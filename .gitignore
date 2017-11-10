@@ -1,6 +1,3 @@
-# Prerequisites
-*.d
-
 # Compiled Object files
 *.slo
 *.lo
@@ -30,3 +27,19 @@
 *.exe
 *.out
 *.app
+
+# misc
+coloreddbg
+query
+validatemantis
+
+# QFs dump
+*.ser
+*.lst
+*.cls
+*.output
+*.fa
+*.bk
+
+#core dump
+core
