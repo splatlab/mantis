@@ -27,6 +27,7 @@
 #include <queue>
 #include <set>
 #include <unordered_set>
+#include <set>
 #include <bitset>
 #include <cassert>
 #include <fstream>
@@ -45,6 +46,7 @@
 
 #include "kmer.h"
 #include "coloreddbg.h"
+#include "common_types.h"
 #include "CLI/CLI.hpp"
 #include "CLI/Timer.hpp"
 
@@ -99,22 +101,36 @@ int main ( int argc, char *argv[] )
 
 	std::cout << "Reading query kmers from disk." << std::endl;
 	uint32_t seed = 2038074743;
-	std::vector<std::unordered_set<uint64_t>> multi_kmers = Kmer::parse_kmers(query_file.c_str(),
+  mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																																		 seed,
 																																		 cdbg.range());
 
 	std::ofstream opfile(output_file);
 	std::cout << "Querying the colored dbg." << std::endl;
 
+  mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
     CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
-    for (auto kmers : multi_kmers) {
-      opfile << cnt++ << "\t" << kmers.size() << std::endl;
-      std::unordered_map<uint64_t, uint64_t> result = cdbg.find_samples(kmers);
-      for (auto it = result.begin(); it != result.end(); ++it)
-        opfile << cdbg.get_sample(it->first) << " " << it->second << std::endl;
+    opfile << "[\n";
+    size_t qctr{0};
+    size_t nquery{multi_kmers.size()};
+    for (auto& kmers : multi_kmers) {
+      //std::sort(kmers.begin(), kmers.end());
+      opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": [\n";
+      mantis::QueryResult result = cdbg.find_samples(kmers);
+      for (auto it = result.begin(); it != result.end(); ++it) {
+          opfile << "{ \"" <<cdbg.get_sample(it->first) << "\": " << it->second << "}";
+          if (std::next(it) != result.end()) {
+              opfile << ",\n";
+          }
+      }
+      opfile << "]}";
+      if (qctr < nquery - 1) { opfile << ","; }
+      opfile << "\n";
+      ++qctr;
     }
+    opfile << "]\n";
   }
 	//std::cout << "Writing samples and abundances out." << std::endl;
 	opfile.close();

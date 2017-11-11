@@ -22,6 +22,7 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
+#include <set>
 #include <unordered_set>
 
 #include <inttypes.h>
@@ -30,6 +31,7 @@
 #include "bitvector.h"
 #include "cqf.h"
 #include "hashutil.h"
+#include "common_types.h"
 
 #define INITIAL_EQ_CLASSES 10000
 #define CQF_FILE "dbg_cqf.ser"
@@ -61,7 +63,7 @@ class ColoredDbg {
 		uint64_t range(void) const { return dbg.range(); }
 
 		std::unordered_map<uint64_t, uint64_t>
-			find_samples(const std::unordered_set<uint64_t>& kmers);
+			find_samples(const mantis::QuerySet& kmers);
 
 		void serialize(std::string prefix);
 
@@ -152,8 +154,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 }
 
 template <class qf_obj, class key_obj>
-std::unordered_map<uint64_t, uint64_t> ColoredDbg<qf_obj,key_obj>::find_samples(
-								const std::unordered_set<uint64_t>& kmers) {
+std::unordered_map<uint64_t, uint64_t> ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 	// Find a list of eq classes and the number of kmers that belong those eq
 	// classes.
 	std::unordered_map<uint64_t, uint64_t> eqclass_map;

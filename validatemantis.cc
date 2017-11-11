@@ -116,7 +116,7 @@ main ( int argc, char *argv[] )
 	// Read query k-mers.
 	std::cout << "Reading query kmers from disk." << std::endl;
 	uint32_t seed = 2038074743;
-	std::vector<std::unordered_set<uint64_t>> multi_kmers = Kmer::parse_kmers(argv[4],
+  mantis::QuerySets multi_kmers = Kmer::parse_kmers(argv[4],
 																																		 seed,
 																																		 cdbg.range());
 
@@ -162,7 +162,7 @@ main ( int argc, char *argv[] )
 			if (fraction_present[i] != result[i]) {
 				std::cout << "Failed for sample: " << inobjects[i].sample_id << 
 					" original CQF " << fraction_present[i] << " cdbg " << 
-					result[i] << std::endl;
+					result[i] << '\n';
 				//abort();
 			}
 		ground_truth.push_back(fraction_present);

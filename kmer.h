@@ -23,6 +23,7 @@
 #include <string>
 
 #include "hashutil.h"
+#include "common_types.h"
 
 #define K 20
 
@@ -44,8 +45,8 @@ class Kmer {
 		static inline unsigned __int128 word_reverse_complement(unsigned __int128 w);
 		static inline int64_t word_reverse_complement(uint64_t w);
 		static inline uint32_t word_reverse_complement(uint32_t w);
-		static std::vector<unordered_set<uint64_t>> parse_kmers(const char *filename,
-																										 uint32_t seed, uint64_t range);
+		static mantis::QuerySets parse_kmers(const char *filename,
+																				 uint32_t seed, uint64_t range);
 		static std::string generate_random_string(uint64_t len);
 
 	private:
@@ -190,14 +191,14 @@ inline static unsigned __int128 Kmer::word_reverse_complement(unsigned __int128 
 }
 #endif
 
-std::vector<unordered_set<uint64_t>> Kmer::parse_kmers(const char *filename, uint32_t
+mantis::QuerySets Kmer::parse_kmers(const char *filename, uint32_t
 																								seed, uint64_t range) {
-	std::vector<unordered_set<uint64_t>> multi_kmers;
+  mantis::QuerySets multi_kmers;
 	uint64_t total_kmers = 0;
 	std::ifstream ipfile(filename);
 	std::string read;
 	while (ipfile >> read) {
-		unordered_set<uint64_t> kmers_set;
+    mantis::QuerySet kmers_set;
 
 		if (read.length() < K)
 			continue;
