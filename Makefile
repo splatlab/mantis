@@ -22,7 +22,7 @@ CXX = g++ -std=c++11
 CC = gcc -std=gnu11
 LD= g++ -std=c++11
 
-CXXFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Isdsl/include \
+CXXFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Isdsl/include -Iinclude \
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare
 
 CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. \
