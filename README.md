@@ -43,14 +43,36 @@ coloreddbg creates a colored de Bruijn graph representation that can be used to 
 
 ```bash
  $ make query
- $ ./query raw/ raw/input_txns.fa
+ $ ./query -i raw/ -o query.res raw/input_txns.fa
 ```
 
- Following are the arguments to query:
- - prefix: the directory where the output of coloreddbg command is present.
+The options and arguments are as follows:
+
+```bash
+Mantis query
+Usage: ./query [OPTIONS] query
+
+Positionals:
+  query TEXT                  Prefix of input files.
+
+Options:
+  -h,--help                   Print this help message and exit
+  -i,--input-prefix TEXT      Prefix of input files.
+  -o,--outout TEXT            Where to write query output.
+  -j,--json                   Write the output in JSON format
+```
+
+ The command takes the following options :
+ - `--input-prefix,-i`: the directory where the output of coloreddbg command is present.
+ - `--output,-o`: the file where the query results should be written (default : `samples.output`).
+ 
+ additionally the command takes the following mandatory argument :
  - query transcripts: input transcripts to be queried.
 
-query creates a samples.output file in prefix that contain the list of experiments corresponding to each queried transcript.
+ finally, rather than writing the results in the "simple" output format, they can be written in JSON if you
+ provide the `--json,-j` flag to the `query` comamnd.
+ 
+The output file in contains the list of experiments (i.e., hits) corresponding to each queried transcript.
 
 Contributing
 ------------
