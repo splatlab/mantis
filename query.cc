@@ -63,10 +63,17 @@ int main ( int argc, char *argv[] )
 
   std::string prefix;
   std::string query_file;
+  std::string output_file{"samples.output"};
   app.add_option("-i,--input-prefix", prefix, "Prefix of input files.")->required();
+  app.add_option("-o,--outout", output_file, "Where to write query output.");
   app.add_option("query", query_file, "Prefix of input files.")->required();
 
   CLI11_PARSE(app, argc, argv);
+
+  // Make sure the prefix is a full folder
+  if (prefix.back() != '/') {
+    prefix.push_back('/');
+  }
 
 	std::cout << "Reading colored dbg from disk." << std::endl;
 	std::string cqf_file(prefix + CQF_FILE);
@@ -96,7 +103,7 @@ int main ( int argc, char *argv[] )
 																																		 seed,
 																																		 cdbg.range());
 
-	std::ofstream opfile(prefix + OUTPUT_FILE);
+	std::ofstream opfile(output_file);
 	std::cout << "Querying the colored dbg." << std::endl;
 
 	uint32_t cnt= 0;
