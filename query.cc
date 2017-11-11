@@ -117,15 +117,15 @@ int main ( int argc, char *argv[] )
     size_t nquery{multi_kmers.size()};
     for (auto& kmers : multi_kmers) {
       //std::sort(kmers.begin(), kmers.end());
-      opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": [\n";
+      opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": {\n";
       mantis::QueryResult result = cdbg.find_samples(kmers);
       for (auto it = result.begin(); it != result.end(); ++it) {
-          opfile << "{ \"" <<cdbg.get_sample(it->first) << "\": " << it->second << "}";
+          opfile << " \"" <<cdbg.get_sample(it->first) << "\": " << it->second ;
           if (std::next(it) != result.end()) {
               opfile << ",\n";
           }
       }
-      opfile << "]}";
+      opfile << "}}";
       if (qctr < nquery - 1) { opfile << ","; }
       opfile << "\n";
       ++qctr;
