@@ -46,7 +46,8 @@ class Kmer {
 		static inline int64_t word_reverse_complement(uint64_t w);
 		static inline uint32_t word_reverse_complement(uint32_t w);
 		static mantis::QuerySets parse_kmers(const char *filename,
-																				 uint32_t seed, uint64_t range);
+																				 uint32_t seed, uint64_t range,
+                                         uint64_t& total_kmers);
 		static std::string generate_random_string(uint64_t len);
 
 	private:
@@ -191,10 +192,10 @@ inline static unsigned __int128 Kmer::word_reverse_complement(unsigned __int128 
 }
 #endif
 
-mantis::QuerySets Kmer::parse_kmers(const char *filename, uint32_t
-																								seed, uint64_t range) {
+mantis::QuerySets Kmer::parse_kmers(const char *filename, uint32_t seed,
+                                    uint64_t range, uint64_t& total_kmers) {
   mantis::QuerySets multi_kmers;
-	uint64_t total_kmers = 0;
+	total_kmers = 0;
 	std::ifstream ipfile(filename);
 	std::string read;
 	while (ipfile >> read) {
@@ -264,7 +265,6 @@ start_read:
 			//std::cout << "set size: " << kmers_set.size() << " vector size: " << kmers.size() << endl;
 		multi_kmers.push_back(kmers_set);
 	}
-	std::cout << "Total kmers to query: " << total_kmers << std::endl;
 	return multi_kmers;
 }
 

@@ -116,9 +116,12 @@ main ( int argc, char *argv[] )
 	// Read query k-mers.
 	std::cout << "Reading query kmers from disk." << std::endl;
 	uint32_t seed = 2038074743;
+  uint64_t num_kmers = 0;
   mantis::QuerySets multi_kmers = Kmer::parse_kmers(argv[4],
-																																		 seed,
-																																		 cdbg.range());
+                                                    seed,
+                                                    cdbg.range(),
+                                                    num_kmers);
+
 
 	//typename CQF<KeyObject>::Iterator it = inobjects[0].obj->begin(0);
 	//std::ofstream kmerlist("kmerlist.dump");

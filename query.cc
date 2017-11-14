@@ -44,6 +44,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "spdlog/spdlog.h"
 #include "kmer.h"
 #include "coloreddbg.h"
 #include "common_types.h"
@@ -129,17 +130,17 @@ int main ( int argc, char *argv[] )
     prefix.push_back('/');
   }
 
-	std::cout << "Reading colored dbg from disk." << std::endl;
+  auto console = spdlog::stdout_color_mt("console");
+	console->info("Reading colored dbg from disk.");
+
 	std::string cqf_file(prefix + CQF_FILE);
 	std::string eqclass_file(prefix + EQCLASS_FILE);
 	std::string sample_file(prefix + SAMPLEID_FILE);
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
 																														eqclass_file,
 																														sample_file);
-	std::cout << "Read colored dbg with " << cdbg.get_cqf()->size() << " k-mers and "
-						 << cdbg.get_bitvector().bit_size() / cdbg.get_num_samples() <<
-						 " equivalence classes." << std::endl;
-	
+  console->info("Read colored dbg with {} k-mers and {} color classes",
+                cdbg.get_cqf()->size(), cdbg.get_bitvector().bit_size() / cdbg.get_num_samples());
 	//cdbg.get_cqf()->dump_metadata(); 
 	//std::string query_file(argv[2]);
 	//CQF<KeyObject> cqf(query_file);
@@ -151,23 +152,43 @@ int main ( int argc, char *argv[] )
 		//++it;
 	//} while (!it.done());
 
-	std::cout << "Reading query kmers from disk." << std::endl;
+	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
+  uint64_t total_kmers = 0;
   mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-																																		 seed,
-																																		 cdbg.range());
+																										seed,
+																										cdbg.range(),
+                                                    total_kmers);
+  console->info("Total k-mers to query: {}", total_kmers);
+
+
+  // Attempt to optimize bulk query
+  /*
+  bool doBulk = multi_kmers.size() >= 100;
+  BulkQuery bq;
+  if (doBulk) {
+    uint32_t exp_id{0};
+    for (auto& kmers : multi_kmers) {
+      for (auto& k : kmers) {
+        bq.qs.insert(k);
+        bq.map[k].push_back(exp_id);
+      }
+      ++exp_id;
+    }
+  }
+  */
 
 	std::ofstream opfile(output_file);
-	std::cout << "Querying the colored dbg." << std::endl;
+	console->info("Querying the colored dbg.");
 
-if (use_json) {
-output_results_json(multi_kmers, cdbg, opfile);
-} else {
-output_results(multi_kmers, cdbg, opfile);
-}
+  if (use_json) {
+    output_results_json(multi_kmers, cdbg, opfile);
+  } else {
+    output_results(multi_kmers, cdbg, opfile);
+  }
 	//std::cout << "Writing samples and abundances out." << std::endl;
 	opfile.close();
-	std::cout << "Writing done." << std::endl;
+	console->info("Writing done.");
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
