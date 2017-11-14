@@ -10,6 +10,7 @@ filters instead of Bloom filters, enabling rapid index builds and queries, small
 false positives or negatives. Furthermore, Mantis is also a colored de Bruijn graph representation, so it supports fast
 graph traversal and other topological analyses in addition to large-scale sequence-level searches.
 
+Preprint of the paper is available here: https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf
 
 API
 --------
