@@ -1669,7 +1669,15 @@ void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
 
 	if (mem) {
 		qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
+		if (qf->metadata == NULL) {
+			perror("Can't allocate qf metadata");
+			exit(EXIT_FAILURE);
+		}
 		qf->blocks = (qfblock *)calloc(size, 1);
+		if (qf->blocks == NULL) {
+			perror("Can't allocate qf blocks");
+			exit(EXIT_FAILURE);
+		}
 	} else {
 		int ret;
 		uint64_t mmap_size = size + sizeof(qfmetadata);
