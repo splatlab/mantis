@@ -108,6 +108,8 @@ int main ( int argc, char *argv[] ) {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';
       }
+    } else {
+      std::cout << usage_lines(cli, "mantis") << '\n';
     }
   }
   return 0;
