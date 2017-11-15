@@ -40,6 +40,7 @@ void explore_options_verbose(T& res) {
 
 int query_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
+int validate_main (ValidateOpts& opt);
 
 /*
  * ===  FUNCTION  =============================================================
@@ -54,11 +55,12 @@ int main ( int argc, char *argv[] ) {
 
   BuildOpts bopt;
   QueryOpts qopt;
+  ValidateOpts vopt;
 
   auto build_mode = (
                      command("build").set(selected, mode::build),
-                     required("--input_list", "-i") & value("input_list", bopt.inlist) % "file containing list of input filters",
-                     required("--cutoff_list", "-c") & value("cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
+                     required("--input-list", "-i") & value("input_list", bopt.inlist) % "file containing list of input filters",
+                     required("--cutoff-list", "-c") & value("cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
                      required("--output", "-o") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto query_mode = (
@@ -68,8 +70,17 @@ int main ( int argc, char *argv[] ) {
                      option("--json","-j").set(qopt.use_json) % "Write the output in JSON format",
                      value("query", qopt.query_file) % "Prefix of input files."
                      );
+
+  auto validate_mode = (
+                     command("validate").set(selected, mode::build),
+                     required("--input-list", "-i") & value("input_list", vopt.inlist) % "file containing list of input filters",
+                     required("--cutoff-list", "-c") & value("cutoff_list", vopt.cutoffs) % "file containing list of experiment-specific cutoffs",
+                     required("--input-prefix", "-i") & value("dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
+                     value("query", vopt.query_file) % "Query file."
+                     );
+
   auto cli = (
-              (build_mode | query_mode | command("help").set(selected,mode::help) ),
+              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) ),
               option("-v", "--version").call([]{std::cout << "version 1.0\n\n";}).doc("show version")  );
 
   auto res = parse(argc, argv, cli);
@@ -80,6 +91,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
     case mode::build: build_main(bopt); /* ... */ break;
     case mode::query: query_main(qopt); /* ... */ break;
+    case mode::validate: validate_main(vopt); /* ... */ break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -87,14 +99,16 @@ int main ( int argc, char *argv[] ) {
     auto e = res.end();
     if (std::distance(b,e) > 0) {
       if (b->arg() == "build") {
-        std::cout << make_man_page(build_mode, "mantis build");
+        std::cout << make_man_page(build_mode, "mantis");
       } else if (b->arg() == "query") {
-        std::cout << make_man_page(query_mode, "mantis query");
+        std::cout << make_man_page(query_mode, "mantis");
+      } else if (b->arg() == "validate") {
+        std::cout << make_man_page(validate_mode, "mantis");
       } else {
-        std::cerr << "There is no command \"" << b->arg() << "\"\n";
+        std::cout << "There is no command \"" << b->arg() << "\"\n";
+        std::cout << usage_lines(cli, "mantis") << '\n';
       }
     }
-    std::cout << usage_lines(cli, "mantis") << '\n';
   }
   return 0;
 }

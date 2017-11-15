@@ -16,5 +16,13 @@ class QueryOpts {
   bool use_json{false};
 };
 
+class ValidateOpts {
+ public:
+  std::string inlist;
+  std::string cutoffs;
+  std::string prefix;
+  std::string query_file;
+};
+
 
 #endif //__MANTIS_PROG_OPTS__
