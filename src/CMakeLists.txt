@@ -1,5 +1,3 @@
-
-
 add_library(mantis_core
   hashutil.cc
   coloreddbg.cc
@@ -14,8 +12,6 @@ target_include_directories(mantis_core PUBLIC
 target_link_libraries(mantis_core
   sdsl
   pthread
-  boost_system 
-  boost_thread
   m
   z
   rt)
