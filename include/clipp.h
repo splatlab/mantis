@@ -1986,6 +1986,13 @@ private:
         flags_.push_back(std::move(str));
     }
 
+    template<class String1, class String2>
+    void flags(String1&& s1, String2&& s2) {
+      flags_.reserve(2);
+      flags(std::forward<String1>(s1));
+      flags(std::forward<String2>(s2));
+    }
+    
     template<class String1, class String2, class... Strings>
     void
     flags(String1&& s1, String2&& s2, Strings&&... ss) {
@@ -3249,10 +3256,12 @@ public:
         const auto fs = all_flags();
 
         using std::begin; using std::end;
+        std::cerr << "d = " << std::distance(begin(fs), end(fs)) << std::endl;
+        for(auto i = begin(fs), e = end(fs); i != e; ++i) { std::cerr << "f : [" << *i << "]\n"; }
         for(auto i = begin(fs), e = end(fs); i != e; ++i) {
             for(auto j = i+1; j != e; ++j) {
-                if(i->find(*j) < 1) return false;
-                if(j->find(*i) < 1) return false;
+              if(i->find(*j) < 1) { std::cerr << "1) found [" << *j << "] in [" << *i << "]" << std::endl; return false; }
+              if(j->find(*i) < 1) { std::cerr << "2) found [" << *i << "] in [" << *j << "]" << std::endl; return false; }
             }
         }
 
