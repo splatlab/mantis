@@ -39,14 +39,18 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
 The usage for this command are as follows:
 
 ```
-build the mantis index
-Usage: ./src/mantis build [OPTIONS]
+SYNOPSIS
+        mantis build -i <input_list> -c <cutoff_list> -o <build_output>
 
-Options:
-  -h,--help                   Print this help message and exit
-  -i,--input-list TEXT        file containing list of input filters
-  -c,--cutoff-list TEXT       file containing list of experiment-specific cutoffs
-  -o,--output TEXT            directory where results should be written
+OPTIONS
+        <input_list>
+                    file containing list of input filters
+
+        <cutoff_list>
+                    file containing list of experiment-specific cutoffs
+
+        <build_output>
+                    directory where results should be written
 ```
 
  Following are the arguments to coloreddbg:
@@ -67,17 +71,19 @@ Query
 The options and arguments are as follows:
 
 ```bash
-query the mantis index
-Usage: ./src/mantis query [OPTIONS] query
+SYNOPSIS
+        mantis query [-j] -p <query_prefix> [-o <output_file>] <query>
 
-Positionals:
-  query TEXT                  Prefix of input files.
+OPTIONS
+        -j, --json  Write the output in JSON format
 
-Options:
-  -h,--help                   Print this help message and exit
-  -j,--json                   Write the output in JSON format
-  -p,--input-prefix TEXT      Prefix of input files.
-  -o,--output TEXT            Where to write query output.
+        <query_prefix>
+                    Prefix of input files.
+
+        <output_file>
+                    Where to write query output.
+
+        <query>     Prefix of input files.
 ```
 
  The command takes the following options :
