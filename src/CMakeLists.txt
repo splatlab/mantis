@@ -9,6 +9,7 @@ add_library(mantis_core
   bitvector.cc
   validatemantis.cc
   coloreddbg.cc
+  MantisFS.cc
   cqf/gqf.c)
 
 target_include_directories(mantis_core PUBLIC
