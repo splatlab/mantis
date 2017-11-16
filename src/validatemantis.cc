@@ -42,6 +42,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "ProgOpts.h"
 #include "kmer.h"
 #include "coloreddbg.h"
 
@@ -57,16 +58,12 @@
  * =====================================================================================
  */
 	int
-main ( int argc, char *argv[] )
+validate_main ( ValidateOpts& opt )
 {
-	if (argc < 5) {
-		std::cout << "Not suffcient args." << std::endl;
-		abort();
-	}
 
 	// Read experiment CQFs and cutoffs
-	std::ifstream infile(argv[1]);
-	std::ifstream cutofffile(argv[2]);
+	std::ifstream infile(opt.inlist);
+	std::ifstream cutofffile(opt.cutoffs);
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	CQF<KeyObject> *cqfs;
 
@@ -101,7 +98,7 @@ main ( int argc, char *argv[] )
 	}
 
 	// Read the colored dBG
-	std::string prefix(argv[3]);
+	std::string prefix(opt.prefix);
 	std::cout << "Reading colored dbg from disk." << std::endl;
 	std::string dbg_file(prefix + CQF_FILE);
 	std::string eqclass_file(prefix + EQCLASS_FILE);
@@ -117,7 +114,7 @@ main ( int argc, char *argv[] )
 	std::cout << "Reading query kmers from disk." << std::endl;
 	uint32_t seed = 2038074743;
   uint64_t num_kmers = 0;
-  mantis::QuerySets multi_kmers = Kmer::parse_kmers(argv[4],
+  mantis::QuerySets multi_kmers = Kmer::parse_kmers(opt.query_file.c_str(),
                                                     seed,
                                                     cdbg.range(),
                                                     num_kmers);

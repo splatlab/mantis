@@ -44,6 +44,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "ProgOpts.h"
 #include "spdlog/spdlog.h"
 #include "kmer.h"
 #include "coloreddbg.h"
@@ -111,19 +112,21 @@ void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObjec
  *  Description:  
  * ============================================================================
  */
-int main ( int argc, char *argv[] )
+int query_main (QueryOpts& opt)
 {
-  CLI::App app("Mantis query");
+  //CLI::App app("Mantis query");
 
-  std::string prefix;
-  std::string query_file;
-  std::string output_file{"samples.output"};
-  bool use_json{false};
+  std::string prefix = opt.prefix;
+  std::string query_file = opt.query_file;
+  std::string output_file = opt.output;//{"samples.output"};
+  bool use_json = opt.use_json;
+  /*
   app.add_option("-i,--input-prefix", prefix, "Prefix of input files.")->required();
   app.add_option("-o,--outout", output_file, "Where to write query output.");
   app.add_option("query", query_file, "Prefix of input files.")->required();
   app.add_flag("-j,--json", use_json, "Write the output in JSON format");
   CLI11_PARSE(app, argc, argv);
+  */
 
   // Make sure the prefix is a full folder
   if (prefix.back() != '/') {

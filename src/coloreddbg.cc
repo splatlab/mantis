@@ -42,6 +42,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "ProgOpts.h"
 #include "coloreddbg.h"
 
 #define MAX_NUM_SAMPLES 2600
@@ -54,12 +55,8 @@
  * ============================================================================
  */
 	int
-main ( int argc, char *argv[] )
+build_main ( BuildOpts& opt )
 {
-	if (argc < 4) {
-		std::cout << "Not suffcient args." << std::endl;
-		abort();
-	}
 
 
 	/* calling asyc read init */
@@ -69,8 +66,8 @@ main ( int argc, char *argv[] )
 	aioinit.aio_threads = 32;
 	aio_init(&aioinit);
 
-	std::ifstream infile(argv[1]);
-	std::ifstream cutofffile(argv[2]);
+	std::ifstream infile(opt.inlist);
+	std::ifstream cutofffile(opt.cutoffs);
 	//struct timeval start1, end1;
 	//struct timezone tzp;
 	SampleObject<CQF<KeyObject>*> *inobjects;
@@ -107,7 +104,7 @@ main ( int argc, char *argv[] )
 		nqf++;
 	}
 
-	std::string prefix(argv[3]);
+	std::string prefix(opt.out);
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->seed(),
 																														nqf);
 
