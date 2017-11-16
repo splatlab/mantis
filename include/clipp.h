@@ -714,7 +714,7 @@ inline bool
 has_prefix(const std::basic_string<C,T,A>& subject,
            const std::basic_string<C,T,A>& prefix)
 {
-    if(prefix.size() >= subject.size()) return false;
+    if(prefix.size() > subject.size()) return false;
     return subject.find(prefix) == 0;
 }
 
@@ -730,7 +730,7 @@ inline bool
 has_postfix(const std::basic_string<C,T,A>& subject,
             const std::basic_string<C,T,A>& postfix)
 {
-    if(postfix.size() >= subject.size()) return false;
+    if(postfix.size() > subject.size()) return false;
     return (subject.size() - postfix.size()) == subject.find(postfix);
 }
 
@@ -911,15 +911,15 @@ first_number_match(std::basic_string<C,T,A> s,
         else {
             sep = false;
             if(s[j] == decimalPoint) {
-                //only one decimal point allowed
-                if(!point) point = true; else break;
+                //only one decimal point before exponent allowed
+                if(!point && exp == string_t::npos) point = true; else break;
             }
             else if(std::tolower(s[j]) == std::tolower(exponential)) {
                 //only one exponent separator allowed
                 if(exp == string_t::npos) exp = j; else break;
             }
             else if(exp != string_t::npos && (exp+1) == j) {
-                //place one after the exponent separator
+                //only sign or digit after exponent separator
                 if(s[j] != '+' && s[j] != '-' && !std::isdigit(s[j])) break;
             }
             else if(!std::isdigit(s[j])) {
@@ -2427,14 +2427,14 @@ class group :
     public:
 
         explicit
-        child_t(const Param&  v)         : m_{v},            type_{type::param} {}
-        child_t(      Param&& v) noexcept: m_{std::move(v)}, type_{type::param} {}
+        child_t(const Param&  v)          : m_{v},            type_{type::param} {}
+        child_t(      Param&& v) noexcept : m_{std::move(v)}, type_{type::param} {}
 
         explicit
-        child_t(const Group&  g)         : m_{g},            type_{type::group} {}
-        child_t(      Group&& g) noexcept: m_{std::move(g)}, type_{type::group} {}
+        child_t(const Group&  g)          : m_{g},            type_{type::group} {}
+        child_t(      Group&& g) noexcept : m_{std::move(g)}, type_{type::group} {}
 
-        child_t(const child_t& src): m_{}, type_{src.type_} {
+        child_t(const child_t& src): type_{src.type_} {
             switch(type_) {
                 default:
                 case type::param: new(&m_)data{src.m_.param}; break;
@@ -2442,7 +2442,7 @@ class group :
             }
         }
 
-        child_t(child_t&& src) noexcept : m_{}, type_{src.type_} {
+        child_t(child_t&& src) noexcept : type_{src.type_} {
             switch(type_) {
                 default:
                 case type::param: new(&m_)data{std::move(src.m_.param)}; break;
@@ -2587,7 +2587,7 @@ class group :
         }
 
         union data {
-            data(): param{} {}
+            data() {}
 
             data(const Param&  v)          : param{v} {}
             data(      Param&& v) noexcept : param{std::move(v)} {}

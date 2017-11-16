@@ -59,23 +59,23 @@ int main ( int argc, char *argv[] ) {
 
   auto build_mode = (
                      command("build").set(selected, mode::build),
-                     required("--input-list", "-i") & value("input_list", bopt.inlist) % "file containing list of input filters",
-                     required("--cutoff-list", "-c") & value("cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
-                     required("--output", "-o") & value("build_output", bopt.out) % "directory where results should be written"
+                     required("-i", "--input-list") & value("input_list", bopt.inlist) % "file containing list of input filters",
+                     required("-c", "--cutoff-list") & value("cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
+                     required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto query_mode = (
                      command("query").set(selected, mode::query),
-                     required("--input-prefix", "-i") & value("query_prefix", qopt.prefix) % "Prefix of input files.",
-                     option("--output", "-o") & value("output_file", qopt.output) % "Where to write query output.",
-                     option("--json","-j").set(qopt.use_json) % "Write the output in JSON format",
+                     (option("-j", "--json").set(qopt.use_json)) % "Write the output in JSON format",
+                     required("-p", "--input-prefix") & value("query_prefix", qopt.prefix) % "Prefix of input files.",
+                     option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
                      value("query", qopt.query_file) % "Prefix of input files."
                      );
 
   auto validate_mode = (
-                     command("validate").set(selected, mode::build),
-                     required("--input-list", "-i") & value("input_list", vopt.inlist) % "file containing list of input filters",
-                     required("--cutoff-list", "-c") & value("cutoff_list", vopt.cutoffs) % "file containing list of experiment-specific cutoffs",
-                     required("--input-prefix", "-i") & value("dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
+                     command("validate").set(selected, mode::validate),
+                     required("-i", "--input-list") & value("input_list", vopt.inlist) % "file containing list of input filters",
+                     required("-c", "--cutoff-list") & value("cutoff_list", vopt.cutoffs) % "file containing list of experiment-specific cutoffs",
+                     required("-p", "--input-prefix") & value("dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
                      value("query", vopt.query_file) % "Query file."
                      );
 
