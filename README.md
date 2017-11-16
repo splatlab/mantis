@@ -10,12 +10,12 @@ filters instead of Bloom filters, enabling rapid index builds and queries, small
 false positives or negatives. Furthermore, Mantis is also a colored de Bruijn graph representation, so it supports fast
 graph traversal and other topological analyses in addition to large-scale sequence-level searches.
 
-Preprint of the paper is available here: https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf
+A preprint of the paper describing mantis is available [here](https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf).
 
 API
 --------
-* 'mantis build': builds a mantis index from a collection of (squeakr) CQF files.
-* 'mantis query': query k-mers in the mantis index.
+* `mantis build`: builds a mantis index from a collection of (squeakr) CQF files.
+* `mantis query`: query k-mers in the mantis index.
 
 Build
 -------
@@ -39,18 +39,14 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
 The usage for this command are as follows:
 
 ```
-SYNOPSIS
-        mantis build --input-list <input_list> --cutoff-list <cutoff_list> --output <build_output>
+build the mantis index
+Usage: ./src/mantis build [OPTIONS]
 
-OPTIONS
-        <input_list>
-                    file containing list of input filters
-
-        <cutoff_list>
-                    file containing list of experiment-specific cutoffs
-
-        <build_output>
-                    directory where results should be written
+Options:
+  -h,--help                   Print this help message and exit
+  -i,--input-list TEXT        file containing list of input filters
+  -c,--cutoff-list TEXT       file containing list of experiment-specific cutoffs
+  -o,--output TEXT            directory where results should be written
 ```
 
  Following are the arguments to coloreddbg:
@@ -58,6 +54,8 @@ OPTIONS
  - experiment cutoffs: The cutoff value for each input cqf file corresponding to the experiment. The cutoff value is the minimum count that a k-mer needs to be considered in the search.
  - prefix: prefix filepath where all the output files will be written.
 
+Query
+-------
 
 `mantis query` lets you query a mantis index with a set of sequences.
 
@@ -69,30 +67,27 @@ OPTIONS
 The options and arguments are as follows:
 
 ```bash
-SYNOPSIS
-        mantis query --input-prefix <query_prefix> [--output <output_file>] [--json] <query>
+query the mantis index
+Usage: ./src/mantis query [OPTIONS] query
 
-OPTIONS
-        <query_prefix>
-                    Prefix of input files.
+Positionals:
+  query TEXT                  Prefix of input files.
 
-        <output_file>
-                    Where to write query output.
-
-        --json, -j
-                    Write the output in JSON format
-
-        <query>     Prefix of input files.              Write the output in JSON format
+Options:
+  -h,--help                   Print this help message and exit
+  -j,--json                   Write the output in JSON format
+  -p,--input-prefix TEXT      Prefix of input files.
+  -o,--output TEXT            Where to write query output.
 ```
 
  The command takes the following options :
- - `--input-prefix,-i`: the directory where the output of coloreddbg command is present.
+ - `--input-prefix,-p`: the directory where the output of coloreddbg command is present.
  - `--output,-o`: the file where the query results should be written (default : `samples.output`).
  
- additionally the command takes the following mandatory argument :
+ additionally the command takes the following mandatory _positional_ argument :
  - query transcripts: input transcripts to be queried.
 
- finally, rather than writing the results in the "simple" output format, they can be written in JSON if you
+ Finally, rather than writing the results in the "simple" output format, they can be written in JSON if you
  provide the `--json,-j` flag to the `query` comamnd.
  
 The output file in contains the list of experiments (i.e., hits) corresponding to each queried transcript.
