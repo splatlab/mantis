@@ -13,6 +13,7 @@
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "clipp.h"
+#include "spdlog/spdlog.h"
 //#include "CLI/CLI.hpp"
 
 #define MAX_NUM_SAMPLES 2600
@@ -57,9 +58,15 @@ int main ( int argc, char *argv[] ) {
   enum class mode {build, query, validate, help};
   mode selected = mode::help;
 
+  auto console = spdlog::stdout_color_mt("mantis_console");
+
   BuildOpts bopt;
   QueryOpts qopt;
   ValidateOpts vopt;
+  bopt.console = console;
+  qopt.console = console;
+  vopt.console = console;
+
   /*
   bool print_version{false};
   CLI::App app{"Mantis"};
