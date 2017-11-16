@@ -14,8 +14,8 @@ Preprint of the paper is available here: https://www.biorxiv.org/content/biorxiv
 
 API
 --------
-* 'coloreddbg': count k-mers in a read dataset.
-* 'query': query k-mers in the Squeakr representation.
+* 'mantis build': builds a mantis index from a collection of (squeakr) CQF files.
+* 'mantis query': query k-mers in the mantis index.
 
 Build
 -------
@@ -30,9 +30,27 @@ introduced in intel's Haswell line of CPUs. However, there is also an alternate
 implementation of select on machine words to work on CPUs older than Haswell.
 To build on an older hardware (older than Haswell) use "NH=1" as a make argument.
 
+`mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
+
 ```bash
- $ make coloreddbg
- $ ./coloreddbg raw/incqfs.lst raw/experiment_cutoffs.lst raw/
+ $ make mantis
+ $ ./mantis build -i raw/incqfs.lst -c raw/experiment_cutoffs.lst -o raw/
+```
+The usage for this command are as follows:
+
+```
+SYNOPSIS
+        mantis build --input-list <input_list> --cutoff-list <cutoff_list> --output <build_output>
+
+OPTIONS
+        <input_list>
+                    file containing list of input filters
+
+        <cutoff_list>
+                    file containing list of experiment-specific cutoffs
+
+        <build_output>
+                    directory where results should be written
 ```
 
  Following are the arguments to coloreddbg:
@@ -40,27 +58,31 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
  - experiment cutoffs: The cutoff value for each input cqf file corresponding to the experiment. The cutoff value is the minimum count that a k-mer needs to be considered in the search.
  - prefix: prefix filepath where all the output files will be written.
 
-coloreddbg creates a colored de Bruijn graph representation that can be used to query transcripts.
+
+`mantis query` lets you query a mantis index with a set of sequences.
 
 ```bash
- $ make query
- $ ./query -i raw/ -o query.res raw/input_txns.fa
+ $ make mantis
+ $ mantis query -i raw/ -o query.res raw/input_txns.fa
 ```
 
 The options and arguments are as follows:
 
 ```bash
-Mantis query
-Usage: ./query [OPTIONS] query
+SYNOPSIS
+        mantis query --input-prefix <query_prefix> [--output <output_file>] [--json] <query>
 
-Positionals:
-  query TEXT                  Prefix of input files.
+OPTIONS
+        <query_prefix>
+                    Prefix of input files.
 
-Options:
-  -h,--help                   Print this help message and exit
-  -i,--input-prefix TEXT      Prefix of input files.
-  -o,--outout TEXT            Where to write query output.
-  -j,--json                   Write the output in JSON format
+        <output_file>
+                    Where to write query output.
+
+        --json, -j
+                    Write the output in JSON format
+
+        <query>     Prefix of input files.              Write the output in JSON format
 ```
 
  The command takes the following options :
