@@ -41,7 +41,8 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <openssl/rand.h>
-
+#include "sparsepp/spp.h"
+#include "tsl/sparse_map.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
 
@@ -111,7 +112,7 @@ build_main ( BuildOpts& opt )
 	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
 		std::endl;
 	// First construct the colored dbg on 1000 k-mers.
-	std::unordered_map<BitVector, std::pair<uint64_t,uint64_t>,
+	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>> unsorted_map;
 
 	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, SAMPLE_SIZE);
@@ -125,7 +126,7 @@ build_main ( BuildOpts& opt )
 		sorted.insert(std::pair<uint64_t, BitVector>(it.second.second, it.first));
 		//sorted[it.second.second] = it.first;
 	}
-	std::unordered_map<BitVector, std::pair<uint64_t,uint64_t>,
+	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>> sorted_map;
 	//DEBUG_CDBG("After sorting.");
 	uint64_t i = 1;

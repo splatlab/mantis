@@ -27,6 +27,8 @@
 
 #include <inttypes.h>
 
+#include "sparsepp/spp.h"
+#include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"
 #include "bitvector.h"
 #include "cqf.h"
@@ -38,18 +40,21 @@
 #define EQCLASS_FILE "eqclass_rrr.cls"
 #define SAMPLEID_FILE "sampleid.lst"
 
+template <typename Key, typename Value, typename Hasher>
+  using cdbg_bv_map_t = spp::sparse_hash_map<Key, Value, Hasher>;
+
 template <class qf_obj, class key_obj>
 class ColoredDbg {
-	public:
-		ColoredDbg(std::string& cqf_file, std::string& eqclass_file, std::string&
+  	public:
+    ColoredDbg(std::string& cqf_file, std::string& eqclass_file, std::string&
 							 sample_file);
 
 		ColoredDbg(uint32_t seed, uint32_t nqf);
 		
-		std::unordered_map<BitVector, std::pair<uint64_t,uint64_t>,
+		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>>& construct(qf_obj *incqfs,
 																		std::unordered_map<std::string, uint64_t>&
-																		cutoffs, std::unordered_map<BitVector,
+																		cutoffs, cdbg_bv_map_t<BitVector,
 																		std::pair<uint64_t,uint64_t>,
 																		sdslhash<BitVector>>& map, uint64_t
 																		num_kmers);
@@ -74,7 +79,7 @@ class ColoredDbg {
 
 		std::unordered_map<uint64_t, std::string> sampleid_map;
 		// bit_vector --> <eq_class_id, abundance>
-		std::unordered_map<BitVector, std::pair<uint64_t,uint64_t>,
+		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 			sdslhash<BitVector>> eqclass_map;
 		CQF<key_obj> dbg;
 		BitVectorRRR eqclasses;
@@ -129,15 +134,17 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	// Else create a new eq class.
 	if (it == eqclass_map.end()) {	// eq class is seen for the first time.
 		eq_id = get_next_available_id();
-		std::pair<uint64_t, uint64_t> val(eq_id, 1);
-		std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(vector,
-																																			val);
-		eqclass_map.insert(keyval);
+		//std::pair<uint64_t, uint64_t> val(eq_id, 1);
+		//std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(vector,
+		//																																	val);
+		eqclass_map.emplace(std::piecewise_construct, std::forward_as_tuple(vector), std::forward_as_tuple(eq_id, 1));
 	} else {		// eq class is seen before so increment the abundance.
-		std::pair<uint64_t, uint64_t> val = it->second;
-		eq_id = val.first;
-		val.second += 1;
-		it->second = val; // update the abundance.
+		//std::pair<uint64_t, uint64_t> val = it->second;
+		eq_id = it->second.first;
+		//val.second += 1;
+		//it.value() = val; // update the abundance.
+    // with standard map
+    it->second.second += 1; // update the abundance.
 	}
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
@@ -211,10 +218,10 @@ void ColoredDbg<qf_obj, key_obj>::serialize(std::string prefix) {
 }
 
 template <class qf_obj, class key_obj>
-std::unordered_map<BitVector, std::pair<uint64_t,uint64_t>,
+cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 	sdslhash<BitVector>>& ColoredDbg<qf_obj, key_obj>::construct(qf_obj *incqfs,
 															std::unordered_map<std::string, uint64_t>& cutoffs,
-															std::unordered_map<BitVector, std::pair<uint64_t,uint64_t>,
+															cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 															sdslhash<BitVector>>& map, uint64_t num_kmers) {
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
