@@ -41,6 +41,7 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <openssl/rand.h>
+#include "MantisFS.h"
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "ProgOpts.h"
@@ -106,6 +107,14 @@ build_main ( BuildOpts& opt )
 	}
 
 	std::string prefix(opt.out);
+  if (prefix.back() != '/') {
+    prefix += '/';
+  }
+  // make the output directory if it doesn't exist
+  if (!mantis::fs::DirExists(prefix.c_str())) {
+    mantis::fs::MakeDir(prefix.c_str());
+  }
+
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->seed(),
 																														nqf);
 
