@@ -25,7 +25,7 @@
 #include "hashutil.h"
 #include "common_types.h"
 
-#define K 20
+constexpr const int K = 20;
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) \
 												- 1ULL)

@@ -29,7 +29,7 @@ OBJDIR=obj
 CXXFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)/sdsl/include -I$(LOC_INCLUDE) \
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare
 
-CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. \
+CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare \
 -Wno-implicit-function-declaration
 
@@ -43,10 +43,11 @@ LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lsdsl -lpthread -lboost_system \
 all: $(TARGETS)
 
 # dependencies between programs and .o files
-mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o 
+mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
 
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
+$(OBJDIR)/MantisFs.o:       $(LOC_SRC)/MantisFS.cc $(LOC_INCLUDE)/MantisFS.h
 $(OBJDIR)/util.o:           $(LOC_SRC)/util.cc $(LOC_INCLUDE)/util.h
 $(OBJDIR)/bitvector.o:      $(LOC_SRC)/bitvector.cc $(LOC_INCLUDE)/bitvector.h
 $(OBJDIR)/kmer.o:           $(LOC_SRC)/kmer.cc $(LOC_INCLUDE)/kmer.h

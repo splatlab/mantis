@@ -133,7 +133,7 @@ int query_main (QueryOpts& opt)
     prefix.push_back('/');
   }
 
-  auto console = spdlog::stdout_color_mt("console");
+  spdlog::logger* console = opt.console.get();
 	console->info("Reading colored dbg from disk.");
 
 	std::string cqf_file(prefix + CQF_FILE);

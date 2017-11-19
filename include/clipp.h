@@ -665,6 +665,8 @@ template<class C, class T, class A>
 inline void
 trimr(std::basic_string<C,T,A>& s)
 {
+    if(s.empty()) return;
+
     s.erase(
         std::find_if_not(s.rbegin(), s.rend(),
                          [](char c) { return std::isspace(c);} ).base(),
@@ -681,6 +683,8 @@ template<class C, class T, class A>
 inline void
 triml(std::basic_string<C,T,A>& s)
 {
+    if(s.empty()) return;
+
     s.erase(
         s.begin(),
         std::find_if_not(s.begin(), s.end(),
@@ -700,6 +704,23 @@ trim(std::basic_string<C,T,A>& s)
 {
     triml(s);
     trimr(s);
+}
+
+
+/*************************************************************************//**
+ *
+ * @brief removes all whitespaces from string
+ *
+ *****************************************************************************/
+template<class C, class T, class A>
+inline void
+remove_ws(std::basic_string<C,T,A>& s)
+{
+    if(s.empty()) return;
+
+    s.erase(std::remove_if(s.begin(), s.end(),
+                           [](char c) { return std::isspace(c); }),
+            s.end() );
 }
 
 
@@ -764,7 +785,7 @@ longest_common_prefix(const InputRange& strs)
     using str_size_t = typename std::decay<decltype(begin(strs)->size())>::type;
 
     const auto n = size_t(distance(begin(strs), end(strs)));
-    if(n < 1) return "";
+    if(n < 1) return item_t("");
     if(n == 1) return *begin(strs);
 
     //length of shortest string
@@ -1825,20 +1846,22 @@ public:
     template<class... Strings>
     explicit
     parameter(arg_string str, Strings&&... strs):
-        flags_{std::move(str), std::forward<Strings>(strs)...},
+        flags_{},
         matcher_{predicate_adapter{match::none}},
         label_{}, required_{false}
     {
-        flags(std::move(str), std::forward<Strings>(strs)...);
+        add_flags(std::move(str), std::forward<Strings>(strs)...);
     }
 
     /** @brief makes "flag" parameter from range of strings */
     explicit
-    parameter(arg_list flaglist):
-        flags_{std::move(flaglist)},
+    parameter(const arg_list& flaglist):
+        flags_{},
         matcher_{predicate_adapter{match::none}},
         label_{}, required_{false}
-    {}
+    {
+        add_flags(flaglist);
+    }
 
     //-----------------------------------------------------
     /** @brief makes "value" parameter with custom match predicate
@@ -1976,29 +1999,25 @@ public:
 
 private:
     //---------------------------------------------------------------
-    void flags(arg_string str) {
+    void add_flags(arg_string str) {
         //empty flags are not allowed
-        if(str.empty()) return;
-        str::trim(str);
-        //spaces within flags are not allowed
-        auto i = str.find(' ');
-        if(i != arg_string::npos) str.erase(i);
-        flags_.push_back(std::move(str));
+        str::remove_ws(str);
+        if(!str.empty()) flags_.push_back(std::move(str));
     }
 
-    template<class String1, class String2>
-    void flags(String1&& s1, String2&& s2) {
-      flags_.reserve(2);
-      flags(std::forward<String1>(s1));
-      flags(std::forward<String2>(s2));
+    //---------------------------------------------------------------
+    void add_flags(const arg_list& strs) {
+        if(strs.empty()) return;
+        flags_.reserve(flags_.size() + strs.size());
+        for(const auto& s : strs) add_flags(s);
     }
-    
+
     template<class String1, class String2, class... Strings>
     void
-    flags(String1&& s1, String2&& s2, Strings&&... ss) {
+    add_flags(String1&& s1, String2&& s2, Strings&&... ss) {
         flags_.reserve(2 + sizeof...(ss));
-        flags(std::forward<String1>(s1));
-        flags(std::forward<String2>(s2), std::forward<Strings>(ss)...);
+        add_flags(std::forward<String1>(s1));
+        add_flags(std::forward<String2>(s2), std::forward<Strings>(ss)...);
     }
 
     arg_list flags_;
@@ -3250,18 +3269,21 @@ public:
         return all;
     }
 
-    /** @brief returns true, if no flag occurs as prefix of any other flag */
+    /** @brief returns true, if no flag occurs as true
+     *         prefix of any other flag (identical flags will be ignored) */
     bool flags_are_prefix_free() const
     {
         const auto fs = all_flags();
 
         using std::begin; using std::end;
-        std::cerr << "d = " << std::distance(begin(fs), end(fs)) << std::endl;
-        for(auto i = begin(fs), e = end(fs); i != e; ++i) { std::cerr << "f : [" << *i << "]\n"; }
         for(auto i = begin(fs), e = end(fs); i != e; ++i) {
-            for(auto j = i+1; j != e; ++j) {
-              if(i->find(*j) < 1) { std::cerr << "1) found [" << *j << "] in [" << *i << "]" << std::endl; return false; }
-              if(j->find(*i) < 1) { std::cerr << "2) found [" << *i << "] in [" << *j << "]" << std::endl; return false; }
+            if(!i->empty()) {
+                for(auto j = i+1; j != e; ++j) {
+                    if(!j->empty() && *i != *j) {
+                        if(i->find(*j) == 0) return false;
+                        if(j->find(*i) == 0) return false;
+                    }
+                }
             }
         }
 
@@ -3284,16 +3306,15 @@ private:
     static void
     gather_flags(const children_store& nodes, arg_list& all)
     {
-        all.reserve(all.size() + nodes.size());
         for(const auto& p : nodes) {
             if(p.is_group()) {
-                gather_prefixes(p.as_group().children_, all);
+                gather_flags(p.as_group().children_, all);
             }
             else {
                 const auto& pf = p.as_param().flags();
                 using std::begin;
                 using std::end;
-                all.insert(end(all), begin(pf), end(pf));
+                if(!pf.empty()) all.insert(end(all), begin(pf), end(pf));
             }
         }
     }
@@ -3301,14 +3322,13 @@ private:
     static void
     gather_prefixes(const children_store& nodes, arg_list& all)
     {
-        all.reserve(all.size() + nodes.size());
         for(const auto& p : nodes) {
             if(p.is_group()) {
                 gather_prefixes(p.as_group().children_, all);
             }
-            else {
-                all.push_back(str::longest_common_prefix(
-                    p.as_param().flags()));
+            else if(!p.as_param().flags().empty()) {
+                auto pfx = str::longest_common_prefix(p.as_param().flags());
+                if(!pfx.empty()) all.push_back(std::move(pfx));
             }
         }
     }
@@ -4448,7 +4468,9 @@ private:
             arg.erase(0, match.str().size());
             //make sure prefix is always present after the first match
             //ensures that, e.g., flags "-a" and "-b" will be found in "-ab"
-            if(!arg.empty() && !prefix.empty() && arg.find(prefix) != 0) {
+            if(!arg.empty() && !prefix.empty() && arg.find(prefix) != 0 &&
+                prefix != match.str())
+            {
                 arg.insert(0,prefix);
             }
 
