@@ -28,11 +28,13 @@
 #include <aio.h>
 
 #include "cqf/gqf.h"
+#include "util.h"
 
 #define NUM_HASH_BITS 40
 #define NUM_Q_BITS 34
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
-#define BUFFER_SIZE (1ULL << 21)
+#define BUFFER_SIZE 1000000
+//(1ULL << 21)
 
 template <class key_obj>
 class CQF {
@@ -74,6 +76,7 @@ class CQF {
 				QFi iter;
 				uint32_t cutoff;
 				struct aiocb aiocb;
+				uint64_t last_read_offset, last_prefetch_offset;
 		};
 
 		Iterator begin(uint32_t cutoff) const;
@@ -148,15 +151,39 @@ key_obj CQF<key_obj>::Iterator::operator*(void) const {
 
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
+	qfi_nextx(&iter, &last_read_offset);
+
 	// Read next 2M bytes from the file offset.
-	if (iter.current % PAGE_DROP_GRANULARITY == 0 &&
-			iter.current < iter.qf->metadata->nslots - 2 * BUFFER_SIZE) {
+	if (last_read_offset > last_prefetch_offset) {
+		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
+						 << " " << last_read_offset << ">" << last_prefetch_offset);
+		if (aiocb.aio_buf) {
+			int res = aio_error(&aiocb);
+			if (res == EINPROGRESS) {
+				DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes << " at "
+								 << last_read_offset << "(until " << last_prefetch_offset <<
+								 ")...");
+				const struct aiocb *const aiocb_list[1] = {&aiocb};
+				aio_suspend(aiocb_list, 1, NULL);
+				DEBUG_CDBG(" finished it");
+			} else if (res > 0) {
+				DEBUG_CDBG("aio_error() returned " << std::dec << res);
+			} else if (res == 0) {
+				DEBUG_CDBG("prefetch was OK for " << aiocb.aio_fildes << " at " <<
+								 std::hex << aiocb.aio_offset << std::dec);
+			}
+		}
+
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = BUFFER_SIZE;
-		aiocb.aio_offset = (__off_t)(qf_get_addr(iter.qf, iter.current) + BUFFER_SIZE);
+		last_prefetch_offset += BUFFER_SIZE;
+    aiocb.aio_offset = (__off_t)last_prefetch_offset;
+		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
+						 last_prefetch_offset << std::dec << " ... ");
 		uint32_t ret = aio_read(&aiocb);
+		DEBUG_CDBG("prefetch issued");
 		if (ret) {
 			std::cerr << "aio_read failed at " << iter.current << " total size " <<
 				iter.qf->metadata->nslots << std::endl;
@@ -164,7 +191,6 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		}
 	}
 
-	qfi_next(&iter);
 	// Skip past the cutoff
 	do {
 		uint64_t key = 0, value = 0, count = 0;

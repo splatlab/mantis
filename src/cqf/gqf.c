@@ -1799,7 +1799,7 @@ void qf_read(QF *qf, const char *path)
 	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED,
 																		qf->mem->fd, 0);
 	
-	ret = madvise(qf->metadata, sb.st_size, MADV_SEQUENTIAL);
+	//ret = madvise(qf->metadata, sb.st_size, MADV_SEQUENTIAL);
 	if (ret < 0) {
 		perror("Couldn't madvice of memory:\n");
 		exit(EXIT_FAILURE);
@@ -2001,7 +2001,10 @@ int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 	return 0;
 }
 
-int qfi_next(QFi *qfi)
+int qfi_next(QFi *qfi) {
+	return qfi_nextx(qfi, NULL);
+}
+int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 {
 	if (qfi_end(qfi))
 		return 1;
@@ -2026,7 +2029,9 @@ int qfi_next(QFi *qfi)
 			uint64_t old_current = qfi->current;
 #endif
 			uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
-			uint64_t rank = bitrank(get_block(qfi->qf, block_index)->occupieds[0],
+			qfblock* addr = get_block(qfi->qf, block_index);
+			if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->blocks);
+			uint64_t rank = bitrank(addr->occupieds[0],
 															qfi->run % SLOTS_PER_BLOCK);
 			uint64_t next_run = bitselect(get_block(qfi->qf,
 																							block_index)->occupieds[0],

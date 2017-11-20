@@ -151,6 +151,7 @@ extern "C" {
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */
 	int qfi_next(QFi *qfi);
+	int qfi_nextx(QFi *qfi, uint64_t* read_offset);
 
 	/* Check to see if the if the end of the QF */
 	int qfi_end(const QFi *qfi); 
