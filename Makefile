@@ -25,16 +25,17 @@ LD= g++ -std=c++11
 LOC_INCLUDE=include
 LOC_SRC=src
 OBJDIR=obj
+LIBDIR=lib
 
-CXXFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)/sdsl/include -I$(LOC_INCLUDE) \
+CXXFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)/sdsl/include -I$(LOC_INCLUDE) -I$(LOC_INCLUDE)/SIMDCompressionAndIntersection \
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare
 
 CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare \
 -Wno-implicit-function-declaration
 
-LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lsdsl -lpthread -lboost_system \
--lboost_thread -lm -lz -lrt
+LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lpthread -lboost_system \
+-lboost_thread -lm -lz -lrt -lsdsl
 
 #
 # declaration of dependencies
@@ -44,6 +45,9 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
+
+compareRepresentations:					$(OBJDIR)/bitvector.o ${OBJDIR}/compareCompressions.o
+	$(LD) $^ $(LDFLAGS) ${LIBDIR}/libSIMDCompressionAndIntersection.a -o $@
 
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
@@ -55,7 +59,8 @@ $(OBJDIR)/coloreddbg.o: 		$(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(L
 $(OBJDIR)/query.o: 					$(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 $(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
-
+$(OBJDIR)/compareCompressions.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compareCompressions.cc
+$(OBJDIR)/compareCompressions.o:    $(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compressedSetBit.cc
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h
