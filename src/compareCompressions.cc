@@ -24,10 +24,10 @@ int main(int argc, char *argv[]) {
     BitVector bv(num_samples);
     std::vector<uint32_t> idxList;
     idxList.reserve(num_samples);
-    size_t i = 0;
+	size_t i = 0;
     while (i < num_samples) {
       size_t bitCnt = std::min(num_samples-i, (size_t)64);
-      int wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
       for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
         if ((wrd >> j) & 0x01) {
           bv.set(curIdx);
@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
       }
       i+=bitCnt;
     }
+    //if (idxList.size() == 0) std::cerr << "Error!! " << eqclsCntr << " Shouldn't ever happen\n";
     totalIdxCnt += idxList.size();
     roundIdxCnt += idxList.size();
     if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
