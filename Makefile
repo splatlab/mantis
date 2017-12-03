@@ -35,7 +35,7 @@ CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 -Wno-implicit-function-declaration
 
 LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lpthread -lboost_system \
--lboost_thread -lm -lz -lrt -lsdsl
+-lboost_thread -lm -lz -lrt -lsdsl 
 
 #
 # declaration of dependencies
@@ -60,7 +60,6 @@ $(OBJDIR)/query.o: 					$(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC
 $(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
 $(OBJDIR)/compareCompressions.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compareCompressions.cc
-$(OBJDIR)/compareCompressions.o:    $(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compressedSetBit.cc
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h

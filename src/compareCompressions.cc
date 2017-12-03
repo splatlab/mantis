@@ -2,10 +2,75 @@
 #include "compressedSetBit.h"
 #include "bitvector.h"
 
+// @input
+// cnt: setbit cnt 
+// num_samples: total number of bits
+// @return true if the output of delta_compression/decompression is the same as bitvector_rrr
+//template<typename IndexSizeT>
+bool validate(uint16_t cnt, uint16_t num_samples=2586) {
+
+  std::cout << "validate for " << cnt << " set bits out of " << num_samples <<"\n";
+  std::set<uint32_t> randIdx;
+
+  BitVector bv(num_samples);
+  std::vector<uint32_t> idxList(cnt);
+  size_t i = 0;
+  while (i < cnt) {
+    //std::cout << "i:"<<i<<"\n";
+    uint32_t currIdx = rand() % num_samples;
+	//std::cout << "b" << currIdx << "\n";
+    if (randIdx.find(currIdx) != randIdx.end()) continue;
+    randIdx.insert(currIdx);
+    bv.set(currIdx);
+    idxList[i] = currIdx;
+    //std::cout << currIdx << "\n";
+    i++;
+  }
+  BitVectorRRR bvr(bv);
+  std::vector<uint32_t> bvr_idxList;
+  uint16_t wrdCnt = 64;
+  for (uint16_t i = 0; i < num_samples; i+=wrdCnt) {
+	wrdCnt = std::min((uint16_t)64, (uint16_t)(num_samples - i));
+    uint64_t wrd = bvr.get_int(i, wrdCnt);
+    for (uint16_t j = 0, idx=i; j < wrdCnt; j++, idx++) {
+        if (wrd >> j & 0x01) {
+			//std::cout << i << " " << j << "\n";
+				bvr_idxList.push_back(idx);
+		}
+    }  
+  }
+  //std::cout <<"\nidx size: " << idxList.size() << "\n";
+  CompressedSetBit<uint32_t> setBitList(idxList);
+  
+  vector<uint32_t> output;
+  setBitList.uncompress(output);
+  //std::cout << "\nAfter compress&decompress size is " << output.size() << "\n";
+  if (output.size() != bvr_idxList.size()) {
+		  std::cout << "rrr idx list size: " << bvr_idxList.size() << " deltac size: " << output.size() << "\n";
+		  return false;
+  }
+  for (size_t i = 0; i < output.size(); i++)
+    if (output[i] != bvr_idxList[i]) {
+		  std::cout << i << " rrr idx: " << bvr_idxList[i] << " deltac: " << output[i] << "\n";
+            return false;
+    }       
+  return true;
+}
+
 
 int main(int argc, char *argv[]) {
 
+
   uint16_t num_samples = 2586;
+  std::cout << "validate for different number of set bits\n";
+  for (uint16_t i = 1; i <= num_samples; i++){
+  	 	if (!validate(i, num_samples)) {
+				std::cerr << "ERROR: NOT VALIDATED\n";
+				std::exit(1);
+		}
+  }
+  std::cout << "SUCCESSFULLY VALIDATED THE COMPRESSION/DECOMPRESSION PROCESS.\n\n#####NEXT STEP#####\nCompare Sizes:\n";
+  
   size_t gtBV = 0;
   size_t gtBVR = 0;
   size_t bvrGTbv = 0;
@@ -54,7 +119,7 @@ int main(int argc, char *argv[]) {
     }
 
     BitVectorRRR bvr(bv);
-    CompressedSetBit setBitList(idxList);
+    CompressedSetBit<uint64_t> setBitList(idxList);
 
     size_t bvSize = bv.size_in_bytes();
     size_t bvrSize = bvr.size_in_bytes();
@@ -79,4 +144,5 @@ int main(int argc, char *argv[]) {
     "\nHow many times bvr > bv : " << bvrGTbv << " or " << (bvrGTbv*100)/totalEqClsCnt << "% of the time" <<
     "\nHow many times bvr == bv : " << bvEQbvr <<  " or " << (bvEQbvr*100)/totalEqClsCnt << "% of the time" <<
     "\n";
+
 }

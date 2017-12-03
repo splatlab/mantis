@@ -8,58 +8,83 @@
 
 using namespace SIMDCompressionLib;
 
+template <typename IndexSizeT>
 class CompressedSetBit {
 public:
   CompressedSetBit(std::vector<uint32_t> idxList) {
-    nSetBits = idxList.size();
+    nSetInts = idxList.size();
 
     std::sort(idxList.begin(), idxList.end());
     //std::cout << "\nAfter sorting:\n";
     //for (size_t i = 0; i < idxList.size(); i++) std::cout << idxList[i] << " ";
     //std::cout << "\n";
     // We pick a CODEC
-    IntegerCODEC &codec = *CODECFactory::getFromName("s4-bp128-dm");
-    deltaCompressedSetList.resize(idxList.size() + 1024);
-    size_t compressedsize = deltaCompressedSetList.size();
-    codec.encodeArray(idxList.data(), idxList.size(), deltaCompressedSetList.data(),
+    //IntegerCODEC &codec = *CODECFactory::getFromName("s4-bp128-dm");
+    IntegerCODEC &codec = *CODECFactory::getFromName("s4-fastpfor-d1");
+
+    std::vector<uint32_t> dat(idxList.size() + 1024);
+    //deltaCompressedSetList.resize(idxList.size() + 1024);
+    size_t compressedsize = dat.size();
+    codec.encodeArray(idxList.data(), idxList.size(), dat.data(),
                       compressedsize);
-    deltaCompressedSetList.resize(compressedsize);
-    deltaCompressedSetList.shrink_to_fit();
+
+    dat.resize(compressedsize);
+    dat.shrink_to_fit();
+    nCompressedInts = compressedsize;
+    data_.reset(new uint32_t[compressedsize]);
+    std::copy(dat.begin(), dat.end(), data_.get());
   }
 
   void uncompress(std::vector<uint32_t>& idxList) {
-    IntegerCODEC &codec = *CODECFactory::getFromName("s4-bp128-dm");
-    idxList.resize(nSetBits);
-    size_t compressedSize = deltaCompressedSetList.size();
-    size_t originalSize = nSetBits;
-    codec.decodeArray(deltaCompressedSetList.data(), compressedSize,
+    //IntegerCODEC &codec = *CODECFactory::getFromName("s4-bp128-dm");
+    IntegerCODEC &codec = *CODECFactory::getFromName("s4-fastpfor-d1");
+    idxList.resize(nSetInts);
+    size_t compressedSize = nCompressedInts;//deltaCompressedSetList.size();
+    size_t originalSize = nSetInts;
+    codec.decodeArray(&data_[0], compressedSize,
                       idxList.data(), originalSize);
     idxList.resize(originalSize); //?? why do we need this?
   }
 
   size_t size_in_bytes() {
     //std::cout << "  size: " << deltaCompressedSetList.size() << " ";
-    return sizeof(std::vector<uint32_t>) + (sizeof(uint32_t) * deltaCompressedSetList.size()); }
+    return sizeof(*this) + (sizeof(uint32_t) * nCompressedInts);
+  }
+
   bool serialize(std::ostream& output) {
-    for (auto it = deltaCompressedSetList.begin(); it != deltaCompressedSetList.end(); it++)
-      output << *it;
-    output << "\n";
+    output.write(reinterpret_cast<const char*>(&nSetInts), sizeof(nSetInts));
+    output.write(reinterpret_cast<const char*>(&nCompressedInts), sizeof(nCompressedInts));
+    output.write(reinterpret_cast<const char*>(&data_[0]), sizeof(uint32_t) * nCompressedInts);
     return true;
   }
 
   bool deserialize(std::istream& input) {
-    std::string val;
-    input >> val;
-    while (val != "\n") {
-      uint32_t digVal(stoi(val));
-      deltaCompressedSetList.push_back(digVal);
-      input >> val;
-    }
+    input.read(reinterpret_cast<char*>(&nSetInts), sizeof(nSetInts));
+    input.read(reinterpret_cast<char*>(&nCompressedInts), sizeof(nCompressedInts));
+    data_.reset(new uint32_t[nCompressedInts]);
+    input.read(reinterpret_cast<char*>(&data_[0]), sizeof(uint32_t) * nCompressedInts);
     return true;
   }
+
 private:
-  std::vector<uint32_t> deltaCompressedSetList;
-  uint32_t nSetBits;
+  template <typename T>
+  friend inline bool operator==(const CompressedSetBit<T>& lhs, const CompressedSetBit<T>& rhs);
+  template <typename T>
+  friend inline bool operator!=(const CompressedSetBit<T>& lhs, const CompressedSetBit<T>& rhs);
+  //std::vector<uint32_t> deltaCompressedSetList;
+  std::unique_ptr<uint32_t[]> data_;
+  IndexSizeT nSetInts;
+  IndexSizeT nCompressedInts;
 };
+
+template <typename T>
+inline bool operator==(const CompressedSetBit<T>& lhs, const CompressedSetBit<T>& rhs) {
+  return (lhs.nCompressedInts == rhs.nCompressedInts) ? (std::memcmp(&lhs.data_[0], &rhs.data_[0], lhs.nCompressedInts) == 0) : false;
+}
+
+template <typename T>
+inline bool operator!=(const CompressedSetBit<T>& lhs, const CompressedSetBit<T>& rhs) {
+  return !(lhs == rhs);
+}
 
 #endif
