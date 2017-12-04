@@ -149,7 +149,7 @@ CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff)
 		buffer = (unsigned char*)calloc(num_pages, PAGE_BUFFER_SIZE);
 		if (buffer == NULL) {
 			std::cerr << "Can't allocate buffer space." << std::endl;
-			exit(1);
+			perror("buffer malloc");
 		}
 	};
 
