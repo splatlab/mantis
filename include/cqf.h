@@ -25,6 +25,7 @@
 
 #include <inttypes.h>
 #include <string.h>
+#include <math.h>
 #include <aio.h>
 
 #include "cqf/gqf.h"
@@ -33,8 +34,7 @@
 #define NUM_HASH_BITS 40
 #define NUM_Q_BITS 34
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
-#define BUFFER_SIZE 1000000
-//(1ULL << 21)
+#define PAGE_BUFFER_SIZE 4096
 
 template <class key_obj>
 class CQF {
@@ -72,7 +72,8 @@ class CQF {
 
 			private:
 				/* global buffer to perform read ahead */
-				unsigned char buffer[BUFFER_SIZE];
+				unsigned char *buffer;
+				uint32_t num_pages;
 				QFi iter;
 				uint32_t cutoff;
 				struct aiocb aiocb;
@@ -140,7 +141,17 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff)
-	: iter(it), cutoff(cutoff) {};
+	: iter(it), cutoff(cutoff) {
+		uint32_t log_slots = log2(it.qf->metadata->nslots);
+		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
+		uint32_t exp = (log_slots - log_page_size) / 5;
+		num_pages = pow(10, exp);
+		buffer = (unsigned char*)calloc(num_pages, PAGE_BUFFER_SIZE);
+		if (buffer == NULL) {
+			std::cerr << "Can't allocate buffer space." << std::endl;
+			exit(1);
+		}
+	};
 
 template <class key_obj>
 key_obj CQF<key_obj>::Iterator::operator*(void) const {
@@ -152,17 +163,18 @@ key_obj CQF<key_obj>::Iterator::operator*(void) const {
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
 	qfi_nextx(&iter, &last_read_offset);
+	uint32_t buffer_size = num_pages * PAGE_BUFFER_SIZE;
 
-	// Read next 2M bytes from the file offset.
+	// Read next "buffer_size" bytes from the file offset.
 	if (last_read_offset > last_prefetch_offset) {
 		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
-						 << " " << last_read_offset << ">" << last_prefetch_offset);
+							 << " " << last_read_offset << ">" << last_prefetch_offset);
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
 			if (res == EINPROGRESS) {
-				DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes << " at "
-								 << last_read_offset << "(until " << last_prefetch_offset <<
-								 ")...");
+				std::cerr << "didn't read fast enough for " << aiocb.aio_fildes <<
+					" at " << last_read_offset << "(until " << last_prefetch_offset <<
+					")..." << std::endl;
 				const struct aiocb *const aiocb_list[1] = {&aiocb};
 				aio_suspend(aiocb_list, 1, NULL);
 				DEBUG_CDBG(" finished it");
@@ -170,18 +182,18 @@ void CQF<key_obj>::Iterator::operator++(void) {
 				DEBUG_CDBG("aio_error() returned " << std::dec << res);
 			} else if (res == 0) {
 				DEBUG_CDBG("prefetch was OK for " << aiocb.aio_fildes << " at " <<
-								 std::hex << aiocb.aio_offset << std::dec);
+									 std::hex << aiocb.aio_offset << std::dec);
 			}
 		}
 
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
-		aiocb.aio_nbytes = BUFFER_SIZE;
-		last_prefetch_offset += BUFFER_SIZE;
-    aiocb.aio_offset = (__off_t)last_prefetch_offset;
+		aiocb.aio_nbytes = buffer_size;
+		last_prefetch_offset += buffer_size;
+		aiocb.aio_offset = (__off_t)last_prefetch_offset;
 		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
-						 last_prefetch_offset << std::dec << " ... ");
+							 last_prefetch_offset << std::dec << " ... ");
 		uint32_t ret = aio_read(&aiocb);
 		DEBUG_CDBG("prefetch issued");
 		if (ret) {
@@ -203,10 +215,10 @@ void CQF<key_obj>::Iterator::operator++(void) {
 	// drop pages of the last million slots.
 	//static uint64_t last_marker = 1;
 	//if (iter.current / PAGE_DROP_GRANULARITY > last_marker + 1) {
-		//uint64_t start_idx = last_marker * PAGE_DROP_GRANULARITY;
-		//uint64_t end_idx = (last_marker + 1) * PAGE_DROP_GRANULARITY;
-		//qf_drop_pages(iter.qf, start_idx, end_idx);
-		//last_marker += 1;
+	//uint64_t start_idx = last_marker * PAGE_DROP_GRANULARITY;
+	//uint64_t end_idx = (last_marker + 1) * PAGE_DROP_GRANULARITY;
+	//qf_drop_pages(iter.qf, start_idx, end_idx);
+	//last_marker += 1;
 	//}
 }
 
