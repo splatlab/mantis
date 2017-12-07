@@ -343,7 +343,7 @@ template<>
 struct make<unsigned char> {
     static inline unsigned char from(const char* s) {
         if(!fwd_to_unsigned_int(s)) return (0);
-        return clamped_on_limits<unsigned char>(std::stoull(s));
+        return clamped_on_limits<unsigned char>(std::strtoull(s,nullptr,10));
     }
 };
 
@@ -351,7 +351,7 @@ template<>
 struct make<unsigned short int> {
     static inline unsigned short int from(const char* s) {
         if(!fwd_to_unsigned_int(s)) return (0);
-        return clamped_on_limits<unsigned short int>(std::stoull(s));
+        return clamped_on_limits<unsigned short int>(std::strtoull(s,nullptr,10));
     }
 };
 
@@ -359,7 +359,7 @@ template<>
 struct make<unsigned int> {
     static inline unsigned int from(const char* s) {
         if(!fwd_to_unsigned_int(s)) return (0);
-        return clamped_on_limits<unsigned int>(std::stoull(s));
+        return clamped_on_limits<unsigned int>(std::strtoull(s,nullptr,10));
     }
 };
 
@@ -367,7 +367,7 @@ template<>
 struct make<unsigned long int> {
     static inline unsigned long int from(const char* s) {
         if(!fwd_to_unsigned_int(s)) return (0);
-        return clamped_on_limits<unsigned long int>(std::stoull(s));
+        return clamped_on_limits<unsigned long int>(std::strtoull(s,nullptr,10));
     }
 };
 
@@ -375,7 +375,7 @@ template<>
 struct make<unsigned long long int> {
     static inline unsigned long long int from(const char* s) {
         if(!fwd_to_unsigned_int(s)) return (0);
-        return clamped_on_limits<unsigned long long int>(std::stoull(s));
+        return clamped_on_limits<unsigned long long int>(std::strtoull(s,nullptr,10));
     }
 };
 
@@ -386,56 +386,56 @@ struct make<char> {
         const auto n = std::strlen(s);
         if(n == 1) return s[0];
         //parse as integer
-        return clamped_on_limits<char>(std::stoll(s));
+        return clamped_on_limits<char>(std::strtoll(s,nullptr,10));
     }
 };
 
 template<>
 struct make<short int> {
     static inline short int from(const char* s) {
-        return clamped_on_limits<short int>(std::stoll(s));
+        return clamped_on_limits<short int>(std::strtoll(s,nullptr,10));
     }
 };
 
 template<>
 struct make<int> {
     static inline int from(const char* s) {
-        return clamped_on_limits<int>(std::stoll(s));
+        return clamped_on_limits<int>(std::strtoll(s,nullptr,10));
     }
 };
 
 template<>
 struct make<long int> {
     static inline long int from(const char* s) {
-        return clamped_on_limits<long int>(std::stoll(s));
+        return clamped_on_limits<long int>(std::strtoll(s,nullptr,10));
     }
 };
 
 template<>
 struct make<long long int> {
     static inline long long int from(const char* s) {
-        return (std::stoll(s));
+        return (std::strtoll(s,nullptr,10));
     }
 };
 
 template<>
 struct make<float> {
     static inline float from(const char* s) {
-        return (std::stof(s));
+        return (std::strtof(s,nullptr));
     }
 };
 
 template<>
 struct make<double> {
     static inline double from(const char* s) {
-        return (std::stod(s));
+        return (std::strtod(s,nullptr));
     }
 };
 
 template<>
 struct make<long double> {
     static inline long double from(const char* s) {
-        return (std::stold(s));
+        return (std::strtold(s,nullptr));
     }
 };
 
@@ -507,7 +507,7 @@ class increment
 {
 public:
     explicit constexpr
-    increment(T& target) noexcept : t_{&target} {}
+    increment(T& target) noexcept : t_{std::addressof(target)} {}
 
     void operator () () const {
         if(t_) ++(*t_);
@@ -529,7 +529,7 @@ class decrement
 {
 public:
     explicit constexpr
-    decrement(T& target) noexcept : t_{&target} {}
+    decrement(T& target) noexcept : t_{std::addressof(target)} {}
 
     void operator () () const {
         if(t_) --(*t_);
@@ -552,7 +552,7 @@ class increment_by
 public:
     explicit constexpr
     increment_by(T& target, T by) noexcept :
-        t_{&target}, by_{std::move(by)}
+        t_{std::addressof(target)}, by_{std::move(by)}
     {}
 
     void operator () () const {
@@ -617,7 +617,7 @@ template<>
 class map_arg_to<bool>
 {
 public:
-    map_arg_to(bool& target): t_{std::addressof(target)} {}
+    map_arg_to(bool& target): t_{&target} {}
 
     void operator () (const char* s) const {
         if(t_ && s) *t_ = true;
@@ -626,6 +626,7 @@ public:
 private:
     bool* t_;
 };
+
 
 } // namespace detail
 
@@ -3856,24 +3857,38 @@ public:
                 //discard other alternatives
                 match.pos_.skip_alternatives();
             }
-            //if current param is not repeatable, go directly to next
-            if(!match->repeatable() && !match->is_group()) {
-                curMatched_ = false;
-                ++match.pos_;
-            }
-            else {
-                curMatched_ = true;
-            }
 
-            if(match.pos_.level() > pos_.level()) {
-                scopes_.push(pos_.undo_point());
-                pos_ = std::move(match.pos_);
+            if(is_last_in_current_scope(match.pos_)) {
+                //if current param is not repeatable -> back to previous scope
+                if(!match->repeatable() && !match->is_group()) {
+                    curMatched_ = false;
+                    pos_ = std::move(match.pos_);
+                    if(!scopes_.empty()) pos_.undo(scopes_.top());
+                }
+                else { //stay at match position
+                    curMatched_ = true;
+                    pos_ = std::move(match.pos_);
+                }
             }
-            else if(match.pos_.level() < pos_.level()) {
-                return_to_level(match.pos_.level());
-            }
-            else {
-                pos_ = std::move(match.pos_);
+            else { //not last in current group
+                //if current param is not repeatable, go directly to next
+                if(!match->repeatable() && !match->is_group()) {
+                    curMatched_ = false;
+                    ++match.pos_;
+                } else {
+                    curMatched_ = true;
+                }
+
+                if(match.pos_.level() > pos_.level()) {
+                    scopes_.push(pos_.undo_point());
+                    pos_ = std::move(match.pos_);
+                }
+                else if(match.pos_.level() < pos_.level()) {
+                    return_to_level(match.pos_.level());
+                }
+                else {
+                    pos_ = std::move(match.pos_);
+                }
             }
             posAfterLastMatch_ = pos_;
         }
@@ -3887,6 +3902,16 @@ public:
     }
 
 private:
+    //-----------------------------------------------------
+    bool is_last_in_current_scope(const dfs_traverser& pos)
+    {
+        if(scopes_.empty()) return pos.is_last_in_path();
+        //check if we would leave the current scope on ++
+        auto p = pos;
+        ++p;
+        return p.level() < scopes_.top().level();
+    }
+
     //-----------------------------------------------------
     void check_repeat_group_start(const scoped_dfs_traverser& newMatch)
     {
@@ -4616,24 +4641,27 @@ private:
         auto npos = match.base();
         if(npos.is_alternative()) npos.skip_alternatives();
         ++npos;
-
+        //need to add potential misses if:
+        //either new repeat group was started
         const auto newRepGroup = match.repeat_group();
-
         if(newRepGroup) {
             if(pos_.start_of_repeat_group()) {
                 for_each_potential_miss(std::move(npos),
-                                        [&,this](const dfs_traverser& pos) {
-                    //inside repeatable group?
-                    if(newRepGroup == pos.repeat_group()) {
-                        missCand_.emplace_back(pos, index_, true);
-                    }
-                });
-
+                    [&,this](const dfs_traverser& pos) {
+                        //only add candidates within repeat group
+                        if(newRepGroup == pos.repeat_group()) {
+                            missCand_.emplace_back(pos, index_, true);
+                        }
+                    });
             }
         }
-        else {
+        //... or an optional blocking param was hit
+        else if(match->blocking() && !match->required() &&
+            npos.level() >= match.base().level())
+        {
             for_each_potential_miss(std::move(npos),
                 [&,this](const dfs_traverser& pos) {
+                    //only add new candidates
                     if(std::find_if(missCand_.begin(), missCand_.end(),
                         [&](const miss_candidate& c){
                             return &(*c.pos) == &(*pos);
@@ -4651,7 +4679,8 @@ private:
     static void
     for_each_potential_miss(dfs_traverser pos, Action&& action)
     {
-        while(pos) {
+        const auto level = pos.level();
+        while(pos && pos.level() >= level) {
             if(pos->is_group() ) {
                 const auto& g = pos->as_group();
                 if(g.all_optional() || (g.exclusive() && g.any_optional())) {
@@ -4799,7 +4828,9 @@ void sanitize_args(arg_list& args)
     if(args.empty()) return;
 
     for(auto i = begin(args)+1; i != end(args); ++i) {
-        if(i->find('.') == 0 && i != begin(args)) {
+        if(i != begin(args) && i->size() > 1 &&
+            i->find('.') == 0 && std::isdigit((*i)[1]) )
+        {
             //find trailing digits in previous arg
             using std::prev;
             auto& prv = *prev(i);
@@ -6102,6 +6133,16 @@ inline doc_string doc_label(const parameter& p)
     return doc_string{"<?>"};
 }
 
+inline doc_string doc_label(const group&)
+{
+    return "<group>";
+}
+
+inline doc_string doc_label(const pattern& p)
+{
+    return p.is_group() ? doc_label(p.as_group()) : doc_label(p.as_param());
+}
+
 
 /*************************************************************************//**
  *
@@ -6166,7 +6207,7 @@ void print(OStream& os, const group& g, int level = 0);
  *
  *****************************************************************************/
 template<class OStream>
-void print(OStream& os, const pattern& param, int level)
+void print(OStream& os, const pattern& param, int level = 0)
 {
     if(param.is_group()) {
         print(os, param.as_group(), level);
