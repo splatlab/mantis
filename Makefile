@@ -36,6 +36,7 @@ CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 
 LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lpthread -lboost_system \
 -lboost_thread -lm -lz -lrt -lsdsl 
+#/home/rob/cosmo/3rd_party_inst/lib/libsdsl.a 
 
 #
 # declaration of dependencies
@@ -49,6 +50,9 @@ mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $
 compareRepresentations:					$(OBJDIR)/bitvector.o ${OBJDIR}/compareCompressions.o
 	$(LD) $^ $(LDFLAGS) ${LIBDIR}/libSIMDCompressionAndIntersection.a -o $@
 
+newColorDSTester:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR}/newColorDSTester.o
+	$(LD) $^ $(LDFLAGS) -o $@
+
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
 $(OBJDIR)/MantisFs.o:       $(LOC_SRC)/MantisFS.cc $(LOC_INCLUDE)/MantisFS.h
@@ -60,6 +64,7 @@ $(OBJDIR)/query.o: 					$(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC
 $(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
 $(OBJDIR)/compareCompressions.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compareCompressions.cc
+$(OBJDIR)/newColorDSTester.o:  $(LOC_SRC)/newColorDSTester.cc
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h
