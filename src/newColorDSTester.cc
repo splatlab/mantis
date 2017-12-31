@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
   std::cerr << "Total bit size: " << eqcls.bit_size() << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
   spp::sparse_hash_map<BitVector, std::pair<uint64_t, uint64_t>, sdslhash<BitVector>> subPatternMap;
   
-  size_t validationCount = 1000000;
+  //size_t validationCount = 1000000;
   for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++)
   {
     size_t i = 0;
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 
   size_t subPatternBits = (ceil(log2(subPatternMap.size())));
   size_t subPatternCntPerEqCls = ceil(num_samples / (double)subPatternLen);
-  size_t subPatternMapTotalSize = sizeof(subPatternMap) + subPatternMap.size() * (subPatternBits + 64); // key len + 2 size_t values that we store for each
+  size_t subPatternMapTotalSize = sizeof(subPatternMap) + subPatternMap.size() * (subPatternLen + 64); // key len + 2 size_t values that we store for each
   std::cerr << "Distribution of number of queries per eqCls:\n";
   std::map<uint64_t, uint64_t> queryDist;
   for (uint32_t qcnt : queryCnt)
@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
   size_t rsVarLenTotal = subPatternMapTotalSize + 2*variableLenBits;
   size_t huffmanVarLenTotal = subPatternMapTotalSize + 1.5*variableLenBits + subPatternMap.size()*64;
   std::cerr << "\n\n\nFinalResults:\n"
-            << "SubPattern length: " << subPatternLen << "\nTotal number of experiments are: " << totalQueryCnt / totalEqClsCnt << "\nunique subPattern count: " << subPatternMap.size() << "\nsubpattern map size: " << subPatternMapTotalSize << "\n"
+            << "SubPattern length: " << subPatternLen << "\nAverage number of queries per color class: " << totalQueryCnt / totalEqClsCnt << "\nunique subPattern count: " << subPatternMap.size() << "\nsubpattern map size: " << subPatternMapTotalSize << "\n"
             << ceil(log2(subPatternMap.size())) << " bits instead of " << subPatternLen << " bits per each subPattern block."
             << "\nFixed length label: " << subPatternBits * subPatternCntPerEqCls << " bits per color class."
             << "\nVariable length label (on average): " << variableLenBits / totalEqClsCnt << " bits per color class."
