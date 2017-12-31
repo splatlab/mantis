@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
   double gigDenum = 8 * pow(1024, 3);
   double fixedLenTotal = subPatternMapTotalSize + subPatternBits * subPatternCntPerEqCls * totalEqClsCnt;
   double rsVarLenTotal = subPatternMapTotalSize + 2*variableLenBits;
-  double huffmanVarLenTotal = subPatternMapTotalSize + 1.5*variableLenBits + subPatternMap.size()*64;
+  double huffmanVarLenTotal = subPatternMapTotalSize + 1.5*variableLenBits + totalEqClsCnt*64;
   std::cerr << "\n\n\nFinalResults:\n"
             << "SubPattern length: " << subPatternLen 
             << "\nAverage number of queries per color class: " << totalQueryCnt / totalEqClsCnt 
