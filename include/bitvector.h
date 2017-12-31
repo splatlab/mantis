@@ -48,8 +48,12 @@ class BitVector {
 		}
 		bool operator==(const BitVector& b) const { return bits == b.bits; }
 		size_t size_in_bytes() {return sdsl::size_in_bytes(bits) /*+ 8*/;}
+  void calcHash() { hashValue = HashUtil::MurmurHash64A((void*)bits.data(), bits.capacity(),
+                                                        2038074743); }
+  uint64_t getHashValue() const {return hashValue;}
 	private:
 		sdsl::bit_vector bits;
+  uint64_t hashValue;
 		//uint64_t size;
 };
 
@@ -68,8 +72,10 @@ class BitVectorRRR {
 		}
 		size_t bit_size() {return rrr_bits.size();}
 		size_t size_in_bytes() {return sdsl::size_in_bytes(rrr_bits) /*+ 8 + 8*/;}
+  uint64_t getHashValue() const {return 0;}
 	private:
 		sdsl::rrr_vector<63> rrr_bits;
+   
 		//uint64_t size;
 };
 
@@ -78,6 +84,7 @@ struct sdslhash {
 	uint64_t operator()(const T& vector) const
 	{
 		// Using the same seed as we use in k-mer hashing.
+    //return static_cast<uint64_t>(vector.getHashValue());
 		return HashUtil::MurmurHash64A((void*)vector.data(), vector.capacity(),
 																	 2038074743);
 	}
