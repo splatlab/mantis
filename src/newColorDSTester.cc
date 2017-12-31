@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 
   size_t subPatternBits = (ceil(log2(subPatternMap.size())));
   size_t subPatternCntPerEqCls = ceil(num_samples / (double)subPatternLen);
-  size_t subPatternMapTotalSize = sizeof(subPatternMap) + subPatternMap.size() * (subPatternLen + 64); // key len + 2 size_t values that we store for each
+  size_t subPatternMapTotalSize = sizeof(subPatternMap)*8 + subPatternMap.size() * (subPatternLen + 64); // key len + 2 size_t values that we store for each
   std::cerr << "Distribution of number of queries per eqCls:\n";
   std::map<uint64_t, uint64_t> queryDist;
   for (uint32_t qcnt : queryCnt)
@@ -217,19 +217,21 @@ int main(int argc, char *argv[])
     }
   }
   std::cout << "\nVALIDATION PASSED\n"; */
-  size_t gigDenum = 8 * pow(1024, 3);
-  size_t fixedLenTotal = subPatternMapTotalSize + subPatternBits * subPatternCntPerEqCls * totalEqClsCnt;
-  size_t rsVarLenTotal = subPatternMapTotalSize + 2*variableLenBits;
-  size_t huffmanVarLenTotal = subPatternMapTotalSize + 1.5*variableLenBits + subPatternMap.size()*64;
+  double gigDenum = 8 * pow(1024, 3);
+  double fixedLenTotal = subPatternMapTotalSize + subPatternBits * subPatternCntPerEqCls * totalEqClsCnt;
+  double rsVarLenTotal = subPatternMapTotalSize + 2*variableLenBits;
+  double huffmanVarLenTotal = subPatternMapTotalSize + 1.5*variableLenBits + subPatternMap.size()*64;
   std::cerr << "\n\n\nFinalResults:\n"
-            << "SubPattern length: " << subPatternLen << "\nAverage number of queries per color class: " << totalQueryCnt / totalEqClsCnt << "\nunique subPattern count: " << subPatternMap.size() << "\nsubpattern map size: " << subPatternMapTotalSize << "\n"
-            << ceil(log2(subPatternMap.size())) << " bits instead of " << subPatternLen << " bits per each subPattern block."
+            << "SubPattern length: " << subPatternLen 
+            << "\nAverage number of queries per color class: " << totalQueryCnt / totalEqClsCnt 
+            << "\nunique subPattern count: " << subPatternMap.size() 
+            << round(log2(subPatternMap.size())) << " bits instead of " << subPatternLen << " bits per each subPattern block."
             << "\nFixed length label: " << subPatternBits * subPatternCntPerEqCls << " bits per color class."
-            << "\nVariable length label (on average): " << variableLenBits / totalEqClsCnt << " bits per color class."
-            << "\n\nFixed length Overall: " << fixedLenTotal << " bits vs " << totalEqClsCnt * num_samples << " bits."
-            << "or " << fixedLenTotal / gigDenum << "GB vs " << (totalEqClsCnt * num_samples) / gigDenum << "GB."
-            << "\nSubpattern map total size: " << subPatternMapTotalSize << " bits or " << subPatternMapTotalSize/ gigDenum << "GB."
-            << "\nRS Variable length Overall: " << rsVarLenTotal << " bits or " << (rsVarLenTotal) / gigDenum << "GB."
-            << "\nHuffman Approximate Variable length Overall: " << huffmanVarLenTotal << " bits or " << (huffmanVarLenTotal) / gigDenum << "GB."
+            << "\nVariable length label (on average): " << round(variableLenBits / totalEqClsCnt) << " bits per color class."
+            << "\n\nSubpattern map total size: " << subPatternMapTotalSize << " bits or " << round(subPatternMapTotalSize/ gigDenum) << "GB."
+            << "\nFixed length Overall: " << fixedLenTotal << " bits vs " << totalEqClsCnt * num_samples << " bits."
+            << "or " << round(fixedLenTotal / gigDenum) << "GB vs " << round((totalEqClsCnt * num_samples) / gigDenum) << "GB."
+            << "\nRS Variable length Overall: " << rsVarLenTotal << " bits or " << round(rsVarLenTotal / gigDenum) << "GB."
+            << "\nHuffman Approximate Variable length Overall: " << huffmanVarLenTotal << " bits or " << round(huffmanVarLenTotal / gigDenum) << "GB."
                                                                                                           "\n";
 }
