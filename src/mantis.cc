@@ -131,6 +131,7 @@ int main ( int argc, char *argv[] ) {
                      command("build").set(selected, mode::build),
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
+                     required("-t", "--num-threads") & value("num_threads", bopt.numthreads) % "number of threads to use to build",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto query_mode = (
