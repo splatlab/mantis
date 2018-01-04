@@ -35,8 +35,7 @@ CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 -Wno-implicit-function-declaration
 
 LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lpthread -lboost_system \
--lboost_thread -lm -lz -lrt -lsdsl 
-#/home/rob/cosmo/3rd_party_inst/lib/libsdsl.a 
+-lboost_thread -lm -lz -lrt /home/rob/cosmo/3rd_party_inst/lib/libsdsl.a 
 
 #
 # declaration of dependencies
@@ -53,6 +52,8 @@ compareRepresentations:					$(OBJDIR)/bitvector.o ${OBJDIR}/compareCompressions.
 newColorDSTester:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR}/newColorDSTester.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
+colorClusteringTester:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR}/colorClusteringTester.o
+	$(LD) $^ $(LDFLAGS) -o $@
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
 $(OBJDIR)/MantisFs.o:       $(LOC_SRC)/MantisFS.cc $(LOC_INCLUDE)/MantisFS.h
@@ -65,6 +66,7 @@ $(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $
 $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
 $(OBJDIR)/compareCompressions.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compareCompressions.cc
 $(OBJDIR)/newColorDSTester.o:  $(LOC_SRC)/newColorDSTester.cc
+$(OBJDIR)/colorClusteringDSTester.o:  $(LOC_SRC)/colorClusteringTester.cc
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h
