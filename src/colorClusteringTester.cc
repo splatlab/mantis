@@ -73,7 +73,8 @@ int main(int argc, char *argv[])
   if (argc > 3) {
     topFreqEqClsCnt = std::stoull(argv[3]);
   }
-  std::cout<< "loading file " << filename << "\n";
+  std::cerr << "Top Most Frequent Eq. Clss Count: " << topFreqEqClsCnt << "\n";
+  std::cerr << "loading file " << filename << "\n";
   BitVectorRRR eqcls(filename);
   size_t totalEqClsCnt = eqcls.bit_size() / num_samples; //222584822;
   std::cerr << "Total bit size: " << eqcls.bit_size() << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
@@ -119,7 +120,7 @@ int main(int argc, char *argv[])
     // if (eqclsCntr != 0 && eqclsCntr % 1000000 == 0)
     //   std::cout << "\nTotal number of eqClses so far : " << eqclsCntr << "\n";
   }
-  std::cout << "Looking for closest popular eq. class ...\n";
+  std::cerr << "Looking for closest popular eq. class ...\n";
   // go over all eq classes other than the m most popular ones and find the popular vector with least distance
   size_t notFound = 0;
   std::map<size_t, size_t> hamDistMap;
@@ -173,12 +174,12 @@ int main(int argc, char *argv[])
       }
     }
     if (eqclsCntr != 0 && eqclsCntr % 1000000 == 0)  
-      std::cout << "\nTotal number of eqClses so far : " << eqclsCntr;
+      std::cerr << "\nTotal number of eqClses so far : " << eqclsCntr;
   }
 
   // print the results:
-  std::cout << "\n\nFinal Results\n"
-            << "Not Found: " << notFound << "\n";
+  std::cerr << "\n\nFinal Results\n";
+  std::cout << "0 " << notFound << "\n";
   for (auto it : hamDistMap) {
     std::cout << it.first << " " << it.second << "\n";
   }
