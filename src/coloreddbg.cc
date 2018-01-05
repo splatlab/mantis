@@ -47,10 +47,51 @@
 #include "ProgOpts.h"
 #include "coloreddbg.h"
 
+#define MAX_THREADS 20
 #define MAX_NUM_SAMPLES 2600
 #define SAMPLE_SIZE (1ULL << 26)
 
-/* 
+struct thread_object {
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> *cdbg;
+	SampleObject<CQF<KeyObject>*> *inobjects;
+	std::unordered_map<std::string, uint64_t> *cutoffs;
+	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
+		sdslhash<BitVector>> *map;
+	uint64_t start_hash;
+	uint64_t end_hash;
+	uint64_t num_kmers;
+};
+
+typedef struct thread_object thread_object;
+
+void *thread_construct(void *object) {
+	thread_object *obj = (thread_object*)object;
+	obj->cdbg->construct(obj->inobjects, *(obj->cutoffs), *(obj->map),
+											 obj->start_hash, obj->end_hash, obj->num_kmers);
+
+	return NULL;
+}
+
+void perform_construction(thread_object args[], uint32_t nthreads) {
+	pthread_t threads[nthreads];
+
+	for (uint32_t i = 0; i < nthreads; i++) {
+		std::cout << "Starting thread " << i << " from " << args[i].start_hash <<
+ 						 " to " << args[i].end_hash << std::endl;
+		if (pthread_create(&threads[i], NULL, &thread_construct, &args[i])) {
+			std::cerr << "Error creating thread " << i << std::endl;
+			abort();
+		}
+	}
+
+	for (uint32_t i = 0; i < nthreads; i++)
+		if (pthread_join(threads[i], NULL)) {
+			std::cerr << "Error joining thread " << i << std::endl;
+			abort();
+		}
+}
+
+/*
  * ===  FUNCTION  =============================================================
  *         Name:  main
  *  Description:  
@@ -59,8 +100,6 @@
 	int
 build_main ( BuildOpts& opt )
 {
-
-
 	/* calling asyc read init */
 	struct aioinit aioinit;
 	memset(&aioinit, 0, sizeof(struct aioinit));
@@ -150,6 +189,17 @@ build_main ( BuildOpts& opt )
 	}
 
 	std::cout << "Constructing the colored dBG." << std::endl;
+
+	thread_object args[MAX_THREADS];
+	for (int i = 0; i < opt.numthreads; i ++) {
+		args[i].cdbg = &cdbg;
+		args[i].cutoffs = &cutoffs;
+		args[i].map = &sorted_map;
+		args[i].start_hash = i * (cdbg.range() / opt.numthreads);
+		args[i].end_hash = (i + 1) * (cdbg.range() / opt.numthreads);
+		args[i].num_kmers = UINT64_MAX;
+	}
+
 	// Reconstruct the colored dbg using the new set of equivalence classes.
 	cdbg.construct(inobjects, cutoffs, sorted_map, 0, UINT64_MAX, UINT64_MAX);
 
