@@ -40,7 +40,7 @@ template <class key_obj>
 class CQF {
 	public:
 		CQF();
-		CQF(uint32_t seed);
+		CQF(uint64_t key_bits, uint32_t seed);
 		CQF(std::string& filename, bool flag);
 		CQF(const CQF<key_obj>& copy_cqf);
 
@@ -55,6 +55,7 @@ class CQF {
 
 		uint64_t range(void) const { return cqf.metadata->range; }
 		uint32_t seed(void) const { return cqf.metadata->seed; }
+		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t size(void) const { return cqf.metadata->ndistinct_elts; }
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
@@ -65,7 +66,7 @@ class CQF {
 
 		class Iterator {
 			public:
-				Iterator(QFi it, uint32_t cutoff);
+				Iterator(QFi it, uint32_t cutoff, uint64_t end);
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
@@ -76,10 +77,12 @@ class CQF {
 				uint32_t num_pages;
 				QFi iter;
 				uint32_t cutoff;
+				uint64_t end;
 				struct aiocb aiocb;
 				uint64_t last_read_offset, last_prefetch_offset;
 		};
 
+		Iterator limits(uint64_t start, uint64_t end, uint32_t cutoff) const;
 		Iterator begin(uint32_t cutoff) const;
 		Iterator end(uint32_t cutoff) const;
 
@@ -106,12 +109,12 @@ class KeyObject {
 
 template <class key_obj>
 CQF<key_obj>::CQF() {
-	qf_init(&cqf, 1ULL << 6, NUM_HASH_BITS, 0, true, "", 23423);
+	qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", 23423);
 }
 
 template <class key_obj>
-CQF<key_obj>::CQF(uint32_t seed) {
-	qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", seed);
+CQF<key_obj>::CQF(uint64_t key_bits, uint32_t seed) {
+	qf_init(&cqf, 1ULL << NUM_Q_BITS, key_bits, 0, true, "", seed);
 }
 
 template <class key_obj>
@@ -140,8 +143,8 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 }
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff)
-	: iter(it), cutoff(cutoff) {
+CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end)
+	: iter(it), cutoff(cutoff), end(end) {
 		uint32_t log_slots = log2(it.qf->metadata->nslots);
 		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
 		uint32_t exp = (log_slots - log_page_size) / 5;
@@ -224,7 +227,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 
 template<class key_obj>
 bool CQF<key_obj>::Iterator::done(void) const {
-	return qfi_end(&iter);
+	return iter.current >= end || qfi_end(&iter);
 }
 
 template<class key_obj>
@@ -241,14 +244,31 @@ typename CQF<key_obj>::Iterator CQF<key_obj>::begin(uint32_t cutoff) const {
 			break;
 	} while(!qfi_end(&qfi));
 
-	return Iterator(qfi, cutoff);
+	return Iterator(qfi, cutoff, UINT64_MAX);
 }
 
 template<class key_obj>
 typename CQF<key_obj>::Iterator CQF<key_obj>::end(uint32_t cutoff) const {
 	QFi qfi;
 	qf_iterator(&this->cqf, &qfi, 0xffffffffffffffff);
-	return Iterator(qfi, cutoff);
+	return Iterator(qfi, cutoff, UINT64_MAX);
 }
 
+template<class key_obj>
+typename CQF<key_obj>::Iterator CQF<key_obj>::limits(uint64_t start, uint64_t
+																									end, uint32_t cutoff) const {
+	QFi qfi;
+	qf_iterator(&this->cqf, &qfi, start);
+	// Skip past the cutoff
+	do {
+		uint64_t key = 0, value = 0, count = 0;
+		qfi_get(&qfi, &key, &value, &count);
+		if (count < cutoff)
+			qfi_next(&qfi);
+		else
+			break;
+	} while(!qfi_end(&qfi));
+
+	return Iterator(qfi, cutoff, end);
+}
 #endif

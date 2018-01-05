@@ -115,7 +115,8 @@ build_main ( BuildOpts& opt )
     mantis::fs::MakeDir(prefix.c_str());
   }
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->seed(),
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->keybits(),
+																														inobjects[0].obj->seed(),
 																														nqf);
 
 	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
@@ -124,7 +125,8 @@ build_main ( BuildOpts& opt )
 	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>> unsorted_map;
 
-	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, SAMPLE_SIZE);
+	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, 0,
+																UINT64_MAX, SAMPLE_SIZE);
 
 	DEBUG_CDBG("Number of eq classes found " << unsorted_map.size());
 
@@ -149,7 +151,7 @@ build_main ( BuildOpts& opt )
 
 	std::cout << "Constructing the colored dBG." << std::endl;
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, cutoffs, sorted_map, UINT64_MAX);
+	cdbg.construct(inobjects, cutoffs, sorted_map, 0, UINT64_MAX, UINT64_MAX);
 
 	std::cout << "Final colored dBG has " << cdbg.get_cqf()->size() <<
 		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes."

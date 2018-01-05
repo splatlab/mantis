@@ -49,7 +49,7 @@ class ColoredDbg {
     ColoredDbg(std::string& cqf_file, std::string& eqclass_file, std::string&
 							 sample_file);
 
-		ColoredDbg(uint32_t seed, uint32_t nqf);
+		ColoredDbg(uint64_t key_bits, uint32_t seed, uint32_t nqf);
 		
 		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>>& construct(qf_obj *incqfs,
@@ -57,6 +57,7 @@ class ColoredDbg {
 																		cutoffs, cdbg_bv_map_t<BitVector,
 																		std::pair<uint64_t,uint64_t>,
 																		sdslhash<BitVector>>& map, uint64_t
+																		start_hash, uint64_t end_hash, uint64_t
 																		num_kmers);
 
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
@@ -137,7 +138,9 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 		//std::pair<uint64_t, uint64_t> val(eq_id, 1);
 		//std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(vector,
 		//																																	val);
-		eqclass_map.emplace(std::piecewise_construct, std::forward_as_tuple(vector), std::forward_as_tuple(eq_id, 1));
+		eqclass_map.emplace(std::piecewise_construct,
+												std::forward_as_tuple(vector),
+												std::forward_as_tuple(eq_id, 1));
 	} else {		// eq class is seen before so increment the abundance.
 		//std::pair<uint64_t, uint64_t> val = it->second;
 		eq_id = it->second.first;
@@ -161,7 +164,8 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 }
 
 template <class qf_obj, class key_obj>
-std::unordered_map<uint64_t, uint64_t> ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
+std::unordered_map<uint64_t, uint64_t>
+ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 	// Find a list of eq classes and the number of kmers that belong those eq
 	// classes.
 	std::unordered_map<uint64_t, uint64_t> eqclass_map;
@@ -222,7 +226,9 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 	sdslhash<BitVector>>& ColoredDbg<qf_obj, key_obj>::construct(qf_obj *incqfs,
 															std::unordered_map<std::string, uint64_t>& cutoffs,
 															cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
-															sdslhash<BitVector>>& map, uint64_t num_kmers) {
+															sdslhash<BitVector>>& map, uint64_t start_hash,
+															uint64_t end_hash, uint64_t num_kmers) {
+																		
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
 
@@ -244,7 +250,7 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 				" cutoff list." << std::endl;
 			abort();
 		} else
-			it_incqfs[i] = incqfs[i].obj->begin(it->second);
+			it_incqfs[i] = incqfs[i].obj->limits(start_hash, end_hash, it->second);
 	}
 
 	std::priority_queue<SampleObject<KeyObject>,
@@ -302,8 +308,9 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 }
 
 template <class qf_obj, class key_obj>
-ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint32_t seed, uint32_t nqf) :
-	dbg(seed), eqclasses(nqf * INITIAL_EQ_CLASSES),
+ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
+																				uint32_t nqf) :
+	dbg(key_bits, seed), eqclasses(nqf * INITIAL_EQ_CLASSES),
 	num_samples(nqf) {}
 
 template <class qf_obj, class key_obj>
