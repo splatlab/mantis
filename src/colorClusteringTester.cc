@@ -42,7 +42,7 @@ void addBlock(spp::sparse_hash_map<BitVector, std::vector<BitVector*>, sdslhash<
   }
 }
 // calculate hammingDistance between two bit vectors
-size_t calcHammingDist(BitVector* b1, BitVector &b2, size_t num_samples) {
+size_t calcHammingDist(BitVector* b1, BitVector &b2, size_t num_samples, size_t minHammingDist = -1) {
   size_t hammingDistance = 0;
   size_t i = 0;
   while (i < num_samples) {
@@ -56,6 +56,7 @@ size_t calcHammingDist(BitVector* b1, BitVector &b2, size_t num_samples) {
         }
       }
     }
+    if (hammingDistance > minHammingDist) break;
     i += bitCnt;
   }
   return hammingDistance;
@@ -94,6 +95,7 @@ int main(int argc, char *argv[])
   size_t totalEqClsCnt = eqcls.bit_size() / num_samples; //222584822;
   std::cerr << "Total bit size: " << eqcls.bit_size() << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
   std::vector<spp::sparse_hash_map<BitVector, std::pair<BitVector*, uint64_t>, sdslhash<BitVector>>> subPatternMaps(ceil(subPatternCntPerEqCls));
+  std::vector<spp::sparse_hash_map<BitVector, std::vector<BitVector*>, sdslhash<BitVector>>> subPatternMapsAndAllBvs(ceil(subPatternCntPerEqCls));
   //size_t validationCount = 1000000;
   // Go over the top most m frequent eq. classes. 
   // Record their IDs in a set for later use
@@ -130,6 +132,7 @@ int main(int argc, char *argv[])
         i += bitCnt;
       }
       addBlock(subPatternMaps[blockCntr], bv, &eqClss[eqclsCntr]);
+      addBlock(subPatternMapsAndAllBvs[blockCntr], bv, &eqClss[eqclsCntr]);
       blockCntr++;
     }
     // if (eqclsCntr != 0 && eqclsCntr % 1000000 == 0)
@@ -155,13 +158,28 @@ int main(int argc, char *argv[])
   }
   file.close();
   //std::exit(1);
+
+  // selecting 1000 random non-popular eq. classes
+   size_t randCnt = 0; //1000;
+/*  std::set<uint64_t> nonPopEqClsId;
+  while (nonPopEqClsId.size() < randCnt) {
+    size_t newID = rand() % totalEqClsCnt;
+    if (eqClsIDs.find(newID) == eqClsIDs.end() && nonPopEqClsId.find(newID) == nonPopEqClsId.end()) {
+      nonPopEqClsId.insert(newID);
+    }
+  }
+ */
   std::cerr << "Looking for closest popular eq. class ...\n";
   // go over all eq classes other than the m most popular ones and find the popular vector with least distance
   size_t notFound = 0;
   std::map<size_t, size_t> hamDistMap;
+  std::map<size_t, size_t> hamDist4AllMap;
+  std::map<size_t, size_t> bruteForceHamDistMap;
   for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+  //for (size_t eqclsCntr : nonPopEqClsId) {
     //std::cout << eqclsCntr << "\n";
     if (eqClsIDs.find(eqclsCntr) == eqClsIDs.end()) {
+      std::set<uint64_t> visitedID;
       //std::cout << "not popular\n";      
       BitVector colorBv(num_samples);
       std::vector<BitVector> subPatterns;
@@ -187,36 +205,87 @@ int main(int argc, char *argv[])
       //std::cout << "Done with one color class\n";
       // find the block with minimum distance from the current color class and update stats for that distance
       size_t minHammingDist = -1;
+      size_t minHammingDist4all = -1;
       bool found = false;
       for (size_t blockCntr=0; blockCntr<subPatterns.size(); blockCntr++) {
         auto it = subPatternMaps[blockCntr].find(subPatterns[blockCntr]);
         if (it != subPatternMaps[blockCntr].end()) {
           found = true;
-          size_t hammingDist = calcHammingDist(it->second.first, colorBv, num_samples);
+          if (minHammingDist4all == 1) break;
+          size_t hammingDist;
+          // if (minHammingDist == 1 && minHammingDist4all == 1) break;
+
+          // keeping the most popular
+          /* hammingDist = calcHammingDist(it->second.first, colorBv, num_samples);
           if (hammingDist < minHammingDist) {
             minHammingDist = hammingDist;
           }
+ */
+          // keeping all the bitvectors:
+          for (auto v : subPatternMapsAndAllBvs[blockCntr][subPatterns[blockCntr]]) {
+            hammingDist = calcHammingDist(v, colorBv, num_samples);
+            if (hammingDist < minHammingDist4all) {
+              minHammingDist4all = hammingDist;
+            }
+            if (minHammingDist4all == 1) break;
+          }     
         }
       }
       if (found) {
-        if (hamDistMap.find(minHammingDist) != hamDistMap.end())
+        // keeping the most popular
+/*         if (hamDistMap.find(minHammingDist) != hamDistMap.end())
           hamDistMap[minHammingDist]++;
         else
           hamDistMap[minHammingDist] = 1;
+ */
+        // keeping all the bitvectors
+        if (hamDist4AllMap.find(minHammingDist4all) != hamDist4AllMap.end())
+          hamDist4AllMap[minHammingDist4all]++;
+        else
+          hamDist4AllMap[minHammingDist4all] = 1;
       }
       else { // if didn't find any similar blocks, increase notFound counter
           notFound++;
       }
+
+
+      // brute-force search
+/*       minHammingDist = -1;
+      for (auto bv : eqClss) {
+        size_t hammingDist = calcHammingDist(&bv, colorBv, num_samples);
+        if (hammingDist < minHammingDist) {
+          minHammingDist = hammingDist;
+        }
+        if (minHammingDist == 1) break;
+      }
+      if (bruteForceHamDistMap.find(minHammingDist) != bruteForceHamDistMap.end())
+          bruteForceHamDistMap[minHammingDist]++;
+        else
+          bruteForceHamDistMap[minHammingDist] = 1; */
     }
     if (eqclsCntr != 0 && eqclsCntr % 1000000 == 0)  
       std::cerr << "\nTotal number of eqClses so far : " << eqclsCntr;
   }
 
-  // print the results:
-  std::cerr << "\n\nFinal Results\n";
-  std::cout << "0 " << notFound << "\n";
-  for (auto it : hamDistMap) {
-    std::cout << it.first << " " << it.second << "\n";
+  // write results for brute force
+  std::ofstream bf_file("bf-"+std::to_string(topFreqEqClsCnt) + "-" + std::to_string(randCnt)+".dist");
+  for (auto it : bruteForceHamDistMap) {
+    bf_file << it.first << " " << it.second << "\n";
   }
+  bf_file.close();
+
+  // write results for keeping all bitvectors
+  bf_file.open("keepAll-"+std::to_string(topFreqEqClsCnt) + "-" + std::to_string(randCnt)+".dist");
+  for (auto it : hamDist4AllMap) {
+    bf_file << it.first << " " << it.second << "\n";
+  }
+  bf_file.close();
+
+// write results for keeping all bitvectors
+  bf_file.open("keepMostPop-"+std::to_string(topFreqEqClsCnt) + "-" + std::to_string(randCnt)+".dist");
+  for (auto it : hamDistMap) {
+    bf_file << it.first << " " << it.second << "\n";
+  }
+  bf_file.close();
 
 }
