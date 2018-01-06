@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
   //for (size_t eqclsCntr : nonPopEqClsId) {
     //std::cout << eqclsCntr << "\n";
     if (eqClsIDs.find(eqclsCntr) == eqClsIDs.end()) {
-      std::set<uint64_t> visitedID;
+      std::set<BitVector*> visitedBV;
       //std::cout << "not popular\n";      
       BitVector colorBv(num_samples);
       std::vector<BitVector> subPatterns;
@@ -223,11 +223,14 @@ int main(int argc, char *argv[])
  */
           // keeping all the bitvectors:
           for (auto v : subPatternMapsAndAllBvs[blockCntr][subPatterns[blockCntr]]) {
-            hammingDist = calcHammingDist(v, colorBv, num_samples);
-            if (hammingDist < minHammingDist4all) {
-              minHammingDist4all = hammingDist;
+            if (visitedBV.find(v) == visitedBV.end()) {
+              visitedBV.insert(v);
+              hammingDist = calcHammingDist(v, colorBv, num_samples, minHammingDist4all);
+              if (hammingDist < minHammingDist4all) {
+                minHammingDist4all = hammingDist;
+              }
+              if (minHammingDist4all == 1) break;
             }
-            if (minHammingDist4all == 1) break;
           }     
         }
       }
