@@ -54,9 +54,9 @@
 struct thread_object {
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> *cdbg;
 	SampleObject<CQF<KeyObject>*> *inobjects;
-	std::unordered_map<std::string, uint64_t> *cutoffs;
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
-		sdslhash<BitVector>> *map;
+	std::unordered_map<std::string, uint64_t> cutoffs;
+	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>, sdslhash<BitVector>>
+		map;
 	uint64_t start_hash;
 	uint64_t end_hash;
 	uint64_t num_kmers;
@@ -66,7 +66,7 @@ typedef struct thread_object thread_object;
 
 void *thread_construct(void *object) {
 	thread_object *obj = (thread_object*)object;
-	obj->cdbg->construct(obj->inobjects, *(obj->cutoffs), *(obj->map),
+	obj->cdbg->construct(obj->inobjects, obj->cutoffs, obj->map,
 											 obj->start_hash, obj->end_hash, obj->num_kmers);
 
 	return NULL;
@@ -193,15 +193,17 @@ build_main ( BuildOpts& opt )
 	thread_object args[MAX_THREADS];
 	for (int i = 0; i < opt.numthreads; i ++) {
 		args[i].cdbg = &cdbg;
-		args[i].cutoffs = &cutoffs;
-		args[i].map = &sorted_map;
+		args[i].inobjects = inobjects;
+		args[i].cutoffs = cutoffs;
+		args[i].map = sorted_map;
 		args[i].start_hash = i * (cdbg.range() / opt.numthreads);
 		args[i].end_hash = (i + 1) * (cdbg.range() / opt.numthreads);
 		args[i].num_kmers = UINT64_MAX;
 	}
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, cutoffs, sorted_map, 0, UINT64_MAX, UINT64_MAX);
+	perform_construction(args, opt.numthreads);
+	//cdbg.construct(inobjects, cutoffs, sorted_map, 0, UINT64_MAX, UINT64_MAX);
 
 	std::cout << "Final colored dBG has " << cdbg.get_cqf()->size() <<
 		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes."

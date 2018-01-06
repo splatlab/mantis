@@ -37,6 +37,10 @@
 	  if (PRINT_DEBUG) { std::cerr << x << std::endl; } \
 } while (0)
 
+#define PRINT_CDBG(x) do { \
+	  { std::cout << x << std::endl; } \
+} while (0)
+
 std::string last_part(std::string str, char c);
 std::string first_part(std::string str, char c);
 /* Print elapsed time using the start and end timeval */

@@ -66,7 +66,7 @@ class CQF {
 
 		class Iterator {
 			public:
-				Iterator(QFi it, uint32_t cutoff, uint64_t end);
+				Iterator(QFi it, uint32_t cutoff, uint64_t end_hash);
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
@@ -77,12 +77,13 @@ class CQF {
 				uint32_t num_pages;
 				QFi iter;
 				uint32_t cutoff;
-				uint64_t end;
+				uint64_t end_hash;
 				struct aiocb aiocb;
 				uint64_t last_read_offset, last_prefetch_offset;
 		};
 
-		Iterator limits(uint64_t start, uint64_t end, uint32_t cutoff) const;
+		Iterator limits(uint64_t start_hash, uint64_t end_hash, uint32_t cutoff)
+			const;
 		Iterator begin(uint32_t cutoff) const;
 		Iterator end(uint32_t cutoff) const;
 
@@ -143,8 +144,8 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 }
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end)
-	: iter(it), cutoff(cutoff), end(end) {
+CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
+	: iter(it), cutoff(cutoff), end_hash(end_hash) {
 		uint32_t log_slots = log2(it.qf->metadata->nslots);
 		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
 		uint32_t exp = (log_slots - log_page_size) / 5;
@@ -215,6 +216,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		else
 			break;
 	} while(!qfi_end(&iter));
+
 	// drop pages of the last million slots.
 	//static uint64_t last_marker = 1;
 	//if (iter.current / PAGE_DROP_GRANULARITY > last_marker + 1) {
@@ -225,9 +227,14 @@ void CQF<key_obj>::Iterator::operator++(void) {
 	//}
 }
 
+/* Currently, the iterator only traverses forward. So, we only need to check
+ * the right side limit.
+ */
 template<class key_obj>
 bool CQF<key_obj>::Iterator::done(void) const {
-	return iter.current >= end || qfi_end(&iter);
+	uint64_t key = 0, value = 0, count = 0;
+	qfi_get(&iter, &key, &value, &count);
+	return key >= end_hash || qfi_end(&iter);
 }
 
 template<class key_obj>
@@ -255,10 +262,11 @@ typename CQF<key_obj>::Iterator CQF<key_obj>::end(uint32_t cutoff) const {
 }
 
 template<class key_obj>
-typename CQF<key_obj>::Iterator CQF<key_obj>::limits(uint64_t start, uint64_t
-																									end, uint32_t cutoff) const {
+typename CQF<key_obj>::Iterator CQF<key_obj>::limits(uint64_t start_hash,
+																										 uint64_t end_hash,
+																										 uint32_t cutoff) const {
 	QFi qfi;
-	qf_iterator(&this->cqf, &qfi, start);
+	qf_iterator_hash(&this->cqf, &qfi, start_hash);
 	// Skip past the cutoff
 	do {
 		uint64_t key = 0, value = 0, count = 0;
@@ -269,6 +277,6 @@ typename CQF<key_obj>::Iterator CQF<key_obj>::limits(uint64_t start, uint64_t
 			break;
 	} while(!qfi_end(&qfi));
 
-	return Iterator(qfi, cutoff, end);
+	return Iterator(qfi, cutoff, end_hash);
 }
 #endif

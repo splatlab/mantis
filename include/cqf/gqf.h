@@ -141,8 +141,13 @@ extern "C" {
 		 value, into qf. */
 	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value);
 
-	/* Initialize an iterator */
+	/* Initialize an iterator and position it at the smallest index greater than
+	 * or equal to "position" containing a valid hash. */
 	bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position);
+
+	/* Initialize an iterator and position it at the smallest index containing a
+	 * hash value greater than or equal to "hash". */
+	bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash);
 
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the
 		 end of the QF. */
