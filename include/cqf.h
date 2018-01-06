@@ -133,7 +133,7 @@ CQF<key_obj>::CQF(const CQF<key_obj>& copy_cqf) {
 
 template <class key_obj>
 void CQF<key_obj>::insert(const key_obj& k) {
-	qf_insert(&cqf, k.key, k.value, k.count, NO_LOCK);
+	qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN);
 	// To validate the CQF
 	//set.insert(k.key);
 }

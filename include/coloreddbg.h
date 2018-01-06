@@ -233,7 +233,9 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
 
+	eqclass_map_lw_lock.lock();
 	eqclass_map = map;
+	eqclass_map_lw_lock.unlock();
 	dbg.reset();
 
 	// merge all input CQFs into the final QF
