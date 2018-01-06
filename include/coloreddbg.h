@@ -82,6 +82,7 @@ class ColoredDbg {
 		// bit_vector --> <eq_class_id, abundance>
 		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 			sdslhash<BitVector>> eqclass_map;
+		LightweightLock eqclass_map_lw_lock;
 		CQF<key_obj> dbg;
 		BitVectorRRR eqclasses;
 		uint32_t num_samples;
@@ -129,6 +130,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	uint64_t eq_id = 1;
+	eqclass_map_lw_lock.lock();
 	auto it = eqclass_map.find(vector);
 	// Find if the eqclass of the kmer is already there.
 	// If it is there then increment the abundance.
@@ -149,11 +151,10 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
     // with standard map
     it->second.second += 1; // update the abundance.
 	}
+	eqclass_map_lw_lock.unlock();
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
-	// TODO: (prashant) An optimization. After you have seen 10M kmers. Then
-	// sort the eqclass ids based on their abundances. Then reassign the
-	// smallest id to the eq class with the highest abundance.
+
 	static uint64_t last_size = 0;
 	if (dbg.size() % 10000000 == 0 &&
 			dbg.size() != last_size) {
