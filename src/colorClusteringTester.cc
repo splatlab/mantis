@@ -16,16 +16,31 @@ void addBlock(spp::sparse_hash_map<BitVector, std::pair<BitVector*, uint64_t>, s
 {
   auto it = eqSubPattern_map.find(subPattern);
   if (it == eqSubPattern_map.end()) { 
-    eqSubPattern_map[subPattern] = std::make_pair(colorCls, eqSubPattern_map.size());
+    eqSubPattern_map[subPattern] = std::make_pair(colorCls, 1);
     //eqSubPattern_map.emplace(std::piecewise_construct, std::forward_as_tuple(subPattern), std::forward_as_tuple(colorCls));
   }
   else { // eq class is seen before so increment the abundance.
-    it->second.first = rand()%2?colorCls:it->second.first;
+    // second methodology : choose the eq. class with the maximum popularity
+    //it->second.first = rand()%2?colorCls:it->second.first;
     it->second.second += 1; // update the abundance.
   }
   //return eq_id;
 }
 
+void addBlock(spp::sparse_hash_map<BitVector, std::vector<BitVector*>, sdslhash<BitVector>> &eqSubPattern_map, 
+                  BitVector &subPattern,
+                  BitVector* colorCls)
+{
+  auto it = eqSubPattern_map.find(subPattern);
+  if (it == eqSubPattern_map.end()) { 
+    std::vector<BitVector*> newVec;
+    newVec.push_back(colorCls);
+    eqSubPattern_map[subPattern] = newVec;
+  }
+  else { // eq class is seen before so increment the abundance.
+    it->second.push_back(colorCls);
+  }
+}
 // calculate hammingDistance between two bit vectors
 size_t calcHammingDist(BitVector* b1, BitVector &b2, size_t num_samples) {
   size_t hammingDistance = 0;
@@ -86,7 +101,7 @@ int main(int argc, char *argv[])
   std::ifstream eqClsFreq(eqclassFreq_filename);
   std::set<uint64_t> eqClsIDs;
   std::vector<BitVector> eqClss;
-  eqClss.reserve(topFreqEqClsCnt);
+  eqClss.resize(topFreqEqClsCnt);
   for (size_t eqclsCntr = 0; eqclsCntr < topFreqEqClsCnt; eqclsCntr++)
   {
     std::string line;
@@ -96,7 +111,7 @@ int main(int argc, char *argv[])
     //std::cout << eqClsID << " ";
     eqClsIDs.insert(eqClsID);
     BitVector colorBv(num_samples);
-    eqClss.push_back(colorBv);
+    eqClss[eqclsCntr] = colorBv;
     size_t i = 0;
     size_t blockCntr = 0;
     while (i < num_samples)
@@ -110,16 +125,36 @@ int main(int argc, char *argv[])
         size_t bitCnt = std::min(lastI - i, (size_t)64);
         size_t wrd = eqcls.get_int(eqClsID * num_samples + i, bitCnt);
         bv.set_int(bvPos, wrd, bitCnt);
-        eqClss.back().set_int(i, wrd, bitCnt);
+        eqClss[eqclsCntr].set_int(i, wrd, bitCnt);
         bvPos += bitCnt;
         i += bitCnt;
       }
-      addBlock(subPatternMaps[blockCntr], bv, &eqClss.back());
+      addBlock(subPatternMaps[blockCntr], bv, &eqClss[eqclsCntr]);
       blockCntr++;
     }
     // if (eqclsCntr != 0 && eqclsCntr % 1000000 == 0)
     //   std::cout << "\nTotal number of eqClses so far : " << eqclsCntr << "\n";
   }
+
+   // calculate and store the distribution of collisions
+  std::map<uint64_t, uint64_t> collisionMap;
+  for (auto & subPatternMap : subPatternMaps) {
+    for (auto it : subPatternMap) {
+      if (collisionMap.find(it.second.second) == collisionMap.end()) {
+        collisionMap[it.second.second] = 1;
+      }
+      else {
+        collisionMap[it.second.second] += 1;
+      }
+    }
+  }
+  std::ofstream file("collisions-" + std::to_string(topFreqEqClsCnt) + ".dist");
+  file << "CollisionCnt,BlockCnt\n";
+  for (auto it : collisionMap) {
+    file << it.first << "," << it.second << "\n";
+  }
+  file.close();
+  //std::exit(1);
   std::cerr << "Looking for closest popular eq. class ...\n";
   // go over all eq classes other than the m most popular ones and find the popular vector with least distance
   size_t notFound = 0;
@@ -183,4 +218,5 @@ int main(int argc, char *argv[])
   for (auto it : hamDistMap) {
     std::cout << it.first << " " << it.second << "\n";
   }
+
 }
