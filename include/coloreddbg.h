@@ -27,6 +27,7 @@
 
 #include <inttypes.h>
 
+#include "libcuckoo/cuckoohash_map.hh"
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"
@@ -41,7 +42,7 @@
 #define SAMPLEID_FILE "sampleid.lst"
 
 template <typename Key, typename Value, typename Hasher>
-  using cdbg_bv_map_t = spp::sparse_hash_map<Key, Value, Hasher>;
+  using cdbg_bv_map_t = cuckoohash_map<Key, Value, Hasher>;
 
 template <class qf_obj, class key_obj>
 class ColoredDbg {
@@ -64,7 +65,7 @@ class ColoredDbg {
 
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
 		const BitVectorRRR get_bitvector(void) const { return eqclasses; }
-		uint64_t get_num_eqclasses(void) const { return num_eq_classes; }
+		uint64_t get_num_eqclasses(void) const { return eqclass_map.size(); }
 		uint64_t get_num_samples(void) const { return num_samples; }
 		std::string get_sample(uint32_t id) const;
 		uint32_t seed(void) const { return dbg.seed(); }
@@ -76,9 +77,7 @@ class ColoredDbg {
 		void serialize(std::string prefix);
 
 	private:
-		void add_kmer(key_obj& hash, BitVector& vector, cdbg_bv_map_t<BitVector,
-									std::pair<uint64_t, uint64_t>, sdslhash<BitVector>>&
-									local_eqclass_map);
+		void add_kmer(key_obj& hash, BitVector& vector);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
 
@@ -90,7 +89,6 @@ class ColoredDbg {
 		CQF<key_obj> dbg;
 		BitVectorRRR eqclasses;
 		uint32_t num_samples;
-		uint64_t num_eq_classes;
 };
 
 template <class T>
@@ -117,11 +115,7 @@ struct compare {
 
 template <class qf_obj, class key_obj>
 inline uint64_t ColoredDbg<qf_obj, key_obj>::get_next_available_id(void) {
-	uint64_t id;
-	eqclass_map_lw_lock.lock();
-	id = ++num_eq_classes;
-	eqclass_map_lw_lock.unlock();
-	return id;
+	return get_num_eqclasses() + 1;
 }
 
 template <class qf_obj, class key_obj>
@@ -135,33 +129,17 @@ std::string ColoredDbg<qf_obj, key_obj>::get_sample(uint32_t id) const {
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
-																					 vector, cdbg_bv_map_t<BitVector,
-																					 std::pair<uint64_t, uint64_t>,
-																					 sdslhash<BitVector>>&
-																					 local_eqclass_map) {
+																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
-	uint64_t eq_id = 1;
-	auto global_it = eqclass_map.find(vector);
-	auto local_it = local_eqclass_map.find(vector);
-	// Find if the eqclass of the kmer is already there.
-	// If it is there then increment the abundance.
-	// Else create a new eq class.
-	if (global_it == eqclass_map.end() && local_it == local_eqclass_map.end()) {
-		// eq class is seen for the first time.
-		eq_id = get_next_available_id();
-		local_eqclass_map.emplace(std::piecewise_construct,
-															std::forward_as_tuple(vector),
-															std::forward_as_tuple(eq_id, 1));
-	// eq class is seen before so increment the abundance.
-	} else if (global_it != eqclass_map.end()) {
-		eq_id = global_it->second.first;
-    // with standard map
-    global_it->second.second += 1; // update the abundance.
+	auto updatefn = [](std::pair<uint64_t, uint64_t> &val) { ++val.second; };
+	uint64_t eq_id = get_next_available_id();
+	bool new_vector = eqclass_map.upsert(vector, updatefn, std::pair<uint64_t,
+																			 uint64_t>(eq_id, 1));
+	if (!new_vector) {
+		eq_id = eqclass_map.find(vector).first;
 	} else {
-		eq_id = local_it->second.first;
-    // with standard map
-    local_it->second.second += 1; // update the abundance.
+		PRINT_CDBG("Added a new bit vector.");
 	}
 
 	k.count = eq_id;	// we use the count to store the eqclass ids
@@ -212,10 +190,11 @@ template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serialize(std::string prefix) {
 	dbg.serialize(prefix + CQF_FILE);
 	BitVector final_bv(get_num_eqclasses() * num_samples);
-	for (auto it = eqclass_map.begin(); it != eqclass_map.end(); ++it) {
-		BitVector vector = it->first;
+	auto vector_it = eqclass_map.lock_table();
+	for (const auto &it : vector_it) {
+		BitVector vector = it.first;
 		// counter starts from 1.
-		uint64_t cur_id = it->second.first - 1;
+		uint64_t cur_id = it.second.first - 1;
 		uint64_t start_idx = cur_id * num_samples;
 		for (uint32_t i = 0; i < num_samples; i++, start_idx++)
 			if (vector[i])
@@ -230,8 +209,9 @@ void ColoredDbg<qf_obj, key_obj>::serialize(std::string prefix) {
 	opfile.close();
 
 	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
-	for (auto sample : eqclass_map)
-		tmpfile << sample.second.first << " " << sample.second.second << std::endl;
+	auto sample_it = eqclass_map.lock_table();
+	for (const auto &it : sample_it)
+		tmpfile << it.second.first << " " << it.second.second << std::endl;
 	tmpfile.close();
 }
 
@@ -246,15 +226,7 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>,
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
 
-	// bit_vector --> <eq_class_id, abundance>
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>, sdslhash<BitVector>>
-		local_eqclass_map;
-
-	// Update the global eqclass map.
-	eqclass_map_lw_lock.lock();
 	eqclass_map = map;
-	eqclass_map_lw_lock.unlock();
-
 	dbg.reset();
 
 	// merge all input CQFs into the final QF
@@ -318,17 +290,13 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>,
 			minheap.push(obj);
 		}
 		// Add <kmer, vector> in the cdbg
-		add_kmer(cur.obj, eq_class, local_eqclass_map);
+		add_kmer(cur.obj, eq_class);
 		counter++;
 		if (counter > num_kmers)
 			break;
 	}
 
-	//Merge local eqclass map in the global one.
-	eqclass_map_lw_lock.lock();
-	eqclass_map.insert(local_eqclass_map.begin(), local_eqclass_map.end());
-	eqclass_map_lw_lock.unlock();
-
+	PRINT_CDBG("Construction done!");
 	return eqclass_map;
 }
 
@@ -343,13 +311,13 @@ void ColoredDbg<qf_obj, key_obj>::build_sampleid_map(qf_obj *incqfs) {
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
 																				uint32_t nqf) :
-	dbg(key_bits, seed), eqclasses(nqf * INITIAL_EQ_CLASSES), num_samples(nqf),
-	num_eq_classes{0} {}
+	dbg(key_bits, seed), eqclasses(nqf * INITIAL_EQ_CLASSES),
+	num_samples(nqf) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file, std::string&
 																				eqclass_file, std::string& sample_file)
-: dbg(cqf_file, false), eqclasses(eqclass_file), num_eq_classes{0} {
+: dbg(cqf_file, false), eqclasses(eqclass_file) {
 	num_samples = 0;
 	std::ifstream sampleid(sample_file.c_str());
 	std::string sample;

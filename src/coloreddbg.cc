@@ -173,20 +173,20 @@ build_main ( BuildOpts& opt )
 
 	// Sort equivalence classes based on their abundances.
 	std::multimap<uint64_t, BitVector, std::greater<uint64_t>> sorted;
-	for (auto& it : unsorted_map) {
+	auto unsorted_it = unsorted_map.lock_table();
+	for (const auto &it : unsorted_it) {
 		//DEBUG_CDBG(it.second.second << " " << it.second.first << " " << it.first.data());
 		sorted.insert(std::pair<uint64_t, BitVector>(it.second.second, it.first));
-		//sorted[it.second.second] = it.first;
 	}
 	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>> sorted_map;
 	//DEBUG_CDBG("After sorting.");
+
 	uint64_t i = 1;
 	for (auto& it : sorted) {
-		//DEBUG_CDBG(it.first << " " << it.second.data());
+	//DEBUG_CDBG(it.first << " " << it.second.data());
 		std::pair<uint64_t, uint64_t> val(i, 0);
-		std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
-		sorted_map.insert(keyval);
+		sorted_map.insert(it.second, val);
 		i++;
 	}
 
