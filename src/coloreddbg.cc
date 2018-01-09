@@ -158,6 +158,8 @@ build_main ( BuildOpts& opt )
 																														inobjects[0].obj->seed(),
 																														nqf);
 
+	cdbg.build_sampleid_map(inobjects);
+
 	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
 		std::endl;
 	// First construct the colored dbg on 1000 k-mers.

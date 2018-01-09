@@ -51,6 +51,8 @@ class ColoredDbg {
 
 		ColoredDbg(uint64_t key_bits, uint32_t seed, uint32_t nqf);
 		
+		void build_sampleid_map(qf_obj *incqfs);
+
 		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>>& construct(qf_obj *incqfs,
 																		std::unordered_map<std::string, uint64_t>&
@@ -137,17 +139,11 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	// Else create a new eq class.
 	if (it == eqclass_map.end()) {	// eq class is seen for the first time.
 		eq_id = get_next_available_id();
-		//std::pair<uint64_t, uint64_t> val(eq_id, 1);
-		//std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(vector,
-		//																																	val);
 		eqclass_map.emplace(std::piecewise_construct,
 												std::forward_as_tuple(vector),
 												std::forward_as_tuple(eq_id, 1));
 	} else {		// eq class is seen before so increment the abundance.
-		//std::pair<uint64_t, uint64_t> val = it->second;
 		eq_id = it->second.first;
-		//val.second += 1;
-		//it.value() = val; // update the abundance.
     // with standard map
     it->second.second += 1; // update the abundance.
 	}
@@ -245,8 +241,6 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 
 	// Initialize all iterators with sample specific cutoffs.
 	for (uint32_t i = 0; i < num_samples; i++) {
-		std::pair<uint32_t, std::string> pair(incqfs[i].id, incqfs[i].sample_id);
-		sampleid_map.insert(pair);
 		auto it = cutoffs.find(incqfs[i].sample_id);
 		if (it == cutoffs.end()) {
 			std::cerr << "Sample id " <<  incqfs[i].sample_id << " not found in" <<
@@ -308,6 +302,14 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 	}
 
 	return eqclass_map;
+}
+
+template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::build_sampleid_map(qf_obj *incqfs) {
+	for (uint32_t i = 0; i < num_samples; i++) {
+		std::pair<uint32_t, std::string> pair(incqfs[i].id, incqfs[i].sample_id);
+		sampleid_map.insert(pair);
+	}
 }
 
 template <class qf_obj, class key_obj>
