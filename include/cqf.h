@@ -79,7 +79,7 @@ class CQF {
 				uint32_t cutoff;
 				uint64_t end_hash;
 				struct aiocb aiocb;
-				uint64_t last_read_offset, last_prefetch_offset;
+				uint64_t last_prefetch_offset;
 		};
 
 		Iterator limits(uint64_t start_hash, uint64_t end_hash, uint32_t cutoff)
@@ -145,7 +145,7 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
-	: iter(it), cutoff(cutoff), end_hash(end_hash) {
+	: iter(it), cutoff(cutoff), end_hash(end_hash), last_prefetch_offset(0) {
 		uint32_t log_slots = log2(it.qf->metadata->nslots);
 		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
 		uint32_t exp = (log_slots - log_page_size) / 5;
@@ -166,11 +166,12 @@ key_obj CQF<key_obj>::Iterator::operator*(void) const {
 
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
+	uint64_t last_read_offset;
 	qfi_nextx(&iter, &last_read_offset);
 	uint32_t buffer_size = num_pages * PAGE_BUFFER_SIZE;
 
 	// Read next "buffer_size" bytes from the file offset.
-	if (last_read_offset > last_prefetch_offset) {
+	if (last_read_offset >= last_prefetch_offset) {
 		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
 							 << " " << last_read_offset << ">" << last_prefetch_offset);
 		if (aiocb.aio_buf) {
@@ -190,11 +191,19 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			}
 		}
 
+		if (last_prefetch_offset <= last_read_offset) {
+			std::cerr << "resetting.. lpo:" << last_prefetch_offset << " lro:"
+				<< last_read_offset << std::endl;
+			last_prefetch_offset = (last_read_offset & ~(4095ULL)) + 4096;
+		} else {
+			 last_prefetch_offset += buffer_size;
+		}
+
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = buffer_size;
-		last_prefetch_offset += buffer_size;
+		last_prefetch_offset = last_read_offset + buffer_size;
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
 		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... ");
