@@ -191,19 +191,18 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			}
 		}
 
-		if (last_prefetch_offset <= last_read_offset) {
+		memset(&aiocb, 0, sizeof(struct aiocb));
+		aiocb.aio_fildes = iter.qf->mem->fd;
+		aiocb.aio_buf = (volatile void*)buffer;
+		aiocb.aio_nbytes = buffer_size;
+		if ((last_prefetch_offset + buffer_size) < last_read_offset ||
+				last_prefetch_offset == 0) {
 			std::cerr << "resetting.. lpo:" << last_prefetch_offset << " lro:"
 				<< last_read_offset << std::endl;
 			last_prefetch_offset = (last_read_offset & ~(4095ULL)) + 4096;
 		} else {
 			 last_prefetch_offset += buffer_size;
 		}
-
-		memset(&aiocb, 0, sizeof(struct aiocb));
-		aiocb.aio_fildes = iter.qf->mem->fd;
-		aiocb.aio_buf = (volatile void*)buffer;
-		aiocb.aio_nbytes = buffer_size;
-		last_prefetch_offset = last_read_offset + buffer_size;
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
 		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... ");
