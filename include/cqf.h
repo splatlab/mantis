@@ -201,7 +201,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 				<< last_read_offset << std::endl;
 			last_prefetch_offset = (last_read_offset & ~(4095ULL)) + 4096;
 		} else {
-			 last_prefetch_offset += buffer_size;
+			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
 		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
