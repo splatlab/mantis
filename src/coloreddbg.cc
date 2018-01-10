@@ -104,7 +104,7 @@ build_main ( BuildOpts& opt )
 	struct aioinit aioinit;
 	memset(&aioinit, 0, sizeof(struct aioinit));
 	aioinit.aio_num = 2500;
-	aioinit.aio_threads = 32;
+	aioinit.aio_threads = 512;
 	aio_init(&aioinit);
 
 	std::ifstream infile(opt.inlist);
