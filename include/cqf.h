@@ -195,12 +195,10 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = buffer_size;
-		if (last_prefetch_offset == 0) {
-			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) + 4096;
-		} else if ((last_prefetch_offset + buffer_size) < last_read_offset) {
+		if ((last_prefetch_offset + buffer_size) < last_read_offset) {
 			std::cerr << "resetting.. lpo:" << last_prefetch_offset << " lro:" <<
 									 last_read_offset << std::endl;
-			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) + 4096;
+			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) + buffer_size;
 		} else {
 			last_prefetch_offset += buffer_size;
 		}

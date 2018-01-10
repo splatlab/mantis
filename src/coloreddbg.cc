@@ -47,7 +47,7 @@
 #include "ProgOpts.h"
 #include "coloreddbg.h"
 
-#define MAX_THREADS 20
+#define MAX_THREADS 50
 #define MAX_NUM_SAMPLES 2600
 #define SAMPLE_SIZE (1ULL << 26)
 
