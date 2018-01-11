@@ -65,9 +65,10 @@ class ColoredDbg {
 
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
 		const BitVectorRRR get_bitvector(void) const { return eqclasses; }
-		uint64_t get_num_eqclasses(void) const { return num_eq_classes.load(); }
+		uint64_t get_num_eqclasses(void) const { return eqclass_map.size(); }
 		uint64_t get_num_samples(void) const { return num_samples; }
 		std::string get_sample(uint32_t id) const;
+		uint64_t get_counter_val(void) const;
 		uint32_t seed(void) const { return dbg.seed(); }
 		uint64_t range(void) const { return dbg.range(); }
 
@@ -77,7 +78,6 @@ class ColoredDbg {
 		void serialize(std::string prefix);
 
 	private:
-		void increment_num_eqclasses() { ++num_eq_classes; }
 		void add_kmer(key_obj& hash, BitVector& vector);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
@@ -116,7 +116,14 @@ struct compare {
 
 template <class qf_obj, class key_obj>
 inline uint64_t ColoredDbg<qf_obj, key_obj>::get_next_available_id(void) {
-	return get_num_eqclasses() + 1;
+	return ++num_eq_classes;
+}
+
+template <class qf_obj, class key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>::get_counter_val(void) const {
+	int x;
+	x = num_eq_classes.load();
+	return x;
 }
 
 template <class qf_obj, class key_obj>
@@ -133,12 +140,15 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
+	thread_local static int local_eq_id = -1;
 	auto updatefn = [](std::pair<uint64_t, uint64_t> &val) { ++val.second; };
 
+	if (local_eq_id == -1)
+		local_eq_id = get_next_available_id();
+
 	if (eqclass_map.upsert(vector, updatefn,
-												 std::pair<uint64_t,uint64_t>(get_next_available_id(),
-																										  1)))
-		increment_num_eqclasses();
+												 std::pair<uint64_t,uint64_t>(local_eq_id, 1)))
+		local_eq_id = get_next_available_id();
 
 	uint64_t eq_id = eqclass_map.find(vector).first;
 
