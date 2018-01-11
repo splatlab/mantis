@@ -134,12 +134,11 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	auto updatefn = [](std::pair<uint64_t, uint64_t> &val) { ++val.second; };
-	bool new_vector = eqclass_map.upsert(vector, updatefn,
-												std::pair<uint64_t,uint64_t>(get_next_available_id(),
-																										 1));
-	if (new_vector) {
+
+	if (eqclass_map.upsert(vector, updatefn,
+												 std::pair<uint64_t,uint64_t>(get_next_available_id(),
+																										  1)))
 		increment_num_eqclasses();
-	}
 
 	uint64_t eq_id = eqclass_map.find(vector).first;
 
