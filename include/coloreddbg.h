@@ -65,7 +65,7 @@ class ColoredDbg {
 
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
 		const BitVectorRRR get_bitvector(void) const { return eqclasses; }
-		uint64_t get_num_eqclasses(void) const { return eqclass_map.size(); }
+		uint64_t get_num_eqclasses(void) const { return num_eq_classes.load(); }
 		uint64_t get_num_samples(void) const { return num_samples; }
 		std::string get_sample(uint32_t id) const;
 		uint32_t seed(void) const { return dbg.seed(); }
@@ -77,6 +77,7 @@ class ColoredDbg {
 		void serialize(std::string prefix);
 
 	private:
+		void increment_num_eqclasses() { ++num_eq_classes; }
 		void add_kmer(key_obj& hash, BitVector& vector);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
@@ -85,10 +86,10 @@ class ColoredDbg {
 		// bit_vector --> <eq_class_id, abundance>
 		cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>,
 			sdslhash<BitVector>> eqclass_map;
-		LightweightLock eqclass_map_lw_lock;
 		CQF<key_obj> dbg;
 		BitVectorRRR eqclasses;
 		uint32_t num_samples;
+		std::atomic<int> num_eq_classes;
 };
 
 template <class T>
@@ -133,14 +134,14 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	auto updatefn = [](std::pair<uint64_t, uint64_t> &val) { ++val.second; };
-	uint64_t eq_id = get_next_available_id();
-	bool new_vector = eqclass_map.upsert(vector, updatefn, std::pair<uint64_t,
-																			 uint64_t>(eq_id, 1));
-	if (!new_vector) {
-		eq_id = eqclass_map.find(vector).first;
-	} else {
-		PRINT_CDBG("Added a new bit vector.");
+	bool new_vector = eqclass_map.upsert(vector, updatefn,
+												std::pair<uint64_t,uint64_t>(get_next_available_id(),
+																										 1));
+	if (new_vector) {
+		increment_num_eqclasses();
 	}
+
+	uint64_t eq_id = eqclass_map.find(vector).first;
 
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
@@ -191,7 +192,9 @@ void ColoredDbg<qf_obj, key_obj>::serialize(std::string prefix) {
 	dbg.serialize(prefix + CQF_FILE);
 	BitVector final_bv(get_num_eqclasses() * num_samples);
 	auto vector_it = eqclass_map.lock_table();
+	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
 	for (const auto &it : vector_it) {
+		tmpfile << it.second.first << " " << it.second.second << std::endl;
 		BitVector vector = it.first;
 		// counter starts from 1.
 		uint64_t cur_id = it.second.first - 1;
@@ -206,12 +209,8 @@ void ColoredDbg<qf_obj, key_obj>::serialize(std::string prefix) {
 	std::ofstream opfile(prefix + SAMPLEID_FILE);
 	for (auto sample : sampleid_map)
 		opfile << sample.first << " " << sample.second << std::endl;
+	
 	opfile.close();
-
-	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
-	auto sample_it = eqclass_map.lock_table();
-	for (const auto &it : sample_it)
-		tmpfile << it.second.first << " " << it.second.second << std::endl;
 	tmpfile.close();
 }
 
@@ -296,7 +295,6 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>,
 			break;
 	}
 
-	PRINT_CDBG("Construction done!");
 	return eqclass_map;
 }
 
@@ -312,7 +310,7 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
 																				uint32_t nqf) :
 	dbg(key_bits, seed), eqclasses(nqf * INITIAL_EQ_CLASSES),
-	num_samples(nqf) {}
+	num_samples(nqf), num_eq_classes(0) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file, std::string&
