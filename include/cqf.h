@@ -149,7 +149,7 @@ CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 		uint32_t log_slots = log2(it.qf->metadata->nslots);
 		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
 		uint32_t exp = (log_slots - log_page_size) / 5;
-		num_pages = pow(4, exp);
+		num_pages = pow(5, exp);
 		buffer = (unsigned char*)calloc(num_pages, PAGE_BUFFER_SIZE);
 		if (buffer == NULL) {
 			std::cerr << "Can't allocate buffer space." << std::endl;
