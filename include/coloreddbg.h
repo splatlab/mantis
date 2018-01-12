@@ -57,11 +57,8 @@ class ColoredDbg {
 		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>>& construct(qf_obj *incqfs,
 																		std::unordered_map<std::string, uint64_t>&
-																		cutoffs, cdbg_bv_map_t<BitVector,
-																		std::pair<uint64_t, uint64_t>,
-																		sdslhash<BitVector>>& map, uint64_t
-																		start_hash, uint64_t end_hash, uint64_t
-																		num_kmers);
+																		cutoffs, uint64_t start_hash, uint64_t
+																		end_hash, uint64_t num_kmers);
 
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
 		const BitVectorRRR get_bitvector(void) const { return eqclasses; }
@@ -71,6 +68,9 @@ class ColoredDbg {
 		uint64_t get_counter_val(void) const;
 		uint32_t seed(void) const { return dbg.seed(); }
 		uint64_t range(void) const { return dbg.range(); }
+
+		void reinit(cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
+												 sdslhash<BitVector>>& map);
 
 		std::unordered_map<uint64_t, uint64_t>
 			find_samples(const mantis::QuerySet& kmers);
@@ -124,6 +124,14 @@ uint64_t ColoredDbg<qf_obj, key_obj>::get_counter_val(void) const {
 	int x;
 	x = num_eq_classes.load();
 	return x;
+}
+
+template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<BitVector,
+																				 std::pair<uint64_t,uint64_t>,
+																				 sdslhash<BitVector>>& map) {
+	eqclass_map = map;
+	dbg.reset();
 }
 
 template <class qf_obj, class key_obj>
@@ -227,15 +235,11 @@ template <class qf_obj, class key_obj>
 cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>,
 	sdslhash<BitVector>>& ColoredDbg<qf_obj, key_obj>::construct(qf_obj *incqfs,
 															std::unordered_map<std::string, uint64_t>& cutoffs,
-															cdbg_bv_map_t<BitVector, std::pair<uint64_t, uint64_t>,
-															sdslhash<BitVector>>& map, uint64_t start_hash,
-															uint64_t end_hash, uint64_t num_kmers) {
+															uint64_t start_hash, uint64_t end_hash, uint64_t
+															num_kmers) {
 																		
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
-
-	eqclass_map = map;
-	dbg.reset();
 
 	// merge all input CQFs into the final QF
 	typename CQF<key_obj>::Iterator *it_incqfs =

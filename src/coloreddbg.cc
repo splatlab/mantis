@@ -55,8 +55,6 @@ struct thread_object {
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> *cdbg;
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	std::unordered_map<std::string, uint64_t> cutoffs;
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>, sdslhash<BitVector>>
-		map;
 	uint64_t start_hash;
 	uint64_t end_hash;
 	uint64_t num_kmers;
@@ -66,8 +64,8 @@ typedef struct thread_object thread_object;
 
 void *thread_construct(void *object) {
 	thread_object *obj = (thread_object*)object;
-	obj->cdbg->construct(obj->inobjects, obj->cutoffs, obj->map,
-											 obj->start_hash, obj->end_hash, obj->num_kmers);
+	obj->cdbg->construct(obj->inobjects, obj->cutoffs, obj->start_hash,
+											 obj->end_hash, obj->num_kmers);
 
 	return NULL;
 }
@@ -166,8 +164,7 @@ build_main ( BuildOpts& opt )
 	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>> unsorted_map;
 
-	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, 0,
-																UINT64_MAX, SAMPLE_SIZE);
+	unsorted_map = cdbg.construct(inobjects, cutoffs, 0, UINT64_MAX, SAMPLE_SIZE);
 
 	DEBUG_CDBG("Number of eq classes found " << unsorted_map.size());
 
@@ -190,6 +187,8 @@ build_main ( BuildOpts& opt )
 		i++;
 	}
 
+	cdbg.reinit(sorted_map);
+
 	std::cout << "Constructing the colored dBG." << std::endl;
 
 	thread_object args[MAX_THREADS];
@@ -197,7 +196,6 @@ build_main ( BuildOpts& opt )
 		args[i].cdbg = &cdbg;
 		args[i].inobjects = inobjects;
 		args[i].cutoffs = cutoffs;
-		args[i].map = sorted_map;
 		args[i].start_hash = i * (cdbg.range() / opt.numthreads);
 		args[i].end_hash = (i + 1) * (cdbg.range() / opt.numthreads);
 		args[i].num_kmers = UINT64_MAX;
