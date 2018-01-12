@@ -2074,6 +2074,10 @@ int qfi_next(QFi *qfi) {
 }
 int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 {
+	uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
+	qfblock* addr = get_block(qfi->qf, block_index);
+	if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->blocks);
+
 	if (qfi_end(qfi))
 		return 1;
 	else {
@@ -2081,7 +2085,7 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 		uint64_t current_remainder, current_count;
 		qfi->current = decode_counter(qfi->qf, qfi->current, &current_remainder,
 																	&current_count);
-		
+
 		if (!is_runend(qfi->qf, qfi->current)) {
 			qfi->current++;
 #ifdef LOG_CLUSTER_LENGTH
@@ -2096,9 +2100,6 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 			/* save to check if the new current is the new cluster. */
 			uint64_t old_current = qfi->current;
 #endif
-			uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
-			qfblock* addr = get_block(qfi->qf, block_index);
-			if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->blocks);
 			uint64_t rank = bitrank(addr->occupieds[0],
 															qfi->run % SLOTS_PER_BLOCK);
 			uint64_t next_run = bitselect(get_block(qfi->qf,
