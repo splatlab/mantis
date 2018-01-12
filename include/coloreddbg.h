@@ -41,6 +41,8 @@
 #define EQCLASS_FILE "eqclass_rrr.cls"
 #define SAMPLEID_FILE "sampleid.lst"
 
+extern uint64_t start_time;
+
 template <typename Key, typename Value, typename Hasher>
   using cdbg_bv_map_t = cuckoohash_map<Key, Value, Hasher>;
 
@@ -168,7 +170,8 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 			dbg.size() != last_size) {
 		last_size = dbg.size();
 		std::cout << "Kmers merged: " << dbg.size() << " Num eq classes: " <<
-			get_num_eqclasses() << std::endl;
+			get_num_eqclasses() <<  " Total time: " << time(NULL) - start_time <<
+			std::endl;
 	}
 }
 

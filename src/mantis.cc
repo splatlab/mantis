@@ -19,6 +19,8 @@
 #define MAX_NUM_SAMPLES 2600
 #define SAMPLE_SIZE (1ULL << 26)
 
+uint64_t start_time;
+
 template <typename T>
 void explore_options_verbose(T& res) {
   if(res.any_error()) { std::cerr << "error\n"; }
@@ -66,6 +68,8 @@ int main ( int argc, char *argv[] ) {
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
+
+	start_time = time(NULL);
 
   /*
   bool print_version{false};
