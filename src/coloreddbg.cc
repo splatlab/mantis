@@ -116,8 +116,7 @@ build_main ( BuildOpts& opt )
 
 
 	// Allocate QF structs for input CQFs
-	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
-																	sizeof(SampleObject<CQF<KeyObject>*>));
+	inobjects = new SampleObject<CQF<KeyObject>*>[MAX_NUM_SAMPLES];
 	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
 
 	// Read cutoffs files
