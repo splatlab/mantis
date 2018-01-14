@@ -118,6 +118,17 @@ uint64_t HashUtil::hash_64i(uint64_t key, uint64_t mask)
 	return key;
 }
 
+__uint128_t HashUtil::MurmurHash128A ( const void * key, int len,
+																			 unsigned int seed1, unsigned int
+																			 seed2 ) {
+	__uint128_t ret_hash;
+	ret_hash = MurmurHash64A(key, len, seed1);
+	ret_hash = ret_hash << 64;
+	ret_hash = ret_hash | MurmurHash64A(key, len, seed2);
+
+	return ret_hash;
+}
+
 //-----------------------------------------------------------------------------
 // MurmurHash2, 64-bit versions, by Austin Appleby
 

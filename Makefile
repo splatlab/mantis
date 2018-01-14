@@ -44,6 +44,7 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
+validatemantis:					$(OBJDIR)/kmer.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
 
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc

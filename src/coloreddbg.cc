@@ -116,15 +116,14 @@ build_main ( BuildOpts& opt )
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->keybits(),
 																														inobjects[0].obj->seed(),
-																														nqf);
+																														prefix, nqf);
 
 	cdbg.build_sampleid_map(inobjects);
 
 	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
 		std::endl;
 	// First construct the colored dbg on 1000 k-mers.
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
-		sdslhash<BitVector>> unsorted_map;
+	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
 
 	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, 0,
 																UINT64_MAX, SAMPLE_SIZE);
@@ -132,20 +131,20 @@ build_main ( BuildOpts& opt )
 	DEBUG_CDBG("Number of eq classes found " << unsorted_map.size());
 
 	// Sort equivalence classes based on their abundances.
-	std::multimap<uint64_t, BitVector, std::greater<uint64_t>> sorted;
+	std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
 	for (auto& it : unsorted_map) {
 		//DEBUG_CDBG(it.second.second << " " << it.second.first << " " << it.first.data());
-		sorted.insert(std::pair<uint64_t, BitVector>(it.second.second, it.first));
+		sorted.insert(std::pair<uint64_t, __uint128_t>(it.second.second,
+																									 it.first));
 		//sorted[it.second.second] = it.first;
 	}
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
-		sdslhash<BitVector>> sorted_map;
+	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> sorted_map;
 	//DEBUG_CDBG("After sorting.");
 	uint64_t i = 1;
 	for (auto& it : sorted) {
 		//DEBUG_CDBG(it.first << " " << it.second.data());
 		std::pair<uint64_t, uint64_t> val(i, 0);
-		std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
+		std::pair<__uint128_t, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
 		sorted_map.insert(keyval);
 		i++;
 	}
@@ -163,7 +162,7 @@ build_main ( BuildOpts& opt )
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
 	std::cout << "Serializing CQF and eq classes in " << prefix << std::endl;
-	cdbg.serialize(prefix);
+	cdbg.serialize();
 	std::cout << "Serialization done." << std::endl;
 
 	return EXIT_SUCCESS;

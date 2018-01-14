@@ -56,6 +56,7 @@ class BitVectorRRR {
 		BitVectorRRR(const BitVector& bv) : rrr_bits(bv.get_bits()),
 				size(bv.bit_size()) {};
 		BitVectorRRR(std::string& filename);
+		BitVectorRRR(const BitVectorRRR& rrr_bv) : rrr_bits(rrr_bv.rrr_bits) {}
 
 		bool operator[](uint64_t idx);
 		bool serialize(std::string& filename);

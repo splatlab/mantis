@@ -42,6 +42,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "MantisFS.h"
 #include "ProgOpts.h"
 #include "kmer.h"
 #include "coloreddbg.h"
@@ -101,14 +102,14 @@ validate_main ( ValidateOpts& opt )
 	std::string prefix(opt.prefix);
 	std::cout << "Reading colored dbg from disk." << std::endl;
 	std::string dbg_file(prefix + CQF_FILE);
-	std::string eqclass_file(prefix + EQCLASS_FILE);
 	std::string sample_file(prefix + SAMPLEID_FILE);
+	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
+																											 std::string(EQCLASS_FILE).c_str());
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
-																														eqclass_file,
+																														eqclass_files,
 																														sample_file);
 	std::cout << "Read colored dbg with " << cdbg.get_cqf()->size() << " k-mers and "
-		<< cdbg.get_bitvector().bit_size() / cdbg.get_num_samples() <<
-		" equivalence classes." << std::endl;
+		<< cdbg.get_num_bitvectors() << " equivalence classes." << std::endl;
 
 	// Read query k-mers.
 	std::cout << "Reading query kmers from disk." << std::endl;
