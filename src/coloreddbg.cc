@@ -96,10 +96,9 @@ build_main ( BuildOpts& opt )
 		cqfs[nqf] = CQF<KeyObject>(cqf_file, true);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
-		std::cout << "Reading CQF " << nqf << " Seed " << cqfs[nqf].seed() <<
-			std::endl;
-		std::cout << "Sample id " << sample_id << " cut off " <<
-							 cutoffs.find(sample_id)->second << std::endl;
+		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());
+		PRINT_CDBG("Sample id " << sample_id << " cut off " <<
+							 cutoffs.find(sample_id)->second);
 		cqfs[nqf].dump_metadata();
 		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], sample_id, nqf);
 		nqf++;
@@ -120,8 +119,7 @@ build_main ( BuildOpts& opt )
 
 	cdbg.build_sampleid_map(inobjects);
 
-	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
-		std::endl;
+	PRINT_CDBG("Sampling eq classes based on " << SAMPLE_SIZE << " kmers.");
 	// First construct the colored dbg on 1000 k-mers.
 	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
 
@@ -149,21 +147,20 @@ build_main ( BuildOpts& opt )
 		i++;
 	}
 
-	std::cout << "Constructing the colored dBG." << std::endl;
+	PRINT_CDBG("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
 	cdbg.construct(inobjects, cutoffs, sorted_map, 0, UINT64_MAX, UINT64_MAX);
 
-	std::cout << "Final colored dBG has " << cdbg.get_cqf()->size() <<
-		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes."
-		<< std::endl;
+	PRINT_CDBG("Final colored dBG has " << cdbg.get_cqf()->size() <<
+		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes.");
 
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
-	std::cout << "Serializing CQF and eq classes in " << prefix << std::endl;
+	PRINT_CDBG("Serializing CQF and eq classes in " << prefix);
 	cdbg.serialize();
-	std::cout << "Serialization done." << std::endl;
+	PRINT_CDBG("Serialization done.");
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */

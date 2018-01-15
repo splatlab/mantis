@@ -89,10 +89,9 @@ validate_main ( ValidateOpts& opt )
 		cqfs[nqf] = CQF<KeyObject>(cqf_file, false);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
-		std::cout << "Reading CQF " << nqf << " Seed " << cqfs[nqf].seed() <<
-			std::endl;
-		std::cout << "Sample id " << sample_id << " cut off " <<
-			cutoffs.find(sample_id)->second << std::endl;
+		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());
+		PRINT_CDBG("Sample id " << sample_id << " cut off " <<
+							 cutoffs.find(sample_id)->second);
 		cqfs[nqf].dump_metadata();
 		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], sample_id, nqf);
 		nqf++;
@@ -100,7 +99,7 @@ validate_main ( ValidateOpts& opt )
 
 	// Read the colored dBG
 	std::string prefix(opt.prefix);
-	std::cout << "Reading colored dbg from disk." << std::endl;
+	PRINT_CDBG("Reading colored dbg from disk.");
 	std::string dbg_file(prefix + CQF_FILE);
 	std::string sample_file(prefix + SAMPLEID_FILE);
 	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
@@ -108,11 +107,12 @@ validate_main ( ValidateOpts& opt )
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
 																														eqclass_files,
 																														sample_file);
-	std::cout << "Read colored dbg with " << cdbg.get_cqf()->size() << " k-mers and "
-		<< cdbg.get_num_bitvectors() << " equivalence classes." << std::endl;
+	PRINT_CDBG("Read colored dbg with " << cdbg.get_cqf()->size() <<
+						 " k-mers and " << cdbg.get_num_bitvectors() <<
+						 " equivalence classes.");
 
 	// Read query k-mers.
-	std::cout << "Reading query kmers from disk." << std::endl;
+	PRINT_CDBG("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
   uint64_t num_kmers = 0;
   mantis::QuerySets multi_kmers = Kmer::parse_kmers(opt.query_file.c_str(),
@@ -169,7 +169,7 @@ validate_main ( ValidateOpts& opt )
 		ground_truth.push_back(fraction_present);
 		cdbg_output.push_back(result);
 	}
-	std::cout << "Colored dBG output is validated." << std::endl;
+	PRINT_CDBG("Colored dBG output is validated.");
 
 #if 0
 	// This is x-axis

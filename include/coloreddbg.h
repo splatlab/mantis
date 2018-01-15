@@ -187,9 +187,8 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	if (dbg.size() % 10000000 == 0 &&
 			dbg.size() != last_size) {
 		last_size = dbg.size();
-		std::cout << "Kmers merged: " << dbg.size() << " Num eq classes: " <<
-			get_num_eqclasses() <<  " Total time: " << time(NULL) - start_time <<
-			std::endl;
+		PRINT_CDBG("Kmers merged: " << dbg.size() << " Num eq classes: " <<
+			get_num_eqclasses() <<  " Total time: " << time(NULL) - start_time);
 	}
 }
 
