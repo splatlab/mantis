@@ -49,7 +49,7 @@ class ColoredDbg {
     ColoredDbg(std::string& cqf_file, std::string& eqclass_file, std::string&
 							 sample_file);
 
-		ColoredDbg(uint32_t seed, uint32_t nqf);
+		ColoredDbg(uint64_t key_bits, uint32_t seed, uint32_t nqf);
 		
 		cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 		sdslhash<BitVector>>& construct(qf_obj *incqfs,
@@ -302,8 +302,9 @@ cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
 }
 
 template <class qf_obj, class key_obj>
-ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint32_t seed, uint32_t nqf) :
-	dbg(seed), eqclasses(nqf * INITIAL_EQ_CLASSES),
+ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
+																				uint32_t nqf) :
+	dbg(key_bits, seed), eqclasses(nqf * INITIAL_EQ_CLASSES),
 	num_samples(nqf) {}
 
 template <class qf_obj, class key_obj>

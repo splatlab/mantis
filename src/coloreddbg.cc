@@ -115,8 +115,8 @@ build_main ( BuildOpts& opt )
     mantis::fs::MakeDir(prefix.c_str());
   }
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->seed(),
-																														nqf);
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>
+		cdbg(inobjects[0].obj->keybits(), inobjects[0].obj->seed(), nqf);
 
 	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
 		std::endl;

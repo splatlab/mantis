@@ -69,6 +69,9 @@ typedef struct __attribute__ ((__packed__)) qfblock {
 #define DEBUG_CQF(fmt, ...) \
 	do { if (PRINT_DEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
 
+#define PRINT_CQF(fmt, ...) \
+	do { fprintf(stdout, fmt, __VA_ARGS__); } while (0)
+
 static __inline__ unsigned long long rdtsc(void)
 {
 	unsigned hi, lo;
@@ -1954,7 +1957,7 @@ bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position)
 	}
 	assert(position < qf->metadata->nslots);
 	if (!is_occupied(qf, position)) {
-		uint64_t block_index = position;
+		uint64_t block_index = position / SLOTS_PER_BLOCK;
 		uint64_t idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
 		if (idx == 64) {
 			while(idx == 64 && block_index < qf->metadata->nblocks) {
@@ -1984,6 +1987,71 @@ bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position)
 	return true;
 }
 
+bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash)
+{
+	if (hash >= qf->metadata->range) {
+		qfi->current = 0xffffffffffffffff;
+		qfi->qf = qf;
+		return false;
+	}
+
+	qfi->qf = qf;
+	qfi->num_clusters = 0;
+
+	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->bits_per_slot);
+	uint64_t hash_bucket_index = hash >> qf->metadata->bits_per_slot;
+	bool flag = false;
+
+	// If a run starts at "position" move the iterator to point it to the
+	// smallest key greater than or equal to "hash".
+	if (is_occupied(qf, hash_bucket_index)) {
+		int64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf,
+																																	hash_bucket_index-1)
+			+ 1;
+		if (runstart_index < hash_bucket_index)
+			runstart_index = hash_bucket_index;
+		uint64_t current_remainder, current_count, current_end;
+		do {
+			current_end = decode_counter(qf, runstart_index, &current_remainder,
+																	 &current_count);
+			if (current_remainder >= hash_remainder) {
+				flag = true;
+				break;
+			}
+			runstart_index = current_end + 1;
+		} while (!is_runend(qf, current_end));
+		// found "hash" or smallest key greater than "hash" in this run.
+		if (flag) {
+			qfi->run = hash_bucket_index;
+			qfi->current = runstart_index;
+		}
+	}
+	// If a run doesn't start at "position" or the largest key in the run
+	// starting at "position" is smaller than "hash" then find the start of the
+	// next run.
+	if (!is_occupied(qf, hash_bucket_index) || !flag) {
+		uint64_t position = hash_bucket_index;
+		assert(position < qf->metadata->nslots);
+		uint64_t block_index = position / SLOTS_PER_BLOCK;
+		uint64_t idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
+		if (idx == 64) {
+			while(idx == 64 && block_index < qf->metadata->nblocks) {
+				block_index++;
+				idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
+			}
+		}
+		position = block_index * SLOTS_PER_BLOCK + idx;
+		qfi->run = position;
+		qfi->current = position == 0 ? 0 : run_end(qfi->qf, position-1) + 1;
+		if (qfi->current < position)
+			qfi->current = position;
+	}
+
+	if (qfi->current >= qf->metadata->nslots)
+		return false;
+	return true;
+}
+
 int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 {
 	assert(qfi->current < qfi->qf->metadata->nslots);
@@ -2006,6 +2074,10 @@ int qfi_next(QFi *qfi) {
 }
 int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 {
+	uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
+	qfblock* addr = get_block(qfi->qf, block_index);
+	if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->blocks);
+
 	if (qfi_end(qfi))
 		return 1;
 	else {
@@ -2013,7 +2085,7 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 		uint64_t current_remainder, current_count;
 		qfi->current = decode_counter(qfi->qf, qfi->current, &current_remainder,
 																	&current_count);
-		
+
 		if (!is_runend(qfi->qf, qfi->current)) {
 			qfi->current++;
 #ifdef LOG_CLUSTER_LENGTH
@@ -2028,9 +2100,6 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 			/* save to check if the new current is the new cluster. */
 			uint64_t old_current = qfi->current;
 #endif
-			uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
-			qfblock* addr = get_block(qfi->qf, block_index);
-			if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->blocks);
 			uint64_t rank = bitrank(addr->occupieds[0],
 															qfi->run % SLOTS_PER_BLOCK);
 			uint64_t next_run = bitselect(get_block(qfi->qf,
