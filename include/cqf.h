@@ -74,6 +74,7 @@ class CQF {
 			private:
 				/* global buffer to perform read ahead */
 				unsigned char *buffer;
+				uint64_t buffer_size;
 				uint32_t num_pages;
 				QFi iter;
 				uint32_t cutoff;
@@ -146,11 +147,8 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), cutoff(cutoff), end_hash(end_hash), last_prefetch_offset(0) {
-		uint32_t log_slots = log2(it.qf->metadata->nslots);
-		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
-		uint32_t exp = (log_slots - log_page_size) / 5;
-		num_pages = pow(8, exp);
-		buffer = (unsigned char*)mmap(NULL, num_pages * PAGE_BUFFER_SIZE,
+		buffer_size = (((it.qf->metadata->size / 64) + 4095) / 4096) * 4096;
+		buffer = (unsigned char*)mmap(NULL, buffer_size,
 																	PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1,
 																	0);
 		if (buffer == NULL) {
@@ -171,7 +169,6 @@ template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
 	uint64_t last_read_offset;
 	qfi_nextx(&iter, &last_read_offset);
-	uint32_t buffer_size = num_pages * PAGE_BUFFER_SIZE;
 
 	// Read next "buffer_size" bytes from the file offset.
 	if (last_read_offset >= last_prefetch_offset) {
