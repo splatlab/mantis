@@ -146,7 +146,8 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
-	: iter(it), cutoff(cutoff), end_hash(end_hash), last_prefetch_offset(0) {
+	: iter(it), cutoff(cutoff), end_hash(end_hash),
+last_prefetch_offset(LLONG_MIN) {
 		buffer_size = (((it.qf->metadata->size / 1024) + 4095) / 4096) * 4096;
 		buffer = (unsigned char*)mmap(NULL, buffer_size,
 																	PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1,
@@ -199,7 +200,8 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			if (last_prefetch_offset != 0)
 				DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
 									 	last_read_offset);
-			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) + buffer_size;
+			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) +
+															PAGE_BUFFER_SIZE;
 		} else {
 			last_prefetch_offset += buffer_size;
 		}
