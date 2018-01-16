@@ -149,7 +149,7 @@ CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 		uint32_t log_slots = log2(it.qf->metadata->nslots);
 		uint32_t log_page_size = log2(PAGE_BUFFER_SIZE);
 		uint32_t exp = (log_slots - log_page_size) / 5;
-		num_pages = pow(9, exp);
+		num_pages = pow(8, exp);
 		buffer = (unsigned char*)mmap(NULL, num_pages * PAGE_BUFFER_SIZE,
 																	PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1,
 																	0);
