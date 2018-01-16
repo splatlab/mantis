@@ -147,7 +147,7 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), cutoff(cutoff), end_hash(end_hash), last_prefetch_offset(0) {
-		buffer_size = (((it.qf->metadata->size / 64) + 4095) / 4096) * 4096;
+		buffer_size = (((it.qf->metadata->size / 1024) + 4095) / 4096) * 4096;
 		buffer = (unsigned char*)mmap(NULL, buffer_size,
 																	PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1,
 																	0);
@@ -195,7 +195,14 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = buffer_size;
-		last_prefetch_offset += buffer_size;
+		if ((last_prefetch_offset + buffer_size) < last_read_offset) {
+			if (last_prefetch_offset != 0)
+				DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
+									 	last_read_offset);
+			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) + buffer_size;
+		} else {
+			last_prefetch_offset += buffer_size;
+		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
 		std::cerr << "prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
