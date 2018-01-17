@@ -148,13 +148,14 @@ template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), cutoff(cutoff), end_hash(end_hash),
 last_prefetch_offset(LLONG_MIN) {
-		buffer_size = (((it.qf->metadata->size / 1024) + 4095) / 4096) * 4096;
-		buffer = (unsigned char*)mmap(NULL, buffer_size,
-																	PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1,
-																	0);
-		if (buffer == NULL) {
-			std::cerr << "Can't allocate buffer space." << std::endl;
+		buffer_size = (((it.qf->metadata->size / 128) + 4095) / 4096) * 4096;
+		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		if (buffer == MAP_FAILED) {
 			perror("buffer malloc");
+			std::cerr << "Can't allocate buffer space." << std::endl;
+			exit(1);
+		} else {
+			std::cerr << "Allocated buffer at " << std::hex << ((uint64_t)buffer) << std::endl;
 		}
 		//last_prefetch_offset = 4096 - (num_pages * PAGE_BUFFER_SIZE);
 	};
@@ -172,7 +173,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 	qfi_nextx(&iter, &last_read_offset);
 
 	// Read next "buffer_size" bytes from the file offset.
-	if (last_read_offset >= last_prefetch_offset) {
+	if ((int64_t)last_read_offset >= last_prefetch_offset) {
 		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
 							 << " " << last_read_offset << ">" << last_prefetch_offset);
 		if (aiocb.aio_buf) {
@@ -196,7 +197,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = buffer_size;
-		if ((last_prefetch_offset + buffer_size) < last_read_offset) {
+		if ((last_prefetch_offset + (int64_t)buffer_size) < (int64_t)last_read_offset) {
 			if (last_prefetch_offset != 0)
 				DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
 									 	last_read_offset);
@@ -208,7 +209,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
 		std::cerr << "prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
-							 << buffer_size << std::endl;
+							 << buffer_size << " into buffer at " << std::hex << ((uint64_t)buffer) << std::endl;
 		uint32_t ret = aio_read(&aiocb);
 		DEBUG_CDBG("prefetch issued");
 		if (ret) {
