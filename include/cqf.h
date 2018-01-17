@@ -149,15 +149,13 @@ CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), cutoff(cutoff), end_hash(end_hash),
 last_prefetch_offset(LLONG_MIN) {
 		buffer_size = (((it.qf->metadata->size / 128) + 4095) / 4096) * 4096;
-		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE,
+																	MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (buffer == MAP_FAILED) {
 			perror("buffer malloc");
 			std::cerr << "Can't allocate buffer space." << std::endl;
 			exit(1);
-		} else {
-			std::cerr << "Allocated buffer at " << std::hex << ((uint64_t)buffer) << std::endl;
 		}
-		//last_prefetch_offset = 4096 - (num_pages * PAGE_BUFFER_SIZE);
 	};
 
 template <class key_obj>
@@ -207,9 +205,10 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		std::cerr << "prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
+		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
-							 << buffer_size << " into buffer at " << std::hex << ((uint64_t)buffer) << std::endl;
+							 << buffer_size << " into buffer at " << std::hex <<
+							 ((uint64_t)buffer));
 		uint32_t ret = aio_read(&aiocb);
 		DEBUG_CDBG("prefetch issued");
 		if (ret) {

@@ -47,10 +47,11 @@
 #include "ProgOpts.h"
 #include "coloreddbg.h"
 
+#define MAX_THREADS 50
 #define MAX_NUM_SAMPLES 2600
 #define SAMPLE_SIZE (1ULL << 26)
 
-/* 
+/*
  * ===  FUNCTION  =============================================================
  *         Name:  main
  *  Description:  
@@ -96,10 +97,9 @@ build_main ( BuildOpts& opt )
 		cqfs[nqf] = CQF<KeyObject>(cqf_file, true);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
-		std::cout << "Reading CQF " << nqf << " Seed " << cqfs[nqf].seed() <<
-			std::endl;
-		std::cout << "Sample id " << sample_id << " cut off " <<
-							 cutoffs.find(sample_id)->second << std::endl;
+		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());
+		PRINT_CDBG("Sample id " << sample_id << " cut off " <<
+							 cutoffs.find(sample_id)->second);
 		cqfs[nqf].dump_metadata();
 		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], sample_id, nqf);
 		nqf++;
@@ -114,52 +114,53 @@ build_main ( BuildOpts& opt )
     mantis::fs::MakeDir(prefix.c_str());
   }
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>
-		cdbg(inobjects[0].obj->keybits(), inobjects[0].obj->seed(), nqf);
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->keybits(),
+																														inobjects[0].obj->seed(),
+																														prefix, nqf);
 
-	std::cout << "Sampling eq classes based on " << SAMPLE_SIZE << " kmers." <<
-		std::endl;
+	cdbg.build_sampleid_map(inobjects);
+
+	PRINT_CDBG("Sampling eq classes based on " << SAMPLE_SIZE << " kmers.");
 	// First construct the colored dbg on 1000 k-mers.
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
-		sdslhash<BitVector>> unsorted_map;
+	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
 
 	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, SAMPLE_SIZE);
 
 	DEBUG_CDBG("Number of eq classes found " << unsorted_map.size());
 
 	// Sort equivalence classes based on their abundances.
-	std::multimap<uint64_t, BitVector, std::greater<uint64_t>> sorted;
+	std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
 	for (auto& it : unsorted_map) {
 		//DEBUG_CDBG(it.second.second << " " << it.second.first << " " << it.first.data());
-		sorted.insert(std::pair<uint64_t, BitVector>(it.second.second, it.first));
+		sorted.insert(std::pair<uint64_t, __uint128_t>(it.second.second,
+																									 it.first));
 		//sorted[it.second.second] = it.first;
 	}
-	cdbg_bv_map_t<BitVector, std::pair<uint64_t,uint64_t>,
-		sdslhash<BitVector>> sorted_map;
+	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> sorted_map;
 	//DEBUG_CDBG("After sorting.");
 	uint64_t i = 1;
 	for (auto& it : sorted) {
 		//DEBUG_CDBG(it.first << " " << it.second.data());
 		std::pair<uint64_t, uint64_t> val(i, 0);
-		std::pair<BitVector, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
+		std::pair<__uint128_t, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
 		sorted_map.insert(keyval);
 		i++;
 	}
 
-	std::cout << "Constructing the colored dBG." << std::endl;
+	PRINT_CDBG("Constructing the colored dBG.");
+
 	// Reconstruct the colored dbg using the new set of equivalence classes.
 	cdbg.construct(inobjects, cutoffs, sorted_map, UINT64_MAX);
 
-	std::cout << "Final colored dBG has " << cdbg.get_cqf()->size() <<
-		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes."
-		<< std::endl;
+	PRINT_CDBG("Final colored dBG has " << cdbg.get_cqf()->size() <<
+		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes.");
 
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
-	std::cout << "Serializing CQF and eq classes in " << prefix << std::endl;
-	cdbg.serialize(prefix);
-	std::cout << "Serialization done." << std::endl;
+	PRINT_CDBG("Serializing CQF and eq classes in " << prefix);
+	cdbg.serialize();
+	PRINT_CDBG("Serialization done.");
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
