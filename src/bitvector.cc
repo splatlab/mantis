@@ -26,11 +26,6 @@ BitVectorRRR::BitVectorRRR(std::string& filename) {
 						 filename);
 }
 
-BitVectorRRR& BitVectorRRR::operator=(const BitVectorRRR&& bv) {
-	rrr_bits = bv.rrr_bits;
-	return *this;
-}
-
 bool BitVectorRRR::operator[](uint64_t idx) {
 	assert(idx < size);
 	return rrr_bits[idx];

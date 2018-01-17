@@ -178,7 +178,8 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
 
-	if (get_num_eqclasses() % NUM_BV_BUFFER == 0) {
+	// Serialize bit vectors if buffer is full.
+	if (it == eqclass_map.end() && get_num_eqclasses() % NUM_BV_BUFFER == 0) {
 		PRINT_CDBG("Serializing bit vector with " << get_num_eqclasses() <<
 							 " eq classes.");
 		bv_buffer_serialize();
@@ -360,7 +361,7 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
 																				std::string& prefix, uint32_t nqf) :
 	dbg(key_bits, seed), bv_buffer(NUM_BV_BUFFER * nqf),
-	eqclasses(), prefix(prefix), num_samples(nqf), num_serializations(0) {}
+	prefix(prefix), num_samples(nqf), num_serializations(0) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
@@ -372,7 +373,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	num_serializations = 0;
 
 	for (std::string file : eqclass_files) {
-		eqclasses[num_serializations] = BitVectorRRR(file);
+		eqclasses.push_back(BitVectorRRR(file));
 		num_serializations++;
 	}
 

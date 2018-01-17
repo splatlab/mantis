@@ -30,7 +30,7 @@
 
 class BitVector {
 	public:
-		BitVector() : bits(0), size(0) {};
+		BitVector() : bits(), size(0) {};
 		BitVector(uint64_t size);
 
 		sdsl::bit_vector get_bits() const {
@@ -52,12 +52,11 @@ class BitVector {
 
 class BitVectorRRR {
 	public:
-		BitVectorRRR() : rrr_bits(BitVector().get_bits()), size(0) {};
+		BitVectorRRR() : rrr_bits(), size(0) {};
 		BitVectorRRR(const BitVector& bv) : rrr_bits(bv.get_bits()),
 				size(bv.bit_size()) {};
 		BitVectorRRR(std::string& filename);
 
-		BitVectorRRR& operator=(const BitVectorRRR&& rrr_bv);
 		bool operator[](uint64_t idx);
 		bool serialize(std::string& filename);
 		uint64_t bit_size(void) const { return rrr_bits.size(); }
