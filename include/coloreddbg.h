@@ -168,7 +168,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 		eqclass_map.emplace(std::piecewise_construct,
 															std::forward_as_tuple(vec_hash),
 															std::forward_as_tuple(eq_id, 1));
-		// TODO: Add the bit vector in the buffer.
+		add_bitvector(vector);
 	} else { // eq class is seen before so increment the abundance.
 		eq_id = it->second.first;
     // with standard map
