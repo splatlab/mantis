@@ -88,6 +88,14 @@ struct sdslhash {
 		return HashUtil::MurmurHash64A((void*)vector.data(), vector.capacity(),
 																	 2038074743);
 	}
+
+	uint64_t getHash(const T& vector, size_t siz) const
+	{
+		// Using the same seed as we use in k-mer hashing.
+    //return static_cast<uint64_t>(vector.getHashValue());
+		return HashUtil::MurmurHash64A((void*)vector.data(), siz,
+																	 2038074743);
+	}
 };
 
 #endif
