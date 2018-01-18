@@ -213,7 +213,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		//aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		std::cerr << "prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
+		std::cerr << "prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
 							 ((uint64_t)buffer) << std::endl;
