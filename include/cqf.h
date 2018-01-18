@@ -192,13 +192,18 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		}
 
 		if ((last_prefetch_offset - (int64_t)buffer_size) > 0)
-			 madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset - buffer_size, buffer_size, MADV_DONTNEED);
+			posix_fadvise(iter.qf->fd, (unsigned char *)(iter.qf->metadata) +
+										last_prefetch_offset - buffer_size, buffer_size,
+										POSIX_FADV_DONTNEED);
+			//madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset -
+							 //buffer_size, buffer_size, MADV_DONTNEED);
 
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = buffer_size;
-		if ((last_prefetch_offset + (int64_t)buffer_size) < (int64_t)last_read_offset) {
+		if ((last_prefetch_offset + (int64_t)buffer_size) <
+				(int64_t)last_read_offset) {
 			if (last_prefetch_offset != 0)
 				DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
 									 	last_read_offset);
@@ -212,7 +217,9 @@ void CQF<key_obj>::Iterator::operator++(void) {
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
 							 ((uint64_t)buffer) << std::endl;
-		uint32_t ret = aio_read(&aiocb);
+		//uint32_t ret = aio_read(&aiocb);
+		posix_fadvise(iter.qf->fd, last_read_offset, buffer_size,
+									POSIX_FADV_WILLNEED);
 		DEBUG_CDBG("prefetch issued");
 		if (ret) {
 			std::cerr << "aio_read failed at " << iter.current << " total size " <<
