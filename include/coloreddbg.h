@@ -62,7 +62,7 @@ class ColoredDbg {
 		ColoredDbg(std::string& cqf_file, std::vector<std::string>& eqclass_files,
 							 std::string& sample_file);
 
-		ColoredDbg(uint64_t key_bits, uint32_t seed, std::string& prefix, uint32_t
+		ColoredDbg(uint64_t key_bits, uint32_t seed, std::string& prefix, uint64_t
 							 nqf);
 		
 		void build_sampleid_map(qf_obj *incqfs);
@@ -359,7 +359,7 @@ void ColoredDbg<qf_obj, key_obj>::build_sampleid_map(qf_obj *incqfs) {
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
-																				std::string& prefix, uint32_t nqf) :
+																				std::string& prefix, uint64_t nqf) :
 	dbg(key_bits, seed), bv_buffer(NUM_BV_BUFFER * nqf),
 	prefix(prefix), num_samples(nqf), num_serializations(0) {}
 
