@@ -2076,7 +2076,7 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 {
 	uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
 	qfblock* addr = get_block(qfi->qf, block_index);
-	if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->blocks);
+	if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->metadata);
 
 	if (qfi_end(qfi))
 		return 1;

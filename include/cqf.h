@@ -148,7 +148,7 @@ template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), cutoff(cutoff), end_hash(end_hash),
 last_prefetch_offset(LLONG_MIN) {
-		buffer_size = (((it.qf->metadata->size / 128) + 4095) / 4096) * 4096;
+		buffer_size = (((it.qf->metadata->size / 128 - (rand() % (it.qf->metadata->size / 256))) + 4095) / 4096) * 4096;
 		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE,
 																	MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (buffer == MAP_FAILED) {
@@ -180,8 +180,8 @@ void CQF<key_obj>::Iterator::operator++(void) {
 				std::cerr << "didn't read fast enough for " << aiocb.aio_fildes <<
 					" at " << last_read_offset << "(until " << last_prefetch_offset <<
 					" buffer size: "<< buffer_size << ")..." << std::endl;
-				const struct aiocb *const aiocb_list[1] = {&aiocb};
-				aio_suspend(aiocb_list, 1, NULL);
+				// const struct aiocb *const aiocb_list[1] = {&aiocb};
+				// aio_suspend(aiocb_list, 1, NULL);
 				DEBUG_CDBG(" finished it");
 			} else if (res > 0) {
 				DEBUG_CDBG("aio_error() returned " << std::dec << res);
@@ -190,6 +190,9 @@ void CQF<key_obj>::Iterator::operator++(void) {
 									 std::hex << aiocb.aio_offset << std::dec);
 			}
 		}
+
+		if ((last_prefetch_offset - (int64_t)buffer_size) > 0)
+			 madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset - buffer_size, buffer_size, MADV_DONTNEED);
 
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
@@ -205,10 +208,10 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
+		std::cerr << "prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
-							 ((uint64_t)buffer));
+							 ((uint64_t)buffer) << std::endl;
 		uint32_t ret = aio_read(&aiocb);
 		DEBUG_CDBG("prefetch issued");
 		if (ret) {
