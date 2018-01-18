@@ -49,10 +49,10 @@ int main(int argc, char *argv[])
 			i++;
 		}
 		std::sort(bsOrderedRandIdx[bsCntr].begin(), bsOrderedRandIdx[bsCntr].end());
-		for (auto i : bsOrderedRandIdx[bsCntr]) {
+		/* for (auto i : bsOrderedRandIdx[bsCntr]) {
 			std::cerr << i << " ";
 		}
-		std::cerr << "\n";
+		std::cerr << "\n"; */
 		bsbvs[bsCntr].resize(numOfBlocks);
 		for (int i=0, siz = blockSize; siz <= randCnt; i++, siz+=blockSize) {
 			sdsl::util::assign(bsbvs[bsCntr][i], sdsl::bit_vector(siz, 0));
