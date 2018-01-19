@@ -32,10 +32,14 @@ class BitVector {
 	public:
 		BitVector() : bits(), size(0) {};
 		BitVector(uint64_t size);
+		BitVector(const BitVector& bv) : bits(bv.bits), size(bv.size)
+	{};
 
 		sdsl::bit_vector get_bits() const {
 			return bits;
 		}
+
+		void reset();
 		bool operator[](uint64_t idx);
 		void set(const uint64_t idx);
 		uint64_t capacity(void) const { return bits.capacity() / 8; }

@@ -71,16 +71,16 @@ class CQF {
 				void operator++(void);
 				bool done(void) const;
 
+				QFi iter;
+				int64_t last_prefetch_offset;
+				uint64_t buffer_size;
 			private:
 				/* global buffer to perform read ahead */
 				unsigned char *buffer;
-				uint64_t buffer_size;
 				uint32_t num_pages;
-				QFi iter;
 				uint32_t cutoff;
 				uint64_t end_hash;
 				struct aiocb aiocb;
-				int64_t last_prefetch_offset;
 		};
 
 		Iterator limits(uint64_t start_hash, uint64_t end_hash, uint32_t cutoff)
@@ -165,6 +165,9 @@ key_obj CQF<key_obj>::Iterator::operator*(void) const {
 	return key_obj(key, value, count);
 }
 
+// This function read one byte from each page in the iterator buffer.
+void handler_function(union sigval sv);
+
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
 	uint64_t last_read_offset;
@@ -177,7 +180,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
 			if (res == EINPROGRESS) {
-				std::cerr << "didn't read fast enough for " << aiocb.aio_fildes <<
+				std::cout << "didn't read fast enough for " << aiocb.aio_fildes <<
 					" at " << last_read_offset << "(until " << last_prefetch_offset <<
 					" buffer size: "<< buffer_size << ")..." << std::endl;
 				// const struct aiocb *const aiocb_list[1] = {&aiocb};
@@ -214,10 +217,15 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		std::cerr << "prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
+		std::cout << "prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
-							 ((uint64_t)buffer) << std::endl;
+							 ((uint64_t)buffer) << std::dec << std::endl;
+		// to touch each page in the buffer.
+		aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
+		aiocb.aio_sigevent.sigev_notify_function = &handler_function;
+		aiocb.aio_sigevent.sigev_value.sival_ptr = (void*)this;
+
 		uint32_t ret = aio_read(&aiocb);
 		//uint32_t ret = posix_fadvise(iter.qf->mem->fd, last_read_offset,
 																 //buffer_size, POSIX_FADV_WILLNEED);

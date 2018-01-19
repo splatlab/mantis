@@ -84,10 +84,12 @@ class ColoredDbg {
 			find_samples(const mantis::QuerySet& kmers);
 
 		void serialize();
+		void reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
+															 uint64_t>>& map);
 
 	private:
 		void add_kmer(key_obj& hash, BitVector& vector);
-		void add_bitvector(BitVector& vector);
+		void add_bitvector(BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
 		void bv_buffer_serialize();
@@ -99,8 +101,8 @@ class ColoredDbg {
 		BitVector bv_buffer;
 		std::vector<BitVectorRRR> eqclasses;
 		std::string prefix;
-		uint32_t num_samples;
-		uint32_t num_serializations;
+		uint64_t num_samples;
+		uint64_t num_serializations;
 };
 
 template <class T>
@@ -149,6 +151,30 @@ uint64_t ColoredDbg<qf_obj, key_obj>::get_num_bitvectors(void) const {
 }
 
 template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj,
+		 key_obj>::reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t,
+																		 std::pair<uint64_t, uint64_t>>& map) {
+	BitVector new_bv_buffer(NUM_BV_BUFFER * num_samples);
+	for (auto& it_input : map) {
+		auto it_local = eqclass_map.find(it_input.first);
+		if (it_local == eqclass_map.end()) {
+			std::cerr << "Can't find the vector hash during shuffling." << std::endl;
+			exit(1);
+		} else {
+			uint64_t src_idx = ((it_local->second.first - 1) * num_samples) %
+				NUM_BV_BUFFER;
+			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples) %
+				NUM_BV_BUFFER;
+			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
+				if (bv_buffer[src_idx]) {
+					new_bv_buffer.set(dest_idx);
+				}
+		}
+	}
+	bv_buffer = new_bv_buffer;
+}
+
+template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
@@ -168,7 +194,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 		eqclass_map.emplace(std::piecewise_construct,
 															std::forward_as_tuple(vec_hash),
 															std::forward_as_tuple(eq_id, 1));
-		add_bitvector(vector);
+		add_bitvector(vector, eq_id - 1);
 	} else { // eq class is seen before so increment the abundance.
 		eq_id = it->second.first;
     // with standard map
@@ -195,46 +221,13 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 }
 
 template <class qf_obj, class key_obj>
-std::unordered_map<uint64_t, uint64_t>
-ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
-	// Find a list of eq classes and the number of kmers that belong those eq
-	// classes.
-	std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
-	for (auto k : kmers) {
-		key_obj key(k, 0, 0);
-		uint64_t eqclass = dbg.query(key);
-		if (eqclass)
-			query_eqclass_map[eqclass] += 1;
-	}
-
-	std::unordered_map<uint64_t, uint64_t> sample_map;
-	for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
-			 ++it) {
-		auto eqclass_id = it->first;
-		auto count = it->second;
-		// counter starts from 1.
-		uint64_t start_idx = (eqclass_id - 1) * num_samples;
-		for (uint32_t w = 0; w <= num_samples / 64; w++) {
-			uint32_t len = std::min((uint32_t)64, num_samples - w * 64);
-			uint64_t bucket_idx = start_idx / NUM_BV_BUFFER;
-			uint64_t bucket_offset = start_idx % NUM_BV_BUFFER;
-			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
-			for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
-					if ((wrd >> i) & 0x01)
-							sample_map[sCntr] += count;
-			start_idx += len;
-		}
-	}
-	return sample_map;
-}
-
-template <class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector) {
-	uint64_t eq_id = get_num_eqclasses() - 1;
-	uint64_t start_idx = (eq_id % NUM_BV_BUFFER) * num_samples;
+void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
+																								eq_id) {
+	uint64_t start_idx = (eq_id * num_samples) % NUM_BV_BUFFER;
 	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
-		if (vector[i])
+		if (vector[i]) {
 			bv_buffer.set(start_idx);
+		}
 }
 
 template <class qf_obj, class key_obj>
@@ -243,6 +236,7 @@ void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 	std::string bv_file(prefix + std::to_string(num_serializations) +
 											EQCLASS_FILE);
 	final_com_bv.serialize(bv_file);
+	bv_buffer.reset();
 	num_serializations++;
 }
 
@@ -265,6 +259,40 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 	for (auto sample : eqclass_map)
 		tmpfile << sample.second.first << " " << sample.second.second << std::endl;
 	tmpfile.close();
+}
+
+template <class qf_obj, class key_obj>
+std::unordered_map<uint64_t, uint64_t>
+ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
+	// Find a list of eq classes and the number of kmers that belong those eq
+	// classes.
+	std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
+	for (auto k : kmers) {
+		key_obj key(k, 0, 0);
+		uint64_t eqclass = dbg.query(key);
+		if (eqclass)
+			query_eqclass_map[eqclass] += 1;
+	}
+
+	std::unordered_map<uint64_t, uint64_t> sample_map;
+	for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
+			 ++it) {
+		auto eqclass_id = it->first;
+		auto count = it->second;
+		// counter starts from 1.
+		uint64_t start_idx = (eqclass_id - 1) * num_samples;
+		uint64_t bucket_idx = start_idx / NUM_BV_BUFFER;
+		uint64_t bucket_offset = start_idx % NUM_BV_BUFFER;
+		for (uint32_t w = 0; w <= num_samples / 64; w++) {
+			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
+			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
+			for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
+					if ((wrd >> i) & 0x01)
+							sample_map[sCntr] += count;
+			bucket_offset += len;
+		}
+	}
+	return sample_map;
 }
 
 template <class qf_obj, class key_obj>
