@@ -147,24 +147,28 @@ int query_main (QueryOpts& opt)
 																														sample_file);
   console->info("Read colored dbg with {} k-mers and {} color classes",
                 cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
-	//cdbg.get_cqf()->dump_metadata();
-	//CQF<KeyObject> cqf(query_file, false);
-	//CQF<KeyObject>::Iterator it = cqf.begin(1);
-	//mantis::QuerySet input_kmers;
-	//do {
-		//KeyObject k = *it;
-		//input_kmers.insert(k.key);
-		//++it;
-	//} while (!it.done());
 
-	console->info("Reading query kmers from disk.");
-	uint32_t seed = 2038074743;
-	uint64_t total_kmers = 0;
-	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-																										seed,
-																										cdbg.range(),
-																										total_kmers);
-	console->info("Total k-mers to query: {}", total_kmers);
+	//cdbg.get_cqf()->dump_metadata(); 
+	CQF<KeyObject> cqf(query_file, false);
+	CQF<KeyObject>::Iterator it = cqf.begin(1);
+	mantis::QuerySet input_kmers;
+	do {
+		KeyObject k = *it;
+		input_kmers.insert(k.key);
+		++it;
+	} while (!it.done());
+
+	//console->info("Reading query kmers from disk.");
+	//uint32_t seed = 2038074743;
+  //uint64_t total_kmers = 0;
+  //mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
+																										//seed,
+																										//cdbg.range(),
+                                                    //total_kmers);
+  //console->info("Total k-mers to query: {}", total_kmers);
+
+	mantis::QuerySets multi_kmers;
+	multi_kmers.push_back(input_kmers);
 
   // Attempt to optimize bulk query
   /*

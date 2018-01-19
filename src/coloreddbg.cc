@@ -158,8 +158,8 @@ build_main ( BuildOpts& opt )
 		i++;
 	}
 
-	PRINT_CDBG("Shuffling bit vectors");
-	cdbg.reshuffle_bit_vectors(sorted_map);
+	PRINT_CDBG("Reinitializing colored DBG after the sampling phase.");
+	cdbg.reinit(sorted_map);
 
 	PRINT_CDBG("Constructing the colored dBG.");
 

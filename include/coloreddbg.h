@@ -84,8 +84,8 @@ class ColoredDbg {
 			find_samples(const mantis::QuerySet& kmers);
 
 		void serialize();
-		void reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
-															 uint64_t>>& map);
+		void reinit(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>&
+								map);
 
 	private:
 		void add_kmer(key_obj& hash, BitVector& vector);
@@ -93,6 +93,8 @@ class ColoredDbg {
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
 		void bv_buffer_serialize();
+		void reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
+															 uint64_t>>& map);
 
 		std::unordered_map<uint64_t, std::string> sampleid_map;
 		// bit_vector --> <eq_class_id, abundance>
@@ -103,6 +105,7 @@ class ColoredDbg {
 		std::string prefix;
 		uint64_t num_samples;
 		uint64_t num_serializations;
+		bool is_sampling{false};
 };
 
 template <class T>
@@ -166,12 +169,19 @@ void ColoredDbg<qf_obj,
 			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples) %
 				NUM_BV_BUFFER;
 			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
-				if (bv_buffer[src_idx]) {
+				if (bv_buffer[src_idx])
 					new_bv_buffer.set(dest_idx);
-				}
 		}
 	}
 	bv_buffer = new_bv_buffer;
+}
+
+template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
+																		 std::pair<uint64_t, uint64_t>>& map) {
+	dbg.reset();
+	reshuffle_bit_vectors(map);
+	eqclass_map = map;
 }
 
 template <class qf_obj, class key_obj>
@@ -225,9 +235,8 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
 																								eq_id) {
 	uint64_t start_idx = (eq_id * num_samples) % NUM_BV_BUFFER;
 	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
-		if (vector[i]) {
+		if (vector[i])
 			bv_buffer.set(start_idx);
-		}
 }
 
 template <class qf_obj, class key_obj>
@@ -303,9 +312,6 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 {
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
-
-	eqclass_map = map;
-	dbg.reset();
 
 	// merge all input CQFs into the final QF
 	typename CQF<key_obj>::Iterator *it_incqfs =
@@ -389,7 +395,10 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t key_bits, uint32_t seed,
 																				std::string& prefix, uint64_t nqf) :
 	dbg(key_bits, seed), bv_buffer(NUM_BV_BUFFER * nqf),
-	prefix(prefix), num_samples(nqf), num_serializations(0) {}
+	prefix(prefix), num_samples(nqf), num_serializations(0) {
+		if (nqf < UINT64_MAX)
+			is_sampling = true;
+	}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,

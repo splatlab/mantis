@@ -146,8 +146,8 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
-	: iter(it), cutoff(cutoff), end_hash(end_hash),
-last_prefetch_offset(LLONG_MIN) {
+	: iter(it), last_prefetch_offset(LLONG_MIN), cutoff(cutoff),
+	end_hash(end_hash) {
 		buffer_size = (((it.qf->metadata->size / 128 - (rand() % (it.qf->metadata->size / 256))) + 4095) / 4096) * 4096;
 		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE,
 																	MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -180,9 +180,9 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
 			if (res == EINPROGRESS) {
-				std::cout << "didn't read fast enough for " << aiocb.aio_fildes <<
+				DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes <<
 					" at " << last_read_offset << "(until " << last_prefetch_offset <<
-					" buffer size: "<< buffer_size << ")..." << std::endl;
+					" buffer size: "<< buffer_size << ")...");
 				// const struct aiocb *const aiocb_list[1] = {&aiocb};
 				// aio_suspend(aiocb_list, 1, NULL);
 				DEBUG_CDBG(" finished it");
@@ -217,10 +217,10 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		std::cout << "prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
+		DEBUG_CDBG("prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
-							 ((uint64_t)buffer) << std::dec << std::endl;
+							 ((uint64_t)buffer) << std::dec);
 		// to touch each page in the buffer.
 		aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
 		aiocb.aio_sigevent.sigev_notify_function = &handler_function;
