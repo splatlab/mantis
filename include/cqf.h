@@ -191,12 +191,13 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			}
 		}
 
-		if ((last_prefetch_offset - (int64_t)buffer_size) > 0)
+		if ((last_prefetch_offset - (int64_t)buffer_size) > 0) {
+			madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset -
+							 buffer_size, buffer_size, MADV_DONTNEED);
 			posix_fadvise(iter.qf->mem->fd, (off_t)(last_prefetch_offset -
 																							(int64_t)buffer_size),
 										buffer_size, POSIX_FADV_DONTNEED);
-			//madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset -
-							 //buffer_size, buffer_size, MADV_DONTNEED);
+		}
 
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
