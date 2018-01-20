@@ -148,7 +148,9 @@ template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), last_prefetch_offset(LLONG_MIN), cutoff(cutoff),
 	end_hash(end_hash) {
-		buffer_size = (((it.qf->metadata->size / 128 - (rand() % (it.qf->metadata->size / 256))) + 4095) / 4096) * 4096;
+		buffer_size = (((it.qf->metadata->size / 2048 -
+										 (rand() % (it.qf->metadata->size / 4096)))
+										+ 4095) / 4096) * 4096;
 		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE,
 																	MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (buffer == MAP_FAILED) {

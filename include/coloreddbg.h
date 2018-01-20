@@ -233,7 +233,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
 																								eq_id) {
-	uint64_t start_idx = (eq_id * num_samples) % NUM_BV_BUFFER;
+	uint64_t start_idx = (eq_id  % NUM_BV_BUFFER) * num_samples;
 	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
 		if (vector[i])
 			bv_buffer.set(start_idx);
@@ -242,7 +242,7 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 	BitVectorRRR final_com_bv(bv_buffer);
-	std::string bv_file(prefix + std::to_string(num_serializations) +
+	std::string bv_file(prefix + std::to_string(num_serializations) + "_"
 											EQCLASS_FILE);
 	final_com_bv.serialize(bv_file);
 	bv_buffer.reset();
@@ -254,8 +254,9 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 	// serialize the CQF
 	dbg.serialize(prefix + CQF_FILE);
 
-	// serialize the last bv buffer
-	bv_buffer_serialize();
+	// serialize the bv buffer last time if needed
+	if (get_num_eqclasses() % NUM_BV_BUFFER > 1)
+		bv_buffer_serialize();
 
 	//serialize the eq class id map
 	std::ofstream opfile(prefix + SAMPLEID_FILE);
@@ -289,9 +290,9 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 		auto eqclass_id = it->first;
 		auto count = it->second;
 		// counter starts from 1.
-		uint64_t start_idx = (eqclass_id - 1) * num_samples;
+		uint64_t start_idx = (eqclass_id - 1);
 		uint64_t bucket_idx = start_idx / NUM_BV_BUFFER;
-		uint64_t bucket_offset = start_idx % NUM_BV_BUFFER;
+		uint64_t bucket_offset = (start_idx % NUM_BV_BUFFER) * num_samples;
 		for (uint32_t w = 0; w <= num_samples / 64; w++) {
 			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
 			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
@@ -409,8 +410,15 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	num_samples = 0;
 	num_serializations = 0;
 
+	std::map<int, std::string> sorted_files;
 	for (std::string file : eqclass_files) {
-		eqclasses.push_back(BitVectorRRR(file));
+		int id = std::stoi(first_part(last_part(file, '/'), '_'));
+		sorted_files[id] = file;
+	}
+
+	for (auto file : sorted_files) {
+		std::cout << "Reading eq class file: " << file.second << std::endl;
+		eqclasses.push_back(BitVectorRRR(file.second));
 		num_serializations++;
 	}
 

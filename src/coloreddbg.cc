@@ -75,7 +75,7 @@ build_main ( BuildOpts& opt )
 	struct aioinit aioinit;
 	memset(&aioinit, 0, sizeof(struct aioinit));
 	aioinit.aio_num = 2500;
-	aioinit.aio_threads = 200;
+	aioinit.aio_threads = 100;
 	aioinit.aio_idle_time = 60;
 	aio_init(&aioinit);
 
@@ -137,7 +137,8 @@ build_main ( BuildOpts& opt )
 
 	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, SAMPLE_SIZE);
 
-	DEBUG_CDBG("Number of eq classes found " << unsorted_map.size());
+	PRINT_CDBG("Number of eq classes found after sampling " <<
+						 unsorted_map.size());
 
 	// Sort equivalence classes based on their abundances.
 	std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
