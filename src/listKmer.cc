@@ -85,6 +85,12 @@ int main ( int argc, char *argv[] )
 		kmers.push_back(HashUtil::hash_64i(k.key, BITMASK(cqf.keybits())));
 		++it;
 	}
+	std::cout << "Done reading" << std::endl;
+	gettimeofday(&end, &tzp);
+	print_time_elapsed("", &start, &end);
+
+	
+	gettimeofday(&start, &tzp);
 	std::ofstream fout("kmers.bin", ios::out | ios::binary);
 	size_t num = kmers.size();
     size_t elemSize = sizeof(typename std::vector<uint64_t>::value_type);
