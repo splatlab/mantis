@@ -73,11 +73,20 @@ int main ( int argc, char *argv[] )
 	gettimeofday(&start, &tzp);
 	cout << "Reading the kmers off disk" << std::endl;
 	std::ifstream fin(kmers_file, ios::in | ios::binary);
-	kmers.reserve(4000000000);
-	while(!fin.eof()) {
-		fin >> kmer;
-		kmers.push_back(kmer);
+	fin.seekg(0, fin.end);
+	size_t len = fin.tellg();
+	kmers.reserve(len/sizeof(kmer));
+	std::cout << "file len: " << len << " kmers vec size: " << len/sizeof(kmer) << std::endl; 
+	fin.seekg(0, fin.beg);
+	while( fin.read( reinterpret_cast<char*>( &kmer ), sizeof(kmer) ) ) {
+		kmers.push_back(kmer) ;
 	}
+	//kmers.reserve(4000000000);
+	/*while(!fin.eof()) {
+
+		//fin >> kmer;
+		kmers.push_back(kmer);
+	}*/
     fin.close();
 	std::cout << "Done loading the kmers" << std::endl;
 	gettimeofday(&end, &tzp);
