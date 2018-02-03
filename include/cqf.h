@@ -62,7 +62,9 @@ class CQF {
 		void dump_metadata(void) const { DEBUG_DUMP(&cqf); }
 
 		void drop_pages(uint64_t cur);
-
+		
+		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
+		
 		class Iterator {
 			public:
 				Iterator(QFi it, uint32_t cutoff);
