@@ -25,6 +25,7 @@
 
 #include <inttypes.h>
 #include <string.h>
+#include <math.h>
 #include <aio.h>
 
 #include "cqf/gqf.h"
@@ -33,14 +34,13 @@
 #define NUM_HASH_BITS 40
 #define NUM_Q_BITS 34
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
-#define BUFFER_SIZE 1000000
-//(1ULL << 21)
+#define PAGE_BUFFER_SIZE 4096
 
 template <class key_obj>
 class CQF {
 	public:
 		CQF();
-		CQF(uint32_t seed);
+		CQF(uint64_t key_bits, uint32_t seed);
 		CQF(std::string& filename, bool flag);
 		CQF(const CQF<key_obj>& copy_cqf);
 
@@ -55,6 +55,7 @@ class CQF {
 
 		uint64_t range(void) const { return cqf.metadata->range; }
 		uint32_t seed(void) const { return cqf.metadata->seed; }
+		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t size(void) const { return cqf.metadata->ndistinct_elts; }
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
@@ -63,24 +64,27 @@ class CQF {
 
 		void drop_pages(uint64_t cur);
 		
-		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
-		
 		class Iterator {
 			public:
-				Iterator(QFi it, uint32_t cutoff);
+				Iterator(QFi it, uint32_t cutoff, uint64_t end_hash);
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
 
 			private:
 				/* global buffer to perform read ahead */
-				unsigned char buffer[BUFFER_SIZE];
+				unsigned char *buffer;
+				uint64_t buffer_size;
+				uint32_t num_pages;
 				QFi iter;
 				uint32_t cutoff;
+				uint64_t end_hash;
 				struct aiocb aiocb;
-				uint64_t last_read_offset, last_prefetch_offset;
+				int64_t last_prefetch_offset;
 		};
 
+		Iterator limits(uint64_t start_hash, uint64_t end_hash, uint32_t cutoff)
+			const;
 		Iterator begin(uint32_t cutoff) const;
 		Iterator end(uint32_t cutoff) const;
 
@@ -107,12 +111,12 @@ class KeyObject {
 
 template <class key_obj>
 CQF<key_obj>::CQF() {
-	qf_init(&cqf, 1ULL << 6, NUM_HASH_BITS, 0, true, "", 23423);
+	qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", 23423);
 }
 
 template <class key_obj>
-CQF<key_obj>::CQF(uint32_t seed) {
-	qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", seed);
+CQF<key_obj>::CQF(uint64_t key_bits, uint32_t seed) {
+	qf_init(&cqf, 1ULL << NUM_Q_BITS, key_bits, 0, true, "", seed);
 }
 
 template <class key_obj>
@@ -130,7 +134,7 @@ CQF<key_obj>::CQF(const CQF<key_obj>& copy_cqf) {
 
 template <class key_obj>
 void CQF<key_obj>::insert(const key_obj& k) {
-	qf_insert(&cqf, k.key, k.value, k.count, NO_LOCK);
+	qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN);
 	// To validate the CQF
 	//set.insert(k.key);
 }
@@ -141,8 +145,18 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 }
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff)
-	: iter(it), cutoff(cutoff) {};
+CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
+	: iter(it), cutoff(cutoff), end_hash(end_hash),
+last_prefetch_offset(LLONG_MIN) {
+		buffer_size = (((it.qf->metadata->size / 128 - (rand() % (it.qf->metadata->size / 256))) + 4095) / 4096) * 4096;
+		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE,
+																	MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		if (buffer == MAP_FAILED) {
+			perror("buffer malloc");
+			std::cerr << "Can't allocate buffer space." << std::endl;
+			exit(1);
+		}
+	};
 
 template <class key_obj>
 key_obj CQF<key_obj>::Iterator::operator*(void) const {
@@ -153,37 +167,51 @@ key_obj CQF<key_obj>::Iterator::operator*(void) const {
 
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
+	uint64_t last_read_offset;
 	qfi_nextx(&iter, &last_read_offset);
 
-	// Read next 2M bytes from the file offset.
-	if (last_read_offset > last_prefetch_offset) {
+	// Read next "buffer_size" bytes from the file offset.
+	if ((int64_t)last_read_offset >= last_prefetch_offset) {
 		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
-						 << " " << last_read_offset << ">" << last_prefetch_offset);
+							 << " " << last_read_offset << ">" << last_prefetch_offset);
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
 			if (res == EINPROGRESS) {
-				DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes << " at "
-								 << last_read_offset << "(until " << last_prefetch_offset <<
-								 ")...");
-				const struct aiocb *const aiocb_list[1] = {&aiocb};
-				aio_suspend(aiocb_list, 1, NULL);
+				std::cerr << "didn't read fast enough for " << aiocb.aio_fildes <<
+					" at " << last_read_offset << "(until " << last_prefetch_offset <<
+					" buffer size: "<< buffer_size << ")..." << std::endl;
+				// const struct aiocb *const aiocb_list[1] = {&aiocb};
+				// aio_suspend(aiocb_list, 1, NULL);
 				DEBUG_CDBG(" finished it");
 			} else if (res > 0) {
 				DEBUG_CDBG("aio_error() returned " << std::dec << res);
 			} else if (res == 0) {
 				DEBUG_CDBG("prefetch was OK for " << aiocb.aio_fildes << " at " <<
-								 std::hex << aiocb.aio_offset << std::dec);
+									 std::hex << aiocb.aio_offset << std::dec);
 			}
 		}
+
+		if ((last_prefetch_offset - (int64_t)buffer_size) > 0)
+			 madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset - buffer_size, buffer_size, MADV_DONTNEED);
 
 		memset(&aiocb, 0, sizeof(struct aiocb));
 		aiocb.aio_fildes = iter.qf->mem->fd;
 		aiocb.aio_buf = (volatile void*)buffer;
-		aiocb.aio_nbytes = BUFFER_SIZE;
-		last_prefetch_offset += BUFFER_SIZE;
-    aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		DEBUG_CDBG("prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
-						 last_prefetch_offset << std::dec << " ... ");
+		aiocb.aio_nbytes = buffer_size;
+		if ((last_prefetch_offset + (int64_t)buffer_size) < (int64_t)last_read_offset) {
+			if (last_prefetch_offset != 0)
+				DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
+									 	last_read_offset);
+			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) +
+															PAGE_BUFFER_SIZE;
+		} else {
+			last_prefetch_offset += buffer_size;
+		}
+		aiocb.aio_offset = (__off_t)last_prefetch_offset;
+		std::cerr << "prefetch in " << aiocb.aio_fildes << " from " << std::hex <<
+							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
+							 << buffer_size << " into buffer at " << std::hex <<
+							 ((uint64_t)buffer) << std::endl;
 		uint32_t ret = aio_read(&aiocb);
 		DEBUG_CDBG("prefetch issued");
 		if (ret) {
@@ -202,19 +230,25 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		else
 			break;
 	} while(!qfi_end(&iter));
+
 	// drop pages of the last million slots.
 	//static uint64_t last_marker = 1;
 	//if (iter.current / PAGE_DROP_GRANULARITY > last_marker + 1) {
-		//uint64_t start_idx = last_marker * PAGE_DROP_GRANULARITY;
-		//uint64_t end_idx = (last_marker + 1) * PAGE_DROP_GRANULARITY;
-		//qf_drop_pages(iter.qf, start_idx, end_idx);
-		//last_marker += 1;
+	//uint64_t start_idx = last_marker * PAGE_DROP_GRANULARITY;
+	//uint64_t end_idx = (last_marker + 1) * PAGE_DROP_GRANULARITY;
+	//qf_drop_pages(iter.qf, start_idx, end_idx);
+	//last_marker += 1;
 	//}
 }
 
+/* Currently, the iterator only traverses forward. So, we only need to check
+ * the right side limit.
+ */
 template<class key_obj>
 bool CQF<key_obj>::Iterator::done(void) const {
-	return qfi_end(&iter);
+	uint64_t key = 0, value = 0, count = 0;
+	qfi_get(&iter, &key, &value, &count);
+	return key >= end_hash || qfi_end(&iter);
 }
 
 template<class key_obj>
@@ -231,14 +265,32 @@ typename CQF<key_obj>::Iterator CQF<key_obj>::begin(uint32_t cutoff) const {
 			break;
 	} while(!qfi_end(&qfi));
 
-	return Iterator(qfi, cutoff);
+	return Iterator(qfi, cutoff, UINT64_MAX);
 }
 
 template<class key_obj>
 typename CQF<key_obj>::Iterator CQF<key_obj>::end(uint32_t cutoff) const {
 	QFi qfi;
 	qf_iterator(&this->cqf, &qfi, 0xffffffffffffffff);
-	return Iterator(qfi, cutoff);
+	return Iterator(qfi, cutoff, UINT64_MAX);
 }
 
+template<class key_obj>
+typename CQF<key_obj>::Iterator CQF<key_obj>::limits(uint64_t start_hash,
+																										 uint64_t end_hash,
+																										 uint32_t cutoff) const {
+	QFi qfi;
+	qf_iterator_hash(&this->cqf, &qfi, start_hash);
+	// Skip past the cutoff
+	do {
+		uint64_t key = 0, value = 0, count = 0;
+		qfi_get(&qfi, &key, &value, &count);
+		if (count < cutoff)
+			qfi_next(&qfi);
+		else
+			break;
+	} while(!qfi_end(&qfi));
+
+	return Iterator(qfi, cutoff, end_hash);
+}
 #endif

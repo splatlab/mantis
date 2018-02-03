@@ -19,6 +19,8 @@
 #define MAX_NUM_SAMPLES 2600
 #define SAMPLE_SIZE (1ULL << 26)
 
+uint64_t start_time;
+
 template <typename T>
 void explore_options_verbose(T& res) {
   if(res.any_error()) { std::cerr << "error\n"; }
@@ -66,6 +68,8 @@ int main ( int argc, char *argv[] ) {
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
+
+	start_time = time(NULL);
 
   /*
   bool print_version{false};
@@ -131,6 +135,7 @@ int main ( int argc, char *argv[] ) {
                      command("build").set(selected, mode::build),
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
+                     option("-t", "--num-threads") & value("num_threads", bopt.numthreads) % "number of threads to use to build",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto query_mode = (

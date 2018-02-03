@@ -8,6 +8,7 @@ class BuildOpts {
   std::string inlist;
   std::string cutoffs;
   std::string out;
+	int numthreads{1};
   std::shared_ptr<spdlog::logger> console{nullptr};
 };
 

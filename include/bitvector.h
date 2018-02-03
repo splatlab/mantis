@@ -30,7 +30,7 @@
 
 class BitVector {
 	public:
-		BitVector() : bits(0)/*, size(0)*/ {};
+		BitVector() : bits(), size(0) {};
 		BitVector(uint64_t size);
 
 		sdsl::bit_vector get_bits() const {

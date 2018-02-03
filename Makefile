@@ -60,6 +60,9 @@ eqclsFrequencyStat:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR}/e
 
 listKmer:				   $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o	$(OBJDIR)/kmer.o ${OBJDIR}/listKmer.o
 	$(LD) $^ $(LDFLAGS) -o $@
+
+boom:				        ${OBJDIR}/boom.o
+	$(LD) $^ $(LDFLAGS) -o $@
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
 $(OBJDIR)/MantisFs.o:       $(LOC_SRC)/MantisFS.cc $(LOC_INCLUDE)/MantisFS.h
@@ -75,6 +78,7 @@ $(OBJDIR)/newColorDSTester.o:  $(LOC_SRC)/newColorDSTester.cc
 $(OBJDIR)/colorClusteringDSTester.o:  $(LOC_SRC)/colorClusteringTester.cc
 $(OBJDIR)/eqclsFrequencyStat.o:  $(LOC_SRC)/eqclsFrequencyStat.cc
 $(OBJDIR)/listKmer.o: $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/hashutil.h $(LOC_SRC)/listKmer.cc 
+$(OBJDIR)/boom.o: $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/hashutil.h ${LOC_INCLUDE}/BooPHF.h $(LOC_SRC)/boom.cc 
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h
