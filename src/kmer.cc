@@ -29,7 +29,7 @@ inline uint8_t Kmer::map_base(char base)
  * Converts a string of "ATCG" to a uint64_t
  * where each character is represented by using only two bits
  */
-uint64_t str_to_int(string str)
+uint64_t Kmer::str_to_int(string str)
 {
 	uint64_t strint = 0;
 	for (auto it = str.begin(); it != str.end(); it++) {
@@ -50,7 +50,7 @@ uint64_t str_to_int(string str)
  * Converts a uint64_t to a string of "ACTG"
  * where each character is represented by using only two bits
  */
-string int_to_str(uint64_t kmer)
+string Kmer::int_to_str(uint64_t kmer)
 {
 	uint8_t base;
 	string str;

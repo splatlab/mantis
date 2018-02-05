@@ -99,7 +99,7 @@ int main ( int argc, char *argv[] )
 
 	auto nkeys = kmers.size();
 	auto keyIt = boomphf::range(kmers.begin(), kmers.end());
-	boophf_t* bphf = new boophf_t(nkeys, keyIt, 16, 3.5);
+	boophf_t* bphf = new boophf_t(nkeys, keyIt, 1, 3.5);
 	std::cout << "mphf size = " << (bphf->totalBitSize() / 8) / std::pow(2, 20)
 			            << "\n";
 	gettimeofday(&end, &tzp);
