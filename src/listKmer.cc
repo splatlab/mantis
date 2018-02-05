@@ -88,9 +88,11 @@ int main ( int argc, char *argv[] )
 		uint64_t kint = HashUtil::hash_64i(k.key, BITMASK(cqf.keybits()));
 		if (k.count >= cutoff) {
 			std::string kstr = Kmer::int_to_str(kint);
+			// std::cout << kstr << "\n";
 			fout << kstr << "\t" << k.count << "\n";
 			// kmers.push_back(std::make_pair(Kmer.int_to_str(kint), k.count));
 		}
+		
 		++it;
 	}
 	/*

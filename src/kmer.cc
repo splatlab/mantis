@@ -1,5 +1,6 @@
 #include <fstream>
 #include "kmer.h"
+#include <iostream>
 
 /*return the integer representation of the base */
 inline char Kmer::map_int(uint8_t base)
@@ -54,11 +55,22 @@ string Kmer::int_to_str(uint64_t kmer)
 {
 	uint8_t base;
 	string str;
+	string rstr = "";
 	for (int i=K; i>0; i--) {
 		base = (kmer >> (i*2-2)) & 3ULL;
 		char chr = Kmer::map_int(base);
+		char rchr = 'T';
+		switch(chr) {
+			case 'A': {rchr = 'T'; break;}
+			case 'C': {rchr = 'G'; break;}
+			case 'G': {rchr = 'C'; break;}
+			case 'T': {rchr = 'A'; break;}
+		}
 		str.push_back(chr);
+		rstr = rchr + rstr;
 	}
+	//std::cout << "\n" << rstr << "\n" << str << "\n";
+	if (rstr < str) return rstr;
 	return str;
 }
 
