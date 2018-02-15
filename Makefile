@@ -58,7 +58,7 @@ colorClusteringTester:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR
 eqclsFrequencyStat:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR}/eqclsFrequencyStat.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
-listKmer:				   $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o	$(OBJDIR)/kmer.o ${OBJDIR}/listKmer.o
+walkCqf:				   $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o	$(OBJDIR)/kmer.o ${OBJDIR}/walkCqf.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
 boom:				        ${OBJDIR}/boom.o
@@ -77,7 +77,7 @@ $(OBJDIR)/compareCompressions.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/co
 $(OBJDIR)/newColorDSTester.o:  $(LOC_SRC)/newColorDSTester.cc
 $(OBJDIR)/colorClusteringDSTester.o:  $(LOC_SRC)/colorClusteringTester.cc
 $(OBJDIR)/eqclsFrequencyStat.o:  $(LOC_SRC)/eqclsFrequencyStat.cc
-$(OBJDIR)/listKmer.o: $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/hashutil.h $(LOC_SRC)/listKmer.cc 
+$(OBJDIR)/walkCqf.o: $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/hashutil.h $(LOC_SRC)/walkCqf.cc 
 $(OBJDIR)/boom.o: $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/hashutil.h ${LOC_INCLUDE}/BooPHF.h $(LOC_SRC)/boom.cc 
 # dependencies between .o files and .cc (or .c) files
 

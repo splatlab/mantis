@@ -43,6 +43,7 @@ class CQF {
 		CQF(uint64_t key_bits, uint32_t seed);
 		CQF(std::string& filename, bool flag);
 		CQF(const CQF<key_obj>& copy_cqf);
+		CQF(uint64_t num_q_bits, uint64_t key_bits, uint32_t seed);
 
 		void insert(const key_obj& k);
 
@@ -57,6 +58,7 @@ class CQF {
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t size(void) const { return cqf.metadata->ndistinct_elts; }
+		uint64_t noccupied_slots(void) const { return cqf.metadata->noccupied_slots;}
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
 
@@ -117,6 +119,11 @@ CQF<key_obj>::CQF() {
 template <class key_obj>
 CQF<key_obj>::CQF(uint64_t key_bits, uint32_t seed) {
 	qf_init(&cqf, 1ULL << NUM_Q_BITS, key_bits, 0, true, "", seed);
+}
+
+template<class key_obj>
+CQF<key_obj>::CQF(uint64_t num_q_bits, uint64_t key_bits, uint32_t seed) {
+	qf_init(&cqf, 1ULL << num_q_bits, key_bits, 0, true, "", seed);
 }
 
 template <class key_obj>
