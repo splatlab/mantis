@@ -46,7 +46,7 @@ all: $(TARGETS)
 # dependencies between programs and .o files
 mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
 
-compareRepresentations:					$(OBJDIR)/bitvector.o ${OBJDIR}/compareCompressions.o
+walkEqcls:					$(OBJDIR)/bitvector.o ${OBJDIR}/walkEqcls.o
 	$(LD) $^ $(LDFLAGS) ${LIBDIR}/libSIMDCompressionAndIntersection.a -o $@
 
 newColorDSTester:				   $(OBJDIR)/hashutil.o	$(OBJDIR)/bitvector.o ${OBJDIR}/newColorDSTester.o
@@ -73,7 +73,7 @@ $(OBJDIR)/coloreddbg.o: 		$(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(L
 $(OBJDIR)/query.o: 					$(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 $(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/cqf/gqf.h $(LOC_INCLUDE)/hashutil.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
-$(OBJDIR)/compareCompressions.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/compareCompressions.cc
+$(OBJDIR)/walkEqCls.o:	$(LOC_INCLUDE)/compressedSetBit.h $(LOC_SRC)/walkEqcls.cc
 $(OBJDIR)/newColorDSTester.o:  $(LOC_SRC)/newColorDSTester.cc
 $(OBJDIR)/colorClusteringDSTester.o:  $(LOC_SRC)/colorClusteringTester.cc
 $(OBJDIR)/eqclsFrequencyStat.o:  $(LOC_SRC)/eqclsFrequencyStat.cc

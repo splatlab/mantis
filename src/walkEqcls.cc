@@ -1,6 +1,22 @@
 
 #include "compressedSetBit.h"
 #include "bitvector.h"
+#include <time.h>
+#include <random>
+
+
+void print_time_elapsed(string desc, struct timeval* start, struct timeval* end) 
+{
+	struct timeval elapsed;
+	if (start->tv_usec > end->tv_usec) {
+		end->tv_usec += 1000000;
+		end->tv_sec--;
+	}
+	elapsed.tv_usec = end->tv_usec - start->tv_usec;
+	elapsed.tv_sec = end->tv_sec - start->tv_sec;
+	float time_elapsed = (elapsed.tv_sec * 1000000 + elapsed.tv_usec)/1000000.f;
+	std::cout << desc << "Total Time Elapsed: " << to_string(time_elapsed) << " seconds" << std::endl;
+}
 
 // @input
 // cnt: setbit cnt 
@@ -57,20 +73,7 @@ bool validate(uint16_t cnt, uint16_t num_samples=2586) {
   return true;
 }
 
-
-int main(int argc, char *argv[]) {
-
-
-  uint16_t num_samples = 2586;
-  std::cout << "validate for different number of set bits\n";
-  for (uint16_t i = 1; i <= num_samples; i++){
-  	 	if (!validate(i, num_samples)) {
-				std::cerr << "ERROR: NOT VALIDATED\n";
-				std::exit(1);
-		}
-  }
-  std::cout << "SUCCESSFULLY VALIDATED THE COMPRESSION/DECOMPRESSION PROCESS.\n\n#####NEXT STEP#####\nCompare Sizes:\n";
-  
+void compareCompressions(std::string& filename, size_t num_samples) {
   size_t gtBV = 0;
   size_t gtBVR = 0;
   size_t bvrGTbv = 0;
@@ -81,7 +84,6 @@ int main(int argc, char *argv[]) {
 
   size_t roundIdxCnt = 0;
   size_t totalIdxCnt = 0;
-  std::string filename = argv[1];
   BitVectorRRR eqcls(filename);
   size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
   std::cout << "Total bit size: " << eqcls.bit_size() << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
@@ -144,5 +146,85 @@ int main(int argc, char *argv[]) {
     "\nHow many times bvr > bv : " << bvrGTbv << " or " << (bvrGTbv*100)/totalEqClsCnt << "% of the time" <<
     "\nHow many times bvr == bv : " << bvEQbvr <<  " or " << (bvEQbvr*100)/totalEqClsCnt << "% of the time" <<
     "\n";
+}
+
+void compareCopies(size_t num_samples) {
+  struct timeval start, end;
+	struct timezone tzp;
+
+  size_t numOfCopies = 10;
+  
+  size_t bit_cnt = 1000000000;
+  size_t i;
+  sdsl::bit_vector bits(bit_cnt);
+  srand (time(NULL));
+
+  gettimeofday(&start, &tzp);  
+  for (auto i = 0; i < 1000000; i++) {
+    bits[rand()% bit_cnt] = 1;
+  } 
+  gettimeofday(&end, &tzp);
+	print_time_elapsed("Set random bits done: ", &start, &end);
+
+  sdsl::bit_vector bits2(bit_cnt);
+  sdsl::bit_vector bits3(bit_cnt);
+  sdsl::bit_vector bits4(bit_cnt);
+
+  gettimeofday(&start, &tzp);
+  for (auto c = 0; c < numOfCopies; c++) {
+    bits2 = bits;
+  }
+  gettimeofday(&end, &tzp);
+	print_time_elapsed("MemCpy: ", &start, &end);
+
+  gettimeofday(&start, &tzp);
+  for (auto c = 0; c < numOfCopies; c++) {
+    i = 0;
+    while (i < bit_cnt) {
+      if (bits[i])
+        bits3[i] = 1;
+      i++;
+    }
+  }
+  gettimeofday(&end, &tzp);
+	print_time_elapsed("Index by index!: ", &start, &end);
+
+  gettimeofday(&start, &tzp);
+  for (auto c = 0; c < numOfCopies; c++) {
+    i = 0;
+    while (i < bit_cnt) {
+      size_t bitCnt = std::min(bit_cnt-i, (size_t)64);
+      size_t wrd = bits.get_int(i, bitCnt);
+      bits4.set_int(i, wrd, bitCnt);
+      i+=bitCnt;
+    }
+  }
+  gettimeofday(&end, &tzp);
+	print_time_elapsed("Read int and write int: ", &start, &end);
+
+}
+
+int main(int argc, char *argv[]) {
+
+
+  uint64_t num_samples = 2586;
+  std::string command = argv[1];
+
+  if (command == "validate") {
+    std::cout << "validate for different number of set bits\n";
+    for (uint16_t i = 1; i <= num_samples; i++){
+        if (!validate(i, num_samples)) {
+          std::cerr << "ERROR: NOT VALIDATED\n";
+          std::exit(1);
+      }
+    }
+    std::cout << "SUCCESSFULLY VALIDATED THE COMPRESSION/DECOMPRESSION PROCESS.\n\n#####NEXT STEP#####\nCompare Sizes:\n";
+  }
+  else if (command == "compareCompressions") {
+    std::string filename = argv[2];
+    compareCompressions(filename, num_samples);
+  }
+  else if (command == "compareCopies") 
+    compareCopies(num_samples);
 
 }
