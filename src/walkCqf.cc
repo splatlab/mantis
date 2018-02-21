@@ -91,7 +91,7 @@ void run_filter(std::string ds_file,
 			insertedCntr++;
 		}
 		++it;
-		if (cntr % 1000000 == 0) {
+		if (cntr % 10000000 == 0) {
 			std::cout << cntr << " kmers passed, " 
 					  << insertedCntr << " kmers inserted, " 
 					  << newCqf.noccupied_slots() << " slots occupied, "
