@@ -107,7 +107,8 @@ build_main ( BuildOpts& opt )
 	while (infile >> cqf_file) {
 		cqfs[nqf] = CQF<KeyObject>(cqf_file, true);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
-																									'.'), '_');
+																								'.'), '_');
+		//std::cerr << sample_id << "\n\n";
 		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());
 		PRINT_CDBG("Sample id " << sample_id << " cut off " <<
 							 cutoffs.find(sample_id)->second);

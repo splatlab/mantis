@@ -40,8 +40,10 @@
 #define CQF_FILE "dbg_cqf.ser"
 #define EQCLASS_FILE "eqclass_rrr.cls"
 #define SAMPLEID_FILE "sampleid.lst"
+#define ACCUM_EQCLS_CNT_FILE "accum_eqcls_cnt.lst"
 
 extern uint64_t start_time;
+
 
 struct hash128 {
 	uint64_t operator()(const __uint128_t& val128) const
@@ -95,7 +97,7 @@ class ColoredDbg {
 		void bv_buffer_serialize();
 		void reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
 															 uint64_t>>& map);
-
+		void copy(BitVector& src, BitVector& dst, uint64_t fromStartIdx, uint64_t toStartIdx);
 		std::unordered_map<uint64_t, std::string> sampleid_map;
 		// bit_vector --> <eq_class_id, abundance>
 		cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> eqclass_map;
@@ -106,6 +108,16 @@ class ColoredDbg {
 		uint64_t num_samples;
 		uint64_t num_serializations;
 		bool is_sampling{false};
+		std::vector<uint64_t> accumEqClsCnt;
+
+		uint64_t eqt{0};
+		uint64_t cqft{0};
+		uint64_t eq_exportt{0};
+		uint64_t cqf_exportt{0};
+		uint64_t reshufflet{0};
+		uint64_t map_hasht{0};
+		uint64_t rrrt{0};
+		uint64_t cqf_heapt{0};
 };
 
 template <class T>
@@ -157,6 +169,7 @@ template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj,
 		 key_obj>::reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
+	uint64_t s = time(NULL);
 	BitVector new_bv_buffer(NUM_BV_BUFFER * num_samples);
 	for (auto& it_input : map) {
 		auto it_local = eqclass_map.find(it_input.first);
@@ -168,12 +181,14 @@ void ColoredDbg<qf_obj,
 				NUM_BV_BUFFER;
 			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples) %
 				NUM_BV_BUFFER;
-			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
+			copy(bv_buffer, new_bv_buffer, src_idx, dest_idx);
+			/* for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
 				if (bv_buffer[src_idx])
-					new_bv_buffer.set(dest_idx);
+					new_bv_buffer.set(dest_idx); */
 		}
 	}
 	bv_buffer = new_bv_buffer;
+	reshufflet += time(NULL) - s;
 }
 
 template <class qf_obj, class key_obj>
@@ -181,7 +196,9 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
 	dbg.reset();
 	reshuffle_bit_vectors(map);
+	uint64_t s = time(NULL);
 	eqclass_map = map;
+	map_hasht += time(NULL) - s;
 }
 
 template <class qf_obj, class key_obj>
@@ -189,22 +206,29 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
+	uint64_t s = time(NULL);
+	
 	uint64_t eq_id = 1;
 	__uint128_t vec_hash = HashUtil::MurmurHash128A((void*)vector.data(),
 																								 vector.capacity(), 2038074743,
 																								 2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
+	map_hasht += time(NULL) - s;
 	// Find if the eqclass of the kmer is already there.
 	// If it is there then increment the abundance.
 	// Else create a new eq class.
 	if (it == eqclass_map.end()) {
 		// eq class is seen for the first time.
 		eq_id = get_next_available_id();
+		s = time(NULL);
 		eqclass_map.emplace(std::piecewise_construct,
 															std::forward_as_tuple(vec_hash),
 															std::forward_as_tuple(eq_id, 1));
+		map_hasht += time(NULL) - s;
+		
 		add_bitvector(vector, eq_id - 1);
+		
 	} else { // eq class is seen before so increment the abundance.
 		eq_id = it->second.first;
     // with standard map
@@ -212,15 +236,19 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	}
 
 	k.count = eq_id;	// we use the count to store the eqclass ids
+	s= time(NULL);
 	dbg.insert(k);
+	cqft += time(NULL) - s;
 
 	// Serialize bit vectors if buffer is full.
 	if (it == eqclass_map.end() && get_num_eqclasses() % NUM_BV_BUFFER == 0) {
 		PRINT_CDBG("Serializing bit vector with " << get_num_eqclasses() <<
 							 " eq classes.");
 		bv_buffer_serialize();
+		PRINT_CDBG("Export time: " << (time(NULL) - s));
 	}
 
+	s = time(NULL);
 	static uint64_t last_size = 0;
 	if (dbg.size() % 10000000 == 0 &&
 			dbg.size() != last_size) {
@@ -228,47 +256,100 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 		PRINT_CDBG("Kmers merged: " << dbg.size() << " Num eq classes: " <<
 			get_num_eqclasses() <<  " Total time: " << time(NULL) - start_time);
 	}
+	cqft += time(NULL) - s;
 }
 
 template <class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
-																								eq_id) {
-	uint64_t start_idx = (eq_id  % NUM_BV_BUFFER) * num_samples;
+void ColoredDbg<qf_obj, key_obj>::copy(BitVector& src, BitVector& dst, uint64_t fromStartIdx, uint64_t toStartIdx) {
+	uint64_t s = time(NULL);
+	size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, sizeof(size_t));
+      size_t wrd = src.get_int(fromStartIdx+i, bitCnt);
+      dst.set_int(toStartIdx+i, wrd, bitCnt);
+      i+=bitCnt;
+    }
+	/*
 	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
 		if (vector[i])
 			bv_buffer.set(start_idx);
+	*/
+	eqt += time(NULL) - s;
+}
+
+template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t eq_id) {
+	uint64_t s = time(NULL);
+	uint64_t start_idx = (eq_id  % NUM_BV_BUFFER) * num_samples;
+	size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, sizeof(size_t));
+      size_t wrd = vector.get_int(i, bitCnt);
+      bv_buffer.set_int(start_idx+i, wrd, bitCnt);
+      i+=bitCnt;
+    }
+	/*
+	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
+		if (vector[i])
+			bv_buffer.set(start_idx);
+	*/
+	eqt += time(NULL) - s;
 }
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
+	uint64_t s = time(NULL);
+	accumEqClsCnt.push_back(get_num_eqclasses());
 	BitVectorRRR final_com_bv(bv_buffer);
+	rrrt += time(NULL) - s;
 	std::string bv_file(prefix + std::to_string(num_serializations) + "_"
 											EQCLASS_FILE);
 	final_com_bv.serialize(bv_file);
 	bv_buffer.reset();
 	num_serializations++;
+	eq_exportt += time(NULL) - s;
 }
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serialize() {
+	uint64_t s = time(NULL);
 	// serialize the CQF
 	dbg.serialize(prefix + CQF_FILE);
 
+	cqf_exportt += time(NULL) - s;
+	
 	// serialize the bv buffer last time if needed
 	if (get_num_eqclasses() % NUM_BV_BUFFER > 1)
 		bv_buffer_serialize();
-
+	
 	//serialize the eq class id map
 	std::ofstream opfile(prefix + SAMPLEID_FILE);
 	for (auto sample : sampleid_map)
 		opfile << sample.first << " " << sample.second << std::endl;
 	opfile.close();
 
+	//serialize the eq class accumulative counts per bucket
+	std::ofstream aceqfile(prefix + ACCUM_EQCLS_CNT_FILE);
+	for (auto cnt : accumEqClsCnt)
+		aceqfile << cnt << "\n";
+	aceqfile.close();
+	
 	// dump eq class abundance dist for further analysis.
+	/*
 	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
 	for (auto sample : eqclass_map)
 		tmpfile << sample.second.first << " " << sample.second.second << std::endl;
 	tmpfile.close();
+	*/
+
+	PRINT_CDBG("Timings:" << "\neq: " << eqt 
+						  << "\ncqf: " << cqft
+						  << "\nEq serializing: " << eq_exportt
+						  << "\nRRR: " << rrrt
+						  << "\ncqf serialization: " << cqf_exportt
+						  << "\ncqf iteration and heap: " << cqf_heapt
+						  << "\nmap+hash: " << map_hasht
+						  << "\nreshuffle: " << reshufflet);
 }
 
 template <class qf_obj, class key_obj>
@@ -313,7 +394,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 {
 	uint32_t nqf = num_samples;
 	uint64_t counter = 0;
-
+	uint64_t s = time(NULL);
 	// merge all input CQFs into the final QF
 	typename CQF<key_obj>::Iterator *it_incqfs =
 		(typename CQF<key_obj>::Iterator*)calloc(num_samples, sizeof(typename
@@ -340,22 +421,35 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		SampleObject<KeyObject> obj(key, incqfs[i].sample_id, i);
 		minheap.push(obj);
 	}
-
+	cqf_heapt += time(NULL) - s;
 	while (!minheap.empty()) {
+		s = time(NULL);
 		assert(minheap.size() == nqf);
 		SampleObject<KeyObject> cur;
 		BitVector eq_class(num_samples);
 		// Get the smallest key from minheap and update the eqclass vector
 		cur = minheap.top();
-		eq_class.set(cur.id);
 		minheap.pop();
+		
+		cqf_heapt += time(NULL) - s;
+		
+		s = time(NULL);
+		eq_class.set(cur.id);
+		eqt += time(NULL) - s;
 		// Keep poping keys from minheap until you see a different key.
 		// While poping keys build the eq class for cur.
 		// Increment iterators for all CQFs whose keys are popped.
 		while (!minheap.empty() && cur.obj.key == minheap.top().obj.key) {
+			s = time(NULL);
 			uint32_t id = minheap.top().id;
-			eq_class.set(id);
 			minheap.pop();
+			cqf_heapt += time(NULL) - s;
+		
+			s = time(NULL);
+			eq_class.set(id);
+			eqt += time(NULL) - s;
+		
+			s = time(NULL);
 			++it_incqfs[id];
 			if (it_incqfs[id].done())	// If the iterator is done then decrement nqf
 				nqf--;
@@ -364,7 +458,9 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				SampleObject<KeyObject> obj(key, incqfs[id].sample_id, id);
 				minheap.push(obj);
 			}
+			cqf_heapt += time(NULL) - s;
 		}
+		s = time(NULL);
 		// Move the iterator of the smallest key.
 		++it_incqfs[cur.id];
 		if (it_incqfs[cur.id].done())	// If the iterator is done then decrement nqf
@@ -374,6 +470,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			SampleObject<KeyObject> obj(key, incqfs[cur.id].sample_id, cur.id);
 			minheap.push(obj);
 		}
+		cqf_heapt += time(NULL) - s;
 		// Add <kmer, vector> in the cdbg
 		add_kmer(cur.obj, eq_class);
 		counter++;

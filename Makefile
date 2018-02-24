@@ -33,8 +33,12 @@ CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare \
 -Wno-implicit-function-declaration
 
-LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lsdsl -lpthread -lboost_system \
--lboost_thread -lm -lz -lrt
+#LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lsdsl -lpthread -lssl -lcrypto -lboost_system \
+#-lboost_thread -lm -lbz2 -lz -lrt 
+
+#These flags are used when compiled on Newton. Newton has an issue with sdsl lib.
+LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lpthread -lssl -lcrypto -lboost_system \
+-lboost_thread -lm -lbz2 -lz -lrt /home/rob/cosmo/3rd_party_inst/lib/libsdsl.a 
 
 #
 # declaration of dependencies
@@ -44,6 +48,7 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
+validatemantis:					$(OBJDIR)/kmer.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
 
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc

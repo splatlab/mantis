@@ -182,9 +182,9 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
 			if (res == EINPROGRESS) {
-				DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes <<
+				std::cerr << "didn't read fast enough for " << aiocb.aio_fildes <<
 					" at " << last_read_offset << "(until " << last_prefetch_offset <<
-					" buffer size: "<< buffer_size << ")...");
+					" buffer size: "<< buffer_size << ")..." << std::endl;
 				// const struct aiocb *const aiocb_list[1] = {&aiocb};
 				// aio_suspend(aiocb_list, 1, NULL);
 				DEBUG_CDBG(" finished it");
@@ -219,10 +219,10 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		DEBUG_CDBG("prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
+		std::cerr << "prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
-							 ((uint64_t)buffer) << std::dec);
+							 ((uint64_t)buffer) << std::dec << std::endl;
 		// to touch each page in the buffer.
 		aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
 		aiocb.aio_sigevent.sigev_notify_function = &handler_function;

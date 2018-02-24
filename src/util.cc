@@ -6,7 +6,7 @@ std::string last_part(std::string str, char c) {
 }
 
 std::string first_part(std::string str, char c) {
-	uint64_t found = str.find_last_of(c);
+	uint64_t found = str.find_first_of(c);
 	return str.substr(0, found);
 }
 
