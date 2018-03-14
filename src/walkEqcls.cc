@@ -3,6 +3,7 @@
 #include "bitvector.h"
 #include <time.h>
 #include <random>
+#include <sstream>
 
 
 void print_time_elapsed(string desc, struct timeval* start, struct timeval* end) 
@@ -209,7 +210,9 @@ void compareCopies(size_t num_samples) {
 void run_reorder(std::string filename, 
 				std::string out_filename, 
         uint64_t num_samples) {
-  
+  struct timeval start, end;
+	struct timezone tzp;
+
   std::vector<std::vector<double>> editDistMat(num_samples);
   for (auto& v : editDistMat) {
     v.resize(num_samples);
@@ -220,6 +223,7 @@ void run_reorder(std::string filename,
   //totalEqClsCnt = 10;
   std::cout << "Total bit size: " << eqcls.bit_size() 
             << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
+  gettimeofday(&start, &tzp);
   for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
     std::vector<bool> row(num_samples);
     for (size_t i = 0; i < row.size(); i++) row[i] = false;
@@ -241,9 +245,14 @@ void run_reorder(std::string filename,
         if (row[i] != row[j]) editDistMat[i][j]++;
       }
     }
-    //if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
-      std::cout << eqclsCntr << " eqclses processed\n";
-    //}
+    if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
+      gettimeofday(&end, &tzp);
+      std::stringstream ss;
+      ss << eqclsCntr << " eqclses processed, ";
+      print_time_elapsed(ss.str(), &start, &end);
+      //std::cout << eqclsCntr << " eqclses processed\n";
+      gettimeofday(&start, &tzp);
+    }
   }
 
   std::ofstream out(out_filename);
