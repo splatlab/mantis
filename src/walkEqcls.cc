@@ -206,8 +206,64 @@ void compareCopies(size_t num_samples) {
 
 }
 
-void run_reorder(std::string ds_file, 
-				std::string out_file) {
+void run_reorder(std::string filename, 
+				std::string out_filename, 
+        uint64_t num_samples) {
+  
+  std::vector<std::vector<double>> editDistMat(num_samples);
+  for (auto& v : editDistMat) {
+    v.resize(num_samples);
+    for (auto& d : v) d = 0;
+  }
+  BitVectorRRR eqcls(filename);
+  size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
+  //totalEqClsCnt = 10;
+  std::cout << "Total bit size: " << eqcls.bit_size() 
+            << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
+  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+    std::vector<bool> row(num_samples);
+    for (size_t i = 0; i < row.size(); i++) row[i] = false;
+
+    // set the set bits
+    size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, (size_t)64);
+      size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
+        if ((wrd >> j) & 0x01) {
+          row[i] = true;
+        }
+      }
+      i+=bitCnt;
+    }
+    for (i = 0; i < row.size(); i++) {
+      for (size_t j = i+1; j < row.size(); j++) {
+        if (row[i] != row[j]) editDistMat[i][j]++;
+      }
+    }
+    //if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
+      std::cout << eqclsCntr << " eqclses processed\n";
+    //}
+  }
+
+  std::ofstream out(out_filename);
+  out << editDistMat.size() << "\n";
+  for (size_t i = 0; i < editDistMat.size(); i++) {
+    //bool firstTime = true;
+    for (size_t j = 0; j < editDistMat[i].size(); j++) {
+      if (editDistMat[i][j] != 0) {
+        /* if (firstTime) {
+          std::cout << i << ":\t";
+          firstTime = false;
+        } */
+        std::cout << j << " ";
+        out << i << "\t" << j << "\t" << editDistMat[i][j] << "\n";
+      }
+    }
+    /* if (!firstTime) {
+      std::cout << "\n";
+    } */
+  }
 
 }
 
@@ -233,5 +289,18 @@ int main(int argc, char *argv[]) {
   }
   else if (command == "compareCopies") 
     compareCopies(num_samples);
+  else if (command == "reorder") {
+    if (argc < 4) {
+      std::cerr << "ERROR: MISSING LAST ARGUMENT\n";
+      std::exit(1);
+    }
+    std::string filename = argv[2];
+    std::string output_filename = argv[3];
+    run_reorder(filename, output_filename, num_samples);
+  } else {
+    std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
+              << "OPTIONS ARE: validate, compareCompressions, compareCopies, reorder\n";
+    std::exit(1);
+  }
 
 }
