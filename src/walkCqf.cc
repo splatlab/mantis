@@ -107,8 +107,7 @@ void run_filter(std::string ds_file,
 }
 
 void run_list_kmers(std::string ds_file, 
-				std::string out_file, 
-				uint64_t cutoff) {
+				std::string out_file) {
 	struct timeval start, end;
 	struct timezone tzp;
 	
@@ -158,13 +157,15 @@ int main ( int argc, char *argv[] )
 	cout << ds_file << "\n";
 	std::string out_file = argv[3];
 	cout << out_file << "\n";
-	uint64_t cutoff = stoi(argv[4]);
+	uint64_t cutoff = 0;
 	uint64_t approximate_num_of_kmers_greater_than_cutoff = 0;
 	if (command == "filter") { 
 		if (argc < 6) {
 			std::cerr << "ERROR: missing last argument for filter command\n";
 			exit(1);
 		}
+		cutoff = stoi(argv[4]);
+		cout << cutoff << "\n";
 		cout << argv[5] << "\n";
 		approximate_num_of_kmers_greater_than_cutoff = stoull(argv[5]);
 	}
@@ -172,8 +173,8 @@ int main ( int argc, char *argv[] )
 	if (command == "filter") {
 		run_filter(ds_file, out_file, cutoff, approximate_num_of_kmers_greater_than_cutoff);
 	}
-	else {
-		run_list_kmers(ds_file, out_file, cutoff);
+	else if (command == "listKmers") {
+		run_list_kmers(ds_file, out_file);
 	}
 	
 	return EXIT_SUCCESS;

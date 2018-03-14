@@ -168,7 +168,7 @@ void compareCopies(size_t num_samples) {
 
   sdsl::bit_vector bits2(bit_cnt);
   sdsl::bit_vector bits3(bit_cnt);
-  sdsl::bit_vector bits4(bit_cnt);
+  sdsl::bit_vector bits4(bit_cnt+1);
 
   gettimeofday(&start, &tzp);
   for (auto c = 0; c < numOfCopies; c++) {
@@ -192,15 +192,22 @@ void compareCopies(size_t num_samples) {
   gettimeofday(&start, &tzp);
   for (auto c = 0; c < numOfCopies; c++) {
     i = 0;
+	size_t j = 1;
     while (i < bit_cnt) {
       size_t bitCnt = std::min(bit_cnt-i, (size_t)64);
       size_t wrd = bits.get_int(i, bitCnt);
-      bits4.set_int(i, wrd, bitCnt);
+      bits4.set_int(j, wrd, bitCnt);
       i+=bitCnt;
+	  j+=bitCnt;
     }
   }
   gettimeofday(&end, &tzp);
 	print_time_elapsed("Read int and write int: ", &start, &end);
+
+}
+
+void run_reorder(std::string ds_file, 
+				std::string out_file) {
 
 }
 
