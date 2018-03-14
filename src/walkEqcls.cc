@@ -1,6 +1,7 @@
 
 #include "compressedSetBit.h"
 #include "bitvector.h"
+#include "sdsl/bits.hpp"
 #include <time.h>
 #include <random>
 #include <sstream>
@@ -207,6 +208,106 @@ void compareCopies(size_t num_samples) {
 
 }
 
+void build_distMat(std::string filename, 
+				std::string out_filename, 
+        uint64_t num_samples) {
+  struct timeval start, end, row2colStart, colPairCompStart;
+	struct timezone tzp;
+  
+  std::vector<std::vector<double>> editDistMat(num_samples);
+  for (auto& v : editDistMat) {
+    v.resize(num_samples);
+    for (auto& d : v) d = 0;
+  }
+
+  BitVectorRRR eqcls(filename);
+  size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
+  //totalEqClsCnt = 1000001;
+  std::cout << "Total bit size: " << eqcls.bit_size() 
+            << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
+
+  std::vector<sdsl::bit_vector> cols(num_samples);
+  for (auto& bv : cols) bv = sdsl::bit_vector(totalEqClsCnt, 0);
+
+  gettimeofday(&start, &tzp);
+  gettimeofday(&row2colStart, &tzp);
+  
+  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+   
+    // transpose the matrix of eq. classes
+    size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, (size_t)64);
+      size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
+        if ((wrd >> j) & 0x01) {
+          cols[i][eqclsCntr] = 1;
+        }
+      }
+      i+=bitCnt;
+    }
+    
+    if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
+      gettimeofday(&end, &tzp);
+      std::stringstream ss;
+      ss << eqclsCntr << " eqclses processed, ";
+      print_time_elapsed(ss.str(), &start, &end);
+      gettimeofday(&start, &tzp);
+    }
+  }
+
+  gettimeofday(&end, &tzp);
+  print_time_elapsed("DONE!, ", &row2colStart, &end);
+  gettimeofday(&start, &tzp);
+
+  gettimeofday(&colPairCompStart, &tzp);
+
+  // calc edit distance
+  size_t bitCnt = 64;
+  for (size_t k = 0; k < num_samples; k++) {
+    double dist = 0;
+    for (size_t j = k+1; j < num_samples; j++) {
+      //calculate distance between column i and j
+      size_t i = 0;
+      while (i < totalEqClsCnt) {
+        //size_t bitCnt = std::min(totalEqClsCnt-i, (size_t)64);
+        size_t wrd1 = cols[k].get_int(i, bitCnt);
+        size_t wrd2 = cols[j].get_int(i, bitCnt);
+        
+        // compare words
+        // xor & pop count
+        dist += sdsl::bits::cnt(wrd1^wrd2);
+
+        i+=bitCnt;
+      }
+      editDistMat[k][j] = dist;
+    }
+    gettimeofday(&end, &tzp);
+    std::stringstream ss;
+    ss << k << "," ;//<< j << ", ";
+    print_time_elapsed(ss.str(), &start, &end);
+    gettimeofday(&start, &tzp);
+    
+
+  } 
+  gettimeofday(&end, &tzp);
+  
+  print_time_elapsed(" DONE!, ", &start, &end);
+  gettimeofday(&colPairCompStart, &tzp);
+
+  std::ofstream out(out_filename);
+  out << editDistMat.size() << "\n";
+  for (size_t i = 0; i < editDistMat.size(); i++) {
+    for (size_t j = 0; j < editDistMat[i].size(); j++) {
+      if (editDistMat[i][j] != 0) {
+        
+        //std::cout << j << " ";
+        out << i << "\t" << j << "\t" << editDistMat[i][j] << "\n";
+      }
+    }
+  }
+}
+
 void run_reorder(std::string filename, 
 				std::string out_filename, 
         uint64_t num_samples) {
@@ -277,8 +378,7 @@ void run_reorder(std::string filename,
 }
 
 int main(int argc, char *argv[]) {
-
-
+  
   uint64_t num_samples = 2586;
   std::string command = argv[1];
 
@@ -305,7 +405,7 @@ int main(int argc, char *argv[]) {
     }
     std::string filename = argv[2];
     std::string output_filename = argv[3];
-    run_reorder(filename, output_filename, num_samples);
+    build_distMat(filename, output_filename, num_samples);
   } else {
     std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
               << "OPTIONS ARE: validate, compareCompressions, compareCopies, reorder\n";
