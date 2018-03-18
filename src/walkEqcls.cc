@@ -208,6 +208,55 @@ void compareCopies(size_t num_samples) {
 
 }
 
+void reorder(std::string filename,
+             std::string out_filename,
+             std::string order_filename,
+             uint64_t num_samples) {
+  struct timeval start, end;
+	struct timezone tzp;
+
+  std::ifstream orderFile(order_filename);
+  std::vector<size_t> newOrder;
+  while (!orderFile.eof()) {
+    size_t val;
+    orderFile >> val;
+    newOrder.push_back(val);
+  }
+  sdsl::bit_vector eqcls;
+  sdsl::load_from_file(eqcls, filename);
+  size_t totalEqClsCnt = eqcls.size()/num_samples; //222584822;
+  std::cout << "Total number of Eq. Clss: " << totalEqClsCnt << "\n";
+  //totalEqClsCnt = 1000001;
+  sdsl::bit_vector reordered_eqcls(eqcls.size());
+  gettimeofday(&start, &tzp);
+  
+  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+   
+    // transpose the matrix of eq. classes
+    size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, (size_t)64);
+      size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
+        if ((wrd >> j) & 0x01) {
+          reordered_eqcls[newOrder[curIdx]] = 1;
+        }
+      }
+      i+=bitCnt;
+    }
+    
+    if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
+      gettimeofday(&end, &tzp);
+      std::stringstream ss;
+      ss << eqclsCntr << " eqclses processed, ";
+      print_time_elapsed(ss.str(), &start, &end);
+      gettimeofday(&start, &tzp);
+    }
+  }
+  sdsl::store_to_file(reordered_eqcls, out_filename);
+
+}
+
 void build_distMat(std::string filename, 
 				std::string out_filename, 
         uint64_t num_samples) {
@@ -222,7 +271,8 @@ void build_distMat(std::string filename,
 
   BitVectorRRR eqcls(filename);
   size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
-  //totalEqClsCnt = 1000001;
+  totalEqClsCnt = 1000001;
+  sdsl::bit_vector uncompressed(totalEqClsCnt*num_samples, 0);
   std::cout << "Total bit size: " << eqcls.bit_size() 
             << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
 
@@ -239,9 +289,10 @@ void build_distMat(std::string filename,
     while (i < num_samples) {
       size_t bitCnt = std::min(num_samples-i, (size_t)64);
       size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      uncompressed.set_int(eqclsCntr*num_samples+i, wrd, bitCnt);
       for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
         if ((wrd >> j) & 0x01) {
-          cols[i][eqclsCntr] = 1;
+          cols[curIdx][eqclsCntr] = 1;
         }
       }
       i+=bitCnt;
@@ -255,7 +306,7 @@ void build_distMat(std::string filename,
       gettimeofday(&start, &tzp);
     }
   }
-
+  sdsl::store_to_file(uncompressed, "test.eq");
   gettimeofday(&end, &tzp);
   print_time_elapsed("DONE!, ", &row2colStart, &end);
   gettimeofday(&start, &tzp);
@@ -265,8 +316,8 @@ void build_distMat(std::string filename,
   // calc edit distance
   size_t bitCnt = 64;
   for (size_t k = 0; k < num_samples; k++) {
-    double dist = 0;
     for (size_t j = k+1; j < num_samples; j++) {
+      double dist = 0;
       //calculate distance between column i and j
       size_t i = 0;
       while (i < totalEqClsCnt) {
@@ -282,13 +333,13 @@ void build_distMat(std::string filename,
       }
       editDistMat[k][j] = dist;
     }
-    gettimeofday(&end, &tzp);
-    std::stringstream ss;
-    ss << k << "," ;//<< j << ", ";
-    print_time_elapsed(ss.str(), &start, &end);
-    gettimeofday(&start, &tzp);
-    
-
+    if (k % 100 == 0) {
+      gettimeofday(&end, &tzp);
+      std::stringstream ss;
+      ss << k << "," ;//<< j << ", ";
+      print_time_elapsed(ss.str(), &start, &end);
+      gettimeofday(&start, &tzp);    
+    }
   } 
   gettimeofday(&end, &tzp);
   
@@ -306,75 +357,6 @@ void build_distMat(std::string filename,
       }
     }
   }
-}
-
-void run_reorder(std::string filename, 
-				std::string out_filename, 
-        uint64_t num_samples) {
-  struct timeval start, end;
-	struct timezone tzp;
-
-  std::vector<std::vector<double>> editDistMat(num_samples);
-  for (auto& v : editDistMat) {
-    v.resize(num_samples);
-    for (auto& d : v) d = 0;
-  }
-  BitVectorRRR eqcls(filename);
-  size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
-  //totalEqClsCnt = 10;
-  std::cout << "Total bit size: " << eqcls.bit_size() 
-            << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
-  gettimeofday(&start, &tzp);
-  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
-    std::vector<bool> row(num_samples);
-    for (size_t i = 0; i < row.size(); i++) row[i] = false;
-
-    // set the set bits
-    size_t i = 0;
-    while (i < num_samples) {
-      size_t bitCnt = std::min(num_samples-i, (size_t)64);
-      size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
-      for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
-        if ((wrd >> j) & 0x01) {
-          row[i] = true;
-        }
-      }
-      i+=bitCnt;
-    }
-    for (i = 0; i < row.size(); i++) {
-      for (size_t j = i+1; j < row.size(); j++) {
-        if (row[i] != row[j]) editDistMat[i][j]++;
-      }
-    }
-    if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
-      gettimeofday(&end, &tzp);
-      std::stringstream ss;
-      ss << eqclsCntr << " eqclses processed, ";
-      print_time_elapsed(ss.str(), &start, &end);
-      //std::cout << eqclsCntr << " eqclses processed\n";
-      gettimeofday(&start, &tzp);
-    }
-  }
-
-  std::ofstream out(out_filename);
-  out << editDistMat.size() << "\n";
-  for (size_t i = 0; i < editDistMat.size(); i++) {
-    //bool firstTime = true;
-    for (size_t j = 0; j < editDistMat[i].size(); j++) {
-      if (editDistMat[i][j] != 0) {
-        /* if (firstTime) {
-          std::cout << i << ":\t";
-          firstTime = false;
-        } */
-        std::cout << j << " ";
-        out << i << "\t" << j << "\t" << editDistMat[i][j] << "\n";
-      }
-    }
-    /* if (!firstTime) {
-      std::cout << "\n";
-    } */
-  }
-
 }
 
 int main(int argc, char *argv[]) {
@@ -398,7 +380,7 @@ int main(int argc, char *argv[]) {
   }
   else if (command == "compareCopies") 
     compareCopies(num_samples);
-  else if (command == "reorder") {
+  else if (command == "distMat") {
     if (argc < 4) {
       std::cerr << "ERROR: MISSING LAST ARGUMENT\n";
       std::exit(1);
@@ -406,7 +388,17 @@ int main(int argc, char *argv[]) {
     std::string filename = argv[2];
     std::string output_filename = argv[3];
     build_distMat(filename, output_filename, num_samples);
-  } else {
+  } else if (command == "reorder") {
+    if (argc < 5) {
+      std::cerr << "ERROR: MISSING ARGUMENT. 4 needed.\n";
+      std::exit(1);
+    }
+    std::string filename = argv[2];
+    std::string output_filename = argv[3];
+    std::string order_filename = argv[4];
+    reorder(filename, output_filename, order_filename, num_samples);
+  } 
+  else {
     std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
               << "OPTIONS ARE: validate, compareCompressions, compareCopies, reorder\n";
     std::exit(1);
