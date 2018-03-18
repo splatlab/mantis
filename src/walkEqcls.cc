@@ -220,8 +220,10 @@ void reorder(std::string filename,
   while (!orderFile.eof()) {
     size_t val;
     orderFile >> val;
+    std::cout << val << " ";
     newOrder.push_back(val);
   }
+  std::cout << "\n";
   sdsl::bit_vector eqcls;
   sdsl::load_from_file(eqcls, filename);
   size_t totalEqClsCnt = eqcls.size()/num_samples; //222584822;
@@ -265,6 +267,12 @@ void build_distMat(std::string filename,
   
   std::vector<std::vector<double>> editDistMat(num_samples);
   for (auto& v : editDistMat) {
+    v.resize(num_samples);
+    for (auto& d : v) d = 0;
+  }
+
+  std::vector<std::vector<double>> mutInfoMat(num_samples);
+  for (auto& v : mutInfoMat) {
     v.resize(num_samples);
     for (auto& d : v) d = 0;
   }
@@ -318,6 +326,11 @@ void build_distMat(std::string filename,
   for (size_t k = 0; k < num_samples; k++) {
     for (size_t j = k+1; j < num_samples; j++) {
       double dist = 0;
+      double mutprob[4];
+      double denum = totalEqClsCnt;
+      for(int b=0;b<4;b++) mutprob[b]=0;
+      double indivprob[2];
+      for(int b=0;b<2;b++) indivprob[b]=0;
       //calculate distance between column i and j
       size_t i = 0;
       while (i < totalEqClsCnt) {
@@ -328,10 +341,25 @@ void build_distMat(std::string filename,
         // compare words
         // xor & pop count
         dist += sdsl::bits::cnt(wrd1^wrd2);
-
+        indivprob[0] += sdsl::bits::cnt(wrd1);
+        indivprob[1] += sdsl::bits::cnt(wrd2);        
+        mutprob[0] += sdsl::bits::cnt((~wrd1)&(~wrd2));
+        mutprob[1] += sdsl::bits::cnt((~wrd1)&wrd2);
+        mutprob[2] += sdsl::bits::cnt(wrd1&(~wrd2));
+        mutprob[3] += sdsl::bits::cnt(wrd1&wrd2);
         i+=bitCnt;
       }
       editDistMat[k][j] = dist;
+      editDistMat[j][k] = dist;
+      
+      mutInfoMat[k][j] += 
+      mutprob[0]?mutprob[0]*log2l(denum*mutprob[0]/( (totalEqClsCnt - indivprob[0])*(totalEqClsCnt - indivprob[1])) ):0 +
+      mutprob[1]?mutprob[1]*log2l(denum*mutprob[1]/( (totalEqClsCnt - indivprob[0])*(indivprob[1])) ):0 +
+      mutprob[2]?mutprob[2]*log2l(denum*mutprob[2]/( (indivprob[0])*(totalEqClsCnt - indivprob[1])) ):0 +
+      mutprob[3]?mutprob[3]*log2l(denum*mutprob[3]/( (indivprob[0])*(indivprob[1])) ):0;
+      mutInfoMat[k][j] /= denum;
+      mutInfoMat[j][k] = mutInfoMat[k][j];
+      //if (mutInfoMat[k][j]) std::cout << mutInfoMat[k][j] << "\n";
     }
     if (k % 100 == 0) {
       gettimeofday(&end, &tzp);
@@ -347,13 +375,17 @@ void build_distMat(std::string filename,
   gettimeofday(&colPairCompStart, &tzp);
 
   std::ofstream out(out_filename);
-  out << editDistMat.size() << "\n";
+  std::ofstream mutout(out_filename+".mutinfo");
+  //out << editDistMat.size() << "\n";
   for (size_t i = 0; i < editDistMat.size(); i++) {
     for (size_t j = 0; j < editDistMat[i].size(); j++) {
       if (editDistMat[i][j] != 0) {
         
         //std::cout << j << " ";
         out << i << "\t" << j << "\t" << editDistMat[i][j] << "\n";
+      }
+      if (mutInfoMat[i][j] != 0) {
+        mutout <<  i << "\t" << j << "\t" << mutInfoMat[i][j] << "\n";
       }
     }
   }
