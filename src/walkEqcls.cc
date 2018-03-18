@@ -341,6 +341,7 @@ void build_distMat(std::string filename,
         // compare words
         // xor & pop count
         dist += sdsl::bits::cnt(wrd1^wrd2);
+        
         indivprob[0] += sdsl::bits::cnt(wrd1);
         indivprob[1] += sdsl::bits::cnt(wrd2);        
         mutprob[0] += sdsl::bits::cnt((~wrd1)&(~wrd2));
@@ -353,9 +354,9 @@ void build_distMat(std::string filename,
       editDistMat[j][k] = dist;
       
       mutInfoMat[k][j] += 
-      mutprob[0]?mutprob[0]*log2l(denum*mutprob[0]/( (totalEqClsCnt - indivprob[0])*(totalEqClsCnt - indivprob[1])) ):0 +
-      mutprob[1]?mutprob[1]*log2l(denum*mutprob[1]/( (totalEqClsCnt - indivprob[0])*(indivprob[1])) ):0 +
-      mutprob[2]?mutprob[2]*log2l(denum*mutprob[2]/( (indivprob[0])*(totalEqClsCnt - indivprob[1])) ):0 +
+      mutprob[0]?mutprob[0]*log2l(denum*mutprob[0]/( (denum - indivprob[0])*(denum - indivprob[1])) ):0 +
+      mutprob[1]?mutprob[1]*log2l(denum*mutprob[1]/( (denum - indivprob[0])*(indivprob[1])) ):0 +
+      mutprob[2]?mutprob[2]*log2l(denum*mutprob[2]/( (indivprob[0])*(denum - indivprob[1])) ):0 +
       mutprob[3]?mutprob[3]*log2l(denum*mutprob[3]/( (indivprob[0])*(indivprob[1])) ):0;
       mutInfoMat[k][j] /= denum;
       mutInfoMat[j][k] = mutInfoMat[k][j];
