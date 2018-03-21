@@ -430,10 +430,10 @@ void build_distMat(std::string filename,
       hamDistMat[j][k] = dist;
       
       mutInfoMat[k][j] += 
-      mutprob[0]?mutprob[0]*log2l(denum*mutprob[0]/( (denum - indivprob[0])*(denum - indivprob[1])) ):0 +
-      mutprob[1]?mutprob[1]*log2l(denum*mutprob[1]/( (denum - indivprob[0])*(indivprob[1])) ):0 +
-      mutprob[2]?mutprob[2]*log2l(denum*mutprob[2]/( (indivprob[0])*(denum - indivprob[1])) ):0 +
-      mutprob[3]?mutprob[3]*log2l(denum*mutprob[3]/( (indivprob[0])*(indivprob[1])) ):0;
+      (mutprob[0]?mutprob[0]*(log2l(denum)+log2l(mutprob[0])- log2l(denum - indivprob[0])-log2l(denum - indivprob[1])):0) +
+      (mutprob[1]?mutprob[1]*(log2l(denum)+log2l(mutprob[1])- log2l(denum - indivprob[0])-log2l(indivprob[1])):0) +
+      (mutprob[2]?mutprob[2]*(log2l(denum)+log2l(mutprob[2])- log2l(indivprob[0])-log2l(denum - indivprob[1])):0) +
+      (mutprob[3]?mutprob[3]*(log2l(denum)+log2l(mutprob[3])- log2l(indivprob[0])-log2l(denum - indivprob[1])):0);
       mutInfoMat[k][j] /= denum;
       mutInfoMat[j][k] = mutInfoMat[k][j];
       //if (mutInfoMat[k][j]) std::cout << mutInfoMat[k][j] << "\n";
@@ -523,3 +523,4 @@ int main(int argc, char *argv[]) {
   }
 
 }
+
