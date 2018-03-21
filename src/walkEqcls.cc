@@ -410,7 +410,7 @@ void build_distMat(std::string filename,
       //calculate distance between column i and j
       size_t i = 0;
       while (i < totalEqClsCnt) {
-        //size_t bitCnt = std::min(totalEqClsCnt-i, (size_t)64);
+        bitCnt = std::min(totalEqClsCnt-i, (size_t)64);
         size_t wrd1 = cols[k].get_int(i, bitCnt);
         size_t wrd2 = cols[j].get_int(i, bitCnt);
         
@@ -420,7 +420,7 @@ void build_distMat(std::string filename,
         
         indivprob[0] += sdsl::bits::cnt(wrd1);
         indivprob[1] += sdsl::bits::cnt(wrd2);        
-        mutprob[0] += sdsl::bits::cnt((~wrd1)&(~wrd2));
+        mutprob[0] += sdsl::bits::cnt((~wrd1)&(~wrd2)) - (64-bitCnt);
         mutprob[1] += sdsl::bits::cnt((~wrd1)&wrd2);
         mutprob[2] += sdsl::bits::cnt(wrd1&(~wrd2));
         mutprob[3] += sdsl::bits::cnt(wrd1&wrd2);
