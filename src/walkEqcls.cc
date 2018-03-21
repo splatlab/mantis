@@ -208,6 +208,74 @@ void compareCopies(size_t num_samples) {
 
 }
 
+void compare_reordered_original(std::string filename1,
+             std::string filename2,
+             std::string order_filename,
+             uint64_t num_samples) {
+  struct timeval start, end;
+	struct timezone tzp;
+
+  std::ifstream orderFile(order_filename);
+  std::vector<size_t> newOrder;
+  while (!orderFile.eof()) {
+    size_t val;
+    orderFile >> val;
+    //std::cout << val << " ";
+    newOrder.push_back(val);
+  }
+  std::cout << "\n";
+  sdsl::bit_vector eqcls;
+  sdsl::bit_vector reordered_eqcls;
+  sdsl::load_from_file(eqcls, filename1);
+  sdsl::load_from_file(reordered_eqcls, filename2);
+  size_t totalEqClsCnt = reordered_eqcls.size()/num_samples; //222584822;
+  std::cout << "Total number of Eq. Clss: " << totalEqClsCnt << "\n";
+  //totalEqClsCnt = 1000001;
+  gettimeofday(&start, &tzp);
+  
+  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+
+    std::vector<size_t> eqcls_setbits;
+    std::vector<size_t> reordered_eqcls_setbits;
+    eqcls_setbits.reserve(num_samples);
+    reordered_eqcls_setbits.reserve(num_samples);
+ 
+    // transpose the matrix of eq. classes
+    size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, (size_t)64);
+      size_t wrd1 = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      size_t wrd2 = reordered_eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
+        if ((wrd1 >> j) & 0x01) {
+          eqcls_setbits.push_back(newOrder[curIdx]);
+        }
+        if ((wrd2 >> j) & 0x01) {
+          reordered_eqcls_setbits.push_back(curIdx);
+        }
+        
+      }
+      i+=bitCnt;
+    }
+    std::sort(eqcls_setbits.begin(), eqcls_setbits.end());
+    std::sort(reordered_eqcls_setbits.begin(), reordered_eqcls_setbits.end());
+    
+    if (eqcls_setbits != reordered_eqcls_setbits) {
+      std::cout << "ERROR! EQ CLSES in ROW: " << eqclsCntr << " NOT THE SAME.\n";
+      std::exit(1);
+    }
+    if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
+      gettimeofday(&end, &tzp);
+      std::stringstream ss;
+      ss << eqclsCntr << " eqclses processed, ";
+      print_time_elapsed(ss.str(), &start, &end);
+      gettimeofday(&start, &tzp);
+    }
+
+  }
+  std::cout << "\nValidation Passed!\n\n";
+}
+
 void reorder(std::string filename,
              std::string out_filename,
              std::string order_filename,
@@ -220,16 +288,16 @@ void reorder(std::string filename,
   while (!orderFile.eof()) {
     size_t val;
     orderFile >> val;
-    std::cout << val << " ";
+    //std::cout << val << " ";
     newOrder.push_back(val);
   }
-  std::cout << "\n";
+  //std::cout << "\n";
   sdsl::bit_vector eqcls;
   sdsl::load_from_file(eqcls, filename);
   size_t totalEqClsCnt = eqcls.size()/num_samples; //222584822;
   std::cout << "Total number of Eq. Clss: " << totalEqClsCnt << "\n";
-  //totalEqClsCnt = 1000001;
-  sdsl::bit_vector reordered_eqcls(eqcls.size());
+  totalEqClsCnt = 1280000;
+  sdsl::bit_vector reordered_eqcls(eqcls.size(), 0);
   gettimeofday(&start, &tzp);
   
   for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
@@ -241,12 +309,15 @@ void reorder(std::string filename,
       size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
       for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
         if ((wrd >> j) & 0x01) {
-          reordered_eqcls[newOrder[curIdx]] = 1;
+          //std::cout << curIdx << ":" << newOrder[curIdx] << " ";
+          reordered_eqcls[eqclsCntr*num_samples+newOrder[curIdx]] = 1;
         }
       }
       i+=bitCnt;
     }
     
+    //std::cout << "\n";
+    //std::exit(1);
     if (eqclsCntr != 0 && (eqclsCntr) % 1000000 == 0) {
       gettimeofday(&end, &tzp);
       std::stringstream ss;
@@ -255,6 +326,11 @@ void reorder(std::string filename,
       gettimeofday(&start, &tzp);
     }
   }
+  std::cout << "\noutfilename: " << out_filename << "\n";
+  for (auto idx = 0; idx < num_samples; idx++) {
+    std::cout << idx << ":" << reordered_eqcls[idx] << " ";
+  }
+  std::cout << "\n";
   sdsl::store_to_file(reordered_eqcls, out_filename);
 
 }
@@ -265,8 +341,8 @@ void build_distMat(std::string filename,
   struct timeval start, end, row2colStart, colPairCompStart;
 	struct timezone tzp;
   
-  std::vector<std::vector<double>> editDistMat(num_samples);
-  for (auto& v : editDistMat) {
+  std::vector<std::vector<double>> hamDistMat(num_samples);
+  for (auto& v : hamDistMat) {
     v.resize(num_samples);
     for (auto& d : v) d = 0;
   }
@@ -279,7 +355,7 @@ void build_distMat(std::string filename,
 
   BitVectorRRR eqcls(filename);
   size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
-  totalEqClsCnt = 1000001;
+  totalEqClsCnt = 1280000;
   sdsl::bit_vector uncompressed(totalEqClsCnt*num_samples, 0);
   std::cout << "Total bit size: " << eqcls.bit_size() 
             << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
@@ -321,7 +397,7 @@ void build_distMat(std::string filename,
 
   gettimeofday(&colPairCompStart, &tzp);
 
-  // calc edit distance
+  // calc ham distance
   size_t bitCnt = 64;
   for (size_t k = 0; k < num_samples; k++) {
     for (size_t j = k+1; j < num_samples; j++) {
@@ -350,8 +426,8 @@ void build_distMat(std::string filename,
         mutprob[3] += sdsl::bits::cnt(wrd1&wrd2);
         i+=bitCnt;
       }
-      editDistMat[k][j] = dist;
-      editDistMat[j][k] = dist;
+      hamDistMat[k][j] = dist;
+      hamDistMat[j][k] = dist;
       
       mutInfoMat[k][j] += 
       mutprob[0]?mutprob[0]*log2l(denum*mutprob[0]/( (denum - indivprob[0])*(denum - indivprob[1])) ):0 +
@@ -377,13 +453,13 @@ void build_distMat(std::string filename,
 
   std::ofstream out(out_filename);
   std::ofstream mutout(out_filename+".mutinfo");
-  //out << editDistMat.size() << "\n";
-  for (size_t i = 0; i < editDistMat.size(); i++) {
-    for (size_t j = 0; j < editDistMat[i].size(); j++) {
-      if (editDistMat[i][j] != 0) {
+  //out << hamDistMat.size() << "\n";
+  for (size_t i = 0; i < hamDistMat.size(); i++) {
+    for (size_t j = 0; j < hamDistMat[i].size(); j++) {
+      if (hamDistMat[i][j] != 0) {
         
         //std::cout << j << " ";
-        out << i << "\t" << j << "\t" << editDistMat[i][j] << "\n";
+        out << i << "\t" << j << "\t" << hamDistMat[i][j] << "\n";
       }
       if (mutInfoMat[i][j] != 0) {
         mutout <<  i << "\t" << j << "\t" << mutInfoMat[i][j] << "\n";
@@ -430,6 +506,15 @@ int main(int argc, char *argv[]) {
     std::string output_filename = argv[3];
     std::string order_filename = argv[4];
     reorder(filename, output_filename, order_filename, num_samples);
+  } else if (command == "compare_reordered_original") {
+    if (argc < 5) {
+      std::cerr << "ERROR: MISSING ARGUMENT. 4 needed.\n";
+      std::exit(1);
+    }
+    std::string filename1 = argv[2];
+    std::string filename2 = argv[3];
+    std::string order_filename = argv[4];
+    reorder(filename1, filename2, order_filename, num_samples);
   } 
   else {
     std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
