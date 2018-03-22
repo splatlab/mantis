@@ -37,6 +37,34 @@
 	  if (PRINT_DEBUG) { std::cerr << x << std::endl; } \
 } while (0)
 
+#define PRINT_CDBG(x) do { \
+	  { std::cout << x << std::endl; } \
+} while (0)
+
+class LightweightLock {
+	public:
+		LightweightLock() { locked = 0; }
+
+		/**
+		 * Try to acquire a lock once and return even if the lock is busy.
+		 * If spin flag is set, then spin until the lock is available.
+		 */
+		void lock()
+		{
+			while (__sync_lock_test_and_set(&locked, 1))
+				while (locked);
+		}
+
+		void unlock(void)
+		{
+			__sync_lock_release(&locked);
+			return;
+		}
+
+	private:
+		volatile int locked;
+};
+
 std::string last_part(std::string str, char c);
 std::string first_part(std::string str, char c);
 /* Print elapsed time using the start and end timeval */

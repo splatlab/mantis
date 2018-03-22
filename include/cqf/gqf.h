@@ -144,6 +144,10 @@ extern "C" {
 	/* Initialize an iterator */
 	bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position);
 
+	/* Initialize an iterator and position it at the smallest index containing a
+	 * hash value greater than or equal to "hash". */
+	bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash);
+
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the
 		 end of the QF. */
 	int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count);
@@ -151,6 +155,7 @@ extern "C" {
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */
 	int qfi_next(QFi *qfi);
+	int qfi_nextx(QFi *qfi, uint64_t* read_offset);
 
 	/* Check to see if the if the end of the QF */
 	int qfi_end(const QFi *qfi); 

@@ -44,6 +44,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "MantisFS.h"
 #include "ProgOpts.h"
 #include "spdlog/spdlog.h"
 #include "kmer.h"
@@ -137,33 +138,37 @@ int query_main (QueryOpts& opt)
 	console->info("Reading colored dbg from disk.");
 
 	std::string cqf_file(prefix + CQF_FILE);
-	std::string eqclass_file(prefix + EQCLASS_FILE);
 	std::string sample_file(prefix + SAMPLEID_FILE);
+	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
+																											 std::string(EQCLASS_FILE).c_str());
+
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
-																														eqclass_file,
+																														eqclass_files,
 																														sample_file);
   console->info("Read colored dbg with {} k-mers and {} color classes",
-                cdbg.get_cqf()->size(), cdbg.get_bitvector().bit_size() / cdbg.get_num_samples());
+                cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+
 	//cdbg.get_cqf()->dump_metadata(); 
-	//std::string query_file(argv[2]);
-	//CQF<KeyObject> cqf(query_file);
+	//CQF<KeyObject> cqf(query_file, false);
 	//CQF<KeyObject>::Iterator it = cqf.begin(1);
-	//std::vector<uint64_t> input_kmers;
+	//mantis::QuerySet input_kmers;
 	//do {
 		//KeyObject k = *it;
-		//input_kmers.push_back(k.key);
+		//input_kmers.insert(k.key);
 		//++it;
 	//} while (!it.done());
 
+	//mantis::QuerySets multi_kmers;
+	//multi_kmers.push_back(input_kmers);
+
 	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
-  uint64_t total_kmers = 0;
-  mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
+	uint64_t total_kmers = 0;
+	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										seed,
 																										cdbg.range(),
-                                                    total_kmers);
-  console->info("Total k-mers to query: {}", total_kmers);
-
+																										total_kmers);
+	console->info("Total k-mers to query: {}", total_kmers);
 
   // Attempt to optimize bulk query
   /*
