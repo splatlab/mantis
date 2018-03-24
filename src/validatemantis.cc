@@ -107,6 +107,7 @@ validate_main ( ValidateOpts& opt )
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
 																														eqclass_files,
 																														sample_file);
+	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
 	PRINT_CDBG("Read colored dbg with " << cdbg.get_cqf()->size() <<
 						 " k-mers and " << cdbg.get_num_bitvectors() <<
 						 " equivalence classes.");
@@ -118,6 +119,7 @@ validate_main ( ValidateOpts& opt )
   mantis::QuerySets multi_kmers = Kmer::parse_kmers(opt.query_file.c_str(),
                                                     seed,
                                                     cdbg.range(),
+																										kmer_size,
                                                     num_kmers);
 
 

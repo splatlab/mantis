@@ -145,6 +145,7 @@ int query_main (QueryOpts& opt)
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
 																														eqclass_files,
 																														sample_file);
+	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
   console->info("Read colored dbg with {} k-mers and {} color classes",
                 cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
 
@@ -167,6 +168,7 @@ int query_main (QueryOpts& opt)
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										seed,
 																										cdbg.range(),
+																										kmer_size,
 																										total_kmers);
 	console->info("Total k-mers to query: {}", total_kmers);
 

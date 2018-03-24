@@ -50,11 +50,11 @@ uint64_t str_to_int(string str)
  * Converts a uint64_t to a string of "ACTG"
  * where each character is represented by using only two bits
  */
-string int_to_str(uint64_t kmer)
+string int_to_str(uint64_t kmer, uint64_t kmer_size)
 {
 	uint8_t base;
 	string str;
-	for (int i=K; i>0; i--) {
+	for (int i=kmer_size; i>0; i--) {
 		base = (kmer >> (i*2-2)) & 3ULL;
 		char chr = Kmer::map_int(base);
 		str.push_back(chr);
@@ -66,11 +66,11 @@ string int_to_str(uint64_t kmer)
 inline int Kmer::reverse_complement_base(int x) { return 3 - x; }
 
 /* Calculate the revsese complement of a kmer */
-uint64_t Kmer::reverse_complement(uint64_t kmer)
+uint64_t Kmer::reverse_complement(uint64_t kmer, uint64_t kmer_size)
 {
 	uint64_t rc = 0;
 	uint8_t base = 0;
-	for (int i=0; i<K; i++) {
+	for (int i=0; i<kmer_size; i++) {
 		base = kmer & 3ULL;
 		base = reverse_complement_base(base);
 		kmer >>= 2;
@@ -140,7 +140,8 @@ inline static unsigned __int128 Kmer::word_reverse_complement(unsigned __int128 
 #endif
 
 mantis::QuerySets Kmer::parse_kmers(const char *filename, uint32_t seed,
-                                    uint64_t range, uint64_t& total_kmers) {
+																		uint64_t range, uint64_t kmer_size,
+																		uint64_t& total_kmers) {
   mantis::QuerySets multi_kmers;
 	total_kmers = 0;
 	std::ifstream ipfile(filename);
@@ -148,14 +149,14 @@ mantis::QuerySets Kmer::parse_kmers(const char *filename, uint32_t seed,
 	while (ipfile >> read) {
     mantis::QuerySet kmers_set;
 
-		if (read.length() < K)
+		if (read.length() < kmer_size)
 			continue;
 
 start_read:
 		uint64_t first = 0;
 		uint64_t first_rev = 0;
 		uint64_t item = 0;
-		for(uint32_t i = 0; i < K; i++) { //First kmer
+		for(uint32_t i = 0; i < kmer_size; i++) { //First kmer
 			uint8_t curr = Kmer::map_base(read[i]);
 			if (curr > DNA_MAP::G) { // 'N' is encountered
 				read = read.substr(i+1, read.length());
@@ -165,7 +166,7 @@ start_read:
 			first = first << 2;
 		}
 		first = first >> 2;
-		first_rev = Kmer::reverse_complement(first);
+		first_rev = Kmer::reverse_complement(first, kmer_size);
 
 		//cout << "kmer: "; cout << int_to_str(first);
 		//cout << " reverse-comp: "; cout << int_to_str(first_rev) << endl;
@@ -177,13 +178,13 @@ start_read:
 
 		// hash the kmer using murmurhash/xxHash before adding to the list
 		//item = HashUtil::MurmurHash64A(((void*)&item), sizeof(item), seed);
-		item = HashUtil::hash_64(item, BITMASK(2*K));
+		item = HashUtil::hash_64(item, BITMASK(2*kmer_size));
 		kmers_set.insert(item % range);
 
-		uint64_t next = (first << 2) & BITMASK(2*K);
+		uint64_t next = (first << 2) & BITMASK(2*kmer_size);
 		uint64_t next_rev = first_rev >> 2;
 
-		for(uint32_t i=K; i<read.length(); i++) { //next kmers
+		for(uint32_t i=kmer_size; i<read.length(); i++) { //next kmers
 			//cout << "K: " << read.substr(i-K+1,K) << endl;
 			uint8_t curr = Kmer::map_base(read[i]);
 			if (curr > DNA_MAP::G) { // 'N' is encountered
@@ -192,7 +193,7 @@ start_read:
 			}
 			next |= curr;
 			uint64_t tmp = Kmer::reverse_complement_base(curr);
-			tmp <<= (K*2-2);
+			tmp <<= (kmer_size*2-2);
 			next_rev = next_rev | tmp;
 			if (Kmer::compare_kmers(next, next_rev))
 				item = next;
@@ -201,10 +202,10 @@ start_read:
 
 			// hash the kmer using murmurhash/xxHash before adding to the list
 			//item = HashUtil::MurmurHash64A(((void*)&item), sizeof(item), seed);
-			item = HashUtil::hash_64(item, BITMASK(2*K));
+			item = HashUtil::hash_64(item, BITMASK(2*kmer_size));
 			kmers_set.insert(item % range);
 
-			next = (next << 2) & BITMASK(2*K);
+			next = (next << 2) & BITMASK(2*kmer_size);
 			next_rev = next_rev >> 2;
 		}
 		total_kmers += kmers_set.size();

@@ -65,7 +65,7 @@ Query
 
 ```bash
  $ make mantis
- $ mantis query -i raw/ -o query.res raw/input_txns.fa
+ $ ./mantis query -p raw/ -o query.res raw/input_txns.fa
 ```
 
 The options and arguments are as follows:
