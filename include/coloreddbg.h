@@ -241,7 +241,12 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
-	BitVectorRRR final_com_bv(bv_buffer);
+	BitVector bv_temp(bv_buffer);
+	if (get_num_eqclasses() % NUM_BV_BUFFER > 0) {
+		bv_temp.resize((get_num_eqclasses() % NUM_BV_BUFFER) * num_samples);
+	}
+
+	BitVectorRRR final_com_bv(bv_temp);
 	std::string bv_file(prefix + std::to_string(num_serializations) + "_"
 											EQCLASS_FILE);
 	final_com_bv.serialize(bv_file);
