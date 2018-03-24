@@ -341,7 +341,7 @@ void build_distMat(std::string filename,
   struct timeval start, end, row2colStart, colPairCompStart;
 	struct timezone tzp;
   
-  std::vector<std::vector<double>> hamDistMat(num_samples);
+  std::vector<std::vector<uint64_t>> hamDistMat(num_samples);
   for (auto& v : hamDistMat) {
     v.resize(num_samples);
     for (auto& d : v) d = 0;
@@ -401,18 +401,18 @@ void build_distMat(std::string filename,
   size_t bitCnt = 64;
   for (size_t k = 0; k < num_samples; k++) {
     for (size_t j = k+1; j < num_samples; j++) {
-      double dist = 0;
-      double mutprob[4];
-      double denum = totalEqClsCnt;
+      uint64_t dist = 0;
+      uint64_t mutprob[4];
+      uint64_t denum = totalEqClsCnt;
       for(int b=0;b<4;b++) mutprob[b]=0;
-      double indivprob[2];
+      uint64_t indivprob[2];
       for(int b=0;b<2;b++) indivprob[b]=0;
       //calculate distance between column i and j
       size_t i = 0;
       while (i < totalEqClsCnt) {
         bitCnt = std::min(totalEqClsCnt-i, (size_t)64);
-        size_t wrd1 = cols[k].get_int(i, bitCnt);
-        size_t wrd2 = cols[j].get_int(i, bitCnt);
+        uint64_t wrd1 = cols[k].get_int(i, bitCnt);
+        uint64_t wrd2 = cols[j].get_int(i, bitCnt);
         
         // compare words
         // xor & pop count
@@ -428,15 +428,34 @@ void build_distMat(std::string filename,
       }
       hamDistMat[k][j] = dist;
       hamDistMat[j][k] = dist;
-      
-      mutInfoMat[k][j] += 
-      (mutprob[0]?mutprob[0]*(log2l(denum)+log2l(mutprob[0])- log2l(denum - indivprob[0])-log2l(denum - indivprob[1])):0) +
-      (mutprob[1]?mutprob[1]*(log2l(denum)+log2l(mutprob[1])- log2l(denum - indivprob[0])-log2l(indivprob[1])):0) +
-      (mutprob[2]?mutprob[2]*(log2l(denum)+log2l(mutprob[2])- log2l(indivprob[0])-log2l(denum - indivprob[1])):0) +
-      (mutprob[3]?mutprob[3]*(log2l(denum)+log2l(mutprob[3])- log2l(indivprob[0])-log2l(denum - indivprob[1])):0);
-      mutInfoMat[k][j] /= denum;
+  		
+	  
+      /* mutInfoMat[k][j] = 
+      (mutprob[0]?mutprob[0]*(log2(denum)+log2(mutprob[0])- log2(denum - indivprob[0])-log2(denum - indivprob[1])):0) +
+      (mutprob[1]?mutprob[1]*(log2(denum)+log2(mutprob[1])- log2(denum - indivprob[0])-log2(indivprob[1])):0) +
+      (mutprob[2]?mutprob[2]*(log2(denum)+log2(mutprob[2])- log2(indivprob[0])-log2(denum - indivprob[1])):0) +
+      (mutprob[3]?mutprob[3]*(log2(denum)+log2(mutprob[3])- log2(indivprob[0])-log2(indivprob[1])):0);
+      mutInfoMat[k][j] /= (double)(denum);
+      mutInfoMat[j][k] = mutInfoMat[k][j]; */
+
+      mutInfoMat[k][j] = 
+      (mutprob[0]?mutprob[0]*log2((double)(denum*mutprob[0])/(double)((denum - indivprob[0])*(denum - indivprob[1]))):0) +
+      (mutprob[1]?mutprob[1]*log2((double)(denum*mutprob[1])/(double)((denum - indivprob[0])*indivprob[1])):0) +
+      (mutprob[2]?mutprob[2]*log2((double)(denum*mutprob[2])/(double)((indivprob[0])*(denum - indivprob[1]))):0) +
+      (mutprob[3]?mutprob[3]*log2((double)(denum*mutprob[3])/(double)(indivprob[0]*(indivprob[1]))):0);
+      mutInfoMat[k][j] /= (double)(denum);
       mutInfoMat[j][k] = mutInfoMat[k][j];
-      //if (mutInfoMat[k][j]) std::cout << mutInfoMat[k][j] << "\n";
+	  
+   	  std::cout << mutInfoMat[k][j] << " : " 
+              << mutprob[0] << " " 
+              << mutprob[1] << " " 
+              << mutprob[2] << " " 
+              << mutprob[3] << " " 
+              << indivprob[0] << " " 
+              << indivprob[1] << " " 
+              << denum << "\n";
+      
+    //if (mutInfoMat[k][j]) std::cout << mutInfoMat[k][j] << "\n";
     }
     if (k % 100 == 0) {
       gettimeofday(&end, &tzp);
@@ -469,7 +488,7 @@ void build_distMat(std::string filename,
 }
 
 int main(int argc, char *argv[]) {
-  
+ 
   uint64_t num_samples = 2586;
   std::string command = argv[1];
 
