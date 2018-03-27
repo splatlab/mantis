@@ -26,7 +26,8 @@ void print_time_elapsed(string desc, struct timeval* start, struct timeval* end)
 // @return true if the output of delta_compression/decompression is the same as bitvector_rrr
 //template<typename IndexSizeT>
 bool validate(uint16_t cnt, uint16_t num_samples=2586) {
-
+  std::cout << "\n[Validate]\n";
+  
   std::cout << "validate for " << cnt << " set bits out of " << num_samples <<"\n";
   std::set<uint32_t> randIdx;
 
@@ -76,6 +77,7 @@ bool validate(uint16_t cnt, uint16_t num_samples=2586) {
 }
 
 void compareCompressions(std::string& filename, size_t num_samples) {
+  std::cout << "\n[CompareCompressions]\n";
   size_t gtBV = 0;
   size_t gtBVR = 0;
   size_t bvrGTbv = 0;
@@ -151,6 +153,8 @@ void compareCompressions(std::string& filename, size_t num_samples) {
 }
 
 void compareCopies(size_t num_samples) {
+  std::cout << "\n[CompareCopies]\n";
+  
   struct timeval start, end;
 	struct timezone tzp;
 
@@ -212,6 +216,8 @@ void compare_reordered_original(std::string filename1,
              std::string filename2,
              std::string order_filename,
              uint64_t num_samples) {
+  std::cout << "\n[compare_reordered_original]\n";
+  
   struct timeval start, end;
 	struct timezone tzp;
 
@@ -280,6 +286,7 @@ void reorder(std::string filename,
              std::string out_filename,
              std::string order_filename,
              uint64_t num_samples) {
+  std::cout << "\n[Reorder]\n";
   struct timeval start, end;
 	struct timezone tzp;
 
@@ -326,11 +333,11 @@ void reorder(std::string filename,
       gettimeofday(&start, &tzp);
     }
   }
-  std::cout << "\noutfilename: " << out_filename << "\n";
+ /*  std::cout << "\noutfilename: " << out_filename << "\n";
   for (auto idx = 0; idx < num_samples; idx++) {
     std::cout << idx << ":" << reordered_eqcls[idx] << " ";
   }
-  std::cout << "\n";
+  std::cout << "\n"; */
   sdsl::store_to_file(reordered_eqcls, out_filename);
 
 }
@@ -338,6 +345,7 @@ void reorder(std::string filename,
 void build_distMat(std::string filename, 
 				std::string out_filename, 
         uint64_t num_samples) {
+  std::cout << "\n[Build_distMat]\n";
   struct timeval start, end, row2colStart, colPairCompStart;
 	struct timezone tzp;
   
@@ -446,14 +454,14 @@ void build_distMat(std::string filename,
       mutInfoMat[k][j] /= (double)(denum);
       mutInfoMat[j][k] = mutInfoMat[k][j];
 	  
-   	  std::cout << mutInfoMat[k][j] << " : " 
+   	/*   std::cout << mutInfoMat[k][j] << " : " 
               << mutprob[0] << " " 
               << mutprob[1] << " " 
               << mutprob[2] << " " 
               << mutprob[3] << " " 
               << indivprob[0] << " " 
               << indivprob[1] << " " 
-              << denum << "\n";
+              << denum << "\n"; */
       
     //if (mutInfoMat[k][j]) std::cout << mutInfoMat[k][j] << "\n";
     }
@@ -533,7 +541,7 @@ int main(int argc, char *argv[]) {
     std::string filename1 = argv[2];
     std::string filename2 = argv[3];
     std::string order_filename = argv[4];
-    reorder(filename1, filename2, order_filename, num_samples);
+    compare_reordered_original(filename1, filename2, order_filename, num_samples);
   } 
   else {
     std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
