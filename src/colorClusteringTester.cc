@@ -69,9 +69,10 @@ double twoDecRound(double var) {
 /**
  * Calculates the disk/memory stats for hash-based clustering of color classes
  * two arguments
- * arg1: address to the directory containing color eq. classes and frequency file
- * arg2: subpattern (block) size
- * arg3 (optional, default=1M): count of top highest frequency eq. classes
+ * arg1: color eq. classes file name
+ * arg2: frequency file name
+ * arg3: subpattern (block) size
+ * arg4 (optional, default=1M): count of top highest frequency eq. classes
  * For example in mantis dir after make colorClusteringTest run the following command:
  * ./colorClusteringTest /mnt/scratch2/cdbg_cqf/raw_exact 128 1000000
  *
@@ -79,19 +80,22 @@ double twoDecRound(double var) {
 int main(int argc, char *argv[])
 {
   uint16_t num_samples = 2586;
-  std::string prefix = argv[1];
-  std::string filename = prefix + "/eqclass_rrr.cls";
-  std::string eqclassFreq_filename = prefix + "/tmpfile_sorted";
-  size_t subPatternLen = std::stoull(argv[2]);
+  std::string filename = argv[1];
+  //std::string filename = prefix + "/eqclass_rrr.cls";
+  //std::string eqclassFreq_filename = prefix + "/tmpfile_sorted";
+  std::string eqclassFreq_filename = argv[2];
+  size_t subPatternLen = std::stoull(argv[3]);
   size_t subPatternCntPerEqCls = ceil(num_samples / (double)subPatternLen);
   std::cerr << "SubPattern length: " << subPatternLen << "\n";
   size_t topFreqEqClsCnt = 1000000; //default
-  if (argc > 3) {
-    topFreqEqClsCnt = std::stoull(argv[3]);
+  if (argc > 4) {
+    topFreqEqClsCnt = std::stoull(argv[4]);
   }
   std::cerr << "Top Most Frequent Eq. Clss Count: " << topFreqEqClsCnt << "\n";
   std::cerr << "loading file " << filename << "\n";
-  BitVectorRRR eqcls(filename);
+  //BitVectorRRR eqcls(filename);
+  sdsl::bit_vector eqcls;
+  sdsl::load_from_file(eqcls, filename);
   size_t totalEqClsCnt = eqcls.bit_size() / num_samples; //222584822;
   std::cerr << "Total bit size: " << eqcls.bit_size() << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
   std::vector<spp::sparse_hash_map<BitVector, std::pair<BitVector*, uint64_t>, sdslhash<BitVector>>> subPatternMaps(ceil(subPatternCntPerEqCls));

@@ -221,6 +221,7 @@ void compare_reordered_original(std::string filename1,
   struct timeval start, end;
 	struct timezone tzp;
 
+  uint64_t setBitCnt1{0}, setBitCnt2{0};
   std::ifstream orderFile(order_filename);
   std::vector<size_t> newOrder;
   while (!orderFile.eof()) {
@@ -254,9 +255,11 @@ void compare_reordered_original(std::string filename1,
       size_t wrd2 = reordered_eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
       for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
         if ((wrd1 >> j) & 0x01) {
+          setBitCnt1++;
           eqcls_setbits.push_back(newOrder[curIdx]);
         }
         if ((wrd2 >> j) & 0x01) {
+          setBitCnt2++;
           reordered_eqcls_setbits.push_back(curIdx);
         }
         
@@ -278,6 +281,10 @@ void compare_reordered_original(std::string filename1,
       gettimeofday(&start, &tzp);
     }
 
+  }
+  if (setBitCnt1 != setBitCnt2) {
+    std::cout << "ERROR! EQ CLSES SET BITS NOT THE SAME: " << setBitCnt1 << " VS " << setBitCnt2 << "\n";
+    std::exit(1);
   }
   std::cout << "\nValidation Passed!\n\n";
 }
