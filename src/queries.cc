@@ -113,13 +113,11 @@ void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObjec
  *  Description:  
  * ============================================================================
  */
-int queries_main (QueryOpts& opt)
+int server_main (QueryOpts& opt)
 {
   //CLI::App app("Mantis query");
 
   std::string prefix = opt.prefix;
-  std::string query_file = opt.query_file;
-  std::string output_file = opt.output;//{"samples.output"};
   bool use_json = opt.use_json;
   /*
   app.add_option("-i,--input-prefix", prefix, "Prefix of input files.")->required();
@@ -135,7 +133,7 @@ int queries_main (QueryOpts& opt)
   }
 
   spdlog::logger* console = opt.console.get();
-	console->info("Reading colored dbg from disk.");
+	console->info("Reading colored dbg from disk: " + prefix);
 
 	std::string cqf_file(prefix + CQF_FILE);
 	std::string sample_file(prefix + SAMPLEID_FILE);
@@ -167,8 +165,13 @@ int queries_main (QueryOpts& opt)
 	uint64_t total_kmers = 0;
 
   while (1) {
+    std::string query_file = opt.query_file;
+    std::string output_file = opt.output;//{"samples.output"};
+
     cout << "Enter query file: " << endl;
     cin >> query_file;
+    cout << "Enter output file: " << endl;
+    cin >> output_file;
 
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										seed,
