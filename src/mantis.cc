@@ -46,6 +46,7 @@ void explore_options_verbose(T& res) {
 }
 
 int query_main (QueryOpts& opt);
+int queries_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
 
@@ -177,7 +178,8 @@ int main ( int argc, char *argv[] ) {
   if(res) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
-    case mode::query: query_main(qopt);  break;
+    // case mode::query: query_main(qopt);  break;
+    case mode::query: queries_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
