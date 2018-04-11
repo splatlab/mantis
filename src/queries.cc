@@ -1,59 +1,5 @@
-/*
- * ============================================================================
- *
- *       Filename:  query.cc
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2017-10-27 12:56:50 AM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
- *   Organization:  Stony Brook University
- *
- * ============================================================================
- */
-
-
-#include <iostream>
-#include <fstream>
-#include <utility>
-#include <algorithm>
-#include <string>
-#include <vector>
-#include <map>
-#include <queue>
-#include <set>
-#include <unordered_set>
-#include <set>
-#include <bitset>
-#include <cassert>
-#include <fstream>
-
-#include <time.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/resource.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/mman.h>
-#include <openssl/rand.h>
-
-#include "MantisFS.h"
-#include "ProgOpts.h"
-#include "spdlog/spdlog.h"
-#include "kmer.h"
-#include "coloreddbg.h"
-#include "common_types.h"
-#include "CLI/CLI.hpp"
-#include "CLI/Timer.hpp"
-
-// #include "sockets.hh"
+// #include "query.hh"
+#include "sockets.hh"
 
 #define MAX_NUM_SAMPLES 2600
 #define OUTPUT_FILE "samples.output"
@@ -108,43 +54,41 @@ void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObjec
 
 }
 
-namespace query 
+void query::run_query(std::string query_file, std::string output_file)
 {
-  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> * colored_dbg; 
-  spdlog::logger * console; 
+  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> & cdbg = *colored_dbg; 
+  uint32_t seed = 2038074743;
+  uint64_t total_kmers = 0;
 
-  void run_query(std::string query_file, std::string output_file)
-  {
-    ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> & cdbg = *colored_dbg; 
-    uint32_t seed = 2038074743;
-    uint64_t total_kmers = 0;
+  uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
+  console->info("Use colored dbg with {} k-mers and {} color classes",
+                cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+  console->info("K-mer size: {}", kmer_size);
 
-    uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
-    console->info("Use colored dbg with {} k-mers and {} color classes",
-                  cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
-    console->info("K-mer size", kmer_size);
+  std::cout << "QF: " << query_file << std::endl;
+  std::cout << "OUT: " << output_file << std::endl;
 
-    mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-                                                      seed,
-                                                      cdbg.range(),
-                                                      kmer_size,
-                                                      total_kmers);
-    console->info("Total k-mers to query: {}", total_kmers);
 
-    std::ofstream opfile(output_file);
-    console->info("Querying the colored dbg.");
+  mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
+                                                    seed,
+                                                    cdbg.range(),
+                                                    kmer_size,
+                                                    total_kmers);
+  console->info("Total k-mers to query: {}", total_kmers);
 
-    // if (use_json) {
-    //   output_results_json(multi_kmers, cdbg, opfile);
-    // } else {
-    //   output_results(multi_kmers, cdbg, opfile);
-    // }
-    // TODO use_json
-    output_results(multi_kmers, cdbg, opfile);
+  std::ofstream opfile(output_file);
+  console->info("Querying the colored dbg.");
 
-    opfile.close();
-    console->info("Writing done.");
-  }
+  // if (use_json) {
+  //   output_results_json(multi_kmers, cdbg, opfile);
+  // } else {
+  //   output_results(multi_kmers, cdbg, opfile);
+  // }
+  // TODO use_json
+  output_results(multi_kmers, cdbg, opfile);
+
+  opfile.close();
+  console->info("Writing done.");
 }
 
 /* 
@@ -157,8 +101,8 @@ int server_main (QueryOpts& opt)
 {
   try
   {
-    // boost::asio::io_service io_service;
-    // server s(io_service, 23901);
+    boost::asio::io_service io_service;
+    server s(io_service, 23901);
 
     std::string prefix = opt.prefix;
     // bool use_json = opt.use_json;
@@ -178,23 +122,22 @@ int server_main (QueryOpts& opt)
   	query::colored_dbg = new ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>(cqf_file, eqclass_files, sample_file);
 
 
-    // console->info("Reading query kmers from disk.");
-  	// console->info("Run server accepting queries.");
-   //  io_service.run();
+    query::console->info("Reading query kmers from disk.");
+    query::console->info("Run server accepting queries.");
+    io_service.run();
 
     // read from stdin
+    // while (1) {
+    //   std::string query_file = opt.query_file;
+    //   std::string output_file = opt.output;  //{"samples.output"};
 
-    while (1) {
-      std::string query_file = opt.query_file;
-      std::string output_file = opt.output;  //{"samples.output"};
+    //   cout << "Enter query file: " << endl;
+    //   cin >> query_file;
+    //   cout << "Enter output file: " << endl;
+    //   cin >> output_file;
 
-      cout << "Enter query file: " << endl;
-      cin >> query_file;
-      cout << "Enter output file: " << endl;
-      cin >> output_file;
-
-      query::run_query(query_file, output_file); 
-    }
+    //   query::run_query(query_file, output_file); 
+    // }
   }
   catch (std::exception& e)
   {
