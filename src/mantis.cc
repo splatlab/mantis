@@ -188,7 +188,7 @@ int main ( int argc, char *argv[] ) {
   if(res) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
-    // case mode::query: query_main(qopt);  break;
+    case mode::query: query_main(qopt);  break;
     case mode::server: server_main(sopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
