@@ -88,6 +88,7 @@ $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h
+$(OBJDIR)/queries.o: $(LOC_SRC)/sockets.hh
 
 #
 # generic build rules
