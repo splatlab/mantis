@@ -4,16 +4,23 @@
 #include <utility>
 #include <boost/asio.hpp>
 
-#include "query.hh"
-
 using boost::asio::ip::tcp;
+
+extern void run_query(std::string query_file, std::string output_file, 
+               ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg, 
+               spdlog::logger * console, 
+               bool use_json); 
 
 class session
   : public std::enable_shared_from_this<session>
 {
 public:
-  session(tcp::socket socket)
-    : socket_(std::move(socket))
+  session(tcp::socket socket, 
+          ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg, 
+          spdlog::logger * console, 
+          bool use_json)
+    : socket_(std::move(socket)), 
+      cdbg(cdbg), console(console), use_json(use_json)
   {
   }
 
@@ -39,7 +46,7 @@ private:
           std::string query_filepath(data_, delimeter_ptr - data_);
           std::string output_filepath(delimeter_ptr + 1);  // assume exactly one space between filepaths
 
-          query::run_query(query_filepath, output_filepath); // TODO check result
+          run_query(query_filepath, output_filepath, cdbg, console, use_json); // TODO check result
 
           if (!ec)
           {
@@ -67,14 +74,22 @@ private:
   tcp::socket socket_;
   enum { max_length = 4096 };
   char data_[max_length];
+
+  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg;
+  spdlog::logger * console;
+  bool use_json; 
 };
 
 class server
 {
 public:
-  server(boost::asio::io_service& io_service, short port)
+  server(boost::asio::io_service& io_service, short port, 
+         ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg, 
+         spdlog::logger * console, 
+         bool use_json)
     : acceptor_(io_service, tcp::endpoint(tcp::v4(), port)),
-      socket_(io_service)
+      socket_(io_service), 
+      cdbg(cdbg), console(console), use_json(use_json)
   {
     do_accept();
   }
@@ -87,7 +102,7 @@ private:
         {
           if (!ec)
           {
-            std::make_shared<session>(std::move(socket_))->start();
+            std::make_shared<session>(std::move(socket_), cdbg, console, use_json)->start();
           }
 
           do_accept();
@@ -96,4 +111,8 @@ private:
 
   tcp::acceptor acceptor_;
   tcp::socket socket_;
+
+  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg;
+  spdlog::logger * console;
+  bool use_json; 
 };

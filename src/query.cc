@@ -53,6 +53,8 @@
 #include "CLI/CLI.hpp"
 #include "CLI/Timer.hpp"
 
+#include "sockets.h"
+
 #define MAX_NUM_SAMPLES 2600
 #define OUTPUT_FILE "samples.output"
 
@@ -104,6 +106,40 @@ void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObjec
     opfile << "]\n";
   }
 
+}
+
+void run_query(std::string query_file, std::string output_file, 
+               ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg, 
+               spdlog::logger * console, 
+               bool use_json) {
+  uint32_t seed = 2038074743;
+  uint64_t total_kmers = 0;
+
+  uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
+  console->info("Use colored dbg with {} k-mers and {} color classes",
+                cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+  console->info("K-mer size: {}", kmer_size);
+  console->info("Query file: {}", query_file);
+  console->info("Output file: {}", output_file);
+
+  mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
+                                                    seed,
+                                                    cdbg.range(),
+                                                    kmer_size,
+                                                    total_kmers);
+  console->info("Total k-mers to query: {}", total_kmers);
+
+  std::ofstream opfile(output_file);
+  console->info("Querying the colored dbg.");
+
+  if (use_json) {
+    output_results_json(multi_kmers, cdbg, opfile);
+  } else {
+    output_results(multi_kmers, cdbg, opfile);
+  }
+
+  opfile.close();
+  console->info("Writing done.");
 }
 
 
@@ -202,3 +238,63 @@ int query_main (QueryOpts& opt)
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
+
+
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  main
+ *  Description:  
+ * ============================================================================
+ */
+int server_main (QueryOpts& opt)
+{
+  try
+  {
+    std::string prefix = opt.prefix;
+    bool use_json = opt.use_json;
+
+    // Make sure the prefix is a full folder
+    if (prefix.back() != '/') {
+      prefix.push_back('/');
+    }
+
+    spdlog::logger* console = opt.console.get();
+    console->info("Reading colored dbg from disk: " + prefix);
+
+    std::string cqf_file(prefix + CQF_FILE);
+    std::string sample_file(prefix + SAMPLEID_FILE);
+    std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
+                                                         std::string(EQCLASS_FILE).c_str());
+    ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
+                                                              eqclass_files,
+                                                              sample_file);
+
+    boost::asio::io_service io_service;
+    server s(io_service, 23901, cdbg, console, use_json);  // more parameters
+
+    console->info("Reading query kmers from disk.");
+    console->info("Run server accepting queries.");
+    io_service.run();
+
+    // read from stdin
+    // while (1) {
+    //   std::string query_file = opt.query_file;
+    //   std::string output_file = opt.output;  //{"samples.output"};
+
+    //   cout << "Enter query file: " << endl;
+    //   cin >> query_file;
+    //   cout << "Enter output file: " << endl;
+    //   cin >> output_file;
+
+    //   query::run_query(query_file, output_file); 
+    // }
+  }
+  catch (std::exception& e)
+  {
+    std::cerr << "Exception: " << e.what() << "\n";
+  }
+
+  return EXIT_SUCCESS;
+}       /* ----------  end of function main  ---------- */
+
