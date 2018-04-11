@@ -30,8 +30,6 @@ private:
     socket_.async_read_some(boost::asio::buffer(data_, max_length),
         [this, self](boost::system::error_code ec, std::size_t length)
         {
-          std::cout << "Read: " << data_ << std::endl;
-
           char * delimeter_ptr = strstr(data_, " "); 
           if (!delimeter_ptr) 
           {
@@ -45,7 +43,7 @@ private:
 
           if (!ec)
           {
-            do_write(length, query_filepath);
+            do_write(length, output_filepath);
           }
         });
   }
@@ -54,7 +52,8 @@ private:
   {
     // respond with output filepath 
     auto self(shared_from_this());
-    std::cout << "Respond with message: " << data_ << std::endl;
+    memset(data_, 0, sizeof(data_)); 
+    strcpy(data_, outfile.c_str()); 
     boost::asio::async_write(socket_, boost::asio::buffer(data_, length),
         [this, self](boost::system::error_code ec, std::size_t /*length*/)
         {

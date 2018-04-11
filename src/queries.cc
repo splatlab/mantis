@@ -64,10 +64,8 @@ void query::run_query(std::string query_file, std::string output_file)
   console->info("Use colored dbg with {} k-mers and {} color classes",
                 cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
   console->info("K-mer size: {}", kmer_size);
-
-  std::cout << "QF: " << query_file << std::endl;
-  std::cout << "OUT: " << output_file << std::endl;
-
+  console->info("Query file: {}", query_file);
+  console->info("Output file: {}", output_file);
 
   mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
                                                     seed,
