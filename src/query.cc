@@ -145,26 +145,16 @@ void run_query(std::string query_file, std::string output_file,
 
 /* 
  * ===  FUNCTION  =============================================================
- *         Name:  main
+ *         Name:  query main
  *  Description:  
  * ============================================================================
  */
-int query_main (QueryOpts& opt)
+int query_main(QueryOpts& opt)
 {
-  //CLI::App app("Mantis query");
-
   std::string prefix = opt.prefix;
   std::string query_file = opt.query_file;
   std::string output_file = opt.output;//{"samples.output"};
   bool use_json = opt.use_json;
-  /*
-  app.add_option("-i,--input-prefix", prefix, "Prefix of input files.")->required();
-  app.add_option("-o,--outout", output_file, "Where to write query output.");
-  app.add_option("query", query_file, "Prefix of input files.")->required();
-  app.add_flag("-j,--json", use_json, "Write the output in JSON format");
-  CLI11_PARSE(app, argc, argv);
-  */
-
   // Make sure the prefix is a full folder
   if (prefix.back() != '/') {
     prefix.push_back('/');
@@ -181,60 +171,7 @@ int query_main (QueryOpts& opt)
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
 																														eqclass_files,
 																														sample_file);
-	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
-  console->info("Read colored dbg with {} k-mers and {} color classes",
-                cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
-
-	//cdbg.get_cqf()->dump_metadata(); 
-	//CQF<KeyObject> cqf(query_file, false);
-	//CQF<KeyObject>::Iterator it = cqf.begin(1);
-	//mantis::QuerySet input_kmers;
-	//do {
-		//KeyObject k = *it;
-		//input_kmers.insert(k.key);
-		//++it;
-	//} while (!it.done());
-
-	//mantis::QuerySets multi_kmers;
-	//multi_kmers.push_back(input_kmers);
-
-	console->info("Reading query kmers from disk.");
-	uint32_t seed = 2038074743;
-	uint64_t total_kmers = 0;
-	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-																										seed,
-																										cdbg.range(),
-																										kmer_size,
-																										total_kmers);
-	console->info("Total k-mers to query: {}", total_kmers);
-
-  // Attempt to optimize bulk query
-  /*
-  bool doBulk = multi_kmers.size() >= 100;
-  BulkQuery bq;
-  if (doBulk) {
-    uint32_t exp_id{0};
-    for (auto& kmers : multi_kmers) {
-      for (auto& k : kmers) {
-        bq.qs.insert(k);
-        bq.map[k].push_back(exp_id);
-      }
-      ++exp_id;
-    }
-  }
-  */
-
-	std::ofstream opfile(output_file);
-	console->info("Querying the colored dbg.");
-
-  if (use_json) {
-    output_results_json(multi_kmers, cdbg, opfile);
-  } else {
-    output_results(multi_kmers, cdbg, opfile);
-  }
-	//std::cout << "Writing samples and abundances out." << std::endl;
-	opfile.close();
-	console->info("Writing done.");
+  run_query(query_file, output_file, cdbg, console, use_json); 
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
@@ -243,14 +180,13 @@ int query_main (QueryOpts& opt)
 
 /* 
  * ===  FUNCTION  =============================================================
- *         Name:  main
+ *         Name:  server main
  *  Description:  
  * ============================================================================
  */
-int server_main (QueryOpts& opt)
+int server_main(QueryOpts& opt)
 {
-  try
-  {
+  try {
     std::string prefix = opt.prefix;
     bool use_json = opt.use_json;
 
@@ -277,7 +213,7 @@ int server_main (QueryOpts& opt)
     console->info("Run server accepting queries.");
     io_service.run();
 
-    // read from stdin
+    // read from stdin instead of socket
     // while (1) {
     //   std::string query_file = opt.query_file;
     //   std::string output_file = opt.output;  //{"samples.output"};
@@ -287,11 +223,10 @@ int server_main (QueryOpts& opt)
     //   cout << "Enter output file: " << endl;
     //   cin >> output_file;
 
-    //   query::run_query(query_file, output_file); 
+    //   run_query(query_file, output_file, cdbg, console, use_json); 
     // }
   }
-  catch (std::exception& e)
-  {
+  catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";
   }
 
