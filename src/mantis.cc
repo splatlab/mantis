@@ -152,8 +152,6 @@ int main ( int argc, char *argv[] ) {
                      command("server").set(selected, mode::server),
                      option("-j", "--json").set(sopt.use_json) % "Write the output in JSON format",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", sopt.prefix) % "Prefix of input files." // ,
-                     // option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
-                     // value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
                      );
 
   auto validate_mode = (

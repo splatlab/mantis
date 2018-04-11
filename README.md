@@ -86,7 +86,7 @@ OPTIONS
         <query>     Prefix of input files.
 ```
 
- The command takes the following options :
+ The command takes the following options:
  - `--input-prefix,-p`: the directory where the output of coloreddbg command is present.
  - `--output,-o`: the file where the query results should be written (default : `samples.output`).
  
@@ -94,9 +94,50 @@ OPTIONS
  - query transcripts: input transcripts to be queried.
 
  Finally, rather than writing the results in the "simple" output format, they can be written in JSON if you
- provide the `--json,-j` flag to the `query` comamnd.
+ provide the `--json,-j` flag to the `query` command.
  
 The output file in contains the list of experiments (i.e., hits) corresponding to each queried transcript.
+
+Server
+-------
+
+`mantis server` lets you run mantis as a server which loads a mantis index and waits for queries. 
+
+```bash
+ $ make mantis
+ $ ./mantis server -p raw/ 
+```
+
+The options and arguments are as follows:
+
+```bash
+SYNOPSIS
+        mantis server [-j] -p <query_prefix>
+
+OPTIONS
+        -j, --json  Write the output in JSON format
+
+        <query_prefix>
+                    Prefix of input files.
+```
+
+ The command takes the following options:
+ - `--input-prefix,-p`: the directory where the output of coloreddbg command is present.
+ 
+  Rather than writing the results in the "simple" output format, they can be written in JSON if you
+ provide the `--json,-j` flag to the `query` command.
+
+ The server loads mantis index to memory and starts to accept queries (port 23901 is used by default) in the following format:
+
+```
+<query_filepath> <output_filepath>
+```
+
+ The query has the following arguments: 
+ - query filepath: input transcripts to be queried.
+ - output filepath: the file where the query results should be written. The output file in contains the list of experiments (i.e., hits) corresponding to each queried transcript.
+
+ There is a client example written in python `src/client.py` which demonstrates how one can communicate with the server. 
 
 Contributing
 ------------
