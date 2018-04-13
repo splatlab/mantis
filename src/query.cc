@@ -177,7 +177,6 @@ int query_main(QueryOpts& opt)
 }       /* ----------  end of function main  ---------- */
 
 
-
 /* 
  * ===  FUNCTION  =============================================================
  *         Name:  server main
