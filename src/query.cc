@@ -206,7 +206,7 @@ int server_main(QueryOpts& opt)
                                                               sample_file);
 
     boost::asio::io_service io_service;
-    server s(io_service, 23901, cdbg, console, use_json);  // more parameters
+    server s(io_service, 23901, cdbg, console, use_json);
 
     console->info("Reading query kmers from disk.");
     console->info("Run server accepting queries.");
