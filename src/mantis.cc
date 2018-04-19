@@ -46,6 +46,7 @@ void explore_options_verbose(T& res) {
 }
 
 int query_main (QueryOpts& opt);
+int server_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
 
@@ -57,16 +58,18 @@ int validate_main (ValidateOpts& opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, query, validate, help};
+  enum class mode {build, query, server, validate, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
 
   BuildOpts bopt;
-  QueryOpts qopt;
+  QueryOpts qopt, sopt;
   ValidateOpts vopt;
+
   bopt.console = console;
   qopt.console = console;
+  sopt.console = console;
   vopt.console = console;
 
 	start_time = time(NULL);
@@ -145,6 +148,11 @@ int main ( int argc, char *argv[] ) {
                      option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
                      value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
                      );
+  auto server_mode = (
+                     command("server").set(selected, mode::server),
+                     option("-j", "--json").set(sopt.use_json) % "Write the output in JSON format",
+                     required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", sopt.prefix) % "Prefix of input files." // ,
+                     );
 
   auto validate_mode = (
                      command("validate").set(selected, mode::validate),
@@ -155,11 +163,12 @@ int main ( int argc, char *argv[] ) {
                      );
 
   auto cli = (
-              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) ),
+              (build_mode | query_mode | server_mode | validate_mode | command("help").set(selected,mode::help) ),
               option("-v", "--version").call([]{std::cout << "version 1.0\n\n";}).doc("show version")  );
 
   assert(build_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
+  assert(server_mode.flags_are_prefix_free());
   assert(validate_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
@@ -178,6 +187,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
     case mode::query: query_main(qopt);  break;
+    case mode::server: server_main(sopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
