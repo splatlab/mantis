@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
 {
 
   uint16_t num_samples = 2586;
+  size_t totalBlocks = 0;
   std::vector<uint64_t> queryCnt;
   size_t totalQueryCnt = 0;
   std::string filename = argv[1];
@@ -110,6 +111,7 @@ int main(int argc, char *argv[])
         i += bitCnt;
       }
       uint64_t id = addBlock(subPatternMap, bv);
+      totalBlocks += 1;
       if (idList.find(id) == idList.end())
       {
         idList[id] = 1;
@@ -128,6 +130,18 @@ int main(int argc, char *argv[])
   size_t subPatternBits = (ceil(log2(subPatternMap.size())));
   size_t subPatternCntPerEqCls = ceil(num_samples / (double)subPatternLen);
   size_t subPatternMapTotalSize = sizeof(subPatternMap)*8 + subPatternMap.size() * (subPatternLen + 64); // key len + 2 size_t values that we store for each
+  double entropy = 0;
+  std::cout << "total blocks: " << totalBlocks << "\n";
+  uint64_t valTotalBlocks = 0;
+  for (auto& kv : subPatternMap) {
+    double val = (double)kv.second.second/(double)totalBlocks;
+
+    entropy += val*log2(val);
+	valTotalBlocks += kv.second.second;
+	std::cout << kv.second.second << " " << val << " " << log2(val) << " " << val*log2(val) << " " << entropy << "\n";
+  }
+  entropy *= -1;
+  std::cout << "Final entropy : " << entropy << " total blocks: " << valTotalBlocks <<  "\n"; 
   std::cerr << "Distribution of number of queries per eqCls:\n";
   std::map<uint64_t, uint64_t> queryDist;
   for (uint32_t qcnt : queryCnt)
@@ -229,7 +243,7 @@ int main(int argc, char *argv[])
             << "SubPattern length: " << subPatternLen 
             << "\nAverage number of queries per color class: " << totalQueryCnt / totalEqClsCnt 
             << "\nunique subPattern count: " << subPatternMap.size() 
-            << round(log2(subPatternMap.size())) << " bits instead of " << subPatternLen << " bits per each subPattern block."
+            << "\nNeed " << round(log2(subPatternMap.size())) << " bits instead of " << subPatternLen << " bits per each subPattern block."
             << "\nFixed length label: " << subPatternBits * subPatternCntPerEqCls << " bits per color class."
             << "\nVariable length label (on average): " << round(variableLenBits / totalEqClsCnt) << " bits per color class."
             << "\n\nSubpattern map total size: " << subPatternMapTotalSize << " bits or " << round(subPatternMapTotalSize/ gigDenum) << gran << "B."
@@ -237,5 +251,6 @@ int main(int argc, char *argv[])
             << "or " << round(fixedLenTotal / gigDenum) << gran << "B vs " << round((totalEqClsCnt * num_samples) / gigDenum) << gran << "B."
             << "\nRS Variable length Overall: " << rsVarLenTotal << " bits or " << round(rsVarLenTotal / gigDenum) << gran << "B."
             << "\nHuffman Approximate Variable length Overall: " << huffmanVarLenTotal << " bits or " << round(huffmanVarLenTotal / gigDenum) << gran << "B."
+            << "\nEntropy: " << entropy <<
                                                                                                           "\n";
 }

@@ -5,6 +5,7 @@
 #include <time.h>
 #include <random>
 #include <sstream>
+#include <algorithm>
 
 
 void print_time_elapsed(string desc, struct timeval* start, struct timeval* end) 
@@ -192,6 +193,7 @@ void compareCopies(size_t num_samples) {
       i++;
     }
   }
+
   gettimeofday(&end, &tzp);
 	print_time_elapsed("Index by index!: ", &start, &end);
 
@@ -210,6 +212,33 @@ void compareCopies(size_t num_samples) {
   gettimeofday(&end, &tzp);
 	print_time_elapsed("Read int and write int: ", &start, &end);
 
+}
+
+void decompress(std::string filename, 
+                std::string outfilename, 
+                uint64_t totalEqCls, 
+                uint64_t num_samples=2586) {
+  sdsl::rrr_vector<63> bvr;
+  sdsl::load_from_file(bvr, filename);
+  sdsl::rank_support_rrr<1, 63> ranks(&bvr);
+  totalEqCls = 1;
+  size_t prev = 0;
+  size_t cur = 0;
+  for (uint64_t i = 1; i < 21; i++) {
+		  cur = ranks(2586*i);
+    std::cout << "rank: " << cur << " " << cur-prev <<  "\n";
+	prev = cur;
+  }
+  std::cerr << "loaded " << bvr.size() << "\n";
+  sdsl::bit_vector eqcls(totalEqCls*num_samples, 0);
+  std::cerr << "created\n";
+  for (uint64_t i = 0; i < totalEqCls*num_samples; i+=64) {
+    uint64_t bitCnt = std::min(totalEqCls*num_samples-i, (uint64_t)64);
+    uint64_t wrd = bvr.get_int(i, bitCnt);
+    //std::cerr << wrd << " ";
+    eqcls.set_int(i, wrd, bitCnt);
+  }
+  sdsl::store_to_file(eqcls, outfilename);
 }
 
 void compare_reordered_original(std::string filename1,
@@ -291,26 +320,18 @@ void compare_reordered_original(std::string filename1,
 
 void reorder(std::string filename,
              std::string out_filename,
-             std::string order_filename,
+             std::vector<size_t>& newOrder,
              uint64_t num_samples) {
   std::cout << "\n[Reorder]\n";
   struct timeval start, end;
 	struct timezone tzp;
 
-  std::ifstream orderFile(order_filename);
-  std::vector<size_t> newOrder;
-  while (!orderFile.eof()) {
-    size_t val;
-    orderFile >> val;
-    //std::cout << val << " ";
-    newOrder.push_back(val);
-  }
   //std::cout << "\n";
   sdsl::bit_vector eqcls;
   sdsl::load_from_file(eqcls, filename);
   size_t totalEqClsCnt = eqcls.size()/num_samples; //222584822;
   std::cout << "Total number of Eq. Clss: " << totalEqClsCnt << "\n";
-  totalEqClsCnt = 1280000;
+  //totalEqClsCnt = 1280000;
   sdsl::bit_vector reordered_eqcls(eqcls.size(), 0);
   gettimeofday(&start, &tzp);
   
@@ -340,13 +361,77 @@ void reorder(std::string filename,
       gettimeofday(&start, &tzp);
     }
   }
- /*  std::cout << "\noutfilename: " << out_filename << "\n";
+  std::cout << "\noutfilename: " << out_filename << "\n";
   for (auto idx = 0; idx < num_samples; idx++) {
-    std::cout << idx << ":" << reordered_eqcls[idx] << " ";
+    std::cout << reordered_eqcls[idx] ;
   }
-  std::cout << "\n"; */
+  std::cout << "\n"; 
+  for (size_t eqclsCntr = 0; eqclsCntr < 2; eqclsCntr++) {
+    for (size_t i = 0 ; i < num_samples; i++) {
+      std::cout << reordered_eqcls[num_samples*eqclsCntr+i];
+    }    
+    std::cout << "\n";
+  }
   sdsl::store_to_file(reordered_eqcls, out_filename);
 
+}
+
+void reorder(std::string filename,
+             std::string out_filename,
+             std::string order_filename,
+             uint64_t num_samples) {
+  
+  std::ifstream orderFile(order_filename);
+  std::vector<size_t> newOrder;
+  newOrder.resize(num_samples);
+  uint64_t cntr = 0;
+  while (!orderFile.eof()) {
+    size_t val;
+    orderFile >> val;
+    //std::cout << val << " ";
+    newOrder[val] = cntr++;
+    //newOrder.push_back(val);
+  }
+
+  reorder(filename, out_filename, newOrder, num_samples);
+}
+
+void build_fakeEq_And_randReord(std::string outfile, 
+                                uint64_t totalEqClsCnt = 1280000,
+                                uint64_t num_samples = 2586,
+                                uint64_t wordSize = 8) {
+	std::cout << "\n[Build_fakeEq_And_randReord]\n";
+	uint64_t bvSize = num_samples*totalEqClsCnt;
+  sdsl::bit_vector eqcls(bvSize, 0);
+
+  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+    size_t i = 0;
+    while (i < num_samples) {
+    	uint64_t wrd = rand() % 2?0:-1;
+      size_t bitCnt = std::min(num_samples-i, (size_t)wordSize);
+      eqcls.set_int(eqclsCntr*num_samples+i, wrd, bitCnt);
+      //wrd = wrd?0:-1;
+      i+=bitCnt;
+    }      
+  }
+
+  for (size_t eqclsCntr = 0; eqclsCntr < 2; eqclsCntr++) {
+    for (size_t i = 0 ; i < num_samples; i++) {
+      std::cout << eqcls[num_samples*eqclsCntr+i];
+    }    
+    std::cout << "\n";
+  }
+  sdsl::store_to_file(eqcls, outfile+".eq");
+
+  std::vector<uint64_t> randomizedIndex(num_samples);
+  for (uint64_t i = 0; i < num_samples; i++) 
+    randomizedIndex[i] = i;
+  std::random_shuffle ( randomizedIndex.begin(), randomizedIndex.end() );
+  for (size_t i =0; i < num_samples; i++) {
+  	std::cout << randomizedIndex[i] << " ";
+  }
+  std::cout << "\n";
+  reorder(outfile+".eq", outfile+"_randOrder.eq", randomizedIndex, num_samples);
 }
 
 void build_distMat(std::string filename, 
@@ -363,15 +448,23 @@ void build_distMat(std::string filename,
   }
 
   std::vector<std::vector<double>> mutInfoMat(num_samples);
+  std::vector<std::vector<double>> jointMat(num_samples);
   for (auto& v : mutInfoMat) {
     v.resize(num_samples);
     for (auto& d : v) d = 0;
   }
+  for (auto& v : jointMat) {
+    v.resize(num_samples);
+    for (auto& d : v) d = 0;
+  }
 
-  BitVectorRRR eqcls(filename);
+  //BitVectorRRR eqcls(filename);
+  sdsl::bit_vector eqcls;
+  sdsl::load_from_file(eqcls, filename);
+  
   size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
-  totalEqClsCnt = 1280000;
-  sdsl::bit_vector uncompressed(totalEqClsCnt*num_samples, 0);
+  //totalEqClsCnt = 1280000;
+  //sdsl::bit_vector uncompressed(totalEqClsCnt*num_samples, 0);
   std::cout << "Total bit size: " << eqcls.bit_size() 
             << "\ntotal # of equivalence classes: " << totalEqClsCnt << "\n";
 
@@ -388,7 +481,7 @@ void build_distMat(std::string filename,
     while (i < num_samples) {
       size_t bitCnt = std::min(num_samples-i, (size_t)64);
       size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
-      uncompressed.set_int(eqclsCntr*num_samples+i, wrd, bitCnt);
+      //uncompressed.set_int(eqclsCntr*num_samples+i, wrd, bitCnt);
       for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
         if ((wrd >> j) & 0x01) {
           cols[curIdx][eqclsCntr] = 1;
@@ -405,7 +498,7 @@ void build_distMat(std::string filename,
       gettimeofday(&start, &tzp);
     }
   }
-  sdsl::store_to_file(uncompressed, "test.eq");
+  //sdsl::store_to_file(uncompressed, "test.eq");
   gettimeofday(&end, &tzp);
   print_time_elapsed("DONE!, ", &row2colStart, &end);
   gettimeofday(&start, &tzp);
@@ -461,6 +554,13 @@ void build_distMat(std::string filename,
       mutInfoMat[k][j] /= (double)(denum);
       mutInfoMat[j][k] = mutInfoMat[k][j];
 	  
+      jointMat[k][j] = 
+      (mutprob[0]?mutprob[0]*log2((double)(mutprob[0])/(double)denum):0) +
+      (mutprob[1]?mutprob[1]*log2((double)(mutprob[1])/(double)denum):0) +
+      (mutprob[2]?mutprob[2]*log2((double)(mutprob[2])/(double)denum):0) +
+      (mutprob[3]?mutprob[3]*log2((double)(mutprob[3])/(double)denum):0);
+      jointMat[k][j] /= (-1.0*(double)(denum));
+      jointMat[j][k] = jointMat[k][j];
    	/*   std::cout << mutInfoMat[k][j] << " : " 
               << mutprob[0] << " " 
               << mutprob[1] << " " 
@@ -485,21 +585,60 @@ void build_distMat(std::string filename,
   print_time_elapsed(" DONE!, ", &start, &end);
   gettimeofday(&colPairCompStart, &tzp);
 
-  std::ofstream out(out_filename);
-  std::ofstream mutout(out_filename+".mutinfo");
+  std::ofstream out(out_filename+".ham");
+  std::ofstream mutout(out_filename+".mutinf"/* ".mutinfo" */);
+  //std::ofstream jout(out_filename+".joint");
   //out << hamDistMat.size() << "\n";
+  double mutInfoInv = 0;
+  
   for (size_t i = 0; i < hamDistMat.size(); i++) {
-    for (size_t j = 0; j < hamDistMat[i].size(); j++) {
-      if (hamDistMat[i][j] != 0) {
+    out << hamDistMat[i][0];
+    mutInfoInv = (jointMat[i][0]-mutInfoMat[i][0]) < 0? 0:(jointMat[i][0]-mutInfoMat[i][0]);
+    mutout << mutInfoInv ;
+    for (size_t j = 1; j < hamDistMat[i].size(); j++) {
+      out << "\t" << hamDistMat[i][j];
+      mutInfoInv = (jointMat[i][j]-mutInfoMat[i][j]) < 0? 0:(jointMat[i][j]-mutInfoMat[i][j]);
+      mutout << "\t" << mutInfoInv;
+      //jout << jointMat[i][j] << "\t";
+      //if (hamDistMat[i][j] != 0) {
         
         //std::cout << j << " ";
-        out << i << "\t" << j << "\t" << hamDistMat[i][j] << "\n";
-      }
-      if (mutInfoMat[i][j] != 0) {
-        mutout <<  i << "\t" << j << "\t" << mutInfoMat[i][j] << "\n";
-      }
+        // out << i << "\t" << j << "\t" << hamDistMat[i][j] << "\n";
+      //}
+      //if (mutInfoMat[i][j] != 0) {
+        // mutout <<  i << "\t" << j << "\t" << mutInfoMat[i][j] << "\t" << jointMat[i][j] << "\n";
+      //}
     }
+    out << "\n";
+    mutout << "\n";
+    //jout << "\n";
   }
+}
+
+void writeEq(std::string filename, 
+				std::string out_filename, 
+        uint64_t num_samples,
+        uint64_t totalEqCls) {
+  sdsl::bit_vector eqcls;
+  sdsl::load_from_file(eqcls, filename);
+  std::ofstream out(out_filename+".matrix");
+  size_t totalEqClsCnt = eqcls.bit_size()/num_samples; //222584822;
+  if (totalEqCls > 0) {
+    totalEqClsCnt = totalEqCls;
+  }
+  for (size_t eqclsCntr = 0; eqclsCntr < totalEqClsCnt; eqclsCntr++) {
+    size_t i = 0;
+    while (i < num_samples) {
+      size_t bitCnt = std::min(num_samples-i, (size_t)64);
+      size_t wrd = eqcls.get_int(eqclsCntr*num_samples+i, bitCnt);
+      for (size_t j = 0; j < bitCnt; j++) {
+        out << ((wrd >> j) & 0x01) << "\t";
+      }
+      i+=bitCnt;
+    }
+    out << "\n";
+  }
+  out.close();  
 }
 
 int main(int argc, char *argv[]) {
@@ -517,6 +656,12 @@ int main(int argc, char *argv[]) {
     }
     std::cout << "SUCCESSFULLY VALIDATED THE COMPRESSION/DECOMPRESSION PROCESS.\n\n#####NEXT STEP#####\nCompare Sizes:\n";
   }
+  else if (command == "decompress") {
+    std::string filename = argv[2];
+    std::string outfilename = argv[3];
+    uint64_t totalEqCls = std::stoull(argv[4]);
+    decompress(filename, outfilename, totalEqCls, num_samples);
+  }
   else if (command == "compareCompressions") {
     std::string filename = argv[2];
     compareCompressions(filename, num_samples);
@@ -531,6 +676,18 @@ int main(int argc, char *argv[]) {
     std::string filename = argv[2];
     std::string output_filename = argv[3];
     build_distMat(filename, output_filename, num_samples);
+  } else if (command == "writeEq") {
+    if (argc < 4) {
+      std::cerr << "ERROR: MISSING LAST ARGUMENT\n";
+      std::exit(1);
+    }
+    std::string filename = argv[2];
+    std::string output_filename = argv[3];
+    uint64_t totalEqCls = 0;
+    if (argc == 5)
+      totalEqCls = std::stoull(argv[4]);
+
+    writeEq(filename, output_filename, num_samples, totalEqCls);
   } else if (command == "reorder") {
     if (argc < 5) {
       std::cerr << "ERROR: MISSING ARGUMENT. 4 needed.\n";
@@ -549,7 +706,14 @@ int main(int argc, char *argv[]) {
     std::string filename2 = argv[3];
     std::string order_filename = argv[4];
     compare_reordered_original(filename1, filename2, order_filename, num_samples);
-  } 
+  } else if (command == "fakeEq_randOrder") {
+    std::string outfile = argv[2];
+    uint64_t rows = 1048576;//2^20;
+    build_fakeEq_And_randReord(outfile, 
+                                rows,
+                                num_samples,
+                                8);
+  }
   else {
     std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
               << "OPTIONS ARE: validate, compareCompressions, compareCopies, reorder\n";
