@@ -1,7 +1,10 @@
 
 #include "compressedSetBit.h"
+#include "hashutil.h"
 #include "bitvector.h"
 #include "sdsl/bits.hpp"
+#include "sparsepp/spp.h"
+
 #include <time.h>
 #include <random>
 #include <sstream>
@@ -77,6 +80,57 @@ bool validate(uint16_t cnt, uint16_t num_samples=2586) {
   return true;
 }
 
+/*
+ * validates if the rrr bvs in the input directory all together have unique rows
+ */
+void validate_uniqueness(std::string& directory, size_t num_samples) {
+  spp::sparse_hash_map<BitVector, uint64_t, sdslhash<BitVector>> eqMap;
+  uint64_t cntr = 0;
+
+  for (auto f = 0; f < 12; f++) {
+    uint64_t curCntr = 0;
+    std::string filename = directory + std::to_string(f) + "_eqclass_rrr.cls";
+    BitVectorRRR eqcls(filename);
+    //subPattern.calcHash();
+    uint64_t bitcntr = 0;
+    while (bitcntr < eqcls.bit_size()) {
+      std::cerr << "\n" << curCntr << "\n";
+
+      BitVector eq(num_samples);
+      size_t i = 0;
+      while (i < num_samples) {
+        size_t bitCnt = std::min(num_samples-i, (size_t)64);
+        size_t wrd = eqcls.get_int(curCntr*num_samples+i, bitCnt);
+        for (size_t j = 0, curIdx = i; j < bitCnt; j++, curIdx++) {
+          if ((wrd >> j) & 0x01) {
+            eq.set(curIdx);
+
+          }
+          else {
+            std::cerr << curIdx << " ";
+          }
+        }
+        i+=bitCnt;
+        bitcntr +=bitCnt;
+      }
+      // Find if the eqclass of the kmer is already there.
+      // If it is there then increment the abundance.
+      // Else create a new eq class.
+      if (eqMap.find(eq) == eqMap.end()) {
+        eqMap.emplace(std::piecewise_construct, std::forward_as_tuple(eq), std::forward_as_tuple(cntr));
+      } else { // eq class is seen before. Throw exception
+        std::cerr << "\nFound an already existing equivalence class pattern. eq. number "
+                     << cntr << " file " << f << " cur cntr: " << curCntr
+                  << " before: " << eqMap[eq] << "\n";
+        std::exit(1);
+      }
+      cntr++;
+      curCntr++;
+    }
+  }
+
+
+}
 void compareCompressions(std::string& filename, size_t num_samples) {
   std::cout << "\n[CompareCompressions]\n";
   size_t gtBV = 0;
@@ -218,17 +272,21 @@ void decompress(std::string filename,
                 std::string outfilename, 
                 uint64_t totalEqCls, 
                 uint64_t num_samples=2586) {
+  //std::cerr << "1\n";
   sdsl::rrr_vector<63> bvr;
   sdsl::load_from_file(bvr, filename);
   sdsl::rank_support_rrr<1, 63> ranks(&bvr);
+  //std::cerr << "1\n";
   totalEqCls = 1;
   size_t prev = 0;
   size_t cur = 0;
+  //std::cerr << "1\n";
   for (uint64_t i = 1; i < 21; i++) {
 		  cur = ranks(2586*i);
     std::cout << "rank: " << cur << " " << cur-prev <<  "\n";
 	prev = cur;
   }
+  std::exit(1);
   std::cerr << "loaded " << bvr.size() << "\n";
   sdsl::bit_vector eqcls(totalEqCls*num_samples, 0);
   std::cerr << "created\n";
@@ -713,6 +771,9 @@ int main(int argc, char *argv[]) {
                                 rows,
                                 num_samples,
                                 8);
+  } else if (command == "validate_uniqueness") {
+    std::string dir = argv[2];
+    validate_uniqueness(dir, num_samples);
   }
   else {
     std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
