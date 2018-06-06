@@ -27,9 +27,17 @@ target_link_libraries(mantis_core
 # with the relevant sub-commands
 add_executable(mantis
   mantis.cc)
+add_executable(monochromatic_component_iterator
+				monochromatic_component_iterator.cc)
 
 target_include_directories(mantis PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
+target_include_directories(monochromatic_component_iterator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+
+
 target_link_libraries(mantis
   mantis_core)
+target_link_libraries(monochromatic_component_iterator
+				mantis_core)
