@@ -208,7 +208,7 @@ bool monochromatic_component_iterator::done() { return it.done(); }
 void monochromatic_component_iterator::operator++(void) {
 
     if (it.done()) return; // don't cross the bound (undefined behaviour)
-        ++it;
+    ++it;
     auto keyFromKmer = [this](KeyObject keyobj) {
         return HashUtil::hash_64i(keyobj.key, BITMASK(this->cqf->keybits()));
     };
