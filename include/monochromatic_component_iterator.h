@@ -101,7 +101,7 @@ namespace dna {
 }
 
 struct Mc_stats {
-    uint64_t nodeCnt = 1;
+    uint64_t nodeCnt = 0;
     uint64_t min_dist = -1; // infinity
 };
 
@@ -119,7 +119,7 @@ public:
         work_item(node currin, uint64_t idxin, uint64_t coloridin) : curr(currin), idx(idxin), colorid(coloridin) {}
 
         bool operator<(const work_item &item2) const {
-            return (*this).idx < item2.idx;
+            return (*this).curr < item2.curr;
         }
     };
 
@@ -129,13 +129,13 @@ public:
     Mc_stats operator*(void);
 
     monochromatic_component_iterator(const CQF<KeyObject> *g);
+    uint64_t cntr = 0;
 
 private:
 
     uint32_t k;
     std::queue<work_item> work;
-
-
+    std::unordered_set<uint64_t> visitedKeys;
     const CQF<KeyObject> *cqf;
     CQF<KeyObject>::Iterator it;
     sdsl::bit_vector visited;
