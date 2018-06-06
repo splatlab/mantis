@@ -188,13 +188,10 @@ namespace dna {
 monochromatic_component_iterator::monochromatic_component_iterator(const CQF<KeyObject> *g)
         : cqf(g), it(g->begin(0)) {
     // initialize cqf iterator
-    k = cqf->keybits() / 2;
+    k = cqf->keybits() / 2; // 2-bit encoded
     std::cerr << "k : " << k << "\n";
-    //it = &(cqf->begin(0));
     sdsl::util::assign(visited, sdsl::bit_vector(cqf->slots(), 0));
     std::cerr << "slots: " << cqf->slots() << "\n";
-    // initialize the first item and get to done if it's empty
-    ++(*this);
 
 }
 
@@ -307,12 +304,8 @@ int main(int argc, char *argv[]) {
     std::string eq_file = argv[2];
     CQF<KeyObject> cqf(cqf_file, false);
     monochromatic_component_iterator mci(&cqf);
-    uint64_t cntrr = 0;
     while (!mci.done()) {
-        cntrr++;
-        //for (auto i = 0; i < 3; i++) {
-        //std::cout << (*mci).nodeCnt << "\n";
+        std::cout << (*mci).nodeCnt << "\n";
         ++mci;
     }
-    std::cerr << "cntr: " << cntrr << "\n";
 }
