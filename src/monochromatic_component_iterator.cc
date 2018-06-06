@@ -4,6 +4,8 @@
 
 #include "monochromatic_component_iterator.h"
 
+uint64_t start_time;
+
 namespace dna {
 
     /////////////// bases /////////////////
