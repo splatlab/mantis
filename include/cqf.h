@@ -36,6 +36,13 @@
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
 #define PAGE_BUFFER_SIZE 4096
 
+/*
+extern  int is_runend(const QF *qf, uint64_t index);
+extern  uint64_t run_end(const QF *qf, uint64_t hash_bucket_index);
+extern  uint64_t decode_counter(const QF *qf, uint64_t index, uint64_t *remainder, uint64_t *count);
+extern  int is_occupied(const QF *qf, uint64_t index);
+*/
+
 template <class key_obj>
 class CQF {
 	public:
@@ -48,7 +55,7 @@ class CQF {
 
 		/* Will return the count. */
 		uint64_t query(const key_obj& k);
-
+		std::pair<uint64_t, uint64_t> queryValAndIdx( key_obj& k) const;
 		void serialize(std::string filename) {
 			qf_serialize(&cqf, filename.c_str());
 		}
@@ -57,6 +64,7 @@ class CQF {
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t size(void) const { return cqf.metadata->ndistinct_elts; }
+		uint64_t slots(void) const {return cqf.metadata->nslots;}
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
 
@@ -142,6 +150,39 @@ void CQF<key_obj>::insert(const key_obj& k) {
 template <class key_obj>
 uint64_t CQF<key_obj>::query(const key_obj& k) {
 	return qf_count_key_value(&cqf, k.key, k.value);
+}
+
+template <class key_obj>
+std::pair<uint64_t, uint64_t> CQF<key_obj>::queryValAndIdx(key_obj& k) const {
+	uint64_t eq, idx;
+	eq = qf_key_value_index(&cqf, k.key, k.value, &idx);
+	return std::make_pair(eq, idx);
+	/*uint64_t hash = (k.key << cqf.metadata->value_bits) | (k.value &
+														 BITMASK(cqf.metadata->value_bits));
+	uint64_t hash_remainder   = hash & BITMASK(cqf.metadata->bits_per_slot);
+	int64_t hash_bucket_index = hash >> cqf.metadata->bits_per_slot;
+
+	if (!is_occupied(&cqf, hash_bucket_index))
+		return std::make_pair(0, 0);
+
+	int64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(&cqf,
+																  hash_bucket_index-1)
+														  + 1;
+	if (runstart_index < hash_bucket_index)
+		runstart_index = hash_bucket_index;
+
+	*//* printf("MC RUNSTART: %02lx RUNEND: %02lx\n", runstart_index, runend_index); *//*
+
+	uint64_t current_remainder, current_count, current_end;
+	do {
+		current_end = decode_counter(&cqf, runstart_index, &current_remainder,
+									 &current_count);
+		if (current_remainder == hash_remainder)
+			return std::make_pair(current_count, current_end); // FIXME not sure about this
+		runstart_index = current_end + 1;
+	} while (!is_runend(&cqf, current_end));
+
+	return std::make_pair(0, 0);*/
 }
 
 template <class key_obj>
