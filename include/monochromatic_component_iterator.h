@@ -123,6 +123,7 @@ public:
         }
     };
 
+    bool done();
     void operator++(void);
 
     Mc_stats operator*(void);
@@ -148,7 +149,6 @@ private:
 
     uint64_t manhattanDist(uint64_t eq1, uint64_t eq2);
 
-    Mc_stats getMC();
 };
 
 

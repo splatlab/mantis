@@ -188,17 +188,43 @@ namespace dna {
 
 monochromatic_component_iterator::monochromatic_component_iterator(const CQF<KeyObject> *g)
         : cqf(g), it(g->begin(0)) {
-    cqf = g;
     // initialize cqf iterator
-    k = cqf->keybits();
+    k = cqf->keybits()/2;
+    std::cerr << " k : " << k << "\n";
     //it = &(cqf->begin(0));
     sdsl::util::assign(visited, sdsl::bit_vector(cqf->slots(), 0));
+    std::cerr << "slots: " << cqf->slots() << "\n";
+    // initialize the first item and get to done if it's empty
+    ++(*this);
 
 }
 
 monochromatic_component_iterator::work_item
 monochromatic_component_iterator::front(std::queue <monochromatic_component_iterator::work_item> &w) {
     return w.front();
+}
+
+bool monochromatic_component_iterator::done() {return it.done();}
+void monochromatic_component_iterator::operator++(void) {
+    std::cerr << "++ ";
+    while (!it.done()) {
+        std::cerr << " , " << it.iter.current << " " << (bool)(visited[it.iter.current]) << " ";
+        if ((bool)(visited[it.iter.current])) {
+            ++it;
+            //std::cerr << " ++it ";
+        }
+        else {
+            break;
+            std::cerr << " break\n";
+        }
+    }
+    std::cerr << "\n";
+    if (it.done()) return;
+
+    KeyObject keyobj = *it;
+    node root(k, HashUtil::hash_64i(keyobj.key, BITMASK(cqf->keybits())));
+    monochromatic_component_iterator::work_item neww = {root,0, 0};
+    work.push(neww);
 }
 
 Mc_stats monochromatic_component_iterator::operator*(void) {
@@ -212,7 +238,9 @@ Mc_stats monochromatic_component_iterator::operator*(void) {
         work_item w = front(work);
         work.pop();
 
+        std::cerr << "for w " << w.idx << " : ";
         for (auto &neighbor : neighbors(w)) {
+            std::cerr << "n " << neighbor.idx << " ";
             if (neighbor.curr != w.curr) {
                 /*if (neighbor.colorid != w.colorid) {
                     res.min_dist = std::min(res.min_dist, manhattanDist(neighbor.colorid, w.colorid));
@@ -224,23 +252,15 @@ Mc_stats monochromatic_component_iterator::operator*(void) {
                     }
                 }
             }
+            else {
+                std::cerr << " same || ";
+            }
         }
         visited[w.idx] = 1; // set the corresponding bit
+        std::cerr << " idx " << w.idx << " visited " << visited[w.idx] << "\n";
+
     }
     return res;
-}
-
-void monochromatic_component_iterator::operator++(void) {
-    while (!it.done() and (bool)(visited[it.iter.current])) {
-        ++it;
-    }
-    if (it.done()) return;
-
-    KeyObject keyobj = *it;
-    uint64_t tmp = keyobj.key;
-    node root(k, HashUtil::hash_64i(tmp, BITMASK(k)));
-    monochromatic_component_iterator::work_item neww = {root,0, 0};
-    work.push(neww);
 }
 
 std::set <monochromatic_component_iterator::work_item>
@@ -259,7 +279,7 @@ std::set <monochromatic_component_iterator::work_item>
 bool monochromatic_component_iterator::exists(edge e, uint64_t& idx, uint64_t& eqid) {
     // no correction for exact CQF. right?
     uint64_t tmp = e.val;
-    KeyObject key(HashUtil::hash_64(tmp, BITMASK(k)), 0, 0);
+    KeyObject key(HashUtil::hash_64(tmp, BITMASK(cqf->keybits())), 0, 0);
     auto eq_idx = cqf->queryValAndIdx(key);
     if (eq_idx.first) {
         eqid = eq_idx.first;
@@ -270,30 +290,6 @@ bool monochromatic_component_iterator::exists(edge e, uint64_t& idx, uint64_t& e
 }
 
 
-Mc_stats monochromatic_component_iterator::getMC() {
-    Mc_stats res;
-    while (!work.empty()) {
-        monochromatic_component_iterator::work_item w = front(work);
-        work.pop();
-
-        for (const auto &neighbor : neighbors(w)) {
-            if (neighbor.curr != w.curr) {
-                /*if (neighbor.colorid != w.colorid) {
-                    res.min_dist = std::min(res.min_dist, manhattanDist(neighbor.colorid, w.colorid));
-                }*/
-                if (visited[neighbor.idx] == 0) {
-                    if (neighbor.colorid == w.colorid) {
-                        res.nodeCnt++;
-                        work.push(neighbor);
-                    }
-                }
-            }
-        }
-        visited[w.idx] = 1; // set the corresponding bit
-    }
-    return res;
-}
-
 /*
  * ===  FUNCTION  ============================================================
  *         Name:  main
@@ -302,11 +298,16 @@ Mc_stats monochromatic_component_iterator::getMC() {
  */
 
 int main ( int argc, char *argv[] ) {
-    std::cout << argc << " ....... \n";
 
     std::string cqf_file = argv[1];
     std::cout << cqf_file << "\n";
     std::string eq_file = argv[2];
     std::cout << eq_file << "\n";
     CQF<KeyObject> cqf(cqf_file, false);
+    monochromatic_component_iterator mci(&cqf);
+    //while(!mci.done()) {
+    for (auto i = 0; i < 10; i++) {
+        std::cout << (*mci).nodeCnt << "\n";
+        ++mci;
+    }
 }
