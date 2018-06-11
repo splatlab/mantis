@@ -15,13 +15,14 @@
 #include <unordered_map>
 #include <set>
 #include <unordered_set>
+#include <vector>
 
 #include <inttypes.h>
 
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"
-//#include "bitvector.h"
+#include "bitvector.h"
 #include "cqf.h"
 #include "hashutil.h"
 #include "common_types.h"
@@ -128,7 +129,11 @@ public:
 
     Mc_stats operator*(void);
 
-    monochromatic_component_iterator(const CQF<KeyObject> *g);
+//monochromatic_component_iterator(const CQF<KeyObject> *g);
+    monochromatic_component_iterator(const CQF<KeyObject> *g,
+                                     BitVectorRRR& bvin,
+                                    uint64_t num_samplesin=2586);
+    void neighborDist();
     uint64_t cntr = 0;
 
 private:
@@ -138,6 +143,8 @@ private:
     std::unordered_set<uint64_t> visitedKeys;
     const CQF<KeyObject> *cqf;
     CQF<KeyObject>::Iterator it;
+    BitVectorRRR& bv;
+    uint64_t num_samples;
     sdsl::bit_vector visited;
 
     bool exists(edge e, uint64_t &idx, uint64_t &eqid);
