@@ -133,6 +133,8 @@ int main ( int argc, char *argv[] ) {
 
   auto build_mode = (
                      command("build").set(selected, mode::build),
+										 required("-s","--log-slots") & value("log-slots",
+																											 bopt.qbits) % "log of number of slots in the output CQF",
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
                      option("-t", "--num-threads") & value("num_threads", bopt.numthreads) % "number of threads to use to build",

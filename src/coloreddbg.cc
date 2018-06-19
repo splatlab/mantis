@@ -125,7 +125,8 @@ build_main ( BuildOpts& opt )
     mantis::fs::MakeDir(prefix.c_str());
   }
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(inobjects[0].obj->keybits(),
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
+																														inobjects[0].obj->keybits(),
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
 
