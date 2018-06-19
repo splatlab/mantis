@@ -178,7 +178,7 @@ start_read:
 
 		// hash the kmer using murmurhash/xxHash before adding to the list
 		//item = HashUtil::MurmurHash64A(((void*)&item), sizeof(item), seed);
-		item = HashUtil::hash_64(item, BITMASK(2*kmer_size));
+		item = hash_64(item, BITMASK(2*kmer_size));
 		kmers_set.insert(item % range);
 
 		uint64_t next = (first << 2) & BITMASK(2*kmer_size);
@@ -202,7 +202,7 @@ start_read:
 
 			// hash the kmer using murmurhash/xxHash before adding to the list
 			//item = HashUtil::MurmurHash64A(((void*)&item), sizeof(item), seed);
-			item = HashUtil::hash_64(item, BITMASK(2*kmer_size));
+			item = hash_64(item, BITMASK(2*kmer_size));
 			kmers_set.insert(item % range);
 
 			next = (next << 2) & BITMASK(2*kmer_size);

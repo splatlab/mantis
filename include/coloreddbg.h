@@ -32,7 +32,6 @@
 #include "sdsl/bit_vectors.hpp"
 #include "bitvector.h"
 #include "cqf.h"
-#include "hashutil.h"
 #include "common_types.h"
 
 #define NUM_BV_BUFFER 20000000
@@ -48,7 +47,7 @@ struct hash128 {
 	{
 		__uint128_t val = val128;
 		// Using the same seed as we use in k-mer hashing.
-		return HashUtil::MurmurHash64A((void*)&val, sizeof(__uint128_t),
+		return MurmurHash64A((void*)&val, sizeof(__uint128_t),
 																	 2038074743);
 	}
 };
@@ -72,6 +71,7 @@ class ColoredDbg {
 								cutoffs, cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
 								uint64_t>>& map, uint64_t num_kmers);
 
+		void set_console(spdlog::logger* c) { console = c; }
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
 		uint64_t get_num_bitvectors(void) const;
 		uint64_t get_num_eqclasses(void) const { return eqclass_map.size(); }
@@ -106,6 +106,7 @@ class ColoredDbg {
 		uint64_t num_samples;
 		uint64_t num_serializations;
 		bool is_sampling{false};
+		spdlog::logger* console;
 };
 
 template <class T>
@@ -161,8 +162,8 @@ void ColoredDbg<qf_obj,
 	for (auto& it_input : map) {
 		auto it_local = eqclass_map.find(it_input.first);
 		if (it_local == eqclass_map.end()) {
-			std::cerr << "Can't find the vector hash during shuffling." << std::endl;
-			exit(1);
+			console->error("Can't find the vector hash during shuffling");
+			abort();
 		} else {
 			uint64_t src_idx = ((it_local->second.first - 1) * num_samples) %
 				NUM_BV_BUFFER;
@@ -190,7 +191,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	uint64_t eq_id = 1;
-	__uint128_t vec_hash = HashUtil::MurmurHash128A((void*)vector.data(),
+	__uint128_t vec_hash = MurmurHash128A((void*)vector.data(),
 																								 vector.capacity(), 2038074743,
 																								 2038074751);
 
@@ -216,8 +217,8 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 
 	// Serialize bit vectors if buffer is full.
 	if (it == eqclass_map.end() && get_num_eqclasses() % NUM_BV_BUFFER == 0) {
-		PRINT_CDBG("Serializing bit vector with " << get_num_eqclasses() <<
-							 " eq classes.");
+		console->info("Serializing bit vector with {}  eq classes.", 
+									get_num_eqclasses());
 		bv_buffer_serialize();
 	}
 
@@ -225,8 +226,8 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 	if (dbg.size() % 10000000 == 0 &&
 			dbg.size() != last_size) {
 		last_size = dbg.size();
-		PRINT_CDBG("Kmers merged: " << dbg.size() << " Num eq classes: " <<
-			get_num_eqclasses() <<  " Total time: " << time(NULL) - start_time);
+		console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
+									dbg.size(), get_num_eqclasses(), time(NULL) - start_time);
 	}
 }
 
@@ -328,8 +329,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	for (uint32_t i = 0; i < num_samples; i++) {
 		auto it = cutoffs.find(incqfs[i].sample_id);
 		if (it == cutoffs.end()) {
-			std::cerr << "Sample id " <<  incqfs[i].sample_id << " not found in" <<
-				" cutoff list." << std::endl;
+			console->error("Sample id {} not found in cutoff list.",
+										 incqfs[i].sample_id);
 			abort();
 		} else
 			it_incqfs[i] = incqfs[i].obj->begin(it->second);
@@ -401,8 +402,10 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
-	dbg(qbits, key_bits, seed), bv_buffer(NUM_BV_BUFFER * nqf),
+	dbg(qbits, key_bits, LOCKS_FORBIDDEN, NONE, seed), bv_buffer(NUM_BV_BUFFER *
+																															 nqf),
 	prefix(prefix), num_samples(nqf), num_serializations(0) {
+		dbg.set_auto_resize();
 		if (nqf < UINT64_MAX)
 			is_sampling = true;
 	}
@@ -412,7 +415,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 																				std::vector<std::string>&
 																				eqclass_files, std::string&
 																				sample_file)
-: dbg(cqf_file, false), bv_buffer() {
+: dbg(cqf_file, LOCKS_FORBIDDEN, FREAD), bv_buffer() {
 	num_samples = 0;
 	num_serializations = 0;
 
@@ -423,7 +426,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	}
 
 	for (auto file : sorted_files) {
-		std::cout << "Reading eq class file: " << file.second << std::endl;
+		console->info("Reading eq class file: {}", file.second);
 		eqclasses.push_back(BitVectorRRR(file.second));
 		num_serializations++;
 	}

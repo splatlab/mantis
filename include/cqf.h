@@ -28,7 +28,9 @@
 #include <math.h>
 #include <aio.h>
 
-#include "cqf/gqf.h"
+#include "gqf/gqf.h"
+#include "gqf/gqf_file.h"
+#include "gqf/hashutil.h"
 #include "util.h"
 
 #define NUM_HASH_BITS 28
@@ -36,15 +38,21 @@
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
 #define PAGE_BUFFER_SIZE 4096
 
+enum readmode {
+	MMAP,
+	FREAD
+};
+
 template <class key_obj>
 class CQF {
 	public:
 		CQF();
-		CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed);
-		CQF(std::string& filename, bool flag);
+		CQF(uint64_t q_bits, uint64_t key_bits, enum lockingmode lock, enum
+				hashmode hash, uint32_t seed);
+		CQF(std::string& filename, enum lockingmode lock, enum readmode flag);
 		CQF(const CQF<key_obj>& copy_cqf);
 
-		void insert(const key_obj& k);
+		bool insert(const key_obj& k);
 
 		/* Will return the count. */
 		uint64_t query(const key_obj& k);
@@ -52,7 +60,14 @@ class CQF {
 		void serialize(std::string filename) {
 			qf_serialize(&cqf, filename.c_str());
 		}
+		
+		uint64_t inner_prod(const CQF<key_obj>& in_cqf);
 
+		void set_auto_resize(void) { qf_set_auto_resize(&cqf); }
+
+		bool is_exact(void);
+
+		const QF* get_cqf(void) const { return &cqf; }
 		uint64_t range(void) const { return cqf.metadata->range; }
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
@@ -111,30 +126,45 @@ class KeyObject {
 
 template <class key_obj>
 CQF<key_obj>::CQF() {
-	qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", 23423);
+	if (!qf_malloc(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, LOCKS_REQUIRED,
+								 DEFAULT, 2038074761)) {
+		std::cerr << "Can't allocate the CQF" << std::endl;
+		exit(EXIT_FAILURE);
+	}
 }
 
 template <class key_obj>
-CQF<key_obj>::CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed) {
-	qf_init(&cqf, 1ULL << qbits, key_bits, 0, true, "", seed);
+CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum lockingmode lock,
+									enum hashmode hash, uint32_t seed) {
+	if (!qf_malloc(&cqf, 1ULL << q_bits, key_bits, 0, lock, hash, 2038074761)) {
+		std::cerr << "Can't allocate the CQF" << std::endl;
+		exit(EXIT_FAILURE);
+	}
 }
 
 template <class key_obj>
-CQF<key_obj>::CQF(std::string& filename, bool flag) {
-	if (flag)
-		qf_read(&cqf, filename.c_str());
+CQF<key_obj>::CQF(std::string& filename, enum lockingmode lock, enum readmode
+									flag) {
+	uint64_t size = 0;
+	if (flag == MMAP)
+	 size = qf_usefile(&cqf, lock, filename.c_str());
 	else
-		qf_deserialize(&cqf, filename.c_str());
+		size = qf_deserialize(&cqf, lock, filename.c_str());
+
+	if (size == 0) {
+		std::cerr << "Can't read/deserialize the CQF" << std::endl;
+		exit(EXIT_FAILURE);
+	}
 }
 
 template <class key_obj>
 CQF<key_obj>::CQF(const CQF<key_obj>& copy_cqf) {
-	memcpy(cqf, copy_cqf.get_cqf(), sizeof(QF));
+	memcpy(&cqf, copy_cqf.get_cqf(), sizeof(QF));
 }
 
 template <class key_obj>
-void CQF<key_obj>::insert(const key_obj& k) {
-	qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN);
+bool CQF<key_obj>::insert(const key_obj& k) {
+	return qf_insert(&cqf, k.key, k.value, k.count);
 	// To validate the CQF
 	//set.insert(k.key);
 }
@@ -145,11 +175,23 @@ uint64_t CQF<key_obj>::query(const key_obj& k) {
 }
 
 template <class key_obj>
+uint64_t CQF<key_obj>::inner_prod(const CQF<key_obj>& in_cqf) {
+	return qf_inner_product(&cqf, in_cqf.get_cqf());
+}
+
+template <class key_obj>
+bool CQF<key_obj>::is_exact(void) {
+	if (cqf.metadata->hash_mode == INVERTIBLE)
+		return true;
+	return false;
+}
+
+template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	: iter(it), last_prefetch_offset(LLONG_MIN), cutoff(cutoff),
 	end_hash(end_hash) {
-		buffer_size = (((it.qf->metadata->size / 2048 -
-										 (rand() % (it.qf->metadata->size / 4096)))
+		buffer_size = (((it.qf->metadata->total_size_in_bytes / 2048 -
+										 (rand() % (it.qf->metadata->total_size_in_bytes / 4096)))
 										+ 4095) / 4096) * 4096;
 		buffer = (unsigned char*)mmap(NULL, buffer_size, PROT_READ | PROT_WRITE,
 																	MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -177,7 +219,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 
 	// Read next "buffer_size" bytes from the file offset.
 	if ((int64_t)last_read_offset >= last_prefetch_offset) {
-		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
+		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->runtimedata->f_info.fd
 							 << " " << last_read_offset << ">" << last_prefetch_offset);
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
@@ -199,13 +241,13 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		if ((last_prefetch_offset - (int64_t)buffer_size) > 0) {
 			madvise((unsigned char *)(iter.qf->metadata) + last_prefetch_offset -
 							 buffer_size, buffer_size, MADV_DONTNEED);
-			posix_fadvise(iter.qf->mem->fd, (off_t)(last_prefetch_offset -
+			posix_fadvise(iter.qf->runtimedata->f_info.fd, (off_t)(last_prefetch_offset -
 																							(int64_t)buffer_size),
 										buffer_size, POSIX_FADV_DONTNEED);
 		}
 
 		memset(&aiocb, 0, sizeof(struct aiocb));
-		aiocb.aio_fildes = iter.qf->mem->fd;
+		aiocb.aio_fildes = iter.qf->runtimedata->f_info.fd;
 		aiocb.aio_buf = (volatile void*)buffer;
 		aiocb.aio_nbytes = buffer_size;
 		if ((last_prefetch_offset + (int64_t)buffer_size) <
@@ -219,7 +261,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		DEBUG_CDBG("prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
+		DEBUG_CDBG("prefetch in " << iter.qf->runtimedata->f_info.fd << " from " << std::hex <<
 							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
 							 << buffer_size << " into buffer at " << std::hex <<
 							 ((uint64_t)buffer) << std::dec);

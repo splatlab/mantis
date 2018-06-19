@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <string>
 
-#include "hashutil.h"
+#include "gqf/hashutil.h"
 #include "common_types.h"
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) \

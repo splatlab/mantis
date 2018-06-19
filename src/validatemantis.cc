@@ -86,7 +86,7 @@ validate_main ( ValidateOpts& opt )
 	std::string cqf_file;
 	uint32_t nqf = 0;
 	while (infile >> cqf_file) {
-		cqfs[nqf] = CQF<KeyObject>(cqf_file, false);
+		cqfs[nqf] = CQF<KeyObject>(cqf_file, LOCKS_FORBIDDEN, FREAD);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());

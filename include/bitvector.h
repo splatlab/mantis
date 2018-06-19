@@ -24,8 +24,8 @@
 
 #include <inttypes.h>
 
+#include "gqf/hashutil.h"
 #include "util.h"
-#include "hashutil.h"
 #include "sdsl/bit_vectors.hpp"
 
 class BitVector {
@@ -78,7 +78,7 @@ struct sdslhash {
 	uint64_t operator()(const T& vector) const
 	{
 		// Using the same seed as we use in k-mer hashing.
-		return HashUtil::MurmurHash64A((void*)vector.data(), vector.capacity(),
+		return MurmurHash64A((void*)vector.data(), vector.capacity(),
 																	 2038074743);
 	}
 };
