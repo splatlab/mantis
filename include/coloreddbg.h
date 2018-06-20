@@ -27,6 +27,7 @@
 
 #include <inttypes.h>
 
+#include "gqf/hashutil.h"
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"

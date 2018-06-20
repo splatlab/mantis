@@ -55,11 +55,11 @@ mantis:									$(OBJDIR)/hashutil.o $(OBJDIR)/kmer.o \
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
 $(OBJDIR)/MantisFs.o:       $(LOC_SRC)/MantisFS.cc $(LOC_INCLUDE)/MantisFS.h
 $(OBJDIR)/util.o:           $(LOC_SRC)/util.cc $(LOC_INCLUDE)/util.h
-$(OBJDIR)/bitvector.o:      $(LOC_SRC)/bitvector.cc $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/gqf/hashutil.h
-$(OBJDIR)/kmer.o:           $(LOC_SRC)/kmer.cc $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/gqf/hashutil.h
-$(OBJDIR)/coloreddbg.o: 		$(LOC_INCLUDE)/gqf/gqf.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/gqf/hashutil.h
-$(OBJDIR)/query.o: 					$(LOC_INCLUDE)/gqf/gqf.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/gqf/hashutil.h
-$(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/gqf/gqf.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h $(LOC_INCLUDE)/gqf/hashutil.h
+$(OBJDIR)/bitvector.o:      $(LOC_INCLUDE)/gqf/hashutil.h $(LOC_SRC)/bitvector.cc $(LOC_INCLUDE)/bitvector.h 
+$(OBJDIR)/kmer.o:           $(LOC_INCLUDE)/gqf/hashutil.h $(LOC_SRC)/kmer.cc $(LOC_INCLUDE)/kmer.h
+$(OBJDIR)/coloreddbg.o: 		$(LOC_INCLUDE)/gqf/hashutil.h $(LOC_INCLUDE)/gqf/gqf.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h
+$(OBJDIR)/query.o: 				  $(LOC_INCLUDE)/gqf/hashutil.h $(LOC_INCLUDE)/gqf/gqf.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
+$(OBJDIR)/validatemantis.o: $(LOC_INCLUDE)/gqf/gqf.h $(LOC_INCLUDE)/util.h $(LOC_INCLUDE)/coloreddbg.h $(LOC_INCLUDE)/bitvector.h $(LOC_INCLUDE)/cqf.h $(LOC_INCLUDE)/kmer.h
 
 # dependencies between .o files and .cc (or .c) files
 $(OBJDIR)/gqf.o: 				$(LOC_SRC)/gqf/gqf.c $(LOC_INCLUDE)/gqf/gqf.h
@@ -77,10 +77,10 @@ $(OBJDIR)/%.o: $(LOC_SRC)/%.cc | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDE) -c -o $@ $<
 
 $(OBJDIR)/%.o: $(LOC_SRC)/%.c | $(OBJDIR)
-	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $<
+	$(CXX) $(CFLAGS) $(INCLUDE) -c -o $@ $<
 
 $(OBJDIR)/%.o: $(LOC_SRC)/gqf/%.c | $(OBJDIR)
-	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $<
+	$(CXX) $(CFLAGS) $(INCLUDE) -c -o $@ $<
 
 $(OBJDIR):
 	@mkdir -p $(OBJDIR)
