@@ -33,7 +33,7 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
 `mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
 
 ```bash
-   make mantis
+ $ make mantis
  $ ./mantis build -s 20 -i raw/incqfs.lst -c raw/experiment_cutoffs.lst -o raw/
 ```
 The usage for this command are as follows:
