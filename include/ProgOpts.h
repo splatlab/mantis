@@ -5,6 +5,7 @@
 
 class BuildOpts {
  public:
+	int qbits;
   std::string inlist;
   std::string cutoffs;
   std::string out;

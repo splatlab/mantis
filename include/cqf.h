@@ -31,8 +31,8 @@
 #include "cqf/gqf.h"
 #include "util.h"
 
-#define NUM_HASH_BITS 40
-#define NUM_Q_BITS 34
+#define NUM_HASH_BITS 28
+#define NUM_Q_BITS 20
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
 #define PAGE_BUFFER_SIZE 4096
 
@@ -40,7 +40,7 @@ template <class key_obj>
 class CQF {
 	public:
 		CQF();
-		CQF(uint64_t key_bits, uint32_t seed);
+		CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed);
 		CQF(std::string& filename, bool flag);
 		CQF(const CQF<key_obj>& copy_cqf);
 
@@ -115,8 +115,8 @@ CQF<key_obj>::CQF() {
 }
 
 template <class key_obj>
-CQF<key_obj>::CQF(uint64_t key_bits, uint32_t seed) {
-	qf_init(&cqf, 1ULL << NUM_Q_BITS, key_bits, 0, true, "", seed);
+CQF<key_obj>::CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed) {
+	qf_init(&cqf, 1ULL << qbits, key_bits, 0, true, "", seed);
 }
 
 template <class key_obj>
