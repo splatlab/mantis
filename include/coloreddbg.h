@@ -382,10 +382,9 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		if (counter > num_kmers) {
 			// This is the last k-mer in the sampling phase.
 			// Estimate the size of the final CQF.
-			uint64_t estimated_size = num_kmers * dbg.range() / cur.obj.key;
+			uint64_t estimated_size = num_kmers * (dbg.range() / cur.obj.key);
 			estimated_size *= 3;	// to account for color class ids.
-			estimated_size = pow(2, ceil(log2(estimated_size)));
-			uint64_t log_estimated_size = log2(estimated_size);
+			uint64_t log_estimated_size = ceil(log2(estimated_size));
 			console->info("Estimated number of slots in the output CQF {}",
 										log_estimated_size);
 			if (log_estimated_size < dbg.capacity()) {
