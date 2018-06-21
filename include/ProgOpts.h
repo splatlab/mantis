@@ -7,7 +7,6 @@ class BuildOpts {
  public:
 	int qbits;
   std::string inlist;
-  std::string cutoffs;
   std::string out;
 	int numthreads{1};
   std::shared_ptr<spdlog::logger> console{nullptr};
@@ -25,7 +24,6 @@ class QueryOpts {
 class ValidateOpts {
  public:
   std::string inlist;
-  std::string cutoffs;
   std::string prefix;
   std::string query_file;
   std::shared_ptr<spdlog::logger> console{nullptr};

@@ -64,7 +64,6 @@ validate_main ( ValidateOpts& opt )
 
 	// Read experiment CQFs and cutoffs
 	std::ifstream infile(opt.inlist);
-	std::ifstream cutofffile(opt.cutoffs);
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	CQF<KeyObject> *cqfs;
 
@@ -74,26 +73,26 @@ validate_main ( ValidateOpts& opt )
 	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
 
 	// Read cutoffs files
-	std::unordered_map<std::string, uint64_t> cutoffs;
-	std::string sample_id;
-	uint32_t cutoff;
-	while (cutofffile >> sample_id >> cutoff) {
-		std::pair<std::string, uint32_t> pair(last_part(sample_id, '/'), cutoff);
-		cutoffs.insert(pair);
-	}
+	//std::unordered_map<std::string, uint64_t> cutoffs;
+	//std::string sample_id;
+	//while (cutofffile >> sample_id >> cutoff) {
+		//std::pair<std::string, uint32_t> pair(last_part(sample_id, '/'), cutoff);
+		//cutoffs.insert(pair);
+	//}
 
 	// mmap all the input cqfs
 	std::string cqf_file;
 	uint32_t nqf = 0;
-	while (infile >> cqf_file) {
+	uint32_t cutoff;
+	while (infile >> cqf_file >> cutoff) {
 		cqfs[nqf] = CQF<KeyObject>(cqf_file, false);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());
-		PRINT_CDBG("Sample id " << sample_id << " cut off " <<
-							 cutoffs.find(sample_id)->second);
+		PRINT_CDBG("Sample id " << sample_id << " cut off " << cutoff);
 		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], sample_id, nqf);
+		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
+																									 sample_id, nqf);
 		nqf++;
 	}
 
@@ -140,14 +139,7 @@ validate_main ( ValidateOpts& opt )
 	for (auto kmers : multi_kmers) {
 		std::unordered_map<uint64_t, float> fraction_present;
 		for (uint64_t i = 0; i < nqf; i++) {
-			uint32_t cutoff;
-			auto it = cutoffs.find(inobjects[i].sample_id);
-			if (it == cutoffs.end()) {
-				std::cerr << "Sample id " <<  inobjects[i].sample_id << " not found in"
-					<< " cutoff list." << std::endl;
-				abort();
-			} else
-				cutoff = it->second;
+			uint32_t cutoff = inobjects[i].cutoff;
 			for (auto kmer : kmers) {
 				KeyObject k(kmer, 0, 0);
 				uint64_t count = cqfs[i].query(k);

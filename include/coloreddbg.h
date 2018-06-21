@@ -68,8 +68,7 @@ class ColoredDbg {
 		void build_sampleid_map(qf_obj *incqfs);
 
 		cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>>&
-			construct(qf_obj *incqfs, std::unordered_map<std::string, uint64_t>&
-								cutoffs, cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
+			construct(qf_obj *incqfs, cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
 								uint64_t>>& map, uint64_t num_kmers);
 
 		void set_console(spdlog::logger* c) { console = c; }
@@ -113,13 +112,14 @@ class ColoredDbg {
 template <class T>
 class SampleObject {
 	public:
-		SampleObject() : obj(), sample_id(), id(0) {};
-		SampleObject(T o, std::string& s, uint32_t id) : obj(o),
-		sample_id(s), id(id) {};
-		SampleObject(const SampleObject& o) : obj(o.obj),
+		SampleObject() : obj(), cutoff(0), sample_id(), id(0) {};
+		SampleObject(T o, uint32_t c = 0, std::string& s = std::string(),
+								 uint32_t id = 0) : obj(o), cutoff(c), sample_id(s), id(id) {};
+		SampleObject(const SampleObject& o) : obj(o.obj), cutoff(o.cutoff),
 		sample_id(o.sample_id), id(o.id) {} ;
 
 		T obj;
+		uint32_t cutoff;
 		std::string sample_id;
 		uint32_t id;
 };
@@ -314,8 +314,7 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 
 template <class qf_obj, class key_obj>
 cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
-	key_obj>::construct(qf_obj *incqfs, std::unordered_map<std::string,
-											uint64_t>& cutoffs, cdbg_bv_map_t<__uint128_t,
+	key_obj>::construct(qf_obj *incqfs, cdbg_bv_map_t<__uint128_t,
 											std::pair<uint64_t, uint64_t>>& map, uint64_t num_kmers)
 {
 	uint32_t nqf = 0;
@@ -327,15 +326,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 																																 CQF<key_obj>::Iterator));
 
 	// Initialize all iterators with sample specific cutoffs.
-	for (uint32_t i = 0; i < num_samples; i++) {
-		auto it = cutoffs.find(incqfs[i].sample_id);
-		if (it == cutoffs.end()) {
-			console->error("Sample id {} not found in cutoff list.",
-										 incqfs[i].sample_id);
-			abort();
-		} else
-			it_incqfs[i] = incqfs[i].obj->begin(it->second);
-	}
+	for (uint32_t i = 0; i < num_samples; i++)
+		it_incqfs[i] = incqfs[i].obj->begin(incqfs[i].cutoff);
 
 	std::priority_queue<SampleObject<KeyObject>,
 		std::vector<SampleObject<KeyObject>>, compare<KeyObject>> minheap;
@@ -344,7 +336,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		if (it_incqfs[i].done())
 			continue;
 		KeyObject key = *it_incqfs[i];
-		SampleObject<KeyObject> obj(key, incqfs[i].sample_id, i);
+		SampleObject<KeyObject> obj(key, incqfs[i].cutoff, incqfs[i].sample_id, i);
 		minheap.push(obj);
 		nqf++;
 	}
@@ -369,7 +361,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				nqf--;
 			else {	// Insert the current iterator head in minHeap
 				KeyObject key = *it_incqfs[id];
-				SampleObject<KeyObject> obj(key, incqfs[id].sample_id, id);
+				SampleObject<KeyObject> obj(key, incqfs[id].cutoff,
+																		incqfs[id].sample_id, id);
 				minheap.push(obj);
 			}
 		}
@@ -379,7 +372,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			nqf--;
 		else {	// Insert the current iterator head in minHeap
 			KeyObject key = *it_incqfs[cur.id];
-			SampleObject<KeyObject> obj(key, incqfs[cur.id].sample_id, cur.id);
+			SampleObject<KeyObject> obj(key, incqfs[cur.id].cutoff,
+																	incqfs[cur.id].sample_id, cur.id);
 			minheap.push(obj);
 		}
 		// Add <kmer, vector> in the cdbg
@@ -426,7 +420,6 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	}
 
 	for (auto file : sorted_files) {
-		console->info("Reading eq class file: {}", file.second);
 		eqclasses.push_back(BitVectorRRR(file.second));
 		num_serializations++;
 	}

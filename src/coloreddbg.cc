@@ -80,7 +80,6 @@ build_main ( BuildOpts& opt )
 	aio_init(&aioinit);
 
 	std::ifstream infile(opt.inlist);
-	std::ifstream cutofffile(opt.cutoffs);
 	//struct timeval start1, end1;
 	//struct timezone tzp;
 	SampleObject<CQF<KeyObject>*> *inobjects;
@@ -93,20 +92,12 @@ build_main ( BuildOpts& opt )
 																	sizeof(SampleObject<CQF<KeyObject>*>));
 	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
 
-	// Read cutoffs files
-	std::unordered_map<std::string, uint64_t> cutoffs;
-	std::string sample_id;
-	uint32_t cutoff;
-	while (cutofffile >> sample_id >> cutoff) {
-		std::pair<std::string, uint32_t> pair(last_part(sample_id, '/'), cutoff);
-		cutoffs.insert(pair);
-	}
-
 	// mmap all the input cqfs
 	std::string cqf_file;
 	uint32_t nqf = 0;
+	uint32_t cutoff;
 	console->info("Reading input Squeakr files.");
-	while (infile >> cqf_file) {
+	while (infile >> cqf_file >> cutoff) {
 		if (!mantis::fs::FileExists(cqf_file.c_str())) {
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
@@ -115,10 +106,10 @@ build_main ( BuildOpts& opt )
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut off {}", sample_id,
-							 cutoffs.find(sample_id)->second);
+		console->info("Sample id {} cut off {}", sample_id, cutoff);
 		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], sample_id, nqf);
+		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
+																									 sample_id, nqf);
 		nqf++;
 	}
 
@@ -143,7 +134,7 @@ build_main ( BuildOpts& opt )
 	// First construct the colored dbg on 1000 k-mers.
 	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
 
-	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, SAMPLE_SIZE);
+	unsorted_map = cdbg.construct(inobjects, unsorted_map, SAMPLE_SIZE);
 
 	console->info("Number of eq classes found after sampling {}",
 								unsorted_map.size());
@@ -173,15 +164,15 @@ build_main ( BuildOpts& opt )
 	console->info("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, cutoffs, sorted_map, UINT64_MAX);
+	cdbg.construct(inobjects, sorted_map, UINT64_MAX);
 
-	console->info("Final colored dBG has {} k-mers and equivalence classes",
-								cdbg.get_num_eqclasses(), cdbg.get_cqf()->size());
+	console->info("Final colored dBG has {} k-mers and equivalence classes {}",
+								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
 
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
-	console->info("Serializing CQF and eq classes in ", prefix);
+	console->info("Serializing CQF and eq classes in {}", prefix);
 	cdbg.serialize();
 	console->info("Serialization done.");
 

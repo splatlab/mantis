@@ -177,22 +177,22 @@ void CQF<key_obj>::Iterator::operator++(void) {
 
 	// Read next "buffer_size" bytes from the file offset.
 	if ((int64_t)last_read_offset >= last_prefetch_offset) {
-		DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
-							 << " " << last_read_offset << ">" << last_prefetch_offset);
+		//DEBUG_CDBG("last_read_offset>last_prefetch_offset for " << iter.qf->mem->fd
+							 //<< " " << last_read_offset << ">" << last_prefetch_offset);
 		if (aiocb.aio_buf) {
 			int res = aio_error(&aiocb);
 			if (res == EINPROGRESS) {
-				DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes <<
-					" at " << last_read_offset << "(until " << last_prefetch_offset <<
-					" buffer size: "<< buffer_size << ")...");
+				//DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes <<
+					//" at " << last_read_offset << "(until " << last_prefetch_offset <<
+					//" buffer size: "<< buffer_size << ")...");
 				// const struct aiocb *const aiocb_list[1] = {&aiocb};
 				// aio_suspend(aiocb_list, 1, NULL);
-				DEBUG_CDBG(" finished it");
+				//DEBUG_CDBG(" finished it");
 			} else if (res > 0) {
-				DEBUG_CDBG("aio_error() returned " << std::dec << res);
+				//DEBUG_CDBG("aio_error() returned " << std::dec << res);
 			} else if (res == 0) {
-				DEBUG_CDBG("prefetch was OK for " << aiocb.aio_fildes << " at " <<
-									 std::hex << aiocb.aio_offset << std::dec);
+				//DEBUG_CDBG("prefetch was OK for " << aiocb.aio_fildes << " at " <<
+									 //std::hex << aiocb.aio_offset << std::dec);
 			}
 		}
 
@@ -211,18 +211,18 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		if ((last_prefetch_offset + (int64_t)buffer_size) <
 				(int64_t)last_read_offset) {
 			if (last_prefetch_offset != 0)
-				DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
-									 	last_read_offset);
+				//DEBUG_CDBG("resetting.. lpo:" << last_prefetch_offset << " lro:" <<
+										 //last_read_offset);
 			last_prefetch_offset = ( last_read_offset & ~(4095ULL) ) +
 															PAGE_BUFFER_SIZE;
 		} else {
 			last_prefetch_offset += buffer_size;
 		}
 		aiocb.aio_offset = (__off_t)last_prefetch_offset;
-		DEBUG_CDBG("prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
-							 last_prefetch_offset << std::dec << " ... " << " buffer size: "
-							 << buffer_size << " into buffer at " << std::hex <<
-							 ((uint64_t)buffer) << std::dec);
+		//DEBUG_CDBG("prefetch in " << iter.qf->mem->fd << " from " << std::hex <<
+							 //last_prefetch_offset << std::dec << " ... " << " buffer size: "
+							 //<< buffer_size << " into buffer at " << std::hex <<
+							 //((uint64_t)buffer) << std::dec);
 		// to touch each page in the buffer.
 		aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
 		aiocb.aio_sigevent.sigev_notify_function = &handler_function;
@@ -231,7 +231,7 @@ void CQF<key_obj>::Iterator::operator++(void) {
 		uint32_t ret = aio_read(&aiocb);
 		//uint32_t ret = posix_fadvise(iter.qf->mem->fd, last_read_offset,
 																 //buffer_size, POSIX_FADV_WILLNEED);
-		DEBUG_CDBG("prefetch issued");
+		//DEBUG_CDBG("prefetch issued");
 		if (ret) {
 			std::cerr << "aio_read failed at " << iter.current << " total size " <<
 				iter.qf->metadata->nslots << std::endl;
