@@ -59,6 +59,7 @@ class CQF {
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t size(void) const { return cqf.metadata->ndistinct_elts; }
+		uint64_t capacity() const {return cqf.metadata->nslots; }
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
 

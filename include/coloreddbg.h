@@ -385,8 +385,13 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			uint64_t estimated_size = num_kmers * dbg.range() / cur.obj.key;
 			estimated_size *= 3;	// to account for color class ids.
 			estimated_size = pow(2, ceil(log2(estimated_size)));
+			uint64_t log_estimated_size = log2(estimated_size);
 			console->info("Estimated number of slots in the output CQF {}",
-										log2(estimated_size));
+										log_estimated_size);
+			if (log_estimated_size < dbg.capacity()) {
+				console->error("Specified size is smaller than the estimated size");
+				exit(1);
+			}
 			break;
 		}
 	}
