@@ -388,8 +388,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			console->info("Estimated number of slots in the output CQF {}",
 										log_estimated_size);
 			if (log_estimated_size < dbg.capacity()) {
-				console->error("Specified size is smaller than the estimated size");
-				exit(1);
+				console->warn("Specified size is smaller than the estimated size");
 			}
 			break;
 		}
