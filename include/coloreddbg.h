@@ -218,7 +218,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 
 	// Serialize bit vectors if buffer is full.
 	if (it == eqclass_map.end() && get_num_eqclasses() % NUM_BV_BUFFER == 0) {
-		console->info("Serializing bit vector with {} eq classes.", 
+		console->info("Serializing bit vector with {} eq classes.",
 									get_num_eqclasses());
 		bv_buffer_serialize();
 	}
@@ -379,8 +379,16 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		// Add <kmer, vector> in the cdbg
 		add_kmer(cur.obj, eq_class);
 		counter++;
-		if (counter > num_kmers)
+		if (counter > num_kmers) {
+			// This is the last k-mer in the sampling phase.
+			// Estimate the size of the final CQF.
+			uint64_t estimated_size = num_kmers * dbg.range() / cur.obj.key;
+			estimated_size *= 3;	// to account for color class ids.
+			estimated_size = pow(2, ceil(log2(estimated_size)));
+			console->info("Estimated number of slots in the output CQF {}",
+										log2(estimated_size));
 			break;
+		}
 	}
 
 	return eqclass_map;

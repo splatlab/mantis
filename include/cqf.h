@@ -49,6 +49,8 @@ class CQF {
 		/* Will return the count. */
 		uint64_t query(const key_obj& k);
 
+		uint64_t get_index(const key_obj& k);
+
 		void serialize(std::string filename) {
 			qf_serialize(&cqf, filename.c_str());
 		}
@@ -142,6 +144,11 @@ void CQF<key_obj>::insert(const key_obj& k) {
 template <class key_obj>
 uint64_t CQF<key_obj>::query(const key_obj& k) {
 	return qf_count_key_value(&cqf, k.key, k.value);
+}
+
+template <class key_obj>
+uint64_t CQF<key_obj>::get_index(const key_obj& k) {
+	return get_bucket_index(k.key);
 }
 
 template <class key_obj>
