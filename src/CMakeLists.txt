@@ -45,4 +45,4 @@ target_link_libraries(mantis
 target_link_libraries(monochromatic_component_iterator
 				mantis_core)
 target_link_libraries(walkEqcls
-				mantis_core)
+				mantis_core SIMDCompressionAndIntersection)

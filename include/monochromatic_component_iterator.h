@@ -109,6 +109,23 @@ struct Mc_stats {
 typedef dna::canonical_kmer edge; // k-mer
 typedef dna::canonical_kmer node; // (k-1)-mer
 
+struct hash128 {
+    uint64_t operator()(const __uint128_t &val128) const {
+        __uint128_t val = val128;
+        // Using the same seed as we use in k-mer hashing.
+        return HashUtil::MurmurHash64A((void *) &val, sizeof(__uint128_t),
+                                       2038074743);
+    }
+};
+
+struct bvHash128 {
+    __uint128_t operator()(const sdsl::bit_vector&bv) const {
+        return HashUtil::MurmurHash128A((void *) bv.data(),
+                                        bv.capacity()/8, 2038074743,
+                                        2038074751);
+    }
+};
+
 class monochromatic_component_iterator {
 public:
     class work_item {
@@ -125,16 +142,24 @@ public:
     };
 
     bool done();
+
     void operator++(void);
 
     Mc_stats operator*(void);
 
 //monochromatic_component_iterator(const CQF<KeyObject> *g);
     monochromatic_component_iterator(const CQF<KeyObject> *g,
-                                     BitVectorRRR& bvin,
-                                    uint64_t num_samplesin=2586);
-    void neighborDist();
+                                     BitVectorRRR &bvin,
+                                     uint64_t num_samplesin = 2586);
+
+    void neighborDist(uint64_t cntrr);
+    void uniqNeighborDist(uint64_t num_samples);
+
     uint64_t cntr = 0;
+    std::vector<uint64_t> withMax0;
+    //spp::sparse_hash_map<__uint128_t, uint64_t, hash128> eqclass_map;
+    spp::sparse_hash_map<sdsl::bit_vector, uint64_t, bvHash128> eqclass_map;
+
 
 private:
 
@@ -143,7 +168,7 @@ private:
     std::unordered_set<uint64_t> visitedKeys;
     const CQF<KeyObject> *cqf;
     CQF<KeyObject>::Iterator it;
-    BitVectorRRR& bv;
+    BitVectorRRR &bv;
     uint64_t num_samples;
     sdsl::bit_vector visited;
 
@@ -155,6 +180,13 @@ private:
 
 
     uint64_t manhattanDist(uint64_t eq1, uint64_t eq2);
+
+    __uint128_t manhattanDistBvHash(uint64_t eq1, uint64_t eq2,
+                                    uint64_t num_samples);
+    void manhattanDistBvHash(uint64_t eq1, uint64_t eq2,
+                                    sdsl::bit_vector& dist,
+                                    uint64_t num_samples);
+
 
 };
 

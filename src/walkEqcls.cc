@@ -182,8 +182,8 @@ void compareCompressions(std::string &filename, size_t num_samples) {
         BitVectorRRR bvr(bv);
         CompressedSetBit<uint64_t> setBitList(idxList);
 
-        size_t bvSize = bv.size_in_bytes();
-        size_t bvrSize = bvr.size_in_bytes();
+        size_t bvSize = bv.bit_size()/8;//size_in_bytes();
+        size_t bvrSize = bvr.bit_size()/8;//size_in_bytes();
         size_t compressedSize = setBitList.size_in_bytes();
         bvSum += bvSize;
         bvrSum += bvrSize;
@@ -278,35 +278,81 @@ void splitRows(std::string filename,
     //std::cerr << "1\n";
     std::string eqfile;
     std::ifstream eqlist(filename);
+    std::ofstream bvlist(outdir+"/list.txt");
+    uint64_t totalEqCls = 0;
+    uint64_t rowcntr = 0;
     if (eqlist.is_open()) {
-        while (getline(myfile, eqfile)) {
+        while (getline(eqlist, eqfile)) {
             sdsl::rrr_vector<63> bvr;
             sdsl::load_from_file(bvr, eqfile);
-            /*sdsl::rank_support_rrr<1, 63> ranks(&bvr);
-            size_t prev = 0;
-            size_t cur = 0;
-            //std::cerr << "1\n";
-            for (uint64_t i = 1; i < 21; i++) {
-                cur = ranks(2586 * i);
-                std::cout << "rank: " << cur << " " << cur - prev << "\n";
-                prev = cur;
-            }
-            std::exit(1);*/
             std::cerr << "loaded " << bvr.size() << "\n";
             totalEqCls = bvr.size()/num_samples;
-            std::cerr << ""
-            sdsl::bit_vector eqcls(totalEqCls *num_samples, 0);
+            std::cerr << "total eq in this set: " << totalEqCls << "\t";
             std::cerr << "created\n";
-            for (uint64_t i = 0; i < totalEqCls * num_samples; i += 64) {
-                uint64_t bitCnt = std::min(totalEqCls * num_samples - i, (uint64_t) 64);
-                uint64_t wrd = bvr.get_int(i, bitCnt);
-                //std::cerr << wrd << " ";
-                eqcls.set_int(i, wrd, bitCnt);
+            for (uint64_t eqcntr = 0; eqcntr < totalEqCls; eqcntr++) {
+                sdsl::bit_vector eqcls(num_samples, 0);
+                uint64_t i = 0;
+                while (i < num_samples) {
+                    uint64_t bitCnt = std::min(num_samples - i, (uint64_t) 64);
+                    uint64_t wrd = bvr.get_int(eqcntr*num_samples+i, bitCnt);
+                    //std::cerr << wrd << " ";
+                    eqcls.set_int(i, wrd, bitCnt);
+                    i+=bitCnt;
+                }
+                std::string outbvfile = outdir + "/row" + std::to_string(rowcntr) + ".sim.bf.bv";
+                sdsl::store_to_file(eqcls, outbvfile);
+                bvlist << outbvfile << "\n";
+                rowcntr++;
             }
-            sdsl::store_to_file(eqcls, outfilename);
-
         }
         eqlist.close();
+        bvlist.close();
+    }
+
+}
+
+void splitColumns(std::string filename,
+               std::string outdir,
+               uint64_t totalEqClsCnt = 222000000,
+               uint64_t num_samples = 2586) {
+    std::string eqfile;
+    std::ifstream eqlist(filename);
+    std::ofstream bvlist(outdir+"/collist.txt");
+    std::vector<sdsl::bit_vector> cols(num_samples);
+    for (auto &bv : cols) bv = sdsl::bit_vector(totalEqClsCnt, 0);
+    if (eqlist.is_open()) {
+        uint64_t accumTotalEqCls = 0;
+        while (getline(eqlist, eqfile)) {
+            sdsl::rrr_vector<63> bvr;
+            sdsl::load_from_file(bvr, eqfile);
+            std::cerr << "loaded " << bvr.size() << "\n";
+            //std::cerr << "total eq in this set: " << totalEqCls << "\t";
+            //std::cerr << "created\n";
+            uint64_t b = 0;
+            while (b < bvr.size()) {
+                for (uint64_t c = 0; c < num_samples; c++) {
+                    if (bvr[(b + c)]) {
+                        cols[c][accumTotalEqCls] = 1;
+                    }/* else {
+                        std::cerr << c << ":" << cols[c][accumTotalEqCls] << " ";
+                    }*/
+                }
+                //std::cerr << "\n";
+                accumTotalEqCls++;
+                b += num_samples;
+                if (accumTotalEqCls == totalEqClsCnt) break;
+            }
+        }
+        uint64_t colcntr{0};
+        for (auto& v : cols) {
+            std::string outbvfile = outdir + "/col" + std::to_string(colcntr) + ".sim.bf.bv";
+            sdsl::store_to_file(v, outbvfile);
+            bvlist << outbvfile << "\n";
+            colcntr++;
+        }
+
+        eqlist.close();
+        bvlist.close();
     }
 
 }
@@ -820,6 +866,35 @@ int main(int argc, char *argv[]) {
     } else if (command == "validate_uniqueness") {
         std::string dir = argv[2];
         validate_uniqueness(dir, num_samples);
+    } else if (command == "splitRows") {
+        std::string filename = argv[2];
+        std::string outdir = argv[3];
+        num_samples = stoull(argv[4]);
+        splitRows(filename, outdir, num_samples);
+    } else if (command == "splitColumns") {
+        std::string filename = argv[2];
+        std::string outdir = argv[3];
+        num_samples = stoull(argv[4]);
+        uint64_t num_eqs = stoull(argv[5]);
+        splitColumns(filename, outdir, num_eqs, num_samples);
+    } else if (command == "quickvalidation") {
+        std::string filename = argv[2];
+        sdsl::bit_vector eqcls;
+        sdsl::load_from_file(eqcls, filename);
+        std::ofstream out(filename + ".seq");
+        uint64_t i = 0;
+        out << "start " << eqcls.bit_size() << "\n";
+        while (i < eqcls.bit_size()) {
+            size_t wrd = eqcls.get_int(i, 64);
+            for (size_t j = 0; j < 64; j++) {
+                if (((wrd >> j) & 0x01)) {
+                    std::cerr << (i+j) << " ";
+                }
+            }
+            i += 64;
+        }
+        out.close();
+
     } else {
         std::cerr << "ERROR: NO COMMANDS PROVIDED\n"
                   << "OPTIONS ARE: validate, compareCompressions, compareCopies, reorder\n";

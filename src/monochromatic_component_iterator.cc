@@ -188,7 +188,7 @@ namespace dna {
 //////////////////////////////// monochromatic_component_iterator //////////////////////////
 
 monochromatic_component_iterator::monochromatic_component_iterator(const CQF<KeyObject> *g,
-                                                                   BitVectorRRR& bvin,
+                                                                   BitVectorRRR &bvin,
                                                                    uint64_t num_samplesin)
         : cqf(g), it(g->begin(0)), bv(bvin), num_samples(num_samplesin) {
     // initialize cqf iterator
@@ -197,6 +197,7 @@ monochromatic_component_iterator::monochromatic_component_iterator(const CQF<Key
     sdsl::util::assign(visited, sdsl::bit_vector(cqf->slots(), 0));
     std::cerr << "kmers: " << cqf->size() << "\n";
     std::cerr << "slots: " << cqf->slots() << "\n";
+    withMax0.resize(9);
 }
 
 monochromatic_component_iterator::work_item
@@ -291,7 +292,7 @@ bool monochromatic_component_iterator::exists(edge e, uint64_t &idx, uint64_t &e
     KeyObject key(HashUtil::hash_64(tmp, BITMASK(cqf->keybits())), 0, 0);
     auto eq_idx = cqf->queryValAndIdx(key);
     if (eq_idx.first) {
-        eqid = eq_idx.first;
+        eqid = eq_idx.first - 1;
         idx = eq_idx.second;
         return true;
     }
@@ -300,20 +301,20 @@ bool monochromatic_component_iterator::exists(edge e, uint64_t &idx, uint64_t &e
 
 uint64_t monochromatic_component_iterator::manhattanDist(uint64_t eqid1, uint64_t eqid2) {
     uint64_t dist{0};
-    std::vector<uint64_t> eq1(( (num_samples-1) / 64) + 1), eq2(( (num_samples-1) / 64) + 1);
-    auto colorbuilder = [this](std::vector<uint64_t> &eq, uint64_t eqid) {
+    std::vector<uint64_t> eq1(((num_samples - 1) / 64) + 1), eq2(((num_samples - 1) / 64) + 1);
+    auto colorBuilder = [this](std::vector<uint64_t> &eq, uint64_t eqid) {
         uint64_t i{0}, bitcnt{0}, wrdcnt{0};
         while (i < this->num_samples) {
-            bitcnt = std::min(this->num_samples - i, (uint64_t)64);
+            bitcnt = std::min(this->num_samples - i, (uint64_t) 64);
             uint64_t wrd = (this->bv).get_int(this->num_samples * eqid + i, bitcnt);
             eq[wrdcnt++] = wrd;
             i += bitcnt;
         }
     };
-    colorbuilder(eq1, eqid1);
-    colorbuilder(eq2, eqid2);
+    colorBuilder(eq1, eqid1);
+    colorBuilder(eq2, eqid2);
 
-    for(uint64_t i = 0; i < eq1.size(); i++) {
+    for (uint64_t i = 0; i < eq1.size(); i++) {
         if (eq1[i] != eq2[i])
             dist += sdsl::bits::cnt(eq1[i] ^ eq2[i]);
     }
@@ -321,26 +322,112 @@ uint64_t monochromatic_component_iterator::manhattanDist(uint64_t eqid1, uint64_
 
 }
 
-void monochromatic_component_iterator::neighborDist() {
+__uint128_t monochromatic_component_iterator::manhattanDistBvHash(uint64_t eqid1,
+                                                                  uint64_t eqid2,
+                                                                  uint64_t num_samples = 2586) {
+    sdsl::bit_vector dist(num_samples, 0);
+    std::vector<uint64_t> eq1(((num_samples - 1) / 64) + 1), eq2(((num_samples - 1) / 64) + 1);
+    auto colorBuilder = [this](std::vector<uint64_t> &eq, uint64_t eqid) {
+        uint64_t i{0}, bitcnt{0}, wrdcnt{0};
+        while (i < this->num_samples) {
+            bitcnt = std::min(this->num_samples - i, (uint64_t) 64);
+            uint64_t wrd = (this->bv).get_int(this->num_samples * eqid + i, bitcnt);
+            eq[wrdcnt++] = wrd;
+            i += bitcnt;
+        }
+    };
+    colorBuilder(eq1, eqid1);
+    colorBuilder(eq2, eqid2);
+
+    for (uint64_t i = 0; i < eq1.size(); i++) {
+        uint64_t bitcnt = std::min(this->num_samples - (i * 64), (uint64_t) 64);
+        dist.set_int((i * 64), (eq1[i] ^ eq2[i]), bitcnt);
+        //std::cerr << i << " " << eq1[i] << " " << eq2[i] << " " << (eq1[i] ^ eq2[i]) << "\n";
+    }
+    __uint128_t dist_hash = HashUtil::MurmurHash128A((void *) dist.data(),
+                                                     dist.capacity() / 8, 2038074743,
+                                                     2038074751);
+    return dist_hash;
+}
+
+void monochromatic_component_iterator::manhattanDistBvHash(uint64_t eqid1,
+                                                           uint64_t eqid2,
+                                                           sdsl::bit_vector &dist,
+                                                           uint64_t num_samples = 2586) {
+    std::vector<uint64_t> eq1(((num_samples - 1) / 64) + 1), eq2(((num_samples - 1) / 64) + 1);
+    auto colorBuilder = [this](std::vector<uint64_t> &eq, uint64_t eqid) {
+        uint64_t i{0}, bitcnt{0}, wrdcnt{0};
+        while (i < this->num_samples) {
+            bitcnt = std::min(this->num_samples - i, (uint64_t) 64);
+            uint64_t wrd = (this->bv).get_int(this->num_samples * eqid + i, bitcnt);
+            eq[wrdcnt++] = wrd;
+            i += bitcnt;
+        }
+    };
+    colorBuilder(eq1, eqid1);
+    colorBuilder(eq2, eqid2);
+
+    for (uint64_t i = 0; i < eq1.size(); i++) {
+        uint64_t bitcnt = std::min(this->num_samples - (i * 64), (uint64_t) 64);
+        dist.set_int((i * 64), (eq1[i] ^ eq2[i]), bitcnt);
+        //std::cerr << i << " " << eq1[i] << " " << eq2[i] << " " << (eq1[i] ^ eq2[i]) << "\n";
+    }
+}
+
+
+void monochromatic_component_iterator::neighborDist(uint64_t cntrr) {
     KeyObject keyobj = *it;
-    //std::cout << "keyobj cnt: " << keyobj.count << "\n";
+/*
+    if (keyobj.count == 0)
+        std::cerr << "we have 0\n";
+    if (keyobj.count >= 19216547)
+        std::cerr << cntrr << ", keyobj cnt: " << keyobj.count << "\n";
+*/
     node curn(k, HashUtil::hash_64i(keyobj.key, BITMASK(cqf->keybits())));
-    work_item cur = {curn, it.iter.current, keyobj.count};
+    work_item cur = {curn, it.iter.current, keyobj.count - 1};
     uint64_t mind{UINTMAX_MAX}, meand{0}, maxd{0}, neighborCnt{0};
-    for (auto& nei : neighbors(cur)) {
+    for (auto &nei : neighbors(cur)) {
         neighborCnt++;
         if (nei.colorid != cur.colorid) {
-            //std::cerr << cur.colorid << " other: " << nei.colorid << "\n";
             auto d = manhattanDist(nei.colorid, cur.colorid);
             mind = std::min(mind, d);
             maxd = std::max(maxd, d);
             meand += d;
         }
-        else
+        /*else {
             mind = 0;
+        }*/
     }
-    std::cout << neighborCnt << "\t" << (neighborCnt?(mind):0) << "\t"
-              << (neighborCnt?(meand/neighborCnt):0) << "\t" << maxd << "\n";
+
+    if (!maxd) {
+        withMax0[neighborCnt]++;
+        return;
+    }
+    // when we get here, neighborCnt is > 0, and mind is not UINT_MAX
+    std::cout << neighborCnt << "\t" << mind << "\t"
+              << (meand / neighborCnt) << "\t" << maxd << "\n";
+}
+
+void monochromatic_component_iterator::uniqNeighborDist(uint64_t num_samples) {
+    KeyObject keyobj = *it;
+    node curn(k, HashUtil::hash_64i(keyobj.key, BITMASK(cqf->keybits())));
+    work_item cur = {curn, it.iter.current, keyobj.count - 1};
+    uint64_t mind{UINTMAX_MAX}, meand{0}, maxd{0}, neighborCnt{0};
+    //std::cerr << " current : " << cur.colorid << "\n";
+    for (auto &nei : neighbors(cur)) {
+        neighborCnt++;
+        if (nei.colorid != cur.colorid) {
+            //std::cerr << nei.colorid << "\n";
+            //auto d = manhattanDistBvHash(nei.colorid, cur.colorid, num_samples);
+            sdsl::bit_vector d(num_samples, 0);
+            manhattanDistBvHash(nei.colorid, cur.colorid, d, num_samples);
+            if (eqclass_map.find(d) == eqclass_map.end()) {
+                eqclass_map[d] = 1;
+            } else {
+                eqclass_map[d]++;
+            }
+        }
+    }
 }
 
 /*
@@ -355,12 +442,14 @@ int main(int argc, char *argv[]) {
     std::string command = argv[1];
     std::string cqf_file = argv[2];
     std::string eq_file = argv[3];
-    uint64_t num_samples = 2586;
+    uint64_t num_samples = std::stoull(argv[4]);
+    //uint64_t num_samples = 2586;
     if (argc > 4)
         num_samples = std::stoull(argv[4]);
     std::cerr << "num samples: " << num_samples << "\n";
     CQF<KeyObject> cqf(cqf_file, false);
     BitVectorRRR bv(eq_file);
+    std::cerr << "num eq clss: " << bv.bit_size() / num_samples << "\n";
     monochromatic_component_iterator mci(&cqf, bv, num_samples);
     if (command == "monocomp") {
         while (!mci.done()) {
@@ -368,9 +457,51 @@ int main(int argc, char *argv[]) {
             ++mci;
         }
     } else if (command == "neighborDist") {
+        size_t cntrr = 0;
         while (!mci.done()) {
-            mci.neighborDist();
+            mci.neighborDist(cntrr++);
+            ++mci;
+            if (cntrr % 10000000 == 0) {
+                std::cerr << cntrr << " done\n";
+            }
+        }
+        std::cerr << "\n\nIn order of 0 to 8:\n";
+        uint64_t total0s{0};
+        for (auto val : mci.withMax0) {
+            std::cerr << val << ",";
+            total0s += val;
+        }
+        std::cerr << "\ntotal 0s: " << total0s - mci.withMax0[0] << "\n";
+    } else if (command == "uniquDistanceDistribution") {
+        uint64_t cntr{0};
+        while (!mci.done()) {
+            mci.uniqNeighborDist(num_samples);
+            if (++cntr % 1000000 == 0) {
+                std::cerr << cntr << " kmers & " << mci.eqclass_map.size() << " unique distances.\n";
+            }
             ++mci;
         }
+        std::cerr << "writing the list of distinct distances:\n";
+        sdsl::bit_vector outbv(mci.eqclass_map.size() * num_samples, 0);
+        std::cerr << "total cnt: " << mci.eqclass_map.size() << " "
+                  << (mci.eqclass_map.size() * num_samples) << "\n";
+        cntr = 0;
+        for (auto &eq_keyval : mci.eqclass_map) {
+            std::cout << eq_keyval.second << "\n";
+            auto &bv = eq_keyval.first;
+            uint64_t b = 0;
+            while (b < num_samples) {
+                uint64_t bitcnt = std::min(num_samples - b, (uint64_t) 64);
+                uint64_t wrd = bv.get_int(b, bitcnt);
+                outbv.set_int(num_samples * cntr + b, wrd, bitcnt);
+                b += bitcnt;
+            }
+            cntr++;
+            //std::cerr << cntr << "\n";
+        }
+        uint64_t till = cqf_file.find_last_of('/');
+        sdsl::rrr_vector<> cbv(outbv);
+        sdsl::store_to_file(cbv, cqf_file.substr(0, till + 1) + "dist_bv.rrr");
+
     }
 }
