@@ -166,10 +166,10 @@ void ColoredDbg<qf_obj,
 			console->error("Can't find the vector hash during shuffling");
 			exit(1);
 		} else {
-			uint64_t src_idx = ((it_local->second.first - 1) * num_samples) %
-				NUM_BV_BUFFER;
-			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples) %
-				NUM_BV_BUFFER;
+			assert(it_local->second.first <= NUM_BV_BUFFER && it_input.second.first
+						 <= NUM_BV_BUFFER);
+			uint64_t src_idx = ((it_local->second.first - 1) * num_samples);
+			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
 			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
 				if (bv_buffer[src_idx])
 					new_bv_buffer.set(dest_idx);
@@ -183,6 +183,14 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
 	dbg.reset();
 	reshuffle_bit_vectors(map);
+	// Check if the current bit vector buffer is full and needs to be serialized.
+	// This happens when the sampling phase fills up the bv buffer.
+	if (get_num_eqclasses() % NUM_BV_BUFFER == 0) {
+		// The bit vector buffer is full.
+		console->info("Serializing bit vector with {} eq classes.",
+									get_num_eqclasses());
+		bv_buffer_serialize();
+	}
 	eqclass_map = map;
 }
 
@@ -215,21 +223,6 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
-
-	// Serialize bit vectors if buffer is full.
-	if (it == eqclass_map.end() && get_num_eqclasses() % NUM_BV_BUFFER == 0) {
-		console->info("Serializing bit vector with {} eq classes.",
-									get_num_eqclasses());
-		bv_buffer_serialize();
-	}
-
-	static uint64_t last_size = 0;
-	if (dbg.size() % 10000000 == 0 &&
-			dbg.size() != last_size) {
-		last_size = dbg.size();
-		console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
-									dbg.size(), get_num_eqclasses(), time(NULL) - start_time);
-	}
 }
 
 template <class qf_obj, class key_obj>
@@ -379,18 +372,31 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		// Add <kmer, vector> in the cdbg
 		add_kmer(cur.obj, eq_class);
 		counter++;
-		if (counter > num_kmers) {
-			// This is the last k-mer in the sampling phase.
-			// Estimate the size of the final CQF.
-			uint64_t estimated_size = num_kmers * (dbg.range() / cur.obj.key);
-			estimated_size *= 3;	// to account for color class ids.
-			uint64_t log_estimated_size = ceil(log2(estimated_size));
-			console->info("Estimated number of slots required in the output CQF {}",
-										log_estimated_size);
-			if (log_estimated_size > dbg.capacity())
-				console->warn("Specified size is smaller than the estimated size");
-			break;
+
+		// Progress tracker
+		static uint64_t last_size = 0;
+		if (dbg.size() % 10000000 == 0 &&
+				dbg.size() != last_size) {
+			last_size = dbg.size();
+			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
+										dbg.size(), get_num_eqclasses(), time(NULL) - start_time);
 		}
+
+		// Check if the bit vector buffer is full and needs to be serialized.
+		if (get_num_eqclasses() % NUM_BV_BUFFER == 0) {
+			// Check if the process is in the sampling phase.
+			if (is_sampling)
+				break;
+			else {
+				// The bit vector buffer is full.
+				console->info("Serializing bit vector with {} eq classes.",
+											get_num_eqclasses());
+				bv_buffer_serialize();
+			}
+		}
+		// Check if the sampling phase is finished based on the number of k-mers.
+		else if (counter > num_kmers)
+			break;
 	}
 
 	return eqclass_map;

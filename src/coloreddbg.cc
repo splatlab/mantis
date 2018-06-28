@@ -166,7 +166,7 @@ build_main ( BuildOpts& opt )
 	// Reconstruct the colored dbg using the new set of equivalence classes.
 	cdbg.construct(inobjects, sorted_map, UINT64_MAX);
 
-	console->info("Final colored dBG has {} k-mers and equivalence classes {}",
+	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
 								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
 
 	//cdbg.get_cqf()->dump_metadata();
