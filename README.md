@@ -34,7 +34,7 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
 
 ```bash
  $ make mantis
- $ ./mantis build -s 20 -i raw/incqfs.lst -c raw/experiment_cutoffs.lst -o raw/
+ $ ./mantis build -s 20 -i raw/incqfs.lst -o raw/
 ```
 The usage for this command are as follows:
 
@@ -47,9 +47,6 @@ OPTIONS
 
         <input_list>
                     file containing list of input filters
-
-        <cutoff_list>
-                    file containing list of experiment-specific cutoffs
 
         <build_output>
                     directory where results should be written
