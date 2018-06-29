@@ -313,6 +313,9 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	uint32_t nqf = 0;
 	uint64_t counter = 0;
 
+	if (num_kmers < UINT64_MAX)
+		is_sampling = true;
+
 	// merge all input CQFs into the final QF
 	typename CQF<key_obj>::Iterator *it_incqfs =
 		(typename CQF<key_obj>::Iterator*)calloc(num_samples, sizeof(typename
@@ -415,10 +418,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
 	dbg(qbits, key_bits, seed), bv_buffer(NUM_BV_BUFFER * nqf),
-	prefix(prefix), num_samples(nqf), num_serializations(0) {
-		if (nqf < UINT64_MAX)
-			is_sampling = true;
-	}
+	prefix(prefix), num_samples(nqf), num_serializations(0) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
