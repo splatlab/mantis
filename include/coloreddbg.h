@@ -88,7 +88,9 @@ class ColoredDbg {
 								map);
 
 	private:
-		void add_kmer(key_obj& hash, BitVector& vector);
+    // returns true if adding this k-mer increased the number of equivalence classes
+    // and false otherwise.
+		bool add_kmer(key_obj& hash, BitVector& vector);
 		void add_bitvector(BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
@@ -194,7 +196,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 }
 
 template <class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
+bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
@@ -204,6 +206,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																								 2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
+  bool added_eq_class{false};
 	// Find if the eqclass of the kmer is already there.
 	// If it is there then increment the abundance.
 	// Else create a new eq class.
@@ -214,6 +217,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 															std::forward_as_tuple(vec_hash),
 															std::forward_as_tuple(eq_id, 1));
 		add_bitvector(vector, eq_id - 1);
+    added_eq_class = true;
 	} else { // eq class is seen before so increment the abundance.
 		eq_id = it->second.first;
     // with standard map
@@ -222,6 +226,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
+  return added_eq_class;
 }
 
 template <class qf_obj, class key_obj>
@@ -371,7 +376,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			minheap.push(obj);
 		}
 		// Add <kmer, vector> in the cdbg
-		add_kmer(cur.obj, eq_class);
+		bool added_eq_class = add_kmer(cur.obj, eq_class);
 		counter++;
 
 		// Progress tracker
@@ -384,7 +389,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		}
 
 		// Check if the bit vector buffer is full and needs to be serialized.
-		if (get_num_eqclasses() % NUM_BV_BUFFER == 0) {
+		if (added_eq_class and (get_num_eqclasses() % NUM_BV_BUFFER == 0)) {
 			// Check if the process is in the sampling phase.
 			if (is_sampling) {
 				break;
