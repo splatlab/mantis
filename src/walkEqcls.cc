@@ -863,9 +863,10 @@ int main(int argc, char *argv[]) {
         }
         std::string filename = argv[2];
         std::string output_filename = argv[3];
+        num_samples = stoull(argv[4]);
         uint64_t totalEqCls = 0;
-        if (argc == 5)
-            totalEqCls = std::stoull(argv[4]);
+        if (argc == 6)
+            totalEqCls = std::stoull(argv[5]);
 
         writeEq(filename, output_filename, num_samples, totalEqCls);
     } else if (command == "reorder") {
