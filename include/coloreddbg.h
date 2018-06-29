@@ -105,7 +105,6 @@ class ColoredDbg {
 		std::string prefix;
 		uint64_t num_samples;
 		uint64_t num_serializations;
-		bool is_sampling{false};
 		spdlog::logger* console;
 };
 
@@ -313,8 +312,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	uint32_t nqf = 0;
 	uint64_t counter = 0;
 
-	if (num_kmers < UINT64_MAX)
-		is_sampling = true;
+  bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
 	// merge all input CQFs into the final QF
 	typename CQF<key_obj>::Iterator *it_incqfs =
@@ -388,18 +386,18 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		// Check if the bit vector buffer is full and needs to be serialized.
 		if (get_num_eqclasses() % NUM_BV_BUFFER == 0) {
 			// Check if the process is in the sampling phase.
-			if (is_sampling)
+			if (is_sampling) {
 				break;
-			else {
+      } else {
 				// The bit vector buffer is full.
 				console->info("Serializing bit vector with {} eq classes.",
 											get_num_eqclasses());
 				bv_buffer_serialize();
 			}
-		}
-		// Check if the sampling phase is finished based on the number of k-mers.
-		else if (counter > num_kmers)
+		} else if (counter > num_kmers) {
+      // Check if the sampling phase is finished based on the number of k-mers.
 			break;
+    }
 	}
 
 	return eqclass_map;

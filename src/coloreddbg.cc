@@ -164,7 +164,7 @@ build_main ( BuildOpts& opt )
 	console->info("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, sorted_map, UINT64_MAX);
+	cdbg.construct(inobjects, sorted_map, std::numeric_limits<uint64_t>::max());
 
 	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
 								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
