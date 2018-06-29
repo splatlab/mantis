@@ -93,7 +93,7 @@ void validate_uniqueness(std::string &directory, size_t num_samples) {
         //subPattern.calcHash();
         uint64_t bitcntr = 0;
         while (bitcntr < eqcls.bit_size()) {
-            std::cerr << "\n" << curCntr << "\n";
+            //std::cerr << "\n" << curCntr << "\n";
 
             BitVector eq(num_samples);
             size_t i = 0;
@@ -104,9 +104,9 @@ void validate_uniqueness(std::string &directory, size_t num_samples) {
                     if ((wrd >> j) & 0x01) {
                         eq.set(curIdx);
 
-                    } else {
+                    } /*else {
                         std::cerr << curIdx << " ";
-                    }
+                    }*/
                 }
                 i += bitCnt;
                 bitcntr += bitCnt;
@@ -124,8 +124,12 @@ void validate_uniqueness(std::string &directory, size_t num_samples) {
             }
             cntr++;
             curCntr++;
+            if (curCntr % 1000000 == 0) {
+                std::cerr << "passed " << curCntr << "th eq.\n";
+            }
         }
     }
+    std::cerr << "Validation passed!!! Found " << cntr << " unique eq classes.\n";
 
 
 }
@@ -319,30 +323,51 @@ void splitColumns(std::string filename,
     std::ifstream eqlist(filename);
     std::ofstream bvlist(outdir+"/collist.txt");
     std::vector<sdsl::bit_vector> cols(num_samples);
+    //std::vector<uint64_t> wrds(num_samples);
     for (auto &bv : cols) bv = sdsl::bit_vector(totalEqClsCnt, 0);
     if (eqlist.is_open()) {
-        uint64_t accumTotalEqCls = 0;
+        uint64_t accumTotalEqCls = 0, lineCntr{0};
         while (getline(eqlist, eqfile)) {
-            sdsl::rrr_vector<63> bvr;
-            sdsl::load_from_file(bvr, eqfile);
-            std::cerr << "loaded " << bvr.size() << "\n";
-            //std::cerr << "total eq in this set: " << totalEqCls << "\t";
-            //std::cerr << "created\n";
-            uint64_t b = 0;
-            while (b < bvr.size()) {
-                for (uint64_t c = 0; c < num_samples; c++) {
-                    if (bvr[(b + c)]) {
-                        cols[c][accumTotalEqCls] = 1;
-                    }/* else {
-                        std::cerr << c << ":" << cols[c][accumTotalEqCls] << " ";
+            //if (lineCntr >= 10) {
+                sdsl::rrr_vector<63> bvr;
+                std::cerr << "file: " << eqfile << "\n";
+                sdsl::load_from_file(bvr, eqfile);
+                std::cerr << "loaded " << bvr.size()
+                          << " accumulative Eq Cnt: " << accumTotalEqCls << "\n";
+                //std::cerr << "total eq in this set: " << totalEqCls << "\t";
+                //std::cerr << "created\n";
+                uint64_t b = 0;
+                while (b < bvr.size() and accumTotalEqCls < totalEqClsCnt) {
+                    uint64_t c{0}, bitcnt{0}, wrd{0}, sampleCntr{0};
+                    while (c < num_samples) {
+                        bitcnt = std::min(num_samples - c, (uint64_t) 64);
+                        wrd = bvr.get_int(b + c, bitcnt);
+                        for (uint64_t j = 0; j < bitcnt; j++) {
+                            if ((wrd >> j) & 0x01) {
+                                cols[sampleCntr][accumTotalEqCls] = 1;
+                            }
+                            sampleCntr++;
+                        }
+                        c += bitcnt;
+                    }
+                    /*for (uint64_t c = 0; c < num_samples; c++) {
+                        if (bvr[(b + c)]) {
+                            cols[c][accumTotalEqCls] = 1;
+                        }
                     }*/
+                    //std::cerr << "\n";
+                    accumTotalEqCls++;
+                    if (accumTotalEqCls % 1000000 == 0 || accumTotalEqCls > 222584820) {
+                        std::cerr << accumTotalEqCls << " processed\n";
+                    }
+                    b += num_samples;
                 }
-                //std::cerr << "\n";
-                accumTotalEqCls++;
-                b += num_samples;
-                if (accumTotalEqCls == totalEqClsCnt) break;
-            }
+            /*} else {
+                lineCntr++;
+                accumTotalEqCls += 20000000;
+            }*/
         }
+        std::cerr << "\n\nColumn bvs ready to be stored to file .. \n";
         uint64_t colcntr{0};
         for (auto& v : cols) {
             std::string outbvfile = outdir + "/col" + std::to_string(colcntr) + ".sim.bf.bv";
@@ -357,6 +382,7 @@ void splitColumns(std::string filename,
 
 }
 
+
 void decompress(std::string filename,
                 std::string outfilename,
                 uint64_t totalEqCls,
@@ -364,18 +390,18 @@ void decompress(std::string filename,
     //std::cerr << "1\n";
     sdsl::rrr_vector<63> bvr;
     sdsl::load_from_file(bvr, filename);
-    sdsl::rank_support_rrr<1, 63> ranks(&bvr);
+    //sdsl::rank_support_rrr<1, 63> ranks(&bvr);
     //std::cerr << "1\n";
-    totalEqCls = 1;
+    //totalEqCls = 1;
     size_t prev = 0;
     size_t cur = 0;
     //std::cerr << "1\n";
-    for (uint64_t i = 1; i < 21; i++) {
+    /*for (uint64_t i = 1; i < 21; i++) {
         cur = ranks(2586 * i);
         std::cout << "rank: " << cur << " " << cur - prev << "\n";
         prev = cur;
-    }
-    std::exit(1);
+    }*/
+    //std::exit(1);
     std::cerr << "loaded " << bvr.size() << "\n";
     sdsl::bit_vector eqcls(totalEqCls * num_samples, 0);
     std::cerr << "created\n";
@@ -771,10 +797,10 @@ void writeEq(std::string filename,
              std::string out_filename,
              uint64_t num_samples,
              uint64_t totalEqCls) {
-    sdsl::bit_vector eqcls;
+    sdsl::rrr_vector<63> eqcls;
     sdsl::load_from_file(eqcls, filename);
     std::ofstream out(out_filename + ".matrix");
-    size_t totalEqClsCnt = eqcls.bit_size() / num_samples; //222584822;
+    size_t totalEqClsCnt = eqcls.size() / num_samples; //222584822;
     if (totalEqCls > 0) {
         totalEqClsCnt = totalEqCls;
     }
@@ -784,7 +810,11 @@ void writeEq(std::string filename,
             size_t bitCnt = std::min(num_samples - i, (size_t) 64);
             size_t wrd = eqcls.get_int(eqclsCntr * num_samples + i, bitCnt);
             for (size_t j = 0; j < bitCnt; j++) {
-                out << ((wrd >> j) & 0x01) << "\t";
+                if (((wrd >> j) & 0x01))
+                    out << "1";
+                else
+                    out <<" ";
+                //out << ((wrd >> j) & 0x01) << "\t";
             }
             i += bitCnt;
         }
@@ -865,6 +895,7 @@ int main(int argc, char *argv[]) {
                                    8);
     } else if (command == "validate_uniqueness") {
         std::string dir = argv[2];
+        num_samples = stoull(argv[3]);
         validate_uniqueness(dir, num_samples);
     } else if (command == "splitRows") {
         std::string filename = argv[2];

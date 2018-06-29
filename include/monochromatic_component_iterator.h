@@ -149,7 +149,7 @@ public:
 
 //monochromatic_component_iterator(const CQF<KeyObject> *g);
     monochromatic_component_iterator(const CQF<KeyObject> *g,
-                                     BitVectorRRR &bvin,
+                                     std::vector<sdsl::rrr_vector<63>> &bvin,
                                      uint64_t num_samplesin = 2586);
 
     void neighborDist(uint64_t cntrr);
@@ -168,7 +168,8 @@ private:
     std::unordered_set<uint64_t> visitedKeys;
     const CQF<KeyObject> *cqf;
     CQF<KeyObject>::Iterator it;
-    BitVectorRRR &bv;
+    //BitVectorRRR &bv;
+    std::vector<sdsl::rrr_vector<63>> &bvs;
     uint64_t num_samples;
     sdsl::bit_vector visited;
 
@@ -186,7 +187,7 @@ private:
     void manhattanDistBvHash(uint64_t eq1, uint64_t eq2,
                                     sdsl::bit_vector& dist,
                                     uint64_t num_samples);
-
+    void buildColor(std::vector<uint64_t> &eq, uint64_t eqid);
 
 };
 
