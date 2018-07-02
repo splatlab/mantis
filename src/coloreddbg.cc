@@ -121,6 +121,11 @@ build_main ( BuildOpts& opt )
 	if (!mantis::fs::DirExists(prefix.c_str())) {
 		mantis::fs::MakeDir(prefix.c_str());
 	}
+	// check to see if the output dir exists now
+	if (!mantis::fs::DirExists(prefix.c_str())) {
+		console->error("Output dir {} does not exist.", prefix);
+		exit(1);
+	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
 																														inobjects[0].obj->keybits(),
