@@ -268,11 +268,13 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 		opfile << sample.first << " " << sample.second << std::endl;
 	opfile.close();
 
+#ifdef DEBUG
 	// dump eq class abundance dist for further analysis.
 	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
 	for (auto sample : eqclass_map)
 		tmpfile << sample.second.first << " " << sample.second.second << std::endl;
 	tmpfile.close();
+#endif
 }
 
 template <class qf_obj, class key_obj>
