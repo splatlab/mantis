@@ -123,7 +123,7 @@ build_main ( BuildOpts& opt )
 	}
 	// check to see if the output dir exists now
 	if (!mantis::fs::DirExists(prefix.c_str())) {
-		console->error("Output dir {} does not exist.", prefix);
+		console->error("Output dir {} could not be successfully created.", prefix);
 		exit(1);
 	}
 
