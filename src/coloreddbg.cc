@@ -85,11 +85,11 @@ build_main ( BuildOpts& opt )
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	CQF<KeyObject> *cqfs;
 
-  spdlog::logger* console = opt.console.get();
+	spdlog::logger* console = opt.console.get();
 
 	// Allocate QF structs for input CQFs
 	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
-																	sizeof(SampleObject<CQF<KeyObject>*>));
+																										 sizeof(SampleObject<CQF<KeyObject>*>));
 	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
 
 	// mmap all the input cqfs
@@ -114,13 +114,13 @@ build_main ( BuildOpts& opt )
 	}
 
 	std::string prefix(opt.out);
-  if (prefix.back() != '/') {
-    prefix += '/';
-  }
-  // make the output directory if it doesn't exist
-  if (!mantis::fs::DirExists(prefix.c_str())) {
-    mantis::fs::MakeDir(prefix.c_str());
-  }
+	if (prefix.back() != '/') {
+		prefix += '/';
+	}
+	// make the output directory if it doesn't exist
+	if (!mantis::fs::DirExists(prefix.c_str())) {
+		mantis::fs::MakeDir(prefix.c_str());
+	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
 																														inobjects[0].obj->keybits(),

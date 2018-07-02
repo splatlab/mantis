@@ -133,16 +133,20 @@ int query_main (QueryOpts& opt)
   if (prefix.back() != '/') {
     prefix.push_back('/');
   }
+  // make the output directory if it doesn't exist
+  if (!mantis::fs::DirExists(prefix.c_str())) {
+    mantis::fs::MakeDir(prefix.c_str());
+  }
 
   spdlog::logger* console = opt.console.get();
 	console->info("Reading colored dbg from disk.");
 
-	std::string cqf_file(prefix + CQF_FILE);
+	std::string dbg_file(prefix + CQF_FILE);
 	std::string sample_file(prefix + SAMPLEID_FILE);
 	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
 																											 std::string(EQCLASS_FILE).c_str());
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
 																														eqclass_files,
 																														sample_file);
 	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;

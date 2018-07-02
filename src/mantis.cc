@@ -136,7 +136,6 @@ int main ( int argc, char *argv[] ) {
 										 required("-s","--log-slots") & value("log-slots",
 																											 bopt.qbits) % "log of number of slots in the output CQF",
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
-                     //required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto query_mode = (
@@ -150,7 +149,6 @@ int main ( int argc, char *argv[] ) {
   auto validate_mode = (
                      command("validate").set(selected, mode::validate),
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", vopt.inlist) % "file containing list of input filters",
-                     //required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", vopt.cutoffs) % "file containing list of experiment-specific cutoffs",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
                      value(ensure_file_exists, "query", vopt.query_file) % "Query file."
                      );
