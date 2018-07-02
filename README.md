@@ -34,31 +34,30 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
 
 ```bash
  $ make mantis
- $ ./mantis build -s 20 -i raw/incqfs.lst -c raw/experiment_cutoffs.lst -o raw/
+ $ ./mantis build -s 20 -i raw/incqfs.lst -o raw/
 ```
 The usage for this command are as follows:
 
 ```
 SYNOPSIS
-        mantis build -i <input_list> -c <cutoff_list> -o <build_output>
+        mantis build [-e] -s <log-slots> -i <input_list> -o <build_output>
 
 OPTIONS
+        -e, --eqclass_dist
+                    write the eqclass abundance distribution
+
         <log-slots> log of number of slots in the output CQF
 
         <input_list>
                     file containing list of input filters
-
-        <cutoff_list>
-                    file containing list of experiment-specific cutoffs
 
         <build_output>
                     directory where results should be written
 ```
 
  Following are the arguments to coloreddbg:
- - input cqf files: a list of input cqf files. This is a list of squeakr output files that are generated after running squeakr on input experiments. We have provided two sample cqf files in data dir.
- - experiment cutoffs: The cutoff value for each input cqf file corresponding to the experiment. The cutoff value is the minimum count that a k-mer needs to be considered in the search.
- - prefix: prefix filepath where all the output files will be written.
+ - input squeakr files: a list of input squeakr files (path to files) and cutoffs separated by tab. A sample input squeakr file in provided in the raw dir. This is a list of squeakr output files that are generated after running squeakr on input experiments. We have provided two sample squeakr files in data dir.
+ - build_output: prefix filepath where all the output files will be written.
 
 Query
 -------
@@ -89,7 +88,7 @@ OPTIONS
 ```
 
  The command takes the following options :
- - `--input-prefix,-p`: the directory where the output of coloreddbg command is present.
+ - `--query-prefix,-p`: the directory where the output of coloreddbg command is present.
  - `--output,-o`: the file where the query results should be written (default : `samples.output`).
  
  additionally the command takes the following mandatory _positional_ argument :

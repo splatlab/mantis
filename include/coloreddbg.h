@@ -68,10 +68,10 @@ class ColoredDbg {
 		void build_sampleid_map(qf_obj *incqfs);
 
 		cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>>&
-			construct(qf_obj *incqfs, std::unordered_map<std::string, uint64_t>&
-								cutoffs, cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
+			construct(qf_obj *incqfs, cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
 								uint64_t>>& map, uint64_t num_kmers);
 
+		void set_console(spdlog::logger* c) { console = c; }
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
 		uint64_t get_num_bitvectors(void) const;
 		uint64_t get_num_eqclasses(void) const { return eqclass_map.size(); }
@@ -86,9 +86,12 @@ class ColoredDbg {
 		void serialize();
 		void reinit(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>&
 								map);
+		void set_flush_eqclass_dist(void) { flush_eqclass_dis = true; }
 
 	private:
-		void add_kmer(key_obj& hash, BitVector& vector);
+    // returns true if adding this k-mer increased the number of equivalence classes
+    // and false otherwise.
+		bool add_kmer(key_obj& hash, BitVector& vector);
 		void add_bitvector(BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
@@ -105,19 +108,21 @@ class ColoredDbg {
 		std::string prefix;
 		uint64_t num_samples;
 		uint64_t num_serializations;
-		bool is_sampling{false};
+		bool flush_eqclass_dis{false};
+		spdlog::logger* console;
 };
 
 template <class T>
 class SampleObject {
 	public:
-		SampleObject() : obj(), sample_id(), id(0) {};
-		SampleObject(T o, std::string& s, uint32_t id) : obj(o),
-		sample_id(s), id(id) {};
-		SampleObject(const SampleObject& o) : obj(o.obj),
+		SampleObject() : obj(), cutoff(0), sample_id(), id(0) {};
+		SampleObject(T o, uint32_t c = 0, std::string& s = std::string(),
+								 uint32_t id = 0) : obj(o), cutoff(c), sample_id(s), id(id) {};
+		SampleObject(const SampleObject& o) : obj(o.obj), cutoff(o.cutoff),
 		sample_id(o.sample_id), id(o.id) {} ;
 
 		T obj;
+		uint32_t cutoff;
 		std::string sample_id;
 		uint32_t id;
 };
@@ -161,13 +166,13 @@ void ColoredDbg<qf_obj,
 	for (auto& it_input : map) {
 		auto it_local = eqclass_map.find(it_input.first);
 		if (it_local == eqclass_map.end()) {
-			std::cerr << "Can't find the vector hash during shuffling." << std::endl;
+			console->error("Can't find the vector hash during shuffling");
 			exit(1);
 		} else {
-			uint64_t src_idx = ((it_local->second.first - 1) * num_samples) %
-				NUM_BV_BUFFER;
-			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples) %
-				NUM_BV_BUFFER;
+			assert(it_local->second.first <= NUM_BV_BUFFER && it_input.second.first
+						 <= NUM_BV_BUFFER);
+			uint64_t src_idx = ((it_local->second.first - 1) * num_samples);
+			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
 			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
 				if (bv_buffer[src_idx])
 					new_bv_buffer.set(dest_idx);
@@ -181,11 +186,19 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
 	dbg.reset();
 	reshuffle_bit_vectors(map);
+	// Check if the current bit vector buffer is full and needs to be serialized.
+	// This happens when the sampling phase fills up the bv buffer.
+	if (get_num_eqclasses() % NUM_BV_BUFFER == 0) {
+		// The bit vector buffer is full.
+		console->info("Serializing bit vector with {} eq classes.",
+									get_num_eqclasses());
+		bv_buffer_serialize();
+	}
 	eqclass_map = map;
 }
 
 template <class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
+bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
@@ -195,6 +208,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																								 2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
+  bool added_eq_class{false};
 	// Find if the eqclass of the kmer is already there.
 	// If it is there then increment the abundance.
 	// Else create a new eq class.
@@ -205,6 +219,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 															std::forward_as_tuple(vec_hash),
 															std::forward_as_tuple(eq_id, 1));
 		add_bitvector(vector, eq_id - 1);
+    added_eq_class = true;
 	} else { // eq class is seen before so increment the abundance.
 		eq_id = it->second.first;
     // with standard map
@@ -213,21 +228,7 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 
 	k.count = eq_id;	// we use the count to store the eqclass ids
 	dbg.insert(k);
-
-	// Serialize bit vectors if buffer is full.
-	if (it == eqclass_map.end() && get_num_eqclasses() % NUM_BV_BUFFER == 0) {
-		PRINT_CDBG("Serializing bit vector with " << get_num_eqclasses() <<
-							 " eq classes.");
-		bv_buffer_serialize();
-	}
-
-	static uint64_t last_size = 0;
-	if (dbg.size() % 10000000 == 0 &&
-			dbg.size() != last_size) {
-		last_size = dbg.size();
-		PRINT_CDBG("Kmers merged: " << dbg.size() << " Num eq classes: " <<
-			get_num_eqclasses() <<  " Total time: " << time(NULL) - start_time);
-	}
+  return added_eq_class;
 }
 
 template <class qf_obj, class key_obj>
@@ -269,11 +270,13 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 		opfile << sample.first << " " << sample.second << std::endl;
 	opfile.close();
 
-	// dump eq class abundance dist for further analysis.
-	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
-	for (auto sample : eqclass_map)
-		tmpfile << sample.second.first << " " << sample.second.second << std::endl;
-	tmpfile.close();
+	if (flush_eqclass_dis) {
+		// dump eq class abundance dist for further analysis.
+		std::ofstream tmpfile(prefix + "eqclass_dist.lst");
+		for (auto sample : eqclass_map)
+			tmpfile << sample.second.first << " " << sample.second.second << std::endl;
+		tmpfile.close();
+	}
 }
 
 template <class qf_obj, class key_obj>
@@ -312,12 +315,13 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 
 template <class qf_obj, class key_obj>
 cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
-	key_obj>::construct(qf_obj *incqfs, std::unordered_map<std::string,
-											uint64_t>& cutoffs, cdbg_bv_map_t<__uint128_t,
+	key_obj>::construct(qf_obj *incqfs, cdbg_bv_map_t<__uint128_t,
 											std::pair<uint64_t, uint64_t>>& map, uint64_t num_kmers)
 {
-	uint32_t nqf = num_samples;
+	uint32_t nqf = 0;
 	uint64_t counter = 0;
+
+  bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
 	// merge all input CQFs into the final QF
 	typename CQF<key_obj>::Iterator *it_incqfs =
@@ -325,15 +329,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 																																 CQF<key_obj>::Iterator));
 
 	// Initialize all iterators with sample specific cutoffs.
-	for (uint32_t i = 0; i < num_samples; i++) {
-		auto it = cutoffs.find(incqfs[i].sample_id);
-		if (it == cutoffs.end()) {
-			std::cerr << "Sample id " <<  incqfs[i].sample_id << " not found in" <<
-				" cutoff list." << std::endl;
-			abort();
-		} else
-			it_incqfs[i] = incqfs[i].obj->begin(it->second);
-	}
+	for (uint32_t i = 0; i < num_samples; i++)
+		it_incqfs[i] = incqfs[i].obj->begin(incqfs[i].cutoff);
 
 	std::priority_queue<SampleObject<KeyObject>,
 		std::vector<SampleObject<KeyObject>>, compare<KeyObject>> minheap;
@@ -342,8 +339,9 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		if (it_incqfs[i].done())
 			continue;
 		KeyObject key = *it_incqfs[i];
-		SampleObject<KeyObject> obj(key, incqfs[i].sample_id, i);
+		SampleObject<KeyObject> obj(key, incqfs[i].cutoff, incqfs[i].sample_id, i);
 		minheap.push(obj);
+		nqf++;
 	}
 
 	while (!minheap.empty()) {
@@ -366,7 +364,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				nqf--;
 			else {	// Insert the current iterator head in minHeap
 				KeyObject key = *it_incqfs[id];
-				SampleObject<KeyObject> obj(key, incqfs[id].sample_id, id);
+				SampleObject<KeyObject> obj(key, incqfs[id].cutoff,
+																		incqfs[id].sample_id, id);
 				minheap.push(obj);
 			}
 		}
@@ -376,14 +375,38 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			nqf--;
 		else {	// Insert the current iterator head in minHeap
 			KeyObject key = *it_incqfs[cur.id];
-			SampleObject<KeyObject> obj(key, incqfs[cur.id].sample_id, cur.id);
+			SampleObject<KeyObject> obj(key, incqfs[cur.id].cutoff,
+																	incqfs[cur.id].sample_id, cur.id);
 			minheap.push(obj);
 		}
 		// Add <kmer, vector> in the cdbg
-		add_kmer(cur.obj, eq_class);
+		bool added_eq_class = add_kmer(cur.obj, eq_class);
 		counter++;
-		if (counter > num_kmers)
+
+		// Progress tracker
+		static uint64_t last_size = 0;
+		if (dbg.size() % 10000000 == 0 &&
+				dbg.size() != last_size) {
+			last_size = dbg.size();
+			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
+										dbg.size(), get_num_eqclasses(), time(NULL) - start_time);
+		}
+
+		// Check if the bit vector buffer is full and needs to be serialized.
+		if (added_eq_class and (get_num_eqclasses() % NUM_BV_BUFFER == 0)) {
+			// Check if the process is in the sampling phase.
+			if (is_sampling) {
+				break;
+      } else {
+				// The bit vector buffer is full.
+				console->info("Serializing bit vector with {} eq classes.",
+											get_num_eqclasses());
+				bv_buffer_serialize();
+			}
+		} else if (counter > num_kmers) {
+      // Check if the sampling phase is finished based on the number of k-mers.
 			break;
+    }
 	}
 
 	return eqclass_map;
@@ -402,10 +425,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
 	dbg(qbits, key_bits, seed), bv_buffer(NUM_BV_BUFFER * nqf),
-	prefix(prefix), num_samples(nqf), num_serializations(0) {
-		if (nqf < UINT64_MAX)
-			is_sampling = true;
-	}
+	prefix(prefix), num_samples(nqf), num_serializations(0) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
@@ -423,7 +443,6 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	}
 
 	for (auto file : sorted_files) {
-		std::cout << "Reading eq class file: " << file.second << std::endl;
 		eqclasses.push_back(BitVectorRRR(file.second));
 		num_serializations++;
 	}

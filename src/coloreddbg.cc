@@ -80,66 +80,71 @@ build_main ( BuildOpts& opt )
 	aio_init(&aioinit);
 
 	std::ifstream infile(opt.inlist);
-	std::ifstream cutofffile(opt.cutoffs);
 	//struct timeval start1, end1;
 	//struct timezone tzp;
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	CQF<KeyObject> *cqfs;
 
+	spdlog::logger* console = opt.console.get();
 
 	// Allocate QF structs for input CQFs
 	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
-																	sizeof(SampleObject<CQF<KeyObject>*>));
+																										 sizeof(SampleObject<CQF<KeyObject>*>));
 	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
-
-	// Read cutoffs files
-	std::unordered_map<std::string, uint64_t> cutoffs;
-	std::string sample_id;
-	uint32_t cutoff;
-	while (cutofffile >> sample_id >> cutoff) {
-		std::pair<std::string, uint32_t> pair(last_part(sample_id, '/'), cutoff);
-		cutoffs.insert(pair);
-	}
 
 	// mmap all the input cqfs
 	std::string cqf_file;
 	uint32_t nqf = 0;
-	while (infile >> cqf_file) {
+	uint32_t cutoff;
+	console->info("Reading input Squeakr files.");
+	while (infile >> cqf_file >> cutoff) {
+		if (!mantis::fs::FileExists(cqf_file.c_str())) {
+			console->error("Squeakr file {} does not exist.", cqf_file);
+			exit(1);
+		}
 		cqfs[nqf] = CQF<KeyObject>(cqf_file, true);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
-		PRINT_CDBG("Reading CQF " << nqf << " Seed " << cqfs[nqf].seed());
-		PRINT_CDBG("Sample id " << sample_id << " cut off " <<
-							 cutoffs.find(sample_id)->second);
+		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
+		console->info("Sample id {} cut off {}", sample_id, cutoff);
 		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], sample_id, nqf);
+		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
+																									 sample_id, nqf);
 		nqf++;
 	}
 
 	std::string prefix(opt.out);
-  if (prefix.back() != '/') {
-    prefix += '/';
-  }
-  // make the output directory if it doesn't exist
-  if (!mantis::fs::DirExists(prefix.c_str())) {
-    mantis::fs::MakeDir(prefix.c_str());
-  }
+	if (prefix.back() != '/') {
+		prefix += '/';
+	}
+	// make the output directory if it doesn't exist
+	if (!mantis::fs::DirExists(prefix.c_str())) {
+		mantis::fs::MakeDir(prefix.c_str());
+	}
+	// check to see if the output dir exists now
+	if (!mantis::fs::DirExists(prefix.c_str())) {
+		console->error("Output dir {} could not be successfully created.", prefix);
+		exit(1);
+	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
 																														inobjects[0].obj->keybits(),
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
+	cdbg.set_console(console);
+	if (opt.flush_eqclass_dist)
+		cdbg.set_flush_eqclass_dist();
 
 	cdbg.build_sampleid_map(inobjects);
 
-	PRINT_CDBG("Sampling eq classes based on " << SAMPLE_SIZE << " kmers.");
+	console->info("Sampling eq classes based on {} kmers", SAMPLE_SIZE);
 	// First construct the colored dbg on 1000 k-mers.
 	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
 
-	unsorted_map = cdbg.construct(inobjects, cutoffs, unsorted_map, SAMPLE_SIZE);
+	unsorted_map = cdbg.construct(inobjects, unsorted_map, SAMPLE_SIZE);
 
-	PRINT_CDBG("Number of eq classes found after sampling " <<
-						 unsorted_map.size());
+	console->info("Number of eq classes found after sampling {}",
+								unsorted_map.size());
 
 	// Sort equivalence classes based on their abundances.
 	std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
@@ -160,23 +165,23 @@ build_main ( BuildOpts& opt )
 		i++;
 	}
 
-	PRINT_CDBG("Reinitializing colored DBG after the sampling phase.");
+	console->info("Reinitializing colored DBG after the sampling phase.");
 	cdbg.reinit(sorted_map);
 
-	PRINT_CDBG("Constructing the colored dBG.");
+	console->info("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, cutoffs, sorted_map, UINT64_MAX);
+	cdbg.construct(inobjects, sorted_map, std::numeric_limits<uint64_t>::max());
 
-	PRINT_CDBG("Final colored dBG has " << cdbg.get_cqf()->size() <<
-		" k-mers and " << cdbg.get_num_eqclasses() << " equivalence classes.");
+	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
+								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
 
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
-	PRINT_CDBG("Serializing CQF and eq classes in " << prefix);
+	console->info("Serializing CQF and eq classes in {}", prefix);
 	cdbg.serialize();
-	PRINT_CDBG("Serialization done.");
+	console->info("Serialization done.");
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
