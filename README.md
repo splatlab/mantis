@@ -40,9 +40,12 @@ The usage for this command are as follows:
 
 ```
 SYNOPSIS
-        mantis build -s <log-slots> -i <input_list> -o <build_output>
+        mantis build [-e] -s <log-slots> -i <input_list> -o <build_output>
 
 OPTIONS
+        -e, --eqclass_dist
+                    write the eqclass abundance distribution
+
         <log-slots> log of number of slots in the output CQF
 
         <input_list>

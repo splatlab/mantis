@@ -5,6 +5,7 @@
 
 class BuildOpts {
  public:
+	bool flush_eqclass_dist{false};
 	int qbits;
   std::string inlist;
   std::string out;

@@ -127,6 +127,8 @@ build_main ( BuildOpts& opt )
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
 	cdbg.set_console(console);
+	if (opt.flush_eqclass_dist)
+		cdbg.set_flush_eqclass_dist();
 
 	cdbg.build_sampleid_map(inobjects);
 

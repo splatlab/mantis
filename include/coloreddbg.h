@@ -86,6 +86,7 @@ class ColoredDbg {
 		void serialize();
 		void reinit(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>&
 								map);
+		void set_flush_eqclass_dist(void) { flush_eqclass_dis = true; }
 
 	private:
     // returns true if adding this k-mer increased the number of equivalence classes
@@ -107,6 +108,7 @@ class ColoredDbg {
 		std::string prefix;
 		uint64_t num_samples;
 		uint64_t num_serializations;
+		bool flush_eqclass_dis{false};
 		spdlog::logger* console;
 };
 
@@ -268,13 +270,13 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 		opfile << sample.first << " " << sample.second << std::endl;
 	opfile.close();
 
-#ifdef DEBUG
-	// dump eq class abundance dist for further analysis.
-	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
-	for (auto sample : eqclass_map)
-		tmpfile << sample.second.first << " " << sample.second.second << std::endl;
-	tmpfile.close();
-#endif
+	if (flush_eqclass_dis) {
+		// dump eq class abundance dist for further analysis.
+		std::ofstream tmpfile(prefix + "eqclass_dist.lst");
+		for (auto sample : eqclass_map)
+			tmpfile << sample.second.first << " " << sample.second.second << std::endl;
+		tmpfile.close();
+	}
 }
 
 template <class qf_obj, class key_obj>
