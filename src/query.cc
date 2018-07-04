@@ -54,8 +54,6 @@
 #include "CLI/Timer.hpp"
 #include "mantisconfig.hpp"
 
-#define OUTPUT_FILE "samples.output"
-
 void output_results(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg,
                     std::ofstream& opfile) {
   mantis::QueryResults qres;
