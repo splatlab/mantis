@@ -17,9 +17,6 @@
 #include "mantisconfig.hpp"
 //#include "CLI/CLI.hpp"
 
-#define MAX_NUM_SAMPLES 2600
-#define SAMPLE_SIZE (1ULL << 26)
-
 uint64_t start_time;
 
 template <typename T>

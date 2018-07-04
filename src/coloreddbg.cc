@@ -51,8 +51,6 @@
 #include "mantisconfig.hpp"
 
 #define MAX_THREADS 50
-#define MAX_NUM_SAMPLES 2600
-#define SAMPLE_SIZE (1ULL << 26)
 
 // This function read one byte from each page in the iterator buffer.
 uint64_t tmp_sum;
@@ -82,13 +80,23 @@ build_main ( BuildOpts& opt )
 	aioinit.aio_idle_time = 60;
 	aio_init(&aioinit);
 
+	spdlog::logger* console = opt.console.get();
 	std::ifstream infile(opt.inlist);
+  uint64_t num_samples{0};
+  if (infile.is_open()) {
+    std::string line;
+    while (std::getline(infile, line)) { ++num_samples; }
+    infile.clear();
+    infile.seekg(0, std::ios::beg);
+  } else {
+    console->error("Input file {} does not exist or could not be opened.", opt.inlist);
+    std::exit(1);
+  }
 	//struct timeval start1, end1;
 	//struct timezone tzp;
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	CQF<KeyObject> *cqfs;
 
-	spdlog::logger* console = opt.console.get();
 
   /** try and create the output directory
    *  and write a file to it.  Complain to the user
@@ -126,9 +134,9 @@ build_main ( BuildOpts& opt )
   }
 
 	// Allocate QF structs for input CQFs
-	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
+	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(num_samples,
 																										 sizeof(SampleObject<CQF<KeyObject>*>));
-	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
+	cqfs = (CQF<KeyObject>*)calloc(num_samples, sizeof(CQF<KeyObject>));
 
 	// mmap all the input cqfs
 	std::string cqf_file;
@@ -162,11 +170,11 @@ build_main ( BuildOpts& opt )
 
 	cdbg.build_sampleid_map(inobjects);
 
-	console->info("Sampling eq classes based on {} kmers", SAMPLE_SIZE);
+	console->info("Sampling eq classes based on {} kmers", mantis::SAMPLE_SIZE);
 	// First construct the colored dbg on initial SAMPLE_SIZE k-mers.
 	default_cdbg_bv_map_t unsorted_map;
 
-	cdbg.construct(inobjects, unsorted_map, SAMPLE_SIZE);
+	cdbg.construct(inobjects, unsorted_map, mantis::SAMPLE_SIZE);
 
 	console->info("Number of eq classes found after sampling {}",
 								unsorted_map.size());
