@@ -14,6 +14,7 @@
 #include "ProgOpts.h"
 #include "clipp.h"
 #include "spdlog/spdlog.h"
+#include "mantisconfig.hpp"
 //#include "CLI/CLI.hpp"
 
 #define MAX_NUM_SAMPLES 2600
@@ -155,8 +156,10 @@ int main ( int argc, char *argv[] ) {
                      );
 
   auto cli = (
-              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) ),
-              option("-v", "--version").call([]{std::cout << "version 1.0\n\n";}).doc("show version")  );
+              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
+               option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
+              )
+             );
 
   assert(build_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());

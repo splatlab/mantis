@@ -132,16 +132,17 @@ build_main ( BuildOpts& opt )
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
 	cdbg.set_console(console);
-	if (opt.flush_eqclass_dist)
+	if (opt.flush_eqclass_dist) {
 		cdbg.set_flush_eqclass_dist();
+  }
 
 	cdbg.build_sampleid_map(inobjects);
 
 	console->info("Sampling eq classes based on {} kmers", SAMPLE_SIZE);
-	// First construct the colored dbg on 1000 k-mers.
-	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
+	// First construct the colored dbg on initial SAMPLE_SIZE k-mers.
+	default_cdbg_bv_map_t unsorted_map;
 
-	unsorted_map = cdbg.construct(inobjects, unsorted_map, SAMPLE_SIZE);
+	cdbg.construct(inobjects, unsorted_map, SAMPLE_SIZE);
 
 	console->info("Number of eq classes found after sampling {}",
 								unsorted_map.size());

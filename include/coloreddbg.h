@@ -56,6 +56,8 @@ struct hash128 {
 template <typename Key, typename Value>
   using cdbg_bv_map_t = spp::sparse_hash_map<Key, Value, hash128>;
 
+using default_cdbg_bv_map_t = cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>>;
+
 template <class qf_obj, class key_obj>
 class ColoredDbg {
   	public:
