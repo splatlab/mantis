@@ -31,9 +31,7 @@ Library dependencies (given version or higher):
 The CQF code uses two new instructions to implement select on machine words
 introduced in intel's Haswell line of CPUs. However, there is also an alternate
 implementation of select on machine words to work on CPUs older than Haswell.
-To build on an older hardware (older than Haswell) use "NH=1" as a make argument.
-
-`mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
+To build on an older hardware (older than Haswell) pass `-DNH=1` as a cmake argument.
 
 ```bash
  $ mkdir build
@@ -70,9 +68,12 @@ OPTIONS
                     directory where results should be written
 ```
 
- Following are the arguments to coloreddbg:
- - input squeakr files: a list of input squeakr files (path to files) and cutoffs separated by tab. A sample input squeakr file in provided in the raw dir. This is a list of squeakr output files that are generated after running squeakr on input experiments. We have provided two sample squeakr files in data dir.
- - build_output: prefix filepath where all the output files will be written.
+`mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
+
+The following are the arguments to mantis build:
+ - log-slots: The log of the number of slots in the CQF (i.e. the number of quotient bits).
+ - input squeakr files: A list of input squeakr files (path to files) and cutoffs separated by tab. A sample input squeakr file in provided in the raw dir. This is a list of squeakr output files that are generated after running squeakr on input experiments. We have provided two sample squeakr files in data dir.
+ - build_output: The prefix filepath where all the output files will be written.
 
 Query
 -------
@@ -80,8 +81,7 @@ Query
 `mantis query` lets you query a mantis index with a set of sequences.
 
 ```bash
- $ make mantis
- $ ./mantis query -p raw/ -o query.res raw/input_txns.fa
+ $ ./bin/mantis query -p raw/ -o query.res raw/input_txns.fa
 ```
 
 The options and arguments are as follows:
@@ -117,7 +117,6 @@ The output file in contains the list of experiments (i.e., hits) corresponding t
 Contributing
 ------------
 Contributions via GitHub pull requests are welcome.
-
 
 Authors
 -------
