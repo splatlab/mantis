@@ -69,9 +69,8 @@ class ColoredDbg {
 		
 		void build_sampleid_map(qf_obj *incqfs);
 
-		cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>>&
-			construct(qf_obj *incqfs, cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
-								uint64_t>>& map, uint64_t num_kmers);
+    default_cdbg_bv_map_t&
+			construct(qf_obj *incqfs, default_cdbg_bv_map_t& map, uint64_t num_kmers);
 
 		void set_console(spdlog::logger* c) { console = c; }
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
@@ -86,8 +85,7 @@ class ColoredDbg {
 			find_samples(const mantis::QuerySet& kmers);
 
 		void serialize();
-		void reinit(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>&
-								map);
+		void reinit(default_cdbg_bv_map_t& map);
 		void set_flush_eqclass_dist(void) { flush_eqclass_dis = true; }
 
 	private:
