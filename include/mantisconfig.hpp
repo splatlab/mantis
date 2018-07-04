@@ -9,6 +9,7 @@ namespace mantis{
     constexpr char patchVersion[] = "0";
     constexpr char version[] = "0.2.0";
     constexpr uint32_t indexVersion = 0;
+    constexpr char meta_file_name[] = "/meta_info.json";
 } // namespace mantis
 
 #endif // __MANTIS_CONFIG_HPP__

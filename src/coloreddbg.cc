@@ -46,6 +46,9 @@
 #include "tsl/sparse_map.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
+#include "json.hpp"
+#include "mantis_utils.hpp"
+#include "mantisconfig.hpp"
 
 #define MAX_THREADS 50
 #define MAX_NUM_SAMPLES 2600
@@ -87,6 +90,39 @@ build_main ( BuildOpts& opt )
 
 	spdlog::logger* console = opt.console.get();
 
+  /** try and create the output directory
+   *  and write a file to it.  Complain to the user
+   *  and exit if we cannot.
+   **/
+	std::string prefix(opt.out);
+	if (prefix.back() != '/') {
+		prefix += '/';
+	}
+	// make the output directory if it doesn't exist
+	if (!mantis::fs::DirExists(prefix.c_str())) {
+		mantis::fs::MakeDir(prefix.c_str());
+	}
+	// check to see if the output dir exists now
+	if (!mantis::fs::DirExists(prefix.c_str())) {
+		console->error("Output dir {} could not be successfully created.", prefix);
+		exit(1);
+	}
+
+  // If we made it this far, record relevant meta information in the output directory
+  nlohmann::json minfo;
+  {
+    std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+    if (jfile.is_open()) {
+      minfo = opt.to_json();
+      minfo["start_time"] = mantis::get_current_time_as_string();
+      jfile << minfo.dump(4);
+    } else {
+      console->error("Could not write to output directory {}", prefix);
+      exit(1);
+    }
+    jfile.close();
+  }
+
 	// Allocate QF structs for input CQFs
 	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
 																										 sizeof(SampleObject<CQF<KeyObject>*>));
@@ -111,20 +147,6 @@ build_main ( BuildOpts& opt )
 		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
 																									 sample_id, nqf);
 		nqf++;
-	}
-
-	std::string prefix(opt.out);
-	if (prefix.back() != '/') {
-		prefix += '/';
-	}
-	// make the output directory if it doesn't exist
-	if (!mantis::fs::DirExists(prefix.c_str())) {
-		mantis::fs::MakeDir(prefix.c_str());
-	}
-	// check to see if the output dir exists now
-	if (!mantis::fs::DirExists(prefix.c_str())) {
-		console->error("Output dir {} could not be successfully created.", prefix);
-		exit(1);
 	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
@@ -184,5 +206,16 @@ build_main ( BuildOpts& opt )
 	cdbg.serialize();
 	console->info("Serialization done.");
 
-	return EXIT_SUCCESS;
+  {
+    std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+    if (jfile.is_open()) {
+      minfo["end_time"] = mantis::get_current_time_as_string();
+      jfile << minfo.dump(4);
+    } else {
+      console->error("Could not write to output directory {}", prefix);
+    }
+    jfile.close();
+  }
+
+  return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
