@@ -50,8 +50,6 @@
 #include "mantis_utils.hpp"
 #include "mantisconfig.hpp"
 
-#define MAX_THREADS 50
-
 // This function read one byte from each page in the iterator buffer.
 uint64_t tmp_sum;
 void handler_function(union sigval sv) {
@@ -88,6 +86,7 @@ build_main ( BuildOpts& opt )
     while (std::getline(infile, line)) { ++num_samples; }
     infile.clear();
     infile.seekg(0, std::ios::beg);
+    console->info("Will build mantis index over {} input experiments.", num_samples);
   } else {
     console->error("Input file {} does not exist or could not be opened.", opt.inlist);
     std::exit(1);
