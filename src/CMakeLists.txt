@@ -49,3 +49,5 @@ if (SDSL_INSTALL_PATH)
    set_property(TARGET mantis_core APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/build/lib")
 endif()
 
+install(TARGETS mantis
+        RUNTIME DESTINATION bin)
