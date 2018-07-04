@@ -10,7 +10,11 @@ filters instead of Bloom filters, enabling rapid index builds and queries, small
 false positives or negatives. Furthermore, Mantis is also a colored de Bruijn graph representation, so it supports fast
 graph traversal and other topological analyses in addition to large-scale sequence-level searches.
 
-A preprint of the paper describing mantis is available [here](https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf).
+Mantis was presented at RECOMB 2018, and a full journal paper is published in [Cell Systems](https://www.cell.com/cell-systems/abstract/S2405-4712(18)30239-4).  If you use Mantis, please cite the paper:
+
+>Pandey, Prashant, Fatemeh Almodaresi, Michael A. Bender, Michael Ferdman, Rob Johnson, and Rob Patro. "Mantis: A Fast, Small, and Exact Large-Scale Sequence-Search Index." Cell Systems (2018).
+
+A preprint of the paper is available [on bioRxiv](https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf).
 
 API
 --------
@@ -21,7 +25,6 @@ Build
 -------
 
 Library dependencies (given version or higher):
- - libboost-dev 1.58.0.1ubuntu1
  - zlib1g-dev 1:1.2.8.dfsg-2ubuntu4
  - sdsl
 
@@ -33,9 +36,21 @@ To build on an older hardware (older than Haswell) use "NH=1" as a make argument
 `mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
 
 ```bash
- $ make mantis
- $ ./mantis build -s 20 -i raw/incqfs.lst -o raw/
+ $ mkdir build
+ $ cd build
+ $ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=../ ..
+ $ make install
+ $ cd ..
+ $ ./bin/mantis build -s 20 -i raw/incqfs.lst -o raw/
 ```
+
+If SDSL is not installed in a standard location, you can try and tell CMake where to look by adding
+the following to the cmake command:
+
+```
+ -DSDSL_INSTALL_PATH=<path-to-sdsl-build-location>
+```
+
 The usage for this command are as follows:
 
 ```
