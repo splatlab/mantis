@@ -115,6 +115,8 @@ build_main ( BuildOpts& opt )
     if (jfile.is_open()) {
       minfo = opt.to_json();
       minfo["start_time"] = mantis::get_current_time_as_string();
+      minfo["mantis_version"] = mantis::version;
+      minfo["index_version"] = mantis::index_version;
       jfile << minfo.dump(4);
     } else {
       console->error("Could not write to output directory {}", prefix);
