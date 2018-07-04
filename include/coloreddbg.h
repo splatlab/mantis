@@ -319,13 +319,13 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
   bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
 	// merge all input CQFs into the final QF
-	typename CQF<key_obj>::Iterator *it_incqfs =
-		(typename CQF<key_obj>::Iterator*)calloc(num_samples, sizeof(typename
-																																 CQF<key_obj>::Iterator));
+  std::vector<typename CQF<key_obj>::Iterator> it_incqfs;
+  it_incqfs.reserve(num_samples);
 
 	// Initialize all iterators with sample specific cutoffs.
-	for (uint32_t i = 0; i < num_samples; i++)
-		it_incqfs[i] = incqfs[i].obj->begin(incqfs[i].cutoff);
+	for (uint32_t i = 0; i < num_samples; i++) {
+		it_incqfs.emplace_back(incqfs[i].obj->begin(incqfs[i].cutoff));
+  }
 
 	std::priority_queue<SampleObject<KeyObject>,
 		std::vector<SampleObject<KeyObject>>, compare<KeyObject>> minheap;

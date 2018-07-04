@@ -132,7 +132,7 @@ CQF<key_obj>::CQF(std::string& filename, bool flag) {
 
 template <class key_obj>
 CQF<key_obj>::CQF(const CQF<key_obj>& copy_cqf) {
-	memcpy(cqf, copy_cqf.get_cqf(), sizeof(QF));
+  memcpy(reinterpret_cast<void*>(&cqf), reinterpret_cast<void*>(const_cast<QF*>(&copy_cqf.cqf)), sizeof(QF));
 }
 
 template <class key_obj>

@@ -93,9 +93,14 @@ build_main ( BuildOpts& opt )
   }
 	//struct timeval start1, end1;
 	//struct timezone tzp;
-	SampleObject<CQF<KeyObject>*> *inobjects;
-	CQF<KeyObject> *cqfs;
 
+  // C++-izing
+  // This is C++ ... not C.  Why do we have raw pointers
+  // and calloc them.  We use vectors instead.
+	//SampleObject<CQF<KeyObject>*> *inobjects;
+	//CQF<KeyObject> *cqfs;
+  std::vector<SampleObject<CQF<KeyObject>*>> inobjects;
+  std::vector<CQF<KeyObject>> cqfs;
 
   /** try and create the output directory
    *  and write a file to it.  Complain to the user
@@ -132,10 +137,9 @@ build_main ( BuildOpts& opt )
     jfile.close();
   }
 
-	// Allocate QF structs for input CQFs
-	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(num_samples,
-																										 sizeof(SampleObject<CQF<KeyObject>*>));
-	cqfs = (CQF<KeyObject>*)calloc(num_samples, sizeof(CQF<KeyObject>));
+	// reserve QF structs for input CQFs
+  inobjects.reserve(num_samples);
+  cqfs.reserve(num_samples);
 
 	// mmap all the input cqfs
 	std::string cqf_file;
@@ -147,15 +151,14 @@ build_main ( BuildOpts& opt )
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
 		}
-		cqfs[nqf] = CQF<KeyObject>(cqf_file, true);
+    cqfs.emplace_back(cqf_file, true);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
 		console->info("Sample id {} cut off {}", sample_id, cutoff);
-		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
-																									 sample_id, nqf);
-		nqf++;
+		cqfs.back().dump_metadata();
+    inobjects.emplace_back(&cqfs[nqf], cutoff, sample_id, nqf);
+    nqf++;
 	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
@@ -167,13 +170,13 @@ build_main ( BuildOpts& opt )
 		cdbg.set_flush_eqclass_dist();
   }
 
-	cdbg.build_sampleid_map(inobjects);
+	cdbg.build_sampleid_map(inobjects.data());
 
 	console->info("Sampling eq classes based on {} kmers", mantis::SAMPLE_SIZE);
 	// First construct the colored dbg on initial SAMPLE_SIZE k-mers.
 	default_cdbg_bv_map_t unsorted_map;
 
-	cdbg.construct(inobjects, unsorted_map, mantis::SAMPLE_SIZE);
+	cdbg.construct(inobjects.data(), unsorted_map, mantis::SAMPLE_SIZE);
 
 	console->info("Number of eq classes found after sampling {}",
 								unsorted_map.size());
@@ -203,7 +206,7 @@ build_main ( BuildOpts& opt )
 	console->info("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, sorted_map, std::numeric_limits<uint64_t>::max());
+	cdbg.construct(inobjects.data(), sorted_map, std::numeric_limits<uint64_t>::max());
 
 	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
 								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
