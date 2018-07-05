@@ -27,8 +27,10 @@ Build
 Library dependencies (given version or higher):
  - [zlib](https://zlib.net/)
  - [sdsl-lite](https://github.com/simongog/sdsl-lite)
+ 
+To build mantis, you will also need [CMake](https://cmake.org/) version 3.5 or higher.
 
-The CQF code uses two new instructions to implement select on machine words
+The Counting Quotient Filter (CQF) code uses two new instructions to implement select on machine words
 introduced in intel's Haswell line of CPUs. However, there is also an alternate
 implementation of select on machine words to work on CPUs older than Haswell.
 To build on an older hardware (older than Haswell) pass `-DNH=1` as a cmake argument.
