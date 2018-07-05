@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <set>
 #include <unordered_set>
+#include <chrono>
 
 #include <inttypes.h>
 
@@ -35,8 +36,6 @@
 #include "hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
-
-extern uint64_t start_time;
 
 struct hash128 {
 	uint64_t operator()(const __uint128_t& val128) const
@@ -104,6 +103,7 @@ class ColoredDbg {
 		uint64_t num_samples;
 		uint64_t num_serializations;
 		bool flush_eqclass_dis{false};
+    std::time_t start_time_;
 		spdlog::logger* console;
 };
 
@@ -379,7 +379,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				dbg.size() != last_size) {
 			last_size = dbg.size();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
-										dbg.size(), get_num_eqclasses(), time(NULL) - start_time);
+										dbg.size(), get_num_eqclasses(), time(NULL) - start_time_);
 		}
 
 		// Check if the bit vector buffer is full and needs to be serialized.
@@ -415,14 +415,14 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
 	dbg(qbits, key_bits, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
-	prefix(prefix), num_samples(nqf), num_serializations(0) {}
+    prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(NULL)) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 																				std::vector<std::string>&
 																				eqclass_files, std::string&
 																				sample_file)
-: dbg(cqf_file, false), bv_buffer() {
+    : dbg(cqf_file, false), bv_buffer(), start_time_(std::time(NULL)) {
 	num_samples = 0;
 	num_serializations = 0;
 

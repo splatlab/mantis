@@ -15,9 +15,6 @@
 #include "clipp.h"
 #include "spdlog/spdlog.h"
 #include "mantisconfig.hpp"
-//#include "CLI/CLI.hpp"
-
-uint64_t start_time;
 
 template <typename T>
 void explore_options_verbose(T& res) {
@@ -66,50 +63,6 @@ int main ( int argc, char *argv[] ) {
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
-
-	start_time = time(NULL);
-
-  /*
-  bool print_version{false};
-  CLI::App app{"Mantis"};
-  app.add_flag("-v,--version", print_version, "print version info");
-
-  auto build_app = app.add_subcommand("build", "build the mantis index");
-  auto query_app = app.add_subcommand("query", "query the mantis index");
-  auto validate_app = app.add_subcommand("validate", "validate the mantis index");
-
-  build_app->add_option("-i,--input-list", bopt.inlist, "file containing list of input filters")->required()->check(CLI::ExistingFile);
-  build_app->add_option("-c,--cutoff-list", bopt.cutoffs, "file containing list of experiment-specific cutoffs")->required()->check(CLI::ExistingFile);
-  build_app->add_option("-o,--output", bopt.out, "directory where results should be written")->required();
-
-  query_app->add_flag("-j,--json", qopt.use_json, "Write the output in JSON format");
-  query_app->add_option("-p,--input-prefix", qopt.prefix, "Prefix of input files.")->required()->check(CLI::ExistingDirectory);
-  query_app->add_option("-o,--output", qopt.output, "Where to write query output.");
-  query_app->add_option("query", qopt.query_file, "Prefix of input files.")->required()->check(CLI::ExistingFile);
-
-  validate_app->add_option("-i,--input-list", vopt.inlist, "file containing list of input filters")->required()->check(CLI::ExistingFile);
-  validate_app->add_option("-c,--cutoff-list", vopt.cutoffs, "file containing list of experiment-specific cutoffs")->required()->check(CLI::ExistingFile);
-  validate_app->add_option("-p,--input-prefix", vopt.prefix, "Directory containing the mantis dbg.")->required()->check(CLI::ExistingDirectory);
-  validate_app->add_option("query", vopt.query_file,"Query file.")->required()->check(CLI::ExistingFile);
-
-  CLI11_PARSE(app, argc, argv);
-
-  if (print_version) {
-    std::cerr << "mantis " << 0.1 << "\n";
-    return 0;
-  }
-
-  if (app.got_subcommand(build_app)) {
-    return build_main(bopt);
-  } else if (app.got_subcommand(query_app)) {
-    return query_main(qopt);
-  } else if (app.got_subcommand(validate_app)) {
-    return validate_main(vopt);
-  } else {
-    std::cout << "I don't know the requested sub-command\n";
-    return 1;
-  }
-  */
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
