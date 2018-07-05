@@ -35,7 +35,7 @@ if (SDSL_INSTALL_PATH)
    message("Adding ${SDSL_INSTALL_PATH}/include to the include path")
    message("Adding ${SDSL_INSTALL_PATH}/build/lib to the build path")
    list(APPEND MANTIS_CXX_FLAGS "-I${SDSL_INSTALL_PATH}/include")
-   list(APPEND MANTIS_CXX_FLAGS "-L${SDSL_INSTALL_PATH}/build/lib")
+   list(APPEND MANTIS_CXX_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
 endif()
 
 include(GNUInstallDirs)

@@ -45,8 +45,8 @@ target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
 
 # TODO: look more into why this is necessary
 if (SDSL_INSTALL_PATH)
-   set_property(TARGET mantis APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/build/lib")
-   set_property(TARGET mantis_core APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/build/lib")
+   set_property(TARGET mantis APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
+   set_property(TARGET mantis_core APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
 endif()
 
 install(TARGETS mantis
