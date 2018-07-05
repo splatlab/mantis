@@ -334,8 +334,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		if (it_incqfs[i].done())
 			continue;
 		KeyObject key = *it_incqfs[i];
-		SampleObject<KeyObject> obj(key, incqfs[i].cutoff, incqfs[i].sample_id, i);
-		minheap.push(obj);
+		minheap.emplace(key, incqfs[i].cutoff, incqfs[i].sample_id, i);
 		nqf++;
 	}
 
@@ -359,9 +358,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				nqf--;
 			else {	// Insert the current iterator head in minHeap
 				KeyObject key = *it_incqfs[id];
-				SampleObject<KeyObject> obj(key, incqfs[id].cutoff,
-																		incqfs[id].sample_id, id);
-				minheap.push(obj);
+				minheap.emplace(key, incqfs[id].cutoff, incqfs[id].sample_id, id);
 			}
 		}
 		// Move the iterator of the smallest key.
@@ -370,9 +367,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			nqf--;
 		else {	// Insert the current iterator head in minHeap
 			KeyObject key = *it_incqfs[cur.id];
-			SampleObject<KeyObject> obj(key, incqfs[cur.id].cutoff,
-																	incqfs[cur.id].sample_id, cur.id);
-			minheap.push(obj);
+			minheap.emplace(key, incqfs[cur.id].cutoff, incqfs[cur.id].sample_id, cur.id);
 		}
 		// Add <kmer, vector> in the cdbg
 		bool added_eq_class = add_kmer(cur.obj, eq_class);
