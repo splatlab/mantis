@@ -121,5 +121,8 @@ Contributions via GitHub pull requests are welcome.
 Authors
 -------
 - Prashant Pandey <ppandey@cs.stonybrook.edu>
+- Fatemeh Almodaresi <falmodaresit@cs.stonybrook.edu>
+- Michael Bender <bender@cs.stonybrook.edu>
+- Mike Ferdman <mferdman@cs.stonybrook.edu>
 - Rob Johnson <rob@cs.stonybrook.edu>
 - Rob Patro <rob.patro@cs.stonybrook.edu>
