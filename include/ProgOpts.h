@@ -2,6 +2,8 @@
 #define __MANTIS_PROG_OPTS__
 #include <memory>
 #include "spdlog/spdlog.h"
+#include "json.hpp"
+
 
 class BuildOpts {
  public:
@@ -11,6 +13,16 @@ class BuildOpts {
   std::string out;
 	int numthreads{1};
   std::shared_ptr<spdlog::logger> console{nullptr};
+
+  nlohmann::json to_json() {
+    nlohmann::json j;
+    j["dump_eqclass_dist"] = flush_eqclass_dist;
+    j["quotient_bits"] = qbits;
+    j["input_list"] = inlist;
+    j["output_dir"] = out;
+    j["num_threads"] = numthreads;
+    return j;
+  }
 };
 
 class QueryOpts {

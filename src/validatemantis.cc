@@ -46,9 +46,7 @@
 #include "ProgOpts.h"
 #include "kmer.h"
 #include "coloreddbg.h"
-
-#define MAX_NUM_SAMPLES 2600
-#define SAMPLE_SIZE (1ULL << 26)
+#include "mantisconfig.hpp"
 
 #include	<stdlib.h>
 
@@ -62,17 +60,27 @@
 validate_main ( ValidateOpts& opt )
 {
 
+	spdlog::logger* console = opt.console.get();
 	// Read experiment CQFs and cutoffs
 	std::ifstream infile(opt.inlist);
+  uint64_t num_samples{0};
+  if (infile.is_open()) {
+    std::string line;
+    while (std::getline(infile, line)) { ++num_samples; }
+    infile.clear();
+    infile.seekg(0, std::ios::beg);
+  } else {
+    console->error("Input filter list {} does not exist or could not be opened.", opt.inlist);
+    std::exit(1);
+  }
 	SampleObject<CQF<KeyObject>*> *inobjects;
 	CQF<KeyObject> *cqfs;
 
 	// Allocate QF structs for input CQFs
-	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
+	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(num_samples,
 																										 sizeof(SampleObject<CQF<KeyObject>*>));
-	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
+	cqfs = (CQF<KeyObject>*)calloc(num_samples, sizeof(CQF<KeyObject>));
 
-	spdlog::logger* console = opt.console.get();
 
 	// Read cutoffs files
 	//std::unordered_map<std::string, uint64_t> cutoffs;
@@ -113,10 +121,10 @@ validate_main ( ValidateOpts& opt )
 
 	// Read the colored dBG
 	console->info("Reading colored dbg from disk.");
-	std::string dbg_file(prefix + CQF_FILE);
-	std::string sample_file(prefix + SAMPLEID_FILE);
+	std::string dbg_file(prefix + mantis::CQF_FILE);
+	std::string sample_file(prefix + mantis::SAMPLEID_FILE);
 	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
-																																	 std::string(EQCLASS_FILE).c_str());
+																																	 mantis::EQCLASS_FILE);
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
 																														eqclass_files,

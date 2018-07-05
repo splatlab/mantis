@@ -46,10 +46,9 @@
 #include "tsl/sparse_map.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
-
-#define MAX_THREADS 50
-#define MAX_NUM_SAMPLES 2600
-#define SAMPLE_SIZE (1ULL << 26)
+#include "json.hpp"
+#include "mantis_utils.hpp"
+#include "mantisconfig.hpp"
 
 // This function read one byte from each page in the iterator buffer.
 uint64_t tmp_sum;
@@ -79,40 +78,34 @@ build_main ( BuildOpts& opt )
 	aioinit.aio_idle_time = 60;
 	aio_init(&aioinit);
 
+	spdlog::logger* console = opt.console.get();
 	std::ifstream infile(opt.inlist);
+  uint64_t num_samples{0};
+  if (infile.is_open()) {
+    std::string line;
+    while (std::getline(infile, line)) { ++num_samples; }
+    infile.clear();
+    infile.seekg(0, std::ios::beg);
+    console->info("Will build mantis index over {} input experiments.", num_samples);
+  } else {
+    console->error("Input file {} does not exist or could not be opened.", opt.inlist);
+    std::exit(1);
+  }
 	//struct timeval start1, end1;
 	//struct timezone tzp;
-	SampleObject<CQF<KeyObject>*> *inobjects;
-	CQF<KeyObject> *cqfs;
 
-	spdlog::logger* console = opt.console.get();
+  // C++-izing
+  // This is C++ ... not C.  Why do we have raw pointers
+  // and calloc them.  We use vectors instead.
+	//SampleObject<CQF<KeyObject>*> *inobjects;
+	//CQF<KeyObject> *cqfs;
+  std::vector<SampleObject<CQF<KeyObject>*>> inobjects;
+  std::vector<CQF<KeyObject>> cqfs;
 
-	// Allocate QF structs for input CQFs
-	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(MAX_NUM_SAMPLES,
-																										 sizeof(SampleObject<CQF<KeyObject>*>));
-	cqfs = (CQF<KeyObject>*)calloc(MAX_NUM_SAMPLES, sizeof(CQF<KeyObject>));
-
-	// mmap all the input cqfs
-	std::string cqf_file;
-	uint32_t nqf = 0;
-	uint32_t cutoff;
-	console->info("Reading input Squeakr files.");
-	while (infile >> cqf_file >> cutoff) {
-		if (!mantis::fs::FileExists(cqf_file.c_str())) {
-			console->error("Squeakr file {} does not exist.", cqf_file);
-			exit(1);
-		}
-		cqfs[nqf] = CQF<KeyObject>(cqf_file, true);
-		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
-																									'.'), '_');
-		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut off {}", sample_id, cutoff);
-		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
-																									 sample_id, nqf);
-		nqf++;
-	}
-
+  /** try and create the output directory
+   *  and write a file to it.  Complain to the user
+   *  and exit if we cannot.
+   **/
 	std::string prefix(opt.out);
 	if (prefix.back() != '/') {
 		prefix += '/';
@@ -127,21 +120,63 @@ build_main ( BuildOpts& opt )
 		exit(1);
 	}
 
+  // If we made it this far, record relevant meta information in the output directory
+  nlohmann::json minfo;
+  {
+    std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+    if (jfile.is_open()) {
+      minfo = opt.to_json();
+      minfo["start_time"] = mantis::get_current_time_as_string();
+      minfo["mantis_version"] = mantis::version;
+      minfo["index_version"] = mantis::index_version;
+      jfile << minfo.dump(4);
+    } else {
+      console->error("Could not write to output directory {}", prefix);
+      exit(1);
+    }
+    jfile.close();
+  }
+
+	// reserve QF structs for input CQFs
+  inobjects.reserve(num_samples);
+  cqfs.reserve(num_samples);
+
+	// mmap all the input cqfs
+	std::string cqf_file;
+	uint32_t nqf = 0;
+	uint32_t cutoff;
+	console->info("Reading input Squeakr files.");
+	while (infile >> cqf_file >> cutoff) {
+		if (!mantis::fs::FileExists(cqf_file.c_str())) {
+			console->error("Squeakr file {} does not exist.", cqf_file);
+			exit(1);
+		}
+    cqfs.emplace_back(cqf_file, true);
+		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
+																									'.'), '_');
+		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
+		console->info("Sample id {} cut off {}", sample_id, cutoff);
+		cqfs.back().dump_metadata();
+    inobjects.emplace_back(&cqfs[nqf], cutoff, sample_id, nqf);
+    nqf++;
+	}
+
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
 																														inobjects[0].obj->keybits(),
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
 	cdbg.set_console(console);
-	if (opt.flush_eqclass_dist)
+	if (opt.flush_eqclass_dist) {
 		cdbg.set_flush_eqclass_dist();
+  }
 
-	cdbg.build_sampleid_map(inobjects);
+	cdbg.build_sampleid_map(inobjects.data());
 
-	console->info("Sampling eq classes based on {} kmers", SAMPLE_SIZE);
-	// First construct the colored dbg on 1000 k-mers.
-	cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,uint64_t>> unsorted_map;
+	console->info("Sampling eq classes based on {} kmers", mantis::SAMPLE_SIZE);
+	// First construct the colored dbg on initial SAMPLE_SIZE k-mers.
+	default_cdbg_bv_map_t unsorted_map;
 
-	unsorted_map = cdbg.construct(inobjects, unsorted_map, SAMPLE_SIZE);
+	cdbg.construct(inobjects.data(), unsorted_map, mantis::SAMPLE_SIZE);
 
 	console->info("Number of eq classes found after sampling {}",
 								unsorted_map.size());
@@ -171,7 +206,7 @@ build_main ( BuildOpts& opt )
 	console->info("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects, sorted_map, std::numeric_limits<uint64_t>::max());
+	cdbg.construct(inobjects.data(), sorted_map, std::numeric_limits<uint64_t>::max());
 
 	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
 								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
@@ -183,5 +218,16 @@ build_main ( BuildOpts& opt )
 	cdbg.serialize();
 	console->info("Serialization done.");
 
-	return EXIT_SUCCESS;
+  {
+    std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+    if (jfile.is_open()) {
+      minfo["end_time"] = mantis::get_current_time_as_string();
+      jfile << minfo.dump(4);
+    } else {
+      console->error("Could not write to output directory {}", prefix);
+    }
+    jfile.close();
+  }
+
+  return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */

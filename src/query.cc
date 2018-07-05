@@ -52,9 +52,7 @@
 #include "common_types.h"
 #include "CLI/CLI.hpp"
 #include "CLI/Timer.hpp"
-
-#define MAX_NUM_SAMPLES 2600
-#define OUTPUT_FILE "samples.output"
+#include "mantisconfig.hpp"
 
 void output_results(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg,
                     std::ofstream& opfile) {
@@ -141,10 +139,10 @@ int query_main (QueryOpts& opt)
   spdlog::logger* console = opt.console.get();
 	console->info("Reading colored dbg from disk.");
 
-	std::string dbg_file(prefix + CQF_FILE);
-	std::string sample_file(prefix + SAMPLEID_FILE);
+	std::string dbg_file(prefix + mantis::CQF_FILE);
+	std::string sample_file(prefix + mantis::SAMPLEID_FILE);
 	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
-																											 std::string(EQCLASS_FILE).c_str());
+                                                                   mantis::EQCLASS_FILE);
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
 																														eqclass_files,

@@ -1,7 +1,7 @@
 
 # make a library libmantis_core that will contain
 # most of the relevant API
-add_library(mantis_core
+add_library(mantis_core STATIC
   kmer.cc
   hashutil.cc
   query.cc
@@ -12,24 +12,42 @@ add_library(mantis_core
   MantisFS.cc
   cqf/gqf.c)
 
-target_include_directories(mantis_core PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
+set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")
+set(MANTIS_RELEASE_CFLAGS "${MANTIS_C_FLAGS};-O3")
+set(MANTIS_RELEASE_CXXFLAGS "${MANTIS_CXX_FLAGS};-O3")
+
+target_include_directories(mantis_core PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")
+target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_DEBUG_CXXFLAGS}>")
+target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
+target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
+target_compile_definitions(mantis_core PUBLIC "${ARCH_DEFS}")
 
 # link libmantis_core with the required libraries
 target_link_libraries(mantis_core
-  sdsl
-  pthread
+  Threads::Threads
   m
   z
-  rt)
+  rt
+  sdsl)
 
 # The driver program is `mantis`, which is a front-end
 # with the relevant sub-commands
-add_executable(mantis
-  mantis.cc)
+add_executable(mantis mantis.cc)
+target_include_directories(mantis PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+target_link_libraries(mantis mantis_core)
+target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")
+target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_DEBUG_CXXFLAGS}>")
+target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
+target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
+target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
 
-target_include_directories(mantis PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+# TODO: look more into why this is necessary
+if (SDSL_INSTALL_PATH)
+   set_property(TARGET mantis APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
+   set_property(TARGET mantis_core APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
+endif()
 
-target_link_libraries(mantis
-  mantis_core)
+install(TARGETS mantis
+        RUNTIME DESTINATION bin)
