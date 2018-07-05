@@ -25,8 +25,8 @@ Build
 -------
 
 Library dependencies (given version or higher):
- - zlib1g-dev 1:1.2.8.dfsg-2ubuntu4
- - sdsl
+ - [zlib](https://zlib.net/)
+ - [sdsl-lite](https://github.com/simongog/sdsl-lite)
 
 The CQF code uses two new instructions to implement select on machine words
 introduced in intel's Haswell line of CPUs. However, there is also an alternate
