@@ -379,7 +379,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				dbg.size() != last_size) {
 			last_size = dbg.size();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
-										dbg.size(), get_num_eqclasses(), time(NULL) - start_time_);
+										dbg.size(), get_num_eqclasses(), time(nullptr) - start_time_);
 		}
 
 		// Check if the bit vector buffer is full and needs to be serialized.
@@ -415,14 +415,14 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
 	dbg(qbits, key_bits, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
-    prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(NULL)) {}
+    prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 																				std::vector<std::string>&
 																				eqclass_files, std::string&
 																				sample_file)
-    : dbg(cqf_file, false), bv_buffer(), start_time_(std::time(NULL)) {
+    : dbg(cqf_file, false), bv_buffer(), start_time_(std::time(nullptr)) {
 	num_samples = 0;
 	num_serializations = 0;
 
