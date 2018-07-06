@@ -54,8 +54,9 @@
 #include "CLI/Timer.hpp"
 #include "mantisconfig.hpp"
 
-void output_results(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg,
-                    std::ofstream& opfile) {
+void output_results(mantis::QuerySets& multi_kmers,
+										ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
+										cdbg, std::ofstream& opfile) {
   mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
@@ -75,8 +76,9 @@ void output_results(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF
 }
 
 
-void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg,
-                    std::ofstream& opfile) {
+void output_results_json(mantis::QuerySets& multi_kmers,
+												 ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
+												 cdbg, std::ofstream& opfile) {
   mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
@@ -101,7 +103,6 @@ void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObjec
     }
     opfile << "]\n";
   }
-
 }
 
 
