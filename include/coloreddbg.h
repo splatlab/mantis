@@ -432,6 +432,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 		sorted_files[id] = file;
 	}
 
+	eqclasses.reserve(sorted_files.size());
 	for (auto file : sorted_files) {
 		eqclasses.push_back(BitVectorRRR(file.second));
 		num_serializations++;
