@@ -7,6 +7,7 @@
 #include "bitvector.h"
 #include "sdsl/rrr_vector.hpp"
 #include "hashutil.h"
+#include "clipp.h"
 
 uint32_t hamming_dist(BitVectorRRR& v, uint64_t vec_length, std::vector<uint32_t>& blengths,
                       std::vector<uint32_t>& boffs, uint32_t i, uint32_t j, uint32_t thresh) {
@@ -37,12 +38,28 @@ uint32_t hamming_dist(BitVectorRRR& v, uint64_t vec_length, std::vector<uint32_t
 }
 
 int main(int argc, char* argv[]){
+  using namespace clipp; using std::cout; using std::string;
+  uint32_t thresh{5};
+  std::string fname;//{argv[1]};
+  uint64_t vec_length{0};//= std::stoul(argv[2]);
+  uint64_t num_to_process{std::numeric_limits<uint64_t>::max()};// = std::stoul(argv[3]);
+  bool help{false};
+  auto cli = (
+              value("input file", fname),
+              required("-l", "--length") & value("vec_length", vec_length) % "vector length",
+              option("-n") & value("nproc", num_to_process) % "maximum vectors to process (default = all)",
+              option("-t") & value("thresh", thresh) % "threshold of distance to report edges (default = 5)",
+              option("-h", "--help").set(help)
+              );
 
-  constexpr const uint32_t thresh{5};
+  if (!parse(argc, argv, cli)) {
+    std::cerr << make_man_page(cli, argv[0]);
+    std::exit(1);
+  } else if (help) {
+    std::cerr << make_man_page(cli, argv[0]);
+    std::exit(1);
+  }
 
-  std::string fname{argv[1]};
-  uint64_t vec_length = std::stoul(argv[2]);
-  uint64_t num_to_process = std::stoul(argv[3]);
   BitVectorRRR v(fname);
 
   std::vector<std::unordered_map<uint64_t, std::vector<uint32_t>>> pattern_map;
@@ -133,7 +150,7 @@ int main(int argc, char* argv[]){
         bool within_bound = d <= thresh;
         nc += (within_bound);
         m = (d < m) ? d : m;
-        std::cout << x << '\t' << kv.first << '\t' << d << '\n';
+        if (within_bound) { std::cout << x << '\t' << kv.first << '\t' << d << '\n'; }
         //}
     }
     if (x > 0 and x % 10000 == 0) {
