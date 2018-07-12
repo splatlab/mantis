@@ -1,6 +1,9 @@
 //
 // Created by Fatemeh Almodaresi on 7/11/18.
 //
+// The algorithm's basic implementation taken from
+// https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
+//
 #include<bits/stdc++.h>
 #include <sstream>
 #include <unordered_set>
@@ -14,15 +17,14 @@ struct Edge {
 
     Edge(uint64_t inN1, uint64_t inN2, uint16_t inWeight)
             : n1(inN1), n2(inN2), weight(inWeight) {}
-
 };
 
-struct Node {
+struct DisjointSetNode {
    uint64_t parent{0}, rnk{0}, w{0}, edges{0};
 
    void setParent(uint64_t p) {parent = p;}
 
-   void mergeWith(Node& n, uint16_t edgeW) {
+   void mergeWith(DisjointSetNode& n, uint16_t edgeW) {
        n.setParent(parent);
        w += (n.w + static_cast<uint64_t>(edgeW));
        edges += (n.edges + 1);
@@ -35,7 +37,7 @@ struct Node {
 };
 // To represent Disjoint Sets
 struct DisjointSets {
-    std::vector<Node> els;
+    std::vector<DisjointSetNode> els;
     uint64_t n;
 
     // Constructor.
@@ -90,58 +92,51 @@ struct Graph {
 
     // Function to find MST using Kruskal's
     // MST algorithm
-    DisjointSets kruskalMST();
-};
+    DisjointSets kruskalMSF() {
+        int mst_wt = 0; // Initialize result
 
+        // Sort edges in increasing order on basis of cost
+        sort(edges.begin(), edges.end(),
+             [](const Edge &e1, const Edge &e2) { return e1.weight < e2.weight; });
 
-/* Functions returns weight of the MST*/
+        // Create disjoint sets
+        DisjointSets ds(V);
 
-DisjointSets Graph::kruskalMST() {
-    int mst_wt = 0; // Initialize result
+        uint64_t cntr{0}, mergeCntr{0};
+        // Iterate through all sorted edges
+        vector<Edge>::iterator it;
+        for (it = edges.begin(); it != edges.end(); it++) {
+            uint64_t u = it->n1;
+            uint64_t v = it->n2;
+            uint64_t set_u = ds.find(u);
+            uint64_t set_v = ds.find(v);
 
-    // Sort edges in increasing order on basis of cost
-    sort(edges.begin(), edges.end(),
-         [](const Edge &e1, const Edge &e2) { return e1.weight < e2.weight; });
-
-    // Create disjoint sets
-    DisjointSets ds(V);
-
-    uint64_t cntr{0}, mergeCntr{0};
-    // Iterate through all sorted edges
-    vector<Edge>::iterator it;
-    for (it = edges.begin(); it != edges.end(); it++) {
-        uint64_t u = it->n1;
-        uint64_t v = it->n2;
-        uint64_t set_u = ds.find(u);
-        uint64_t set_v = ds.find(v);
-
-        // Check if the selected edge is creating
-        // a cycle or not (Cycle is created if u
-        // and v belong to same set)
-        if (set_u != set_v) {
-            // Current edge will be in the MST
-            // Merge two sets
-            ds.merge(set_u, set_v, it->weight);
-            mergeCntr++;
-        }/* else {
+            // Check if the selected edge is creating
+            // a cycle or not (Cycle is created if u
+            // and v belong to same set)
+            if (set_u != set_v) {
+                // Current edge will be in the MST
+                // Merge two sets
+                ds.merge(set_u, set_v, it->weight);
+                mergeCntr++;
+            }/* else {
             if (nodes.find(u) == nodes.end() || nodes.find(v) == nodes.end())
                 std::cerr << u << " " << v << " " << set_u << " " << set_v << "\n";
         }*/
-        cntr++;
-        if (cntr % 1000000 == 0) {
-            std::cerr << "edge " << cntr << " " << mergeCntr << "\n";
+            cntr++;
+            if (cntr % 1000000 == 0) {
+                std::cerr << "edge " << cntr << " " << mergeCntr << "\n";
+            }
         }
+        std::cerr << "final # of edges: " << cntr
+                  << " # of merges: " << mergeCntr << "\n";
+        return ds;
     }
-    std::cerr << "final # of edges: " << cntr
-              << " # of merges: " << mergeCntr << "\n";
-    //return mst_wt;
-    return ds;
-}
+};
 
-// Driver program to test above functions
 int main(int argc, char *argv[]) {
     /* Let us create above shown weighted
-       and unidrected graph */
+       and undirected graph */
     std::string filename = argv[1];
     uint64_t numNodes = std::stoull(argv[2]);
     ifstream file(filename);
@@ -167,7 +162,7 @@ int main(int argc, char *argv[]) {
     g.E = g.edges.size();
     nodes.clear();
 
-    DisjointSets ds = g.kruskalMST();
+    DisjointSets ds = g.kruskalMSF();
 
     for (auto &el : ds.els) {
         if (el.w != 0) {
