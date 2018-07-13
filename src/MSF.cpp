@@ -7,6 +7,8 @@
 #include<bits/stdc++.h>
 #include <sstream>
 #include <unordered_set>
+#include "bitvector.h"
+//#include "sdsl/bits.hpp"
 
 using namespace std;
 
@@ -84,11 +86,12 @@ struct Graph {
     uint64_t V, E;
     //vector<Edge> edges;
     vector<vector<Edge>> edges;
-    Graph(uint64_t bucketCnt) { edges.resize(bucketCnt);}
+
+    Graph(uint64_t bucketCnt) { edges.resize(bucketCnt); }
 
     // Utility function to add an edge
     void addEdge(uint64_t u, uint64_t v, uint16_t w) {
-        edges[w-1].emplace_back(u, v, w);
+        edges[w - 1].emplace_back(u, v, w);
         //edges.emplace_back(u, v, w);
     }
 
@@ -108,6 +111,7 @@ struct Graph {
         std::string tmp;
         uint64_t n1{0}, n2{0}, cntr{0}, mergeCntr{0};
         uint32_t w{0};
+        sdsl::bit_vector nodes(V, 0);
         // Iterate through all sorted edges
         for (auto bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
             //ifstream file(filename);
@@ -116,28 +120,30 @@ struct Graph {
                 file >> n1 >> n2 >> w;*/
             for (auto it = edges[bucketCntr].begin(); it != edges[bucketCntr].end(); it++) {
                 //if (w == bucketCntr) {
-                        w = it->weight;
-                    uint64_t u = it->n1;
-                    uint64_t v = it->n2;
-                    uint64_t set_u = ds.find(u);
-                    uint64_t set_v = ds.find(v);
+                w = it->weight;
+                uint64_t u = it->n1;
+                uint64_t v = it->n2;
+                uint64_t set_u = ds.find(u);
+                uint64_t set_v = ds.find(v);
 
-                    // Check if the selected edge is creating
-                    // a cycle or not (Cycle is created if u
-                    // and v belong to same set)
-                    if (set_u != set_v) {
-                        // Current edge will be in the MST
-                        // Merge two sets
-                        ds.merge(set_u, set_v, w);
-                        mergeCntr++;
-                    }/* else {
+                // Check if the selected edge is creating
+                // a cycle or not (Cycle is created if u
+                // and v belong to same set)
+                if (set_u != set_v) {
+                    // Current edge will be in the MST
+                    // Merge two sets
+                    ds.merge(set_u, set_v, w);
+                    nodes[u] = 1;
+                    nodes[v] = 1;
+                    mergeCntr++;
+                }/* else {
                             if (nodes.find(u) == nodes.end() || nodes.find(v) == nodes.end())
                                 std::cerr << u << " " << v << " " << set_u << " " << set_v << "\n";
                     }*/
-                    cntr++;
-                    if (cntr % 1000000 == 0) {
-                        std::cerr << "edge " << cntr << " " << mergeCntr << "\n";
-                    }
+                cntr++;
+                if (cntr % 1000000 == 0) {
+                    std::cerr << "edge " << cntr << " " << mergeCntr << "\n";
+                }
                 //}
             }
             /*file.clear();
@@ -145,8 +151,15 @@ struct Graph {
 
         }
         //file.close();
+        uint64_t distinctNodes{0};
+        for (uint64_t i = 0; i < V; i += 64) {
+            distinctNodes += sdsl::bits::cnt(nodes.get_int(i, 64));
+        }
+
         std::cerr << "final # of edges: " << cntr
-                  << " # of merges: " << mergeCntr << "\n";
+                  << "\n# of merges: " << mergeCntr
+                  << "\n# of distinct nodes: " << distinctNodes
+                  << "\n";
         return ds;
     }
 };
@@ -164,23 +177,33 @@ int main(int argc, char *argv[]) {
     uint32_t w_;
     uint64_t n1, n2;
     std::string tmp;
-    unordered_set<uint64_t> nodes;
-    std::getline(file, tmp);
-    while (file.good()) {
-        file >> n1 >> n2 >> w_;
-        g.addEdge(n1, n2, w_);
-        nodes.insert(n1);
-        nodes.insert(n2);
+    {
+        //unordered_set<uint64_t> nodes;
+        sdsl::bit_vector nodes(numNodes, 0);
+        std::getline(file, tmp);
+        while (file.good()) {
+            file >> n1 >> n2 >> w_;
+            g.addEdge(n1, n2, w_);
+            nodes[n1] = 1;
+            nodes[n2] = 1;
+            //nodes.insert(n1);
+            //nodes.insert(n2);
+        }
+        //file.clear();
+        //file.seekg(0, ios::beg);
+        file.close();
+
+        uint64_t distinctNodes{0};
+        for (uint64_t i = 0; i < numNodes; i += 64) {
+            distinctNodes += sdsl::bits::cnt(nodes.get_int(i, 64));
+        }
+        std::cerr << "# of nodes: " << distinctNodes//nodes.size()
+                  << "\n# of edges: " << g.edges.size()
+                  << "\n";
+//        nodes.clear();
     }
-    //file.clear();
-    //file.seekg(0, ios::beg);
-    file.close();
-     std::cerr << "# of nodes: " << nodes.size()
-               << "\n# of edges: " << g.edges.size()
-               << "\n";
-     g.V = numNodes;
-     g.E = g.edges.size();
-     nodes.clear();
+    g.V = numNodes;
+    g.E = g.edges.size();
     //g.V = numNodes;
     //ifstream file(filename);
 
