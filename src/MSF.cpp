@@ -13,28 +13,29 @@ using namespace std;
 struct Edge {
     uint64_t n1;
     uint64_t n2;
-    uint16_t weight;
+    uint32_t weight;
 
-    Edge(uint64_t inN1, uint64_t inN2, uint16_t inWeight)
+    Edge(uint64_t inN1, uint64_t inN2, uint32_t inWeight)
             : n1(inN1), n2(inN2), weight(inWeight) {}
 };
 
 struct DisjointSetNode {
-   uint64_t parent{0}, rnk{0}, w{0}, edges{0};
+    uint64_t parent{0}, rnk{0}, w{0}, edges{0};
 
-   void setParent(uint64_t p) {parent = p;}
+    void setParent(uint64_t p) { parent = p; }
 
-   void mergeWith(DisjointSetNode& n, uint16_t edgeW) {
-       n.setParent(parent);
-       w += (n.w + static_cast<uint64_t>(edgeW));
-       edges += (n.edges + 1);
-       n.edges = 0;
-       n.w = 0;
-       if (rnk == n.rnk) {
-           rnk++;
-       }
-   }
+    void mergeWith(DisjointSetNode &n, uint16_t edgeW) {
+        n.setParent(parent);
+        w += (n.w + static_cast<uint64_t>(edgeW));
+        edges += (n.edges + 1);
+        n.edges = 0;
+        n.w = 0;
+        if (rnk == n.rnk) {
+            rnk++;
+        }
+    }
 };
+
 // To represent Disjoint Sets
 struct DisjointSets {
     std::vector<DisjointSetNode> els;
@@ -92,42 +93,55 @@ struct Graph {
 
     // Function to find MST using Kruskal's
     // MST algorithm
-    DisjointSets kruskalMSF() {
+    DisjointSets kruskalMSF(uint64_t bucketCnt, ifstream &file) {
         int mst_wt = 0; // Initialize result
 
         // Sort edges in increasing order on basis of cost
-        sort(edges.begin(), edges.end(),
-             [](const Edge &e1, const Edge &e2) { return e1.weight < e2.weight; });
 
+        /*sort(edges.begin(), edges.end(),
+             [](const Edge &e1, const Edge &e2) { return e1.weight < e2.weight; });
+*/
         // Create disjoint sets
         DisjointSets ds(V);
 
-        uint64_t cntr{0}, mergeCntr{0};
+        std::string tmp;
+        uint64_t n1{0}, n2{0}, cntr{0}, mergeCntr{0};
+        uint32_t w{0};
         // Iterate through all sorted edges
-        vector<Edge>::iterator it;
-        for (it = edges.begin(); it != edges.end(); it++) {
-            uint64_t u = it->n1;
-            uint64_t v = it->n2;
-            uint64_t set_u = ds.find(u);
-            uint64_t set_v = ds.find(v);
+        for (auto bucketCntr = 1; bucketCntr <= bucketCnt; bucketCntr++) {
+            //ifstream file(filename);
+            std::getline(file, tmp);
+            while (file.good()) {
+                file >> n1 >> n2 >> w;
+                if (w == bucketCntr) {
+                    uint64_t u = n1;
+                    uint64_t v = n2;
+                    uint64_t set_u = ds.find(u);
+                    uint64_t set_v = ds.find(v);
 
-            // Check if the selected edge is creating
-            // a cycle or not (Cycle is created if u
-            // and v belong to same set)
-            if (set_u != set_v) {
-                // Current edge will be in the MST
-                // Merge two sets
-                ds.merge(set_u, set_v, it->weight);
-                mergeCntr++;
-            }/* else {
-            if (nodes.find(u) == nodes.end() || nodes.find(v) == nodes.end())
-                std::cerr << u << " " << v << " " << set_u << " " << set_v << "\n";
-        }*/
-            cntr++;
-            if (cntr % 1000000 == 0) {
-                std::cerr << "edge " << cntr << " " << mergeCntr << "\n";
+                    // Check if the selected edge is creating
+                    // a cycle or not (Cycle is created if u
+                    // and v belong to same set)
+                    if (set_u != set_v) {
+                        // Current edge will be in the MST
+                        // Merge two sets
+                        ds.merge(set_u, set_v, w);
+                        mergeCntr++;
+                    }/* else {
+                            if (nodes.find(u) == nodes.end() || nodes.find(v) == nodes.end())
+                                std::cerr << u << " " << v << " " << set_u << " " << set_v << "\n";
+                    }*/
+                    cntr++;
+                    if (cntr % 1000000 == 0) {
+                        std::cerr << "edge " << cntr << " " << mergeCntr << "\n";
+                    }
+                }
             }
+            file.clear();
+            file.seekg(0, file.beg);
+
         }
+        file.close();
         std::cerr << "final # of edges: " << cntr
                   << " # of merges: " << mergeCntr << "\n";
         return ds;
@@ -139,11 +153,13 @@ int main(int argc, char *argv[]) {
        and undirected graph */
     std::string filename = argv[1];
     uint64_t numNodes = std::stoull(argv[2]);
+    uint64_t bucketCnt = std::stoull(argv[3]);
+
     ifstream file(filename);
 
     Graph g;
 
-    uint32_t w_;
+    /*uint32_t w_;
     uint64_t n1, n2;
     std::string tmp;
     unordered_set<uint64_t> nodes;
@@ -154,15 +170,19 @@ int main(int argc, char *argv[]) {
         nodes.insert(n1);
         nodes.insert(n2);
     }
-    file.close();
-    std::cerr << "# of nodes: " << nodes.size()
-              << "\n# of edges: " << g.edges.size()
-              << "\n";
+    //file.clear();
+    //file.seekg(0, ios::beg);
+    file.close();*/
+    /* std::cerr << "# of nodes: " << nodes.size()
+               << "\n# of edges: " << g.edges.size()
+               << "\n";
+     g.V = numNodes;
+     g.E = g.edges.size();
+     nodes.clear();*/
     g.V = numNodes;
-    g.E = g.edges.size();
-    nodes.clear();
+    //ifstream file(filename);
 
-    DisjointSets ds = g.kruskalMSF();
+    DisjointSets ds = g.kruskalMSF(bucketCnt, file);
 
     for (auto &el : ds.els) {
         if (el.w != 0) {
