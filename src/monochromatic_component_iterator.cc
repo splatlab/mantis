@@ -200,6 +200,8 @@ monochromatic_component_iterator::monochromatic_component_iterator(const CQF<Key
     std::cerr << "kmers: " << cqf->size() << "\n";
     std::cerr << "slots: " << cqf->slots() << "\n";
     withMax0.resize(9);
+    sdsl::bit_vector d(num_samples, 0);
+    eqclass_map[d] = 0;
 }
 
 monochromatic_component_iterator::work_item
@@ -282,9 +284,11 @@ monochromatic_component_iterator::neighbors(monochromatic_component_iterator::wo
     for (const auto b : dna::bases) {
         uint64_t eqid, idx;
         if (exists(b >> n.curr/*b + n.curr*/, idx, eqid))
-            result.insert(work_item(b >> n.curr, idx, eqid));
+            if (eqid != n.colorid) // ignore the neighbor if it's a self-loop
+                result.insert(work_item(b >> n.curr, idx, eqid));
         if (exists(n.curr << b/*n.curr + b*/, idx, eqid))
-            result.insert(work_item(n.curr << b, idx, eqid));
+            if (eqid != n.colorid)
+                result.insert(work_item(n.curr << b, idx, eqid));
     }
     return result;
 }
@@ -382,9 +386,13 @@ void monochromatic_component_iterator::neighborDist(uint64_t cntrr) {
             maxd = std::max(maxd, d);
             meand += d;
         }
-        /*else {
+        else {
             mind = 0;
-        }*/
+        }
+    }
+    // if the node is isolated (or only has a self-loop) it should have maximum possible distance
+    if (neighborCnt == 0) {
+        mind = maxd = meand = num_samples;
     }
 
     if (!maxd) {
@@ -404,17 +412,19 @@ void monochromatic_component_iterator::uniqNeighborDist(uint64_t num_samples) {
     //std::cerr << " current : " << cur.colorid << "\n";
     for (auto &nei : neighbors(cur)) {
         neighborCnt++;
+        sdsl::bit_vector d(num_samples, 0);
         if (nei.colorid != cur.colorid) {
             //xstd::cerr << nei.colorid << "\n";
             //auto d = manhattanDistBvHash(nei.colorid, cur.colorid, num_samples);
-            sdsl::bit_vector d(num_samples, 0);
             manhattanDistBvHash(nei.colorid, cur.colorid, d, num_samples);
             if (eqclass_map.find(d) == eqclass_map.end()) {
                 eqclass_map[d] = 1;
             } else {
                 eqclass_map[d]++;
             }
-        }
+        } /*else {
+            eqclass_map[d]++;
+        }*/
     }
 }
 
