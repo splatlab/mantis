@@ -175,7 +175,7 @@ int main(int argc, char *argv[]) {
     Graph g(bucketCnt);
 
     uint32_t w_;
-    uint64_t n1, n2;
+    uint64_t n1, n2, edgeCntr{0};
     std::string tmp;
     {
         //unordered_set<uint64_t> nodes;
@@ -186,6 +186,7 @@ int main(int argc, char *argv[]) {
             g.addEdge(n1, n2, w_);
             nodes[n1] = 1;
             nodes[n2] = 1;
+            edgeCntr++;
             //nodes.insert(n1);
             //nodes.insert(n2);
         }
@@ -198,12 +199,12 @@ int main(int argc, char *argv[]) {
             distinctNodes += sdsl::bits::cnt(nodes.get_int(i, 64));
         }
         std::cerr << "# of nodes: " << distinctNodes//nodes.size()
-                  << "\n# of edges: " << g.edges.size()
+                  << "\n# of edges: " << edgeCntr
                   << "\n";
 //        nodes.clear();
     }
     g.V = numNodes;
-    g.E = g.edges.size();
+    g.E = edgeCntr;
     //g.V = numNodes;
     //ifstream file(filename);
 
