@@ -88,7 +88,7 @@ class ColoredDbg {
 			uint64_t kmerrev = Kmer::reverse_complement(kmer, dbg.keybits() / 2);
 			if (Kmer::compare_kmers(kmerrev, kmer))
 				kmer = kmerrev;
-			KeyObject qo(HashUtil::hash_64(kmer, BITMASK(dbg.range()-1)), 0, 0);
+			KeyObject qo(HashUtil::hash_64(kmer, BITMASK(dbg.keybits())), 0, 0);
 			return dbg.query(qo);
 		}
 
