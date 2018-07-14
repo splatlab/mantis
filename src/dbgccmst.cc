@@ -169,9 +169,10 @@ int build_dbgccmst(DBGCCMSTOpts& opt)
 					 source(*it, ccg),
 					 target(*it, ccg),
 					 get(edge_weight_t(), ccg, *it));
+
+
 	std::vector<graph_traits < ccGraph >::edge_descriptor> mst;
 	kruskal_minimum_spanning_tree(ccg, std::back_inserter(mst));
-
 	
 	printf("MST:\n");
 	for (const auto & edg : mst)
