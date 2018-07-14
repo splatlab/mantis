@@ -45,7 +45,7 @@ class CQF {
 		void insert(const key_obj& k);
 
 		/* Will return the count. */
-		uint64_t query(const key_obj& k);
+		uint64_t query(const key_obj& k) const;
 
 		void serialize(std::string filename) {
 			qf_serialize(&cqf, filename.c_str());
@@ -131,7 +131,7 @@ void CQF<key_obj>::insert(const key_obj& k) {
 }
 
 template <class key_obj>
-uint64_t CQF<key_obj>::query(const key_obj& k) {
+uint64_t CQF<key_obj>::query(const key_obj& k) const {
 	return qf_count_key_value(&cqf, k.key, k.value);
 }
 

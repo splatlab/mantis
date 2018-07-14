@@ -20,6 +20,12 @@ class QueryOpts {
   std::shared_ptr<spdlog::logger> console{nullptr};
 };
 
+class DBGCCMSTOpts {
+ public:
+  std::string prefix;
+  std::shared_ptr<spdlog::logger> console{nullptr};
+};
+
 class ValidateOpts {
  public:
   std::string inlist;

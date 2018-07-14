@@ -60,7 +60,7 @@ class BitVectorRRR {
 		bool operator[](uint64_t idx);
 		bool serialize(std::string& filename);
 		uint64_t bit_size(void) const { return rrr_bits.size(); }
-		uint64_t get_int(uint64_t startP, uint64_t len=64) {
+		uint64_t get_int(uint64_t startP, uint64_t len=64) const {
 			return rrr_bits.get_int(startP, len);
 		}
 

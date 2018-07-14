@@ -14,10 +14,6 @@
 #include "ProgOpts.h"
 #include "clipp.h"
 #include "spdlog/spdlog.h"
-//#include "CLI/CLI.hpp"
-
-#define MAX_NUM_SAMPLES 2600
-#define SAMPLE_SIZE (1ULL << 26)
 
 template <typename T>
 void explore_options_verbose(T& res) {
@@ -43,71 +39,26 @@ void explore_options_verbose(T& res) {
   }
 }
 
-int query_main (QueryOpts& opt);
-int build_main (BuildOpts& opt);
-int validate_main (ValidateOpts& opt);
+int query_main(QueryOpts& opt);
+int build_dbgccmst(DBGCCMSTOpts& opt);
+int build_main(BuildOpts& opt);
+int validate_main(ValidateOpts& opt);
 
-/*
- * ===  FUNCTION  =============================================================
- *         Name:  main
- *  Description:
- * ============================================================================
- */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, query, validate, help};
+  enum class mode {build, query, dbgccmst, validate, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
 
   BuildOpts bopt;
   QueryOpts qopt;
+  DBGCCMSTOpts mopt;
   ValidateOpts vopt;
   bopt.console = console;
   qopt.console = console;
+  mopt.console = console;
   vopt.console = console;
-
-  /*
-  bool print_version{false};
-  CLI::App app{"Mantis"};
-  app.add_flag("-v,--version", print_version, "print version info");
-
-  auto build_app = app.add_subcommand("build", "build the mantis index");
-  auto query_app = app.add_subcommand("query", "query the mantis index");
-  auto validate_app = app.add_subcommand("validate", "validate the mantis index");
-
-  build_app->add_option("-i,--input-list", bopt.inlist, "file containing list of input filters")->required()->check(CLI::ExistingFile);
-  build_app->add_option("-c,--cutoff-list", bopt.cutoffs, "file containing list of experiment-specific cutoffs")->required()->check(CLI::ExistingFile);
-  build_app->add_option("-o,--output", bopt.out, "directory where results should be written")->required();
-
-  query_app->add_flag("-j,--json", qopt.use_json, "Write the output in JSON format");
-  query_app->add_option("-p,--input-prefix", qopt.prefix, "Prefix of input files.")->required()->check(CLI::ExistingDirectory);
-  query_app->add_option("-o,--output", qopt.output, "Where to write query output.");
-  query_app->add_option("query", qopt.query_file, "Prefix of input files.")->required()->check(CLI::ExistingFile);
-
-  validate_app->add_option("-i,--input-list", vopt.inlist, "file containing list of input filters")->required()->check(CLI::ExistingFile);
-  validate_app->add_option("-c,--cutoff-list", vopt.cutoffs, "file containing list of experiment-specific cutoffs")->required()->check(CLI::ExistingFile);
-  validate_app->add_option("-p,--input-prefix", vopt.prefix, "Directory containing the mantis dbg.")->required()->check(CLI::ExistingDirectory);
-  validate_app->add_option("query", vopt.query_file,"Query file.")->required()->check(CLI::ExistingFile);
-
-  CLI11_PARSE(app, argc, argv);
-
-  if (print_version) {
-    std::cerr << "mantis " << 0.1 << "\n";
-    return 0;
-  }
-
-  if (app.got_subcommand(build_app)) {
-    return build_main(bopt);
-  } else if (app.got_subcommand(query_app)) {
-    return query_main(qopt);
-  } else if (app.got_subcommand(validate_app)) {
-    return validate_main(vopt);
-  } else {
-    std::cout << "I don't know the requested sub-command\n";
-    return 1;
-  }
-  */
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -141,6 +92,11 @@ int main ( int argc, char *argv[] ) {
                      value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
                      );
 
+  auto dbgccmst_mode = (
+                     command("dbgccmst").set(selected, mode::dbgccmst),
+                     required("-p", "--input-dir") & value(ensure_dir_exists, "input_dir", mopt.prefix) % "Directory containing input files."
+                     );
+
   auto validate_mode = (
                      command("validate").set(selected, mode::validate),
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", vopt.inlist) % "file containing list of input filters",
@@ -150,11 +106,12 @@ int main ( int argc, char *argv[] ) {
                      );
 
   auto cli = (
-              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) ),
+              (build_mode | query_mode | dbgccmst_mode | validate_mode | command("help").set(selected,mode::help) ),
               option("-v", "--version").call([]{std::cout << "version 1.0\n\n";}).doc("show version")  );
 
   assert(build_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
+  assert(dbgccmst_mode.flags_are_prefix_free());
   assert(validate_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
@@ -173,6 +130,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
     case mode::query: query_main(qopt);  break;
+    case mode::dbgccmst: build_dbgccmst(mopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
@@ -184,6 +142,8 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(build_mode, "mantis");
       } else if (b->arg() == "query") {
         std::cout << make_man_page(query_mode, "mantis");
+      } else if (b->arg() == "dbgccmst") {
+        std::cout << make_man_page(dbgccmst_mode, "mantis");
       } else if (b->arg() == "validate") {
         std::cout << make_man_page(validate_mode, "mantis");
       } else {
