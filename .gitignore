@@ -43,3 +43,7 @@ validatemantis
 
 #core dump
 core
+
+#build dirs
+build/
+bin/

@@ -4,6 +4,10 @@ BitVector::BitVector(uint64_t size) : size(size) {
 		bits = sdsl::bit_vector(size);
 }
 
+void BitVector::reset() {
+	bits = sdsl::bit_vector(size);
+}
+
 bool BitVector::operator[](uint64_t idx) {
 	assert(idx < size);
 	return bits[idx];

@@ -30,12 +30,16 @@
 
 class BitVector {
 	public:
-		BitVector() : bits(0), size(0) {};
+		BitVector() : bits(), size(0) {};
 		BitVector(uint64_t size);
+		BitVector(const BitVector& bv) : bits(bv.bits), size(bv.size)
+	{};
 
 		sdsl::bit_vector get_bits() const {
 			return bits;
 		}
+
+		void reset();
 		bool operator[](uint64_t idx);
 		void set(const uint64_t idx);
 		uint64_t capacity(void) const { return bits.capacity() / 8; }
@@ -52,7 +56,7 @@ class BitVector {
 
 class BitVectorRRR {
 	public:
-		BitVectorRRR() : rrr_bits(BitVector().get_bits()), size(0) {};
+		BitVectorRRR() : rrr_bits(), size(0) {};
 		BitVectorRRR(const BitVector& bv) : rrr_bits(bv.get_bits()),
 				size(bv.bit_size()) {};
 		BitVectorRRR(std::string& filename);

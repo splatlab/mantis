@@ -48,6 +48,7 @@
 #include <boost/graph/kruskal_min_spanning_tree.hpp>
 #include <boost/range/adaptor/map.hpp>
 
+#include "MantisFS.h"
 #include "ProgOpts.h"
 #include "spdlog/spdlog.h"
 #include "kmer.h"
@@ -66,6 +67,8 @@ static inline int popcnt(uint64_t val)
 	return val;
 }
 
+typedef ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> colored_dbg;
+
 using namespace boost;
 typedef adjacency_list < vecS, vecS, undirectedS, no_property, property < edge_weight_t, uint64_t > > ccGraph;
 
@@ -73,27 +76,26 @@ typedef adjacency_list < vecS, vecS, undirectedS, no_property, property < edge_w
 // edge to the color class graph.
 //
 // Assumes: kmer1 exists with color id ccid1.
-static void add_edge(const CQF<KeyObject> *cqf,
-										 uint64_t num_samples,
-										 const BitVectorRRR & eqclasses,
+static void add_edge(colored_dbg &cdbg,
 										 ccGraph &ccg,
 										 uint64_t ccid1,
 										 uint64_t kmer2) {
-	uint64_t kmer2rev = Kmer::reverse_complement(kmer2);
-	if (Kmer::compare_kmers(kmer2rev, kmer2))
-		kmer2 = kmer2rev;
-		
-	KeyObject qo(HashUtil::hash_64(kmer2, BITMASK(2*K)), 0, 0);
-	uint64_t ccid2 = cqf->query(qo);
+	uint64_t ccid2 = cdbg.color_class_id(kmer2);
+	
 	if (ccid2 && ccid2 != ccid1) {
 		if (edge(ccid1, ccid2, ccg).second)
 			return;
+
+		uint64_t num_samples = cdbg.get_num_samples();
+		const colored_dbg::color_class cc1 = cdbg.get_color_class(ccid1);
+		const colored_dbg::color_class cc2 = cdbg.get_color_class(ccid2);
 		
 		uint64_t hamming_distance = 0;
-		for (uint64_t word_index = 0; word_index < (num_samples + 63) / 64; word_index ++) {
-			uint64_t len = std::min(64UL, num_samples - 64 * word_index);
-			uint64_t word1 = eqclasses.get_int((ccid1 - 1) * num_samples, len);
-			uint64_t word2 = eqclasses.get_int((ccid2 - 1) * num_samples, len);
+		for (uint64_t word_index = 0;
+				 word_index < (num_samples + 63) / 64;
+				 word_index ++) {
+			uint64_t word1 = cc1.get_uint64(64 * word_index);
+			uint64_t word2 = cc2.get_uint64(64 * word_index);
 			hamming_distance += popcnt(word1 ^ word2);
 		}
 
@@ -101,14 +103,15 @@ static void add_edge(const CQF<KeyObject> *cqf,
 	}
 }
 
-static void add_zero_edge(uint64_t num_samples,
-													const BitVectorRRR & eqclasses,
+static void add_zero_edge(colored_dbg &cdbg,
 													ccGraph &ccg,
 													uint64_t ccid) {
+	uint64_t num_samples = cdbg.get_num_samples();
+	const colored_dbg::color_class cc = cdbg.get_color_class(ccid);
+	
 	uint64_t hamming_distance = 0;
 	for (uint64_t word_index = 0; word_index < (num_samples + 63) / 64; word_index ++) {
-		uint64_t len = std::min(64UL, num_samples - 64 * word_index);
-		uint64_t word = eqclasses.get_int((ccid - 1) * num_samples, len);
+		uint64_t word = cc.get_uint64(word_index);
 		hamming_distance += popcnt(word);
 	}
 
@@ -128,38 +131,34 @@ int build_dbgccmst(DBGCCMSTOpts& opt)
   spdlog::logger* console = opt.console.get();
 	console->info("Reading colored dbg from disk.");
 
-	std::string cqf_file(prefix + CQF_FILE);
-	std::string eqclass_file(prefix + EQCLASS_FILE);
-	std::string sample_file(prefix + SAMPLEID_FILE);
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
-																														eqclass_file,
-																														sample_file);
-  console->info("Read colored dbg with {} k-mers and {} color classes",
-                cdbg.get_cqf()->size(),
-								cdbg.get_bitvector().bit_size() / cdbg.get_num_samples());
+	std::string dbg_file(prefix + mantis::CQF_FILE);
+	std::string sample_file(prefix + mantis::SAMPLEID_FILE);
+	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
+                                                                   mantis::EQCLASS_FILE);
+	colored_dbg cdbg(dbg_file,
+									 eqclass_files,
+									 sample_file);
 
-
-	const CQF<KeyObject> *cqf = cdbg.get_cqf();
-	const BitVectorRRR ccTable = cdbg.get_bitvector();
+	const CQF<KeyObject> * cqf = cdbg.get_cqf();
 	uint64_t num_samples = cdbg.get_num_samples();
-	uint64_t num_ccs = ccTable.bit_size() / num_samples;
+	uint64_t num_ccs = cdbg.get_num_eqclasses();
 
 	ccGraph ccg(num_ccs+1);
 	for (auto it = cqf->begin(0); !it.done(); ++it) {
 		auto ko = *it;
-		uint64_t kmer1 = HashUtil::hash_64i(ko.key, BITMASK(2*K));
+		uint64_t kmer1 = HashUtil::hash_64i(ko.key, BITMASK(2*cqf->keybits()));
 		uint64_t ccid1 = ko.count;
 
 		for (uint64_t b : {0, 1, 2, 3}) {
-			uint64_t kmer_right = (kmer1 << 2 | b) & BITMASK(2*K);
-			uint64_t kmer_left = (kmer1 >> 2) | (b << (2*K-2));
-			add_edge(cqf, num_samples, ccTable, ccg, ccid1, kmer_right);
-			add_edge(cqf, num_samples, ccTable, ccg, ccid1, kmer_left);
+			uint64_t kmer_right = (kmer1 << 2 | b) & BITMASK(2*cqf->keybits());
+			uint64_t kmer_left = (kmer1 >> 2) | (b << (2*cqf->keybits()-2));
+			add_edge(cdbg, ccg, ccid1, kmer_right);
+			add_edge(cdbg, ccg, ccid1, kmer_left);
 		}
 	}
 
 	for (uint64_t ccid = 1; ccid < num_ccs + 1; ccid++)
-		add_zero_edge(num_samples, ccTable, ccg, ccid);
+		add_zero_edge(cdbg, ccg, ccid);
 
 
 	printf("Graph:\n");

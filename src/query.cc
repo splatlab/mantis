@@ -44,6 +44,7 @@
 #include <sys/mman.h>
 #include <openssl/rand.h>
 
+#include "MantisFS.h"
 #include "ProgOpts.h"
 #include "spdlog/spdlog.h"
 #include "kmer.h"
@@ -51,12 +52,11 @@
 #include "common_types.h"
 #include "CLI/CLI.hpp"
 #include "CLI/Timer.hpp"
+#include "mantisconfig.hpp"
 
-#define MAX_NUM_SAMPLES 2600
-#define OUTPUT_FILE "samples.output"
-
-void output_results(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg,
-                    std::ofstream& opfile) {
+void output_results(mantis::QuerySets& multi_kmers,
+										ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
+										cdbg, std::ofstream& opfile) {
   mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
@@ -76,8 +76,9 @@ void output_results(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF
 }
 
 
-void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>& cdbg,
-                    std::ofstream& opfile) {
+void output_results_json(mantis::QuerySets& multi_kmers,
+												 ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
+												 cdbg, std::ofstream& opfile) {
   mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
@@ -102,7 +103,6 @@ void output_results_json(mantis::QuerySets& multi_kmers, 	ColoredDbg<SampleObjec
     }
     opfile << "]\n";
   }
-
 }
 
 
@@ -132,38 +132,48 @@ int query_main (QueryOpts& opt)
   if (prefix.back() != '/') {
     prefix.push_back('/');
   }
+  // make the output directory if it doesn't exist
+  if (!mantis::fs::DirExists(prefix.c_str())) {
+    mantis::fs::MakeDir(prefix.c_str());
+  }
 
   spdlog::logger* console = opt.console.get();
 	console->info("Reading colored dbg from disk.");
 
-	std::string cqf_file(prefix + CQF_FILE);
-	std::string eqclass_file(prefix + EQCLASS_FILE);
-	std::string sample_file(prefix + SAMPLEID_FILE);
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(cqf_file,
-																														eqclass_file,
+	std::string dbg_file(prefix + mantis::CQF_FILE);
+	std::string sample_file(prefix + mantis::SAMPLEID_FILE);
+	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
+                                                                   mantis::EQCLASS_FILE);
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
+																														eqclass_files,
 																														sample_file);
+	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
   console->info("Read colored dbg with {} k-mers and {} color classes",
-                cdbg.get_cqf()->size(), cdbg.get_bitvector().bit_size() / cdbg.get_num_samples());
+                cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+
 	//cdbg.get_cqf()->dump_metadata(); 
-	//std::string query_file(argv[2]);
-	//CQF<KeyObject> cqf(query_file);
+	//CQF<KeyObject> cqf(query_file, false);
 	//CQF<KeyObject>::Iterator it = cqf.begin(1);
-	//std::vector<uint64_t> input_kmers;
+	//mantis::QuerySet input_kmers;
 	//do {
 		//KeyObject k = *it;
-		//input_kmers.push_back(k.key);
+		//input_kmers.insert(k.key);
 		//++it;
 	//} while (!it.done());
 
+	//mantis::QuerySets multi_kmers;
+	//multi_kmers.push_back(input_kmers);
+
 	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
-  uint64_t total_kmers = 0;
-  mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
+	uint64_t total_kmers = 0;
+	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										seed,
 																										cdbg.range(),
-                                                    total_kmers);
-  console->info("Total k-mers to query: {}", total_kmers);
-
+																										kmer_size,
+																										total_kmers);
+	console->info("Total k-mers to query: {}", total_kmers);
 
   // Attempt to optimize bulk query
   /*

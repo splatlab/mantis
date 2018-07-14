@@ -14,6 +14,7 @@
 #include "ProgOpts.h"
 #include "clipp.h"
 #include "spdlog/spdlog.h"
+#include "mantisconfig.hpp"
 
 template <typename T>
 void explore_options_verbose(T& res) {
@@ -80,8 +81,10 @@ int main ( int argc, char *argv[] ) {
 
   auto build_mode = (
                      command("build").set(selected, mode::build),
+                     option("-e", "--eqclass_dist").set(bopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
+										 required("-s","--log-slots") & value("log-slots",
+																											 bopt.qbits) % "log of number of slots in the output CQF",
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
-                     required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", bopt.cutoffs) % "file containing list of experiment-specific cutoffs",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto query_mode = (
@@ -100,14 +103,15 @@ int main ( int argc, char *argv[] ) {
   auto validate_mode = (
                      command("validate").set(selected, mode::validate),
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", vopt.inlist) % "file containing list of input filters",
-                     required("-c", "--cutoff-list") & value(ensure_file_exists, "cutoff_list", vopt.cutoffs) % "file containing list of experiment-specific cutoffs",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
                      value(ensure_file_exists, "query", vopt.query_file) % "Query file."
                      );
 
   auto cli = (
-              (build_mode | query_mode | dbgccmst_mode | validate_mode | command("help").set(selected,mode::help) ),
-              option("-v", "--version").call([]{std::cout << "version 1.0\n\n";}).doc("show version")  );
+              (build_mode | query_mode | dbgccmst_mode | validate_mode | command("help").set(selected,mode::help) |
+               option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
+              )
+             );
 
   assert(build_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
