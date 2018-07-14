@@ -146,12 +146,12 @@ int build_dbgccmst(DBGCCMSTOpts& opt)
 	ccGraph ccg(num_ccs+1);
 	for (auto it = cqf->begin(0); !it.done(); ++it) {
 		auto ko = *it;
-		uint64_t kmer1 = HashUtil::hash_64i(ko.key, BITMASK(2*cqf->keybits()));
+		uint64_t kmer1 = HashUtil::hash_64i(ko.key, BITMASK(cqf->keybits()));
 		uint64_t ccid1 = ko.count;
 
 		for (uint64_t b : {0, 1, 2, 3}) {
-			uint64_t kmer_right = (kmer1 << 2 | b) & BITMASK(2*cqf->keybits());
-			uint64_t kmer_left = (kmer1 >> 2) | (b << (2*cqf->keybits()-2));
+			uint64_t kmer_right = (kmer1 << 2 | b) & BITMASK(cqf->keybits());
+			uint64_t kmer_left = (kmer1 >> 2) | (b << (cqf->keybits()-2));
 			add_edge(cdbg, ccg, ccid1, kmer_right);
 			add_edge(cdbg, ccg, ccid1, kmer_left);
 		}
