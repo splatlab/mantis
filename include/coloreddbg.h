@@ -65,7 +65,7 @@ class ColoredDbg {
 		void build_sampleid_map(qf_obj *incqfs);
 
     default_cdbg_bv_map_t&
-			construct(qf_obj *incqfs, default_cdbg_bv_map_t& map, uint64_t num_kmers);
+			construct(qf_obj *incqfs, uint64_t num_kmers);
 
 		void set_console(spdlog::logger* c) { console = c; }
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
@@ -358,8 +358,7 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 
 template <class qf_obj, class key_obj>
 cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
-	key_obj>::construct(qf_obj *incqfs, cdbg_bv_map_t<__uint128_t,
-											std::pair<uint64_t, uint64_t>>& map, uint64_t num_kmers)
+	key_obj>::construct(qf_obj *incqfs, uint64_t num_kmers)
 {
 	uint32_t nqf = 0;
 	uint64_t counter = 0;
