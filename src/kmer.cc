@@ -85,7 +85,7 @@ uint64_t Kmer::reverse_complement(uint64_t kmer)
  * Return true if the kmer is greater than or equal to its
  * reverse complement. 
  * */
-inline bool Kmer::compare_kmers(uint64_t kmer, uint64_t kmer_rev)
+bool Kmer::compare_kmers(uint64_t kmer, uint64_t kmer_rev)
 {
 	return kmer >= kmer_rev;
 }

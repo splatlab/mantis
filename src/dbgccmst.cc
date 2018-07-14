@@ -80,7 +80,11 @@ static void add_edge(const CQF<KeyObject> *cqf,
 										 uint64_t ccid1,
 										 uint64_t kmer2) {
 	// Do we need to canonicalize kmer2?
-	
+
+	uint64_t kmer2rev = Kmer::reverse_complement(kmer2);
+	if (Kmer::compare_kmers(kmer2rev, kmer2))
+		kmer2 = kmer2rev;
+		
 	KeyObject qo(HashUtil::hash_64(kmer2, BITMASK(2*K)), 0, 0);
 	uint64_t ccid2 = cqf->query(qo);
 	if (ccid2 && ccid2 != ccid1) {

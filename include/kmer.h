@@ -41,7 +41,7 @@ class Kmer {
 		static string int_to_str(uint64_t kmer);
 		static inline int reverse_complement_base(int x);
 		static uint64_t reverse_complement(uint64_t kmer);
-		static inline bool compare_kmers(uint64_t kmer, uint64_t kmer_rev);
+		static bool compare_kmers(uint64_t kmer, uint64_t kmer_rev);
 		static inline unsigned __int128 word_reverse_complement(unsigned __int128 w);
 		static inline int64_t word_reverse_complement(uint64_t w);
 		static inline uint32_t word_reverse_complement(uint32_t w);
