@@ -176,7 +176,7 @@ build_main ( BuildOpts& opt )
 	// First construct the colored dbg on initial SAMPLE_SIZE k-mers.
 	default_cdbg_bv_map_t unsorted_map;
 
-	cdbg.construct(inobjects.data(), unsorted_map, mantis::SAMPLE_SIZE);
+	unsorted_map = cdbg.construct(inobjects.data(), mantis::SAMPLE_SIZE);
 
 	console->info("Number of eq classes found after sampling {}",
 								unsorted_map.size());
@@ -206,7 +206,7 @@ build_main ( BuildOpts& opt )
 	console->info("Constructing the colored dBG.");
 
 	// Reconstruct the colored dbg using the new set of equivalence classes.
-	cdbg.construct(inobjects.data(), sorted_map, std::numeric_limits<uint64_t>::max());
+	cdbg.construct(inobjects.data(), std::numeric_limits<uint64_t>::max());
 
 	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
 								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
