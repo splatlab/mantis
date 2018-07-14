@@ -141,7 +141,7 @@ int build_dbgccmst(DBGCCMSTOpts& opt)
 
 	const CQF<KeyObject> * cqf = cdbg.get_cqf();
 	uint64_t num_samples = cdbg.get_num_samples();
-	uint64_t num_ccs = cdbg.get_num_eqclasses();
+	uint64_t num_ccs = cdbg.get_num_bitvectors();
 
 	ccGraph ccg(num_ccs+1);
 	for (auto it = cqf->begin(0); !it.done(); ++it) {
