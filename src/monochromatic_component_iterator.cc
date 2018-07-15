@@ -190,9 +190,14 @@ namespace dna {
 //////////////////////////////// monochromatic_component_iterator //////////////////////////
 
 monochromatic_component_iterator::monochromatic_component_iterator(const CQF<KeyObject> *g,
-                                                                   std::vector<sdsl::rrr_vector<63>> &bvin,
-                                                                   uint64_t num_samplesin)
-        : cqf(g), it(g->begin(0)), bvs(bvin), num_samples(num_samplesin) {
+                                                                   std::vector<sdsl::rrr_vector < 63>>
+
+&bvin,
+uint64_t num_samplesin
+)
+:
+
+cqf (g), it(g->begin(0)), bvs(bvin), num_samples(num_samplesin) {
     // initialize cqf iterator
     k = cqf->keybits() / 2; // 2-bit encoded
     std::cerr << "k : " << k << "\n";
@@ -312,7 +317,7 @@ void monochromatic_component_iterator::buildColor(std::vector<uint64_t> &eq, uin
     //std::cerr << eqid << " " << num_samples << " " << idx << " " << offset << "\n";
     while (i < num_samples) {
         bitcnt = std::min(num_samples - i, (uint64_t) 64);
-        uint64_t wrd = (bvs[idx]).get_int(offset*num_samples + i, bitcnt);
+        uint64_t wrd = (bvs[idx]).get_int(offset * num_samples + i, bitcnt);
         eq[wrdcnt++] = wrd;
         i += bitcnt;
     }
@@ -385,14 +390,14 @@ void monochromatic_component_iterator::neighborDist(uint64_t cntrr) {
             mind = std::min(mind, d);
             maxd = std::max(maxd, d);
             meand += d;
-        }
-        else {
+        } else {
             mind = 0;
         }
     }
     // if the node is isolated (or only has a self-loop) it should have maximum possible distance
     if (neighborCnt == 0) {
-        mind = maxd = meand = num_samples;
+        isolatedCnt++;
+        return;
     }
 
     if (!maxd) {
@@ -402,6 +407,28 @@ void monochromatic_component_iterator::neighborDist(uint64_t cntrr) {
     // when we get here, neighborCnt is > 0, and mind is not UINT_MAX
     std::cout << neighborCnt << "\t" << mind << "\t"
               << (meand / neighborCnt) << "\t" << maxd << "\n";
+}
+
+void monochromatic_component_iterator::buildEqGraph(uint64_t cntrr) {
+    KeyObject keyobj = *it;
+    node curn(k, HashUtil::hash_64i(keyobj.key, BITMASK(cqf->keybits())));
+    work_item cur = {curn, it.iter.current, keyobj.count - 1};
+    uint64_t neighborCnt{0};
+    for (auto &nei : neighbors(cur)) {
+        neighborCnt++;
+        if (nei.colorid < cur.colorid) {
+            uint16_t d = (uint16_t) manhattanDist(nei.colorid, cur.colorid);
+            //if (d <= distThreshold) {
+            Edge e(static_cast<uint32_t>(nei.colorid), static_cast<uint32_t>(cur.colorid));
+            if (edges.find(e) == edges.end()) {
+                edges[e] = d;
+            } else if (edges[e] > d) {
+                edges[e] = d;
+            }
+            //}
+        }
+    }
+
 }
 
 void monochromatic_component_iterator::uniqNeighborDist(uint64_t num_samples) {
@@ -449,7 +476,8 @@ int main(int argc, char *argv[]) {
     std::cerr << "cqf loaded: " << cqf.size() << "\n";
     std::string eqfile;
     std::ifstream eqlist(eqlistfile);
-    std::vector<sdsl::rrr_vector<63>> bvs;
+    std::vector<sdsl::rrr_vector < 63>>
+    bvs;
     bvs.reserve(20);
     if (eqlist.is_open()) {
         uint64_t accumTotalEqCls = 0;
@@ -460,7 +488,8 @@ int main(int argc, char *argv[]) {
         }
     }
     //BitVectorRRR bv(eqfile);
-    std::cerr << "num eq clss: " << ((bvs.size()-1)*EQS_PER_SLOT*num_samples + bvs.back().size()) / num_samples << "\n";
+    std::cerr << "num eq clss: " << ((bvs.size() - 1) * EQS_PER_SLOT * num_samples + bvs.back().size()) / num_samples
+              << "\n";
     monochromatic_component_iterator mci(&cqf, bvs, num_samples);
     if (command == "monocomp") {
         while (!mci.done()) {
@@ -482,7 +511,22 @@ int main(int argc, char *argv[]) {
             std::cerr << val << ",";
             total0s += val;
         }
-        std::cerr << "\ntotal 0s: " << total0s - mci.withMax0[0] << "\n";
+        std::cerr << "\ntotal 0s: " << total0s - mci.withMax0[0]
+                  << "\ntota isolated kmers: " << mci.isolatedCnt
+                  << "\n";
+    } else if (command == "buildEqGraph") {
+        size_t cntrr = 0;
+        while (!mci.done()) {
+            mci.buildEqGraph(cntrr++);
+            ++mci;
+            if (cntrr % 10000000 == 0) {
+                std::cerr << cntrr << " kmers & " << mci.edges.size() << " edges\n";
+            }
+        }
+
+        for (auto &kv : mci.edges) {
+            std::cout << kv.first.n1 << "\t" << kv.first.n2 << "\t" << kv.second << "\n";
+        }
     } else if (command == "uniquDistanceDistribution") {
         uint64_t cntr{0};
         while (!mci.done()) {

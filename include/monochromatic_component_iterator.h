@@ -126,6 +126,25 @@ struct bvHash128 {
     }
 };
 
+
+struct Edge {
+    uint32_t n1;
+    uint32_t n2;
+
+    Edge(uint32_t inN1, uint32_t inN2) : n1(inN1), n2(inN2) {}
+
+    bool operator==(const Edge& e) const {
+        return n1 == e.n1 && n2 == e.n2;
+    }
+};
+
+struct edge_hash {
+    uint64_t operator() (const Edge& e) const {
+        uint64_t res = e.n1;
+        return (res << 32) | (uint64_t)e.n2;
+    }
+};
+
 class monochromatic_component_iterator {
 public:
     class work_item {
@@ -153,12 +172,15 @@ public:
                                      uint64_t num_samplesin = 2586);
 
     void neighborDist(uint64_t cntrr);
+    void buildEqGraph(uint64_t cntrr);
+
     void uniqNeighborDist(uint64_t num_samples);
 
-    uint64_t cntr = 0;
+    uint64_t cntr{0}, isolatedCnt{0};
     std::vector<uint64_t> withMax0;
     //spp::sparse_hash_map<__uint128_t, uint64_t, hash128> eqclass_map;
     spp::sparse_hash_map<sdsl::bit_vector, uint64_t, bvHash128> eqclass_map;
+    std::unordered_map<Edge, uint16_t, edge_hash> edges;
 
 
 private:
@@ -172,6 +194,8 @@ private:
     std::vector<sdsl::rrr_vector<63>> &bvs;
     uint64_t num_samples;
     sdsl::bit_vector visited;
+    uint16_t distThreshold = 5;
+
 
     bool exists(edge e, uint64_t &idx, uint64_t &eqid);
 
