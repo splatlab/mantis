@@ -43,15 +43,6 @@ target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUA
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
 target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
 
-add_executable(build_eq_graph build_eq_graph.cc)
-target_include_directories(build_eq_graph PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_link_libraries(build_eq_graph mantis_core)
-target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")
-target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_DEBUG_CXXFLAGS}>")
-target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
-target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
-target_compile_definitions(build_eq_graph PUBLIC "${ARCH_DEFS}")
-
 # TODO: look more into why this is necessary
 if (SDSL_INSTALL_PATH)
    set_property(TARGET mantis APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
