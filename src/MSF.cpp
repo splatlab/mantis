@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
 
     for (auto &el : ds.els) {
         if (el.w != 0) {
-            std::cout << el.edges << "\t" << el.w << "\n";
+            std::cout << el.edges << "\t" << el.w << "\t" << el.rnk << "\n";
         }
     }
     return 0;
