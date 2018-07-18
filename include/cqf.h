@@ -55,6 +55,7 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
+		std::pair<uint64_t, uint64_t> queryValAndIdx( key_obj& k) const;
 		uint64_t range(void) const { return cqf.metadata->range; }
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
@@ -145,6 +146,13 @@ void CQF<key_obj>::insert(const key_obj& k) {
 template <class key_obj>
 uint64_t CQF<key_obj>::query(const key_obj& k) {
 	return qf_count_key_value(&cqf, k.key, k.value);
+}
+
+template <class key_obj>
+std::pair<uint64_t, uint64_t> CQF<key_obj>::queryValAndIdx(key_obj& k) const {
+	uint64_t eq, idx;
+	eq = qf_key_value_index(&cqf, k.key, k.value, &idx);
+	return std::make_pair(eq, idx);
 }
 
 template <class key_obj>

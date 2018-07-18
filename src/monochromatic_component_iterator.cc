@@ -201,9 +201,9 @@ cqf (g), it(g->begin(0)), bvs(bvin), num_samples(num_samplesin) {
     // initialize cqf iterator
     k = cqf->keybits() / 2; // 2-bit encoded
     std::cerr << "k : " << k << "\n";
-    sdsl::util::assign(visited, sdsl::bit_vector(cqf->slots(), 0));
+    sdsl::util::assign(visited, sdsl::bit_vector(cqf->capacity(), 0));
     std::cerr << "kmers: " << cqf->size() << "\n";
-    std::cerr << "slots: " << cqf->slots() << "\n";
+    std::cerr << "slots: " << cqf->capacity() << "\n";
     withMax0.resize(9);
     sdsl::bit_vector d(num_samples, 0);
     eqclass_map[d] = 0;

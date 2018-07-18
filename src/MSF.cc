@@ -4,9 +4,11 @@
 // The algorithm's basic implementation taken from
 // https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
 //
+
 #include<bits/stdc++.h>
 #include <sstream>
 #include <unordered_set>
+#include "clipp.h"
 #include "bitvector.h"
 //#include "sdsl/bits.hpp"
 
@@ -22,12 +24,15 @@ struct Edge {
 };
 
 struct DisjointSetNode {
-    uint64_t parent{0}, rnk{0}, w{0}, edges{0};
+    uint64_t parent{0}, realParent{0}, rnk{0}, w{0}, edges{0};
 
     void setParent(uint64_t p) { parent = p; }
 
-    void mergeWith(DisjointSetNode &n, uint16_t edgeW) {
+    void setRealParent(uint64_t p) { parent = p; }
+
+    void mergeWith(DisjointSetNode &n, uint16_t edgeW, uint64_t id) {
         n.setParent(parent);
+        n.setRealParent(id);
         w += (n.w + static_cast<uint64_t>(edgeW));
         edges += (n.edges + 1);
         n.edges = 0;
@@ -53,6 +58,7 @@ struct DisjointSets {
         for (uint64_t i = 0; i <= n; i++) {
             //every element is parent of itself
             els[i].setParent(i);
+            els[i].setRealParent(i);
         }
     }
 
@@ -73,10 +79,10 @@ struct DisjointSets {
         /* Make tree with smaller height
            a subtree of the other tree  */
         if (els[x].rnk > els[y].rnk) {
-            els[x].mergeWith(els[y], edgeW);
+            els[x].mergeWith(els[y], edgeW, x);
 
         } else {// If rnk[x] <= rnk[y]
-            els[y].mergeWith(els[x], edgeW);
+            els[y].mergeWith(els[x], edgeW, y);
         }
     }
 };
@@ -164,22 +170,88 @@ struct Graph {
     }
 };
 
+struct Opts {
+    std::string filename;
+    uint64_t numNodes; // = std::stoull(argv[2]);
+    uint64_t bucketCnt; // = std::stoull(argv[3]);
+    uint64_t numSamples;
+    std::string eqClsListFile;
+};
+
 int main(int argc, char *argv[]) {
     /* Let us create above shown weighted
        and undirected graph */
-    std::string filename = argv[1];
-    uint64_t numNodes = std::stoull(argv[2]);
-    uint64_t bucketCnt = std::stoull(argv[3]);
-    ifstream file(filename);
+    using namespace clipp;
+    enum class mode {
+        build, ccInfo, help
+    };
+    mode selected = mode::help;
+    Opts opt;
+    auto ccInfo_mode = (
+            command("ccInfo").set(selected, mode::ccInfo),
+                    required("-e", "--edge-filename") &
+                    value("edge_filename", opt.filename) % "file containing list of eq. class edges.",
+                    required("-n", "--eqCls-cnt") &
+                    value("equivalenceClass_count", opt.numNodes) % "Total number of equivalence (color) classes.",
+                    required("-b", "--bucket-cnt") &
+                    value("bucket_count", opt.bucketCnt) % "Total number of valid distances."
+    );
 
-    Graph g(bucketCnt);
+    auto build_mode = (
+            command("build").set(selected, mode::build),
+                    required("-e", "--edge-filename") &
+                    value("edge_filename", opt.filename) % "File containing list of eq. class edges.",
+                    required("-n", "--eqCls-cnt") &
+                    value("equivalenceClass_count", opt.numNodes) % "Total number of equivalence (color) classes.",
+                    required("-b", "--bucket-cnt") &
+                    value("bucket_count", opt.bucketCnt) % "Total number of valid distances.",
+                    required("-s", "--numSamples") &
+                    value("numSamples", opt.numSamples) % "Total number of experiments (samples).",
+                    required("-c", "--eqCls-lst") &
+                    value("eqCls_list", opt.eqClsListFile) % "File containing list of equivalence (color) classes."
+    );
+
+    auto cli = (
+            (build_mode | ccInfo_mode | command("help").set(selected, mode::help)
+            )
+    );
+
+    decltype(parse(argc, argv, cli)) res;
+    try {
+        res = parse(argc, argv, cli);
+    } catch (std::exception &e) {
+        std::cout << "\n\nParsing command line failed with exception: " << e.what() << "\n";
+        std::cout << "\n\n";
+        std::cout << make_man_page(cli, "MSF");
+        return 1;
+    }
+
+    //explore_options_verbose(res);
+
+    if (res) {
+        switch (selected) {
+            //case mode::ccInfo: query_main(qopt);  break;
+            //case mode::build: validate_main(vopt);  break;
+            case mode::help:
+                std::cerr << make_man_page(cli, "MSF");
+                break;
+        }
+    }
+
+    std::cerr << "here are the inputs: \n"
+              << opt.filename << "\n"
+              << opt.numNodes << "\n"
+              << opt.bucketCnt << "\n";
+    ifstream file(opt.filename);
+
+    Graph g(opt.bucketCnt);
 
     uint32_t w_;
     uint64_t n1, n2, edgeCntr{0};
     std::string tmp;
     {
         //unordered_set<uint64_t> nodes;
-        sdsl::bit_vector nodes(numNodes, 0);
+        sdsl::bit_vector nodes(opt.numNodes, 0);
         std::getline(file, tmp);
         while (file.good()) {
             file >> n1 >> n2 >> w_;
@@ -195,7 +267,7 @@ int main(int argc, char *argv[]) {
         file.close();
 
         uint64_t distinctNodes{0};
-        for (uint64_t i = 0; i < numNodes; i += 64) {
+        for (uint64_t i = 0; i < nodes.size(); i += 64) {
             distinctNodes += sdsl::bits::cnt(nodes.get_int(i, 64));
         }
         std::cerr << "# of nodes: " << distinctNodes//nodes.size()
@@ -203,18 +275,21 @@ int main(int argc, char *argv[]) {
                   << "\n";
 //        nodes.clear();
     }
-    g.V = numNodes;
+    g.V = opt.numNodes;
     g.E = edgeCntr;
     //g.V = numNodes;
     //ifstream file(filename);
 
-    DisjointSets ds = g.kruskalMSF(bucketCnt, file);
+    DisjointSets ds = g.kruskalMSF(opt.bucketCnt, file);
 
-    for (auto &el : ds.els) {
-        if (el.w != 0) {
-            std::cout << el.edges << "\t" << el.w << "\t" << el.rnk << "\n";
+    if (selected == mode::ccInfo) {
+        for (auto &el : ds.els) {
+            if (el.w != 0) {
+                std::cout << el.edges << "\t" << el.w << "\t" << el.rnk << "\n";
+            }
         }
     }
+
     return 0;
 }
 
