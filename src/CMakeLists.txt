@@ -42,6 +42,9 @@ target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
 target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
+add_executable(monochromatic_component_iterator
+				monochromatic_component_iterator.cc)
+add_executable(walkEqcls walkEqcls.cc)
 
 add_executable(build_eq_graph build_eq_graph.cc)
 target_include_directories(build_eq_graph PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
@@ -60,3 +63,15 @@ endif()
 
 install(TARGETS mantis
         RUNTIME DESTINATION bin)
+target_include_directories(monochromatic_component_iterator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+
+target_include_directories(walkEqcls PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/SIMDCompressionAndIntersection>)
+
+target_link_libraries(mantis
+  mantis_core)
+target_link_libraries(monochromatic_component_iterator
+				mantis_core)
+target_link_libraries(walkEqcls
+				mantis_core SIMDCompressionAndIntersection)

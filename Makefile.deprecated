@@ -1,4 +1,4 @@
-TARGETS= mantis 
+TARGETS= mantis monochromatic_component_iterator 
 
 ifdef D
 	DEBUG=-g -DDEBUG
@@ -33,8 +33,8 @@ CFLAGS += -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -I$(LOC_INCLUDE)\
 -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function -Wno-sign-compare \
 -Wno-implicit-function-declaration
 
-LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lsdsl -lpthread -lboost_system \
--lboost_thread -lm -lz -lrt
+LDFLAGS += $(DEBUG) $(PROFILE) $(OPT) -lpthread -lboost_system \
+-lboost_thread -lm -lz -lrt lib/libsdsl.a
 
 #
 # declaration of dependencies
@@ -44,6 +44,8 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 mantis:									$(OBJDIR)/kmer.o $(OBJDIR)/mantis.o $(OBJDIR)/validatemantis.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o $(OBJDIR)/query.o $(OBJDIR)/coloreddbg.o $(OBJDIR)/bitvector.o $(OBJDIR)/util.o  $(OBJDIR)/MantisFS.o
+
+monochromatic_component_iterator:				  $(OBJDIR)/kmer.o  $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o  $(OBJDIR)/monochromatic_component_iterator.o
 
 # dependencies between .o files and .h files
 $(OBJDIR)/mantis.o:					$(LOC_SRC)/mantis.cc
@@ -59,7 +61,7 @@ $(OBJDIR)/hashutil.o: 			$(LOC_INCLUDE)/hashutil.h
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o: $(LOC_SRC)/cqf/gqf.c $(LOC_INCLUDE)/cqf/gqf.h
-
+$(OBJDIR)/monochromatic_component_iterator.o: $(LOC_INCLUDE)/cqf.h  $(LOC_INCLUDE)/monochromatic_component_iterator.h $(LOC_SRC)/monochromatic_component_iterator.cc
 #
 # generic build rules
 #
