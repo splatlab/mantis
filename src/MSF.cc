@@ -12,6 +12,8 @@
 #include "bitvector.h"
 //#include "sdsl/bits.hpp"
 
+#define EQS_PER_SLOT 20000000
+
 using namespace std;
 
 struct Edge {
@@ -28,7 +30,7 @@ struct DisjointSetNode {
 
     void setParent(uint64_t p) { parent = p; }
 
-    void setRealParent(uint64_t p) { parent = p; }
+    void setRealParent(uint64_t p) { realParent = p; }
 
     void mergeWith(DisjointSetNode &n, uint16_t edgeW, uint64_t id) {
         n.setParent(parent);
@@ -178,6 +180,40 @@ struct Opts {
     std::string eqClsListFile;
 };
 
+void loadEqs(std::string filename, std::vector<sdsl::rrr_vector<63>> &bvs) {
+    bvs.reserve(20);
+    std::string eqfile;
+    std::ifstream eqlist(filename);
+    if (eqlist.is_open()) {
+        uint64_t accumTotalEqCls = 0;
+        while (getline(eqlist, eqfile)) {
+            sdsl::rrr_vector<63> bv;
+            bvs.push_back(bv);
+            sdsl::load_from_file(bvs.back(), eqfile);
+        }
+    }
+    //BitVectorRRR bv(eqfile);
+    std::cerr << "loaded all the equivalence classes: " << ((bvs.size() - 1) * EQS_PER_SLOT + bvs.back().size())
+              << "\n";
+}
+
+void buildColor(std::vector<sdsl::rrr_vector<63>> &bvs,
+                std::vector<uint64_t> &eq,
+                uint64_t eqid,
+                uint64_t num_samples) {
+    uint64_t i{0}, bitcnt{0}, wrdcnt{0};
+    uint64_t idx = eqid / EQS_PER_SLOT;
+    uint64_t offset = eqid % EQS_PER_SLOT;
+//std::cerr << eqid << " " << num_samples << " " << idx << " " << offset << "\n";
+    while (i < num_samples) {
+        bitcnt = std::min(num_samples - i, (uint64_t) 64);
+        uint64_t wrd = (bvs[idx]).get_int(offset * num_samples + i, bitcnt);
+        eq[wrdcnt++] = wrd;
+        i += bitcnt;
+    }
+}
+
+
 int main(int argc, char *argv[]) {
     /* Let us create above shown weighted
        and undirected graph */
@@ -242,6 +278,7 @@ int main(int argc, char *argv[]) {
               << opt.filename << "\n"
               << opt.numNodes << "\n"
               << opt.bucketCnt << "\n";
+
     ifstream file(opt.filename);
 
     Graph g(opt.bucketCnt);
@@ -288,6 +325,39 @@ int main(int argc, char *argv[]) {
                 std::cout << el.edges << "\t" << el.w << "\t" << el.rnk << "\n";
             }
         }
+    }
+
+    if (selected == mode::build) {
+        std::vector<sdsl::rrr_vector<63>> bvs;
+        loadEqs(opt.eqClsListFile, bvs);
+        std::vector<uint64_t> eq1(((opt.numSamples - 1) / 64) + 1),
+                eq2(((opt.numSamples - 1) / 64) + 1);
+        sdsl::int_vector<> parents(opt.numNodes, 0, (uint64_t) ceil(log2(opt.numNodes)));
+        uint64_t totalDeltas{0}, rootDeltas{0}, rootCnt{0};
+        for (auto i = 0; i < opt.numNodes; i++) {
+            if (ds.els[i].realParent == i) {
+                parents[i] = 0;
+                buildColor(bvs, eq1, i+1, opt.numSamples);
+                for (auto& wrd : eq1) {
+                    rootDeltas += sdsl::bits::cnt(wrd);
+                }
+                rootCnt ++;
+            }
+            else
+                parents[i] = ds.els[i].realParent;
+            totalDeltas += ds.els[i].w;
+        }
+        /*buildColor(eq1, eqid, opt.numSamples);
+        for (uint64_t i = 0; i < eq1.size(); i++) {
+            uint64_t bitcnt = std::min(this->num_samples - (i * 64), (uint64_t) 64);
+            dist.set_int((i * 64), (eq1[i] ^ eq2[i]), bitcnt);
+            //std::cerr << i << " " << eq1[i] << " " << eq2[i] << " " << (eq1[i] ^ eq2[i]) << "\n";
+        }*/
+        sdsl::store_to_file(parents, "parent.tst");
+        std::cerr << "parent size: " << sdsl::size_in_mega_bytes(parents) << "MB\n"
+                  << "delta size: " << totalDeltas * log2(opt.numSamples) / 8 << "B\n"
+                  << "bbv size: " << totalDeltas/8 << "B\n"
+                  << "root delta count: " << rootCnt << " " << rootDeltas << "\n";
     }
 
     return 0;
