@@ -79,10 +79,11 @@ add_executable(mstBoost MST_boost.cc)
 		target_include_directories(mstBoost PUBLIC
 						                  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(mstBoost mantis_core)
-#link_directories($<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/lib>)
-add_executable(walkEqcls walkEqcls.cc)
-target_include_directories(walkEqcls PUBLIC
-		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/SIMDCompressionAndIntersection>)
-find_library(compression_library NAMES SIMDCompressionAndIntersection HINTS "${CMAKE_SOURCE_DIR}/lib")
-target_link_libraries(walkEqcls
-				mantis_core ${compression_library})
+
+
+#add_executable(walkEqcls walkEqcls.cc)
+#target_include_directories(walkEqcls PUBLIC
+#		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/SIMDCompressionAndIntersection>)
+#find_library(compression_library NAMES SIMDCompressionAndIntersection HINTS "${CMAKE_SOURCE_DIR}/lib")
+#target_link_libraries(walkEqcls
+#				mantis_core ${compression_library})

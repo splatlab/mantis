@@ -426,7 +426,7 @@ int main(int argc, char *argv[]) {
         pq.push(Path(root, 0, 0));
         double avgDegree{0};
         uint64_t internalNodeCnt{0};
-        std::cout << "-1\t" << root << "\t" << 0 << "\t" << 0 << "\n";
+        std::cout << "-1\t" << root << "\t" << 0 << "\t" << 0 << "\t" << 0 << "\n";
         while (!pq.empty()) {
             Path p = pq.front();
             pq.pop();
@@ -436,7 +436,11 @@ int main(int argc, char *argv[]) {
             }
             for (auto &c : p2c[p.id]) {
                 Path cp(c.id, p.steps + 1, p.weight + c.weight);
-                std::cout << p.id << "\t" << cp.id << "\t" << cp.steps << "\t" << cp.weight << "\n";
+                std::cout << p.id << "\t"
+                          << cp.id << "\t"
+                          << cp.steps << "\t"
+                          << c.weight << "\t"
+                          << cp.weight << "\n";
                 pq.push(cp);
             }
             nodeCntr++;
@@ -451,6 +455,5 @@ int main(int argc, char *argv[]) {
 
     }
 
-    return 0;
-}
+    return 0;}
 
