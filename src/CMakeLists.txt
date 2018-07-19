@@ -68,6 +68,17 @@ target_include_directories(monochromatic_component_iterator PUBLIC
 target_link_libraries(monochromatic_component_iterator
 				mantis_core)
 
+
+add_executable(msf MSF.cc)
+target_include_directories(msf PUBLIC
+				  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+target_link_libraries(msf
+				                mantis_core)
+
+add_executable(mstBoost MST_boost.cc)
+		target_include_directories(mstBoost PUBLIC
+						                  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+target_link_libraries(mstBoost mantis_core)
 #link_directories($<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/lib>)
 add_executable(walkEqcls walkEqcls.cc)
 target_include_directories(walkEqcls PUBLIC
