@@ -30,11 +30,8 @@ struct DisjointSetNode {
 
     void setParent(uint64_t p) { parent = p; }
 
-    void setRealParent(uint64_t p) { realParent = p; }
-
     void mergeWith(DisjointSetNode &n, uint16_t edgeW, uint64_t id) {
         n.setParent(parent);
-        n.setRealParent(id);
         w += (n.w + static_cast<uint64_t>(edgeW));
         edges += (n.edges + 1);
         n.edges = 0;
@@ -60,7 +57,6 @@ struct DisjointSets {
         for (uint64_t i = 0; i <= n; i++) {
             //every element is parent of itself
             els[i].setParent(i);
-            els[i].setRealParent(i);
         }
     }
 
@@ -328,36 +324,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (selected == mode::build) {
-        std::vector<sdsl::rrr_vector<63>> bvs;
-        loadEqs(opt.eqClsListFile, bvs);
-        std::vector<uint64_t> eq1(((opt.numSamples - 1) / 64) + 1),
-                eq2(((opt.numSamples - 1) / 64) + 1);
-        sdsl::int_vector<> parents(opt.numNodes, 0, (uint64_t) ceil(log2(opt.numNodes)));
-        uint64_t totalDeltas{0}, rootDeltas{0}, rootCnt{0};
-        for (auto i = 0; i < opt.numNodes; i++) {
-            if (ds.els[i].realParent == i) {
-                parents[i] = 0;
-                buildColor(bvs, eq1, i+1, opt.numSamples);
-                for (auto& wrd : eq1) {
-                    rootDeltas += sdsl::bits::cnt(wrd);
-                }
-                rootCnt ++;
-            }
-            else
-                parents[i] = ds.els[i].realParent;
-            totalDeltas += ds.els[i].w;
-        }
-        /*buildColor(eq1, eqid, opt.numSamples);
-        for (uint64_t i = 0; i < eq1.size(); i++) {
-            uint64_t bitcnt = std::min(this->num_samples - (i * 64), (uint64_t) 64);
-            dist.set_int((i * 64), (eq1[i] ^ eq2[i]), bitcnt);
-            //std::cerr << i << " " << eq1[i] << " " << eq2[i] << " " << (eq1[i] ^ eq2[i]) << "\n";
-        }*/
-        sdsl::store_to_file(parents, "parent.tst");
-        std::cerr << "parent size: " << sdsl::size_in_mega_bytes(parents) << "MB\n"
-                  << "delta size: " << totalDeltas * log2(opt.numSamples) / 8 << "B\n"
-                  << "bbv size: " << totalDeltas/8 << "B\n"
-                  << "root delta count: " << rootCnt << " " << rootDeltas << "\n";
+
     }
 
     return 0;
