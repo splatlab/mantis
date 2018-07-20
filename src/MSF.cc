@@ -17,6 +17,8 @@
 
 using namespace std;
 
+typedef std::vector<sdsl::rrr_vector < 63>> eqvec;
+
 struct Edge {
     uint32_t n1;
     uint32_t n2;
@@ -198,17 +200,7 @@ struct Graph {
     }
 };
 
-struct Opts {
-    std::string filename;
-    uint64_t numNodes; // = std::stoull(argv[2]);
-    uint32_t bucketCnt; // = std::stoull(argv[3]);
-    uint16_t numSamples;
-    std::string eqClsListFile;
-};
-
-void loadEqs(std::string filename, std::vector<sdsl::rrr_vector < 63>>
-
-&bvs) {
+void loadEqs(std::string filename, eqvec &bvs) {
 bvs.reserve(20);
 std::string eqfile;
 std::ifstream eqlist(filename);
@@ -250,7 +242,7 @@ size()
 << "\n";
 }
 
-void buildColor(std::vector<sdsl::rrr_vector < 63>> &bvs,
+void buildColor(eqvec &bvs,
 std::vector<uint64_t> &eq,
         uint64_t eqid,
 uint64_t num_samples
@@ -269,17 +261,47 @@ bitcnt;
 }
 }
 
-uint16_t sum1s(std::vector<sdsl::rrr_vector < 63>> &bvs, uint64_t eqid,
-        uint64_t num_samples) {
+uint16_t sum1s(eqvec &bvs, uint64_t eqid,
+        uint64_t num_samples, uint64_t numWrds) {
     uint16_t res{0};
     std::vector<uint64_t> eq;
-    eq.resize((uint64_t)std::ceil((double)num_samples/64.0));
+    eq.resize(numWrds);
     buildColor(bvs, eq, eqid, num_samples);
     for (uint64_t i = 0; i < eq.size(); i += 1) {
         res += (uint16_t)sdsl::bits::cnt(eq[i]);
     }
     return res;
 }
+
+std::vector<uint32_t> getDeltaList(eqvec &bvs,
+        uint64_t eqid1,uint64_t eqid2, uint64_t num_samples, uint64_t numWrds) {
+    std::vector<uint32_t> res;
+    std::vector<uint64_t> eq1, eq2;
+    eq1.resize(numWrds);
+    eq2.resize(numWrds);
+    buildColor(bvs, eq1, eqid1, num_samples);
+    buildColor(bvs, eq2, eqid2, num_samples);
+
+    for (uint32_t i = 0; i < eq1.size(); i += 1) {
+        for (uint32_t j = 0; j < 64; j++) {
+            if ( (eq1[i] >> j) & 0x01 ) {
+                res.push_back(i*64+j);
+            }
+        }
+    }
+
+    return res; // rely on c++ optimization
+}
+
+struct Opts {
+    std::string filename;
+    uint64_t numNodes; // = std::stoull(argv[2]);
+    uint32_t bucketCnt; // = std::stoull(argv[3]);
+    uint16_t numSamples;
+    std::string eqClsListFile;
+    std::string outputDir;
+};
+
 
 int main(int argc, char *argv[]) {
     /* Let us create above shown weighted
@@ -302,7 +324,9 @@ int main(int argc, char *argv[]) {
                     required("-s", "--numSamples") &
                     value("numSamples", opt.numSamples) % "Total number of experiments (samples).",
                     required("-c", "--eqCls-lst") &
-                    value("eqCls_list", opt.eqClsListFile) % "File containing list of equivalence (color) classes."
+                    value("eqCls_list_filename", opt.eqClsListFile) % "File containing list of equivalence (color) classes.",
+                    required("-o", "--output_dir") &
+                    value("output directory", opt.outputDir) % "Directory that all the int_vectors will be stored in."
     );
 
     auto cli = (
@@ -333,6 +357,7 @@ int main(int argc, char *argv[]) {
               << opt.filename << "\n"
               << opt.numNodes << "\n"
               << opt.bucketCnt << "\n";
+    uint64_t numWrds = (uint64_t)std::ceil((double)opt.numSamples/64.0);
     opt.numNodes++; // number of nodes is one more than input including the zero node
 
     std::cerr << "Loading all the equivalence classes first .. \n";
@@ -349,7 +374,7 @@ int main(int argc, char *argv[]) {
     {
         std::cerr << "Adding edges from 0 to each node with number of set bits in the node as weight .. \n";
         for (uint32_t i = 0; i < opt.numNodes; i++) {
-            uint16_t ones = sum1s(eqs, i, opt.numSamples);
+            uint16_t ones = sum1s(eqs, i, opt.numSamples, numWrds);
             g.addEdge(zero, i, ones);
         }
         std::cerr << "Done adding 0-end edges.\n";
@@ -449,7 +474,13 @@ int main(int argc, char *argv[]) {
     pq.push(Path(root, 0, 0));
     double avgDegree{0};
     uint64_t internalNodeCnt{0};
+
+    sdsl::int_vector<> parentbv(opt.numNodes, 0, ceil(log2(opt.numNodes)));
+    sdsl::int_vector<> deltabv(g.mst_totalWeight, 0, ceil(log2(opt.numSamples)));
+    sdsl::bit_vector bbv(g.mst_totalWeight, 0);
+    uint64_t deltaOffset{0};
     std::cout << "-1\t" << root << "\t" << 0 << "\t" << 0 << "\t" << 0 << "\n";
+    parentbv[root] = root;
     while (!pq.empty()) {
         Path p = pq.front();
         pq.pop();
@@ -458,12 +489,19 @@ int main(int argc, char *argv[]) {
             internalNodeCnt++;
         }
         for (auto &c : p2c[p.id]) {
+            parentbv[c.id] = p.id;
             Path cp(c.id, p.steps + 1, p.weight + c.weight);
             std::cout << p.id << "\t"
                       << cp.id << "\t"
                       << cp.steps << "\t"
                       << c.weight << "\t"
                       << cp.weight << "\n";
+            std::vector<uint32_t> deltas = getDeltaList(eqs, p.id, cp.id, opt.numSamples, numWrds);
+            for (auto & v : deltas) {
+                deltabv[deltaOffset] = v;
+                deltaOffset++;
+            }
+            bbv[deltaOffset-1] = 1;
             pq.push(cp);
         }
         nodeCntr++;
@@ -477,6 +515,9 @@ int main(int argc, char *argv[]) {
               << "total out degree: " << avgDegree << "\n"
               << "average degree: " << avgDegree / internalNodeCnt << "\t" << avgDegree / opt.numNodes << "\n";
 
+    sdsl::store_to_file(parentbv, opt.outputDir+"/parents.bv");
+    sdsl::store_to_file(deltabv, opt.outputDir+"/deltas.bv");
+    sdsl::store_to_file(bbv, opt.outputDir+"/boundary.bv");
 
     return 0;
 }
