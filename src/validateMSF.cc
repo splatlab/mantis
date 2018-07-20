@@ -11,6 +11,7 @@ private:
     uint64_t numSamples;
     uint64_t numWrds;
     uint32_t zero;
+    sdsl::bit_vector bbv;
 
 public:
     sdsl::int_vector<> parentbv;
@@ -24,7 +25,6 @@ public:
     void loadIdx(std::string indexDir) {
         sdsl::load_from_file(parentbv, indexDir+"/parents.bv");
         sdsl::load_from_file(deltabv, indexDir+"/deltas.bv");
-        sdsl::bit_vector bbv;
         sdsl::load_from_file(bbv, indexDir+"/boundary.bv");
         sbbv = sdsl::bit_vector::select_1_type(&bbv);
         zero = parentbv.size()-1; // maximum color id which
@@ -32,36 +32,42 @@ public:
         std::cerr << "--> parent size: " << parentbv.size() << "\n"
                   << "--> delta size: " << deltabv.size() << "\n"
                   << "--> boundary size: " << bbv.size() << "\n";
-    }
+        }
 
     std::vector<uint64_t> buildColor(uint64_t eqid) {
         std::vector<uint32_t> flips(numSamples);
         uint64_t i{eqid}, from{0}, to{0};
         while (parentbv[i] != i) {
-            std::cerr << i << " " << parentbv[i] << "\n";
+            //std::cerr << i << " " << parentbv[i] << "\n";
             if (i > 0)
                 from = sbbv(i)+1;
             to = sbbv(i+1);
-            std::cerr << "f" << from << " t" << to << "\n";
             for (auto j = from; j <= to; j++) {
+                //std::cerr << deltabv[j] << "\n";
                 flips[deltabv[j]] ^= 0x01;
             }
             i = parentbv[i];
         }
         if (i != zero) {
+            std::cerr << "root not zero\n";
             if (i > 0)
                 from = sbbv(i)+1;
             to = sbbv(i+1);
             for (auto j = from; j <= to; j++) {
+                //std::cerr << deltabv[j] << "\n";
                 flips[deltabv[j]] ^= 0x01;
             }
+        }
+        else {
+            std::cerr <<"root is zero\n";
         }
         std::vector<uint64_t> eq(numWrds);
         uint64_t one = 1;
         for (i = 0; i < numSamples; i++) {
             if (flips[i]) {
-                uint64_t idx = i / numSamples;
-                eq[idx] = eq[idx] ^ (one << (i % numSamples));
+                uint64_t idx = i / 64;
+                //std::cerr << "set " << i << " " << idx << " " << i % 64 << "\n";
+                eq[idx] = eq[idx] | (one << (i % 64));
             }
         }
         return eq;
@@ -74,12 +80,9 @@ int main(int argc, char *argv[]) {
     std::string eqlistfile = argv[2];
     uint64_t numSamples = std::stoull(argv[3]);
     uint64_t numWrds = (uint64_t)std::ceil((double)numSamples/64.0);
-    MSFQuery msfQuery(numSamples);
-    msfQuery.loadIdx(indexDir);
-    for (uint64_t i = 1; i < 100; i++) {
-        std::cerr <<i << ":" << msfQuery.sbbv(i) << "\n";
-    }
-    uint64_t eqCount = msfQuery.parentbv.size()-1;
+    MSFQuery query(numSamples);
+    query.loadIdx(indexDir);
+    uint64_t eqCount = query.parentbv.size()-1;
     std::cerr << "total # of equivalence classes is : " << eqCount << "\n";
 
     eqvec bvs;
@@ -92,15 +95,17 @@ int main(int argc, char *argv[]) {
 
     uint64_t cntr{0};
     for (auto idx : ids) {
-        std::vector<uint64_t> newEq = msfQuery.buildColor(idx);
-        std::cerr <<"1\n";
+        std::vector<uint64_t> newEq = query.buildColor(idx);
         std::vector<uint64_t> oldEq(numWrds);
         buildColor(bvs, oldEq, idx, numSamples);
-        std::cerr <<"2\n";
 
         if (newEq != oldEq) {
             std::cerr << "AAAAA! LOOOSER!!\n";
             std::cerr << cntr << ": index=" << idx << "\n";
+            std::cerr << "new size: " << newEq.size() << " old size: " << oldEq.size() << "\n";
+            for (auto k = 0; k < newEq.size(); k++) {
+                std::cerr << newEq[k] << " " << oldEq[k] << "\n";
+            }
             std::exit(1);
         }
         cntr++;
