@@ -206,7 +206,7 @@ int main(int argc, char *argv[]) {
         std::vector<uint32_t> deltas;
         if (i == zero) {
             deltaOffset++;
-        } else if (parentbv[i] == zero) {
+        } else if (parentbv[i] == zero || parentbv[i] == i) {
             deltas = getDeltaList(eqs, i, opt.numSamples, numWrds);
         } else {
             deltas = getDeltaList(eqs, parentbv[i], i, opt.numSamples, numWrds);
