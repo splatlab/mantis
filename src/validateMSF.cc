@@ -34,18 +34,25 @@ public:
                   << "--> boundary size: " << bbv.size() << "\n";
         }
 
-    std::vector<uint64_t> buildColor(uint64_t eqid) {
+    std::vector<uint64_t> buildColor(uint64_t eqid, eqvec &bvs) {
         std::vector<uint32_t> flips(numSamples);
         uint64_t i{eqid}, from{0}, to{0};
         while (parentbv[i] != i) {
-            //std::cerr << i << " " << parentbv[i] << "\n";
+            std::cerr << "c" << i << " p" << parentbv[i] << "\n";
             if (i > 0)
                 from = sbbv(i)+1;
             to = sbbv(i+1);
+            std::cerr << "delta list: \n";
+            auto res = getDeltaList(bvs, i, parentbv[i], numSamples, numWrds);
+            for (auto v : res) {
+                std::cerr << v << " ";
+            }
+            std::cerr << "\nours:\n";
             for (auto j = from; j <= to; j++) {
-                //std::cerr << deltabv[j] << "\n";
+                std::cerr << deltabv[j] << " ";
                 flips[deltabv[j]] ^= 0x01;
             }
+            std::cerr <<"\n";
             i = parentbv[i];
         }
         if (i != zero) {
@@ -95,7 +102,7 @@ int main(int argc, char *argv[]) {
 
     uint64_t cntr{0};
     for (auto idx : ids) {
-        std::vector<uint64_t> newEq = query.buildColor(idx);
+        std::vector<uint64_t> newEq = query.buildColor(idx, bvs);
         std::vector<uint64_t> oldEq(numWrds);
         buildColor(bvs, oldEq, idx, numSamples);
 
