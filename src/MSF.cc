@@ -201,64 +201,36 @@ struct Graph {
 };
 
 void loadEqs(std::string filename, eqvec &bvs) {
-bvs.reserve(20);
-std::string eqfile;
-std::ifstream eqlist(filename);
-if (eqlist.
-
-is_open()
-
-) {
-uint64_t accumTotalEqCls = 0;
-while (
-getline(eqlist, eqfile
-)) {
-sdsl::rrr_vector<63> bv;
-bvs.
-push_back(bv);
-sdsl::load_from_file(bvs
-.
-
-back(), eqfile
-
-);
-}
-}
-//BitVectorRRR bv(eqfile);
-std::cerr << "loaded all the equivalence classes: "
-<< ((bvs.
-
-size()
-
-- 1) * EQS_PER_SLOT + bvs.
-
-back()
-
-.
-
-size()
-
-)
-<< "\n";
+    bvs.reserve(20);
+    std::string eqfile;
+    std::ifstream eqlist(filename);
+    if (eqlist.is_open()) {
+        uint64_t accumTotalEqCls = 0;
+        while (getline(eqlist, eqfile)) {
+            sdsl::rrr_vector<63> bv;
+            bvs.push_back(bv);
+            sdsl::load_from_file(bvs.back(), eqfile);
+        }
+    }
+    std::cerr << "loaded all the equivalence classes: "
+                << ((bvs.size() - 1) * EQS_PER_SLOT + bvs.back().size())
+                << "\n";
 }
 
 void buildColor(eqvec &bvs,
-std::vector<uint64_t> &eq,
-        uint64_t eqid,
-uint64_t num_samples
-) {
-uint64_t i{0}, bitcnt{0}, wrdcnt{0};
-uint64_t idx = eqid / EQS_PER_SLOT;
-uint64_t offset = eqid % EQS_PER_SLOT;
-//std::cerr << eqid << " " << num_samples << " " << idx << " " << offset << "\n";
-while (i<num_samples) {
-bitcnt = std::min(num_samples - i, (uint64_t) 64);
-uint64_t wrd = (bvs[idx]).get_int(offset * num_samples + i, bitcnt);
-eq[wrdcnt++] =
-wrd;
-i +=
-bitcnt;
-}
+                std::vector<uint64_t> &eq,
+                uint64_t eqid,
+                uint64_t num_samples) {
+    uint64_t i{0}, bitcnt{0}, wrdcnt{0};
+    uint64_t idx = eqid / EQS_PER_SLOT;
+    uint64_t offset = eqid % EQS_PER_SLOT;
+    //std::cerr << eqid << " " << num_samples << " " << idx << " " << offset << "\n";
+    while (i<num_samples) {
+        bitcnt = std::min(num_samples - i, (uint64_t) 64);
+        uint64_t wrd = (bvs[idx]).get_int(offset * num_samples + i, bitcnt);
+        eq[wrdcnt++] = wrd;
+        i += bitcnt;
+    }
 }
 
 uint16_t sum1s(eqvec &bvs, uint64_t eqid,
@@ -273,6 +245,7 @@ uint16_t sum1s(eqvec &bvs, uint64_t eqid,
     return res;
 }
 
+// for two non-zero nodes, delta list is positions that xor of the bits was 1
 std::vector<uint32_t> getDeltaList(eqvec &bvs,
         uint64_t eqid1,uint64_t eqid2, uint64_t num_samples, uint64_t numWrds) {
     std::vector<uint32_t> res;
@@ -281,6 +254,26 @@ std::vector<uint32_t> getDeltaList(eqvec &bvs,
     eq2.resize(numWrds);
     buildColor(bvs, eq1, eqid1, num_samples);
     buildColor(bvs, eq2, eqid2, num_samples);
+
+    for (uint32_t i = 0; i < eq1.size(); i += 1) {
+        uint64_t eq12xor = eq1[i] ^ eq2[i];
+        for (uint32_t j = 0; j < 64; j++) {
+            if ( (eq12xor >> j) & 0x01 ) {
+                res.push_back(i*64+j);
+            }
+        }
+    }
+
+    return res; // rely on c++ optimization
+}
+
+// for those connected to node zero, delta list is position of set bits
+std::vector<uint32_t> getDeltaList(eqvec &bvs,
+                                   uint64_t eqid1, uint64_t num_samples, uint64_t numWrds) {
+    std::vector<uint32_t> res;
+    std::vector<uint64_t> eq1;
+    eq1.resize(numWrds);
+    buildColor(bvs, eq1, eqid1, num_samples);
 
     for (uint32_t i = 0; i < eq1.size(); i += 1) {
         for (uint32_t j = 0; j < 64; j++) {
@@ -496,7 +489,14 @@ int main(int argc, char *argv[]) {
                       << cp.steps << "\t"
                       << c.weight << "\t"
                       << cp.weight << "\n";
-            std::vector<uint32_t> deltas = getDeltaList(eqs, p.id, cp.id, opt.numSamples, numWrds);
+            std::vector<uint32_t> deltas;
+            if (p.id == zero) {
+                deltas = getDeltaList(eqs, c.id, opt.numSamples, numWrds);
+            } else if (c.id == zero) {
+                deltas = getDeltaList(eqs, p.id, opt.numSamples, numWrds);
+            } else {
+                deltas = getDeltaList(eqs, p.id, c.id, opt.numSamples, numWrds);
+            }
             for (auto & v : deltas) {
                 deltabv[deltaOffset] = v;
                 deltaOffset++;
