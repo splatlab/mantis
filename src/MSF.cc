@@ -403,7 +403,8 @@ int main(int argc, char *argv[]) {
         }
     }
     // now go run the algorithm to find the root of the tree and all the edge directions
-    uint32_t root;
+    sdsl::int_vector<> parentbv(opt.numNodes, 0, ceil(log2(opt.numNodes)));
+
     bool check = false;
     uint64_t nodeCntr{0};
     while (!q.empty()) {
@@ -418,8 +419,13 @@ int main(int argc, char *argv[]) {
                           << "finding a node with no edges should only happen once at the root\n";
                 std::exit(1);
             }
+            parentbv[node] = node;
             check = true;
-            root = node;
+            // Update the total weight to contain the delta of root from bv of zero
+            uint16_t ones = 1; // If the root is zero itself
+            if (node != zero) // otherwise
+                ones = sum1s(eqs, node, opt.numSamples, numWrds);
+            g.mst_totalWeight += ones;
             continue;
         }
         // what ever is in q (node) is a leaf and has only one edge left
@@ -433,7 +439,15 @@ int main(int argc, char *argv[]) {
         if (src == node) { // swap src & dest since src is the leaf
             std::swap(src, dest);
         }
-        p2c[src].emplace_back(dest, g.edges[buck][idx].weight);
+        if (dest == zero) { // we break the tree from node zero
+            parentbv[zero] = zero;
+            // we're breaking the tree, so should remove the edge weight from total weights
+            // But instead we're gonna spend one slot to store 0 as the delta of the zero node from zero node
+            g.mst_totalWeight = g.mst_totalWeight - g.edges[buck][idx].weight + 1;
+        }
+        else {
+            parentbv[dest] = src;
+        }
         // erase the edge from src list of edges
         g.mst[dest].erase(std::remove_if(
                 g.mst[dest].begin(), g.mst[dest].end(),
@@ -447,7 +461,7 @@ int main(int argc, char *argv[]) {
                     return x.bucket == buck && x.idx == idx;
                 }), g.mst[src].end());
         // the destination has no edges left
-        // but if the src has turned to a leaf (node with one edge) after removal of this last edge
+        // but if the src has turned to a leaf (node with one edge)
         // add it to the queue
         if (g.mst[src].size() == 1) {
             q.push(src);
@@ -458,62 +472,33 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    sdsl::int_vector<> deltabv(g.mst_totalWeight, 0, ceil(log2(opt.numSamples)));
+    sdsl::bit_vector bbv(g.mst_totalWeight, 0);
+
     // calculate all the stats!!
     // create the data structures
     std::cerr << "Calculate Stats .. \n";
     std::cerr << "Sum of MST weights: " << g.mst_totalWeight << "\n";
     nodeCntr = 0;
-    std::queue<Path> pq;
-    pq.push(Path(root, 0, 0));
-    double avgDegree{0};
-    uint64_t internalNodeCnt{0};
-
-    sdsl::int_vector<> parentbv(opt.numNodes, 0, ceil(log2(opt.numNodes)));
-    sdsl::int_vector<> deltabv(g.mst_totalWeight, 0, ceil(log2(opt.numSamples)));
-    sdsl::bit_vector bbv(g.mst_totalWeight, 0);
     uint64_t deltaOffset{0};
-    std::cout << "-1\t" << root << "\t" << 0 << "\t" << 0 << "\t" << 0 << "\n";
-    parentbv[root] = root;
-    while (!pq.empty()) {
-        Path p = pq.front();
-        pq.pop();
-        avgDegree += p2c[p.id].size();
-        if (p2c[p.id].size() != 0) {
-            internalNodeCnt++;
+    for (uint64_t i = 0; i < parentbv.size(); i++) {
+        std::vector<uint32_t> deltas;
+        if (i == zero) {
+            deltaOffset++;
+        } else if (parentbv[i] == zero) {
+            deltas = getDeltaList(eqs, i, opt.numSamples, numWrds);
+        } else {
+            deltas = getDeltaList(eqs, parentbv[i], i, opt.numSamples, numWrds);
         }
-        for (auto &c : p2c[p.id]) {
-            parentbv[c.id] = p.id;
-            Path cp(c.id, p.steps + 1, p.weight + c.weight);
-            std::cout << p.id << "\t"
-                      << cp.id << "\t"
-                      << cp.steps << "\t"
-                      << c.weight << "\t"
-                      << cp.weight << "\n";
-            std::vector<uint32_t> deltas;
-            if (p.id == zero) {
-                deltas = getDeltaList(eqs, c.id, opt.numSamples, numWrds);
-            } else if (c.id == zero) {
-                deltas = getDeltaList(eqs, p.id, opt.numSamples, numWrds);
-            } else {
-                deltas = getDeltaList(eqs, p.id, c.id, opt.numSamples, numWrds);
-            }
-            for (auto & v : deltas) {
-                deltabv[deltaOffset] = v;
-                deltaOffset++;
-            }
-            bbv[deltaOffset-1] = 1;
-            pq.push(cp);
+        for (auto & v : deltas) {
+            deltabv[deltaOffset] = v;
+            deltaOffset++;
         }
-        nodeCntr++;
-        if (nodeCntr % 10000000 == 0) {
-            std::cerr << nodeCntr << " nodes processed from root\n";
-        }
+        bbv[deltaOffset-1] = 1;
     }
 
-    std::cerr << "Sum of MST weights: " << g.mst_totalWeight << "\n"
-              << "internal node count: " << internalNodeCnt << "\n"
-              << "total out degree: " << avgDegree << "\n"
-              << "average degree: " << avgDegree / internalNodeCnt << "\t" << avgDegree / opt.numNodes << "\n";
+
+    std::cerr << "Sum of MST weights: " << g.mst_totalWeight << "\n";
 
     sdsl::store_to_file(parentbv, opt.outputDir+"/parents.bv");
     sdsl::store_to_file(deltabv, opt.outputDir+"/deltas.bv");
