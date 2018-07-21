@@ -38,25 +38,27 @@ public:
         std::vector<uint32_t> flips(numSamples);
         uint64_t i{eqid}, from{0}, to{0};
         while (parentbv[i] != i) {
-            std::cerr << "c" << i << " p" << parentbv[i] << "\n";
+            //std::cerr << "c" << i << " p" << parentbv[i] << "\n";
             if (i > 0)
                 from = sbbv(i)+1;
+            else
+                from = 0;
             to = sbbv(i+1);
-            std::cerr << "delta list: \n";
-            auto res = getDeltaList(bvs, i, parentbv[i], numSamples, numWrds);
+            /*std::cerr << "delta list: \n";
+            auto res = getDeltaList(bvs, parentbv[i], i, numSamples, numWrds);
             for (auto v : res) {
                 std::cerr << v << " ";
             }
-            std::cerr << "\nours:\n";
+            std::cerr << "\nours from " << from  << " to " << to << ":\n";*/
             for (auto j = from; j <= to; j++) {
-                std::cerr << deltabv[j] << " ";
+                //std::cerr << deltabv[j] << " ";
                 flips[deltabv[j]] ^= 0x01;
             }
-            std::cerr <<"\n";
+            //std::cerr <<"\n";
             i = parentbv[i];
         }
         if (i != zero) {
-            std::cerr << "root not zero\n";
+            //std::cerr << "root not zero\n";
             if (i > 0)
                 from = sbbv(i)+1;
             to = sbbv(i+1);
@@ -65,9 +67,9 @@ public:
                 flips[deltabv[j]] ^= 0x01;
             }
         }
-        else {
+        /*else {
             std::cerr <<"root is zero\n";
-        }
+        }*/
         std::vector<uint64_t> eq(numWrds);
         uint64_t one = 1;
         for (i = 0; i < numSamples; i++) {
@@ -94,14 +96,16 @@ int main(int argc, char *argv[]) {
 
     eqvec bvs;
     loadEqs(eqlistfile, bvs);
+
     // choose 1M random eq classes
     std::unordered_set<uint64_t> ids;
-    while (ids.size() < 10) {
+    /*while (ids.size() < 1000000) {
         ids.insert(rand() % eqCount);
-    }
+    }*/
+   //ids.insert(12237996);
 
     uint64_t cntr{0};
-    for (auto idx : ids) {
+    for (uint64_t idx = 0; idx < eqCount; idx++) {
         std::vector<uint64_t> newEq = query.buildColor(idx, bvs);
         std::vector<uint64_t> oldEq(numWrds);
         buildColor(bvs, oldEq, idx, numSamples);
@@ -116,6 +120,9 @@ int main(int argc, char *argv[]) {
             std::exit(1);
         }
         cntr++;
+        if (cntr % 10000000 == 0) {
+            std::cerr << cntr << " eqs were the same\n";
+        }
     }
     std::cerr << "WOOOOW! Validation passed\n";
 }

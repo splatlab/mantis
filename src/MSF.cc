@@ -200,7 +200,6 @@ int main(int argc, char *argv[]) {
     // create the data structures
     std::cerr << "Calculate Stats .. \n";
     std::cerr << "Sum of MST weights: " << g.mst_totalWeight << "\n";
-    nodeCntr = 0;
     uint64_t deltaOffset{0};
     for (uint64_t i = 0; i < parentbv.size(); i++) {
         std::vector<uint32_t> deltas;
@@ -216,6 +215,9 @@ int main(int argc, char *argv[]) {
             deltaOffset++;
         }
         bbv[deltaOffset-1] = 1;
+        if (i % 10000000 == 0) {
+            std::cerr << i << " nodes parents processed\n";
+        }
     }
 
 
