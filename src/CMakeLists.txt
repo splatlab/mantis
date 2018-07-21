@@ -75,10 +75,10 @@ target_include_directories(msf PUBLIC
 target_link_libraries(msf
 				                mantis_core)
 
-add_executable(validateMsf validateMSF.cc)
-target_include_directories(validateMsf PUBLIC
+add_executable(loadColorCls validateMSF.cc)
+target_include_directories(loadColorCls PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_link_libraries(validateMsf
+target_link_libraries(loadColorCls
 		mantis_core)
 
 add_executable(mstBoost MST_boost.cc)
