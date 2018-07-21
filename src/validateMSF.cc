@@ -34,48 +34,33 @@ public:
                   << "--> boundary size: " << bbv.size() << "\n";
         }
 
-    std::vector<uint64_t> buildColor(uint64_t eqid, eqvec &bvs) {
+    std::vector<uint64_t> buildColor(uint64_t eqid) {
         std::vector<uint32_t> flips(numSamples);
         uint64_t i{eqid}, from{0}, to{0};
         while (parentbv[i] != i) {
-            //std::cerr << "c" << i << " p" << parentbv[i] << "\n";
             if (i > 0)
                 from = sbbv(i)+1;
             else
                 from = 0;
             to = sbbv(i+1);
-            /*std::cerr << "delta list: \n";
-            auto res = getDeltaList(bvs, parentbv[i], i, numSamples, numWrds);
-            for (auto v : res) {
-                std::cerr << v << " ";
-            }
-            std::cerr << "\nours from " << from  << " to " << to << ":\n";*/
             for (auto j = from; j <= to; j++) {
-                //std::cerr << deltabv[j] << " ";
                 flips[deltabv[j]] ^= 0x01;
             }
-            //std::cerr <<"\n";
             i = parentbv[i];
         }
         if (i != zero) {
-            //std::cerr << "root not zero\n";
             if (i > 0)
                 from = sbbv(i)+1;
             to = sbbv(i+1);
             for (auto j = from; j <= to; j++) {
-                //std::cerr << deltabv[j] << "\n";
                 flips[deltabv[j]] ^= 0x01;
             }
         }
-        /*else {
-            std::cerr <<"root is zero\n";
-        }*/
         std::vector<uint64_t> eq(numWrds);
         uint64_t one = 1;
         for (i = 0; i < numSamples; i++) {
             if (flips[i]) {
                 uint64_t idx = i / 64;
-                //std::cerr << "set " << i << " " << idx << " " << i % 64 << "\n";
                 eq[idx] = eq[idx] | (one << (i % 64));
             }
         }
@@ -108,7 +93,7 @@ int main(int argc, char *argv[]) {
 
     using namespace clipp;
     enum class mode {
-        validate, steps, query, help
+        validate, steps, decodeAllEqs, help
     };
     mode selected = mode::help;
     Opts opt;
@@ -131,8 +116,16 @@ int main(int argc, char *argv[]) {
                     value("numSamples", opt.numSamples) % "Total number of experiments (samples)."
     );
 
+    auto decodeAllEqs_mode = (
+            command("decodeAllEqs").set(selected, mode::decodeAllEqs),
+                    required("-i", "--indexDir") &
+                    value("index_dir", opt.indexDir) % "Directory containing index files.",
+                    required("-s", "--numSamples") &
+                    value("numSamples", opt.numSamples) % "Total number of experiments (samples)."
+    );
+
     auto cli = (
-            (validate_mode | steps_mode | command("help").set(selected, mode::help)
+            (validate_mode | steps_mode | decodeAllEqs_mode | command("help").set(selected, mode::help)
             )
     );
 
@@ -174,7 +167,7 @@ int main(int argc, char *argv[]) {
 
         uint64_t cntr{0};
         for (uint64_t idx = 0; idx < eqCount; idx++) {
-            std::vector<uint64_t> newEq = query.buildColor(idx, bvs);
+            std::vector<uint64_t> newEq = query.buildColor(idx);
             std::vector<uint64_t> oldEq(numWrds);
             buildColor(bvs, oldEq, idx, numSamples);
 
@@ -193,6 +186,13 @@ int main(int argc, char *argv[]) {
             }
         }
         std::cerr << "WOOOOW! Validation passed\n";
+    } else if (selected == mode::decodeAllEqs) {
+        for (uint64_t idx = 0; idx < eqCount; idx++) {
+            std::vector<uint64_t> newEq = query.buildColor(idx);
+            if (idx % 10000000 == 0) {
+                std::cerr << idx << " eqs decoded\n";
+            }
+        }
     } else if (selected == mode::steps) {
         uint32_t zero = query.parentbv.size()-1;
         std::vector<uint32_t> steps(eqCount, 0);
