@@ -87,13 +87,14 @@ struct Opts {
     std::string indexDir;
     uint64_t numSamples;
     std::string eqlistfile;
+    std::string cqffile;
 };
 
 int main(int argc, char *argv[]) {
 
     using namespace clipp;
     enum class mode {
-        validate, steps, decodeAllEqs, help
+        validate, steps, decodeAllEqs, query, help
     };
     mode selected = mode::help;
     Opts opt;
@@ -124,8 +125,18 @@ int main(int argc, char *argv[]) {
                     value("numSamples", opt.numSamples) % "Total number of experiments (samples)."
     );
 
+    auto query_mode = (
+            command("query").set(selected, mode::query),
+                    required("-i", "--indexDir") &
+                    value("index_dir", opt.indexDir) % "Directory containing index files.",
+                    required("-g", "--cqf") &
+                    value("kmer-graph", opt.cqffile) % "cqf file containing the kmer mapping to color class ids.",
+                    required("-s", "--numSamples") &
+                    value("numSamples", opt.numSamples) % "Total number of experiments (samples)."
+    );
+
     auto cli = (
-            (validate_mode | steps_mode | decodeAllEqs_mode | command("help").set(selected, mode::help)
+            (validate_mode | steps_mode | decodeAllEqs_mode | query_mode | command("help").set(selected, mode::help)
             )
     );
 
@@ -147,30 +158,20 @@ int main(int argc, char *argv[]) {
         std::exit(1);
     }
 
-    std::string indexDir = opt.indexDir;
-    std::string eqlistfile = opt.eqlistfile;
-    uint64_t numSamples = opt.numSamples;
-    uint64_t numWrds = (uint64_t)std::ceil((double)numSamples/64.0);
-    MSFQuery query(numSamples);
-    query.loadIdx(indexDir);
+    uint64_t numWrds = (uint64_t)std::ceil((double)opt.numSamples/64.0);
+    MSFQuery query(opt.numSamples);
+    query.loadIdx(opt.indexDir);
     uint64_t eqCount = query.parentbv.size()-1;
     std::cerr << "total # of equivalence classes is : " << eqCount << "\n";
 
     if (selected == mode::validate) {
         eqvec bvs;
-        loadEqs(eqlistfile, bvs);
-        // choose 1M random eq classes
-        /*std::unordered_set<uint64_t> ids;
-        while (ids.size() < 1000000) {
-            ids.insert(rand() % eqCount);
-        }*/
-
+        loadEqs(opt.eqlistfile, bvs);
         uint64_t cntr{0};
         for (uint64_t idx = 0; idx < eqCount; idx++) {
             std::vector<uint64_t> newEq = query.buildColor(idx);
             std::vector<uint64_t> oldEq(numWrds);
-            buildColor(bvs, oldEq, idx, numSamples);
-
+            buildColor(bvs, oldEq, idx, opt.numSamples);
             if (newEq != oldEq) {
                 std::cerr << "AAAAA! LOOOSER!!\n";
                 std::cerr << cntr << ": index=" << idx << "\n";
@@ -196,11 +197,12 @@ int main(int argc, char *argv[]) {
     } else if (selected == mode::steps) {
         uint32_t zero = query.parentbv.size()-1;
         std::vector<uint32_t> steps(eqCount, 0);
-
         for (uint64_t idx = 0; idx < eqCount; idx++) {
             std::cout << query.parentbv[idx] << "\t"
                       << idx << "\t"
                       << recursiveSteps(idx, query.parentbv, steps, zero) << "\n";
         }
+    } else if (selected == mode::query) {
+
     }
 }
