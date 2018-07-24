@@ -4,14 +4,27 @@
 
 #include <unordered_set>
 #include <random>
+#include <chrono>
 #include "MSF.h"
 #include "cqf.h"
 #include "common_types.h"
 #include "CLI/CLI.hpp"
 #include "CLI/Timer.hpp"
 #include "kmer.h"
+#include "lrucache.hpp"
+
+struct QueryStats {
+    uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
+    uint64_t totSel{0};
+    std::chrono::duration<double> selectTime{0};
+    std::chrono::duration<double> flipTime{0};
+    uint64_t totEqcls{0};
+    uint64_t rootedNonZero{0};
+    std::unordered_map<uint32_t, uint64_t> numOcc;
+};
 
 class MSFQuery {
+
 private:
     uint64_t numSamples;
     uint64_t numWrds;
@@ -39,34 +52,85 @@ public:
                   << "--> boundary size: " << bbv.size() << "\n";
     }
 
-    std::vector<uint64_t> buildColor(uint64_t eqid, bool all=true) {
+    std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
+                                     cache::lru_cache <uint64_t, std::vector<uint64_t>> *lru_cache,
+                                     bool all = true) {
+
         std::vector<uint32_t> flips(numSamples);
+        std::vector<uint32_t> xorflips(numSamples, 0);
         uint64_t i{eqid}, from{0}, to{0};
+        std::vector<uint64_t> froms;
+        froms.reserve(12000);
+        queryStats.totEqcls++;
+        auto sstart = std::chrono::system_clock::now();
         while (parentbv[i] != i) {
+            if (lru_cache->exists(i)) {
+                const auto &vs = lru_cache->get(i);
+                for (auto v : vs) {
+                    xorflips[v] = 1;
+                }
+                queryStats.cacheCntr++;
+                break;
+            }
             if (i > 0)
                 from = sbbv(i) + 1;
             else
                 from = 0;
-            to = sbbv(i + 1);
-            for (auto j = from; j <= to; j++) {
-                flips[deltabv[j]] ^= 0x01;
-            }
+            froms.push_back(from);
+            queryStats.numOcc[i]++;
             i = parentbv[i];
+            ++queryStats.totSel;
         }
         if (i != zero) {
             if (i > 0)
                 from = sbbv(i) + 1;
-            to = sbbv(i + 1);
-            for (auto j = from; j <= to; j++) {
-                flips[deltabv[j]] ^= 0x01;
-            }
+            else
+                from = 0;
+            froms.push_back(from);
+            ++queryStats.totSel;
+            queryStats.rootedNonZero++;
         }
+        queryStats.selectTime += std::chrono::system_clock::now() - sstart;
+        auto fstart = std::chrono::system_clock::now();
+        for (auto f : froms) {
+            bool found = false;
+            uint64_t wrd{0};
+            //auto j = f;
+            auto start = f;
+            do {
+                wrd = bbv.get_int(start, 64);
+                //j = 0;
+                for (uint64_t j = 0; j < 64; j++) {
+                    flips[deltabv[start + j]] ^= 0x01;
+                    //j++;
+                    if ((wrd >> j) & 0x01) {
+                        found = true;
+                        break;
+                    }
+                }
+                start += 64;
+            } while (!found/*bbv[j - 1] != 1*/);
+        }
+        queryStats.flipTime += std::chrono::system_clock::now() - fstart;
+        /*while (parentbv[i] != i) {
+            if (i > 0)
+                from = sbbv(i) + 1;
+            else
+                from = 0;
+            auto j = from;
+            do {
+                flips[deltabv[j]] ^= 0x01;
+                j++;
+            } while (bbv[j-1] != 1);
+            i = parentbv[i];
+        }*/
+
         if (!all) { // return the indices of set bits
             std::vector<uint64_t> eq;
             eq.reserve(numWrds);
             uint64_t one = 1;
             for (i = 0; i < numSamples; i++) {
-                if (flips[i]) {
+                if (flips[i] ^ xorflips[i]) {
                     eq.push_back(i);
                 }
             }
@@ -85,8 +149,10 @@ public:
 
 };
 
-mantis::QueryResult findSamples(const mantis::QuerySet& kmers,
-                               CQF<KeyObject>& dbg, MSFQuery& msfQuery) {
+mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
+                                CQF<KeyObject> &dbg, MSFQuery &msfQuery,
+                                cache::lru_cache <uint64_t, std::vector<uint64_t>> &lru_cache,
+                                QueryStats &queryStats) {
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
     for (auto k : kmers) {
         KeyObject key(k, 0, 0);
@@ -98,9 +164,18 @@ mantis::QueryResult findSamples(const mantis::QuerySet& kmers,
     std::unordered_map<uint64_t, uint64_t> sample_map;
     for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
          ++it) {
-        auto eqclass_id = it->first-1;
+        auto eqclass_id = it->first - 1;
         auto count = it->second;
-        auto setbits = msfQuery.buildColor(eqclass_id, false);
+        std::vector<uint64_t> setbits;
+        if (lru_cache.exists(eqclass_id)) {
+            setbits = lru_cache.get(eqclass_id);
+            queryStats.cacheCntr++;
+        } else {
+            std::vector<uint64_t> setbits = msfQuery.buildColor(eqclass_id,
+                                                                queryStats, &lru_cache, false);
+            lru_cache.put(eqclass_id, setbits);
+            queryStats.noCacheCntr++;
+        }
         for (auto sb : setbits) {
             sample_map[sb] += count;
         }
@@ -108,18 +183,23 @@ mantis::QueryResult findSamples(const mantis::QuerySet& kmers,
     return sample_map;
 }
 
-uint32_t recursiveSteps(uint32_t idx, sdsl::int_vector<> &parentbv,
-                        std::vector<uint32_t> &steps,
-                        uint32_t zero) {
-    if (idx == zero)
+std::pair<uint32_t, uint32_t> recursiveSteps(uint32_t idx, sdsl::int_vector<> &parentbv,
+                                             std::vector<std::pair<uint32_t, uint32_t>> &steps,
+                                             uint32_t zero) {
+    if (idx == zero) {
+        steps[idx].second = zero;
         return steps[idx]; // 0
-    if (steps[idx] != 0)
+    }
+    if (steps[idx].first != 0)
         return steps[idx];
     if (parentbv[idx] == idx) {
-        steps[idx] = 1; // to retrieve the representative
+        steps[idx].first = 1; // to retrieve the representative
+        steps[idx].second = idx;
         return steps[idx];
     }
-    steps[idx] = recursiveSteps(parentbv[idx], parentbv, steps, zero) + 1;
+    auto ret = recursiveSteps(parentbv[idx], parentbv, steps, zero);
+    steps[idx].first = ret.first + 1;
+    steps[idx].second = ret.second;
     return steps[idx];
 }
 
@@ -211,12 +291,15 @@ int main(int argc, char *argv[]) {
     uint64_t eqCount = msfQuery.parentbv.size() - 1;
     std::cerr << "total # of equivalence classes is : " << eqCount << "\n";
 
+    cache::lru_cache <uint64_t, std::vector<uint64_t>> cache_lru(100000);
+    QueryStats queryStats;
+
     if (selected == mode::validate) {
         eqvec bvs;
         loadEqs(opt.eqlistfile, bvs);
         uint64_t cntr{0};
         for (uint64_t idx = 0; idx < eqCount; idx++) {
-            std::vector<uint64_t> newEq = msfQuery.buildColor(idx);
+            std::vector<uint64_t> newEq = msfQuery.buildColor(idx, queryStats, &cache_lru);
             std::vector<uint64_t> oldEq(numWrds);
             buildColor(bvs, oldEq, idx, opt.numSamples);
             if (newEq != oldEq) {
@@ -235,19 +318,36 @@ int main(int argc, char *argv[]) {
         }
         std::cerr << "WOOOOW! Validation passed\n";
     } else if (selected == mode::decodeAllEqs) {
-        for (uint64_t idx = 0; idx < eqCount; idx++) {
-            std::vector<uint64_t> newEq = msfQuery.buildColor(idx);
-            if (idx % 10000000 == 0) {
+        std::random_device r;
+
+        // Choose a random mean between 1 and 6
+        std::default_random_engine e1(r());
+        std::uniform_int_distribution<int> uniform_dist(0, eqCount - 1);
+        for (uint64_t idx = 0; idx < 182169; idx++) {
+            std::vector<uint64_t> newEq = msfQuery.buildColor(uniform_dist(e1),
+                                                              queryStats,
+                                                              &
+                                                              false);
+            /*if (idx % 10000000 == 0) {
                 std::cerr << idx << " eqs decoded\n";
-            }
+            }*/
         }
+        std::cerr << "cache was used " << queryStats.cacheCntr << " times " << queryStats.noCacheCntr << "\n";
+        std::cerr << "select time was " << queryStats.selectTime.count() << "s, flip time was "
+                  << queryStats.flipTime.count() << '\n';
+        std::cerr << "total selects = " << queryStats.totSel << ", time per select = "
+                  << queryStats.selectTime.count() / queryStats.totSel << '\n';
+        std::cerr << "total # of queries = " << queryStats.totEqcls
+                  << ", total # of queries rooted at a non-zero node = " << queryStats.rootedNonZero << "\n";
+
     } else if (selected == mode::steps) {
         uint32_t zero = msfQuery.parentbv.size() - 1;
-        std::vector<uint32_t> steps(eqCount, 0);
+        std::vector<std::pair<uint32_t, uint32_t>> steps(eqCount, {0, 0});
         for (uint64_t idx = 0; idx < eqCount; idx++) {
+            auto row = recursiveSteps(idx, msfQuery.parentbv, steps, zero);
             std::cout << msfQuery.parentbv[idx] << "\t"
                       << idx << "\t"
-                      << recursiveSteps(idx, msfQuery.parentbv, steps, zero) << "\n";
+                      << row.first << "\t" << row.second << "\n";
         }
     } else if (selected == mode::query) {
         CQF<KeyObject> dbg(opt.cqffile, false);
@@ -262,17 +362,27 @@ int main(int argc, char *argv[]) {
                                                           total_kmers);
         std::cerr << "Done loading query file : # of seqs: " << multi_kmers.size() << "\n";
         std::ofstream opfile(opt.outputfile);
-        uint32_t cnt = 0;
         {
-            CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
+            //CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
             for (auto &kmers : multi_kmers) {
-                opfile << "seq" << cnt++ << '\t' << kmers.size() << '\n';
-                mantis::QueryResult result = findSamples(kmers, dbg, msfQuery);
+                opfile << "seq" << queryStats.cnt++ << '\t' << kmers.size() << '\n';
+                mantis::QueryResult result = findSamples(kmers, dbg, msfQuery, cache_lru,
+                                                         queryStats);
                 for (auto it = result.begin(); it != result.end(); ++it) {
                     opfile << it->first/*cdbg.get_sample(it->first)*/ << '\t' << it->second << '\n';
                 }
             }
             opfile.close();
+        }
+        std::cerr << "cache was used " << queryStats.cacheCntr << " times " << queryStats.noCacheCntr << "\n";
+        std::cerr << "select time was " << queryStats.selectTime.count() << "s, flip time was "
+                  << queryStats.flipTime.count() << '\n';
+        std::cerr << "total selects = " << queryStats.totSel << ", time per select = "
+                  << queryStats.selectTime.count() / queryStats.totSel << '\n';
+        std::cerr << "total # of queries = " << queryStats.totEqcls
+                  << ", total # of queries rooted at a non-zero node = " << queryStats.rootedNonZero << "\n";
+        for (auto &kv : queryStats.numOcc) {
+            std::cout << kv.first << '\t' << kv.second << '\n';
         }
     }
 }
