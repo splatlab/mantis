@@ -326,7 +326,7 @@ int main(int argc, char *argv[]) {
         for (uint64_t idx = 0; idx < 182169; idx++) {
             std::vector<uint64_t> newEq = msfQuery.buildColor(uniform_dist(e1),
                                                               queryStats,
-                                                              &
+                                                              &cache_lru,
                                                               false);
             /*if (idx % 10000000 == 0) {
                 std::cerr << idx << " eqs decoded\n";
@@ -363,7 +363,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "Done loading query file : # of seqs: " << multi_kmers.size() << "\n";
         std::ofstream opfile(opt.outputfile);
         {
-            //CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
+            CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
             for (auto &kmers : multi_kmers) {
                 opfile << "seq" << queryStats.cnt++ << '\t' << kmers.size() << '\n';
                 mantis::QueryResult result = findSamples(kmers, dbg, msfQuery, cache_lru,
@@ -381,8 +381,8 @@ int main(int argc, char *argv[]) {
                   << queryStats.selectTime.count() / queryStats.totSel << '\n';
         std::cerr << "total # of queries = " << queryStats.totEqcls
                   << ", total # of queries rooted at a non-zero node = " << queryStats.rootedNonZero << "\n";
-        for (auto &kv : queryStats.numOcc) {
+        /*for (auto &kv : queryStats.numOcc) {
             std::cout << kv.first << '\t' << kv.second << '\n';
-        }
+        }*/
     }
 }
