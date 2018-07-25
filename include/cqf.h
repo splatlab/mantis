@@ -36,6 +36,8 @@
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
 #define PAGE_BUFFER_SIZE 4096
 
+static uint64_t tmp_sum_local;
+
 template <class key_obj>
 class CQF {
 	public:
@@ -70,6 +72,7 @@ class CQF {
 		class Iterator {
 			public:
 				Iterator(QFi it, uint32_t cutoff, uint64_t end_hash);
+				~Iterator();
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
@@ -169,6 +172,17 @@ CQF<key_obj>::Iterator::Iterator(QFi it, uint32_t cutoff, uint64_t end_hash)
 	};
 
 template <class key_obj>
+CQF<key_obj>::Iterator::~Iterator(void) {
+	struct aiocb *aio_list[1];
+	aio_list[0] = &aiocb;
+	int ret = aio_suspend(aio_list, 1, 0);
+	if (ret < 0) {
+		perror("aio_suspend");
+		exit(1);
+	}
+}
+
+template <class key_obj>
 key_obj CQF<key_obj>::Iterator::operator*(void) const {
 	uint64_t key = 0, value = 0, count = 0;
 	qfi_get(&iter, &key, &value, &count);
@@ -176,7 +190,7 @@ key_obj CQF<key_obj>::Iterator::operator*(void) const {
 }
 
 // This function read one byte from each page in the iterator buffer.
-void handler_function(union sigval sv);
+//void handler_function(union sigval sv);
 
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
@@ -193,14 +207,22 @@ void CQF<key_obj>::Iterator::operator++(void) {
 				//DEBUG_CDBG("didn't read fast enough for " << aiocb.aio_fildes <<
 					//" at " << last_read_offset << "(until " << last_prefetch_offset <<
 					//" buffer size: "<< buffer_size << ")...");
-				// const struct aiocb *const aiocb_list[1] = {&aiocb};
-				// aio_suspend(aiocb_list, 1, NULL);
+				 const struct aiocb *const aiocb_list[1] = {&aiocb};
+				 aio_suspend(aiocb_list, 1, NULL);
 				//DEBUG_CDBG(" finished it");
 			} else if (res > 0) {
 				//DEBUG_CDBG("aio_error() returned " << std::dec << res);
 			} else if (res == 0) {
 				//DEBUG_CDBG("prefetch was OK for " << aiocb.aio_fildes << " at " <<
 									 //std::hex << aiocb.aio_offset << std::dec);
+			} else if (res == 0) {
+				unsigned char *start = (unsigned char*)(iter.qf->metadata) +
+					last_prefetch_offset;
+				unsigned char *counter = (unsigned char*)(iter.qf->metadata) +
+					last_prefetch_offset;
+				for (;counter < start + buffer_size; counter += 4096) {
+					tmp_sum_local += *counter;
+				}
 			}
 		}
 
@@ -232,9 +254,9 @@ void CQF<key_obj>::Iterator::operator++(void) {
 							 //<< buffer_size << " into buffer at " << std::hex <<
 							 //((uint64_t)buffer) << std::dec);
 		// to touch each page in the buffer.
-		aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
-		aiocb.aio_sigevent.sigev_notify_function = &handler_function;
-		aiocb.aio_sigevent.sigev_value.sival_ptr = (void*)this;
+		//aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
+		//aiocb.aio_sigevent.sigev_notify_function = &handler_function;
+		//aiocb.aio_sigevent.sigev_value.sival_ptr = (void*)this;
 
 		uint32_t ret = aio_read(&aiocb);
 		//uint32_t ret = posix_fadvise(iter.qf->mem->fd, last_read_offset,
