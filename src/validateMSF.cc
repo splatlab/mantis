@@ -228,7 +228,7 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
         }
 
         ++queryStats.globalQueryNum;
-        
+        /*
         if (queryStats.globalQueryNum > queryStats.nextCacheUpdate) {
           for (int64_t i = rs.maxRank(); i > 50; i-=50) {
             auto& m = rs[i];
@@ -258,8 +258,9 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
           }
           queryStats.nextCacheUpdate += 10000;
           rs.clear();
-        }
+        }*/
     }
+
     return sample_map;
 }
 
