@@ -12,6 +12,7 @@
 #include "CLI/Timer.hpp"
 #include "kmer.h"
 #include "lrucache.hpp"
+#include "hashutil.h"
 
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
@@ -24,6 +25,20 @@ struct QueryStats {
     uint64_t globalQueryNum{0};
     std::unordered_map<uint32_t, uint64_t> numOcc;
 };
+
+
+namespace mantis{
+  namespace util {
+    class int_hasher {
+    public:
+      size_t operator()(uint64_t i) const {
+        return HashUtil::MurmurHash64A(reinterpret_cast<const void*>(&i), sizeof(i), 8675309);
+      }
+    };
+  }
+}
+
+using LRUCacheMap =  cache::lru_cache <uint64_t, std::vector<uint64_t>, mantis::util::int_hasher>;
 
 class RankScores {
 public:
@@ -79,10 +94,10 @@ public:
     }
 
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
-                                     cache::lru_cache <uint64_t, std::vector<uint64_t>> *lru_cache,
+                                     LRUCacheMap *lru_cache,
                                      RankScores* rs,
                                      bool all = true) {
-
+        (void)rs;
         std::vector<uint32_t> flips(numSamples);
         std::vector<uint32_t> xorflips(numSamples, 0);
         uint64_t i{eqid}, from{0}, to{0};
@@ -90,7 +105,7 @@ public:
         std::vector<uint64_t> froms;
         std::vector<uint32_t> parents;
         froms.reserve(12000);
-        parents.reserve(12000);
+        //parents.reserve(12000);
         queryStats.totEqcls++;
         auto sstart = std::chrono::system_clock::now();
         bool foundCache = false;
@@ -111,30 +126,32 @@ public:
             else
                 from = 0;
             froms.push_back(from);
-            parents.push_back(i);
+            //parents.push_back(i);
             //queryStats.numOcc[i]++;
             i = iparent;
             iparent = parentbv[i];
             ++queryStats.totSel;
             ++height;
         }
-        if (!foundCache and i == iparent and i != zero) {
+        if (!foundCache and i != zero) {
             if (i > 0)
                 from = sbbv(i) + 1;
             else
                 from = 0;
             froms.push_back(from);
-            parents.push_back(i);
+            //parents.push_back(i);
             ++queryStats.totSel;
             queryStats.rootedNonZero++;
             ++height;
         }
         // update ranks
+        /*
         if (rs) {
           for (size_t idx = 0; idx < froms.size(); ++idx) {
             (*rs)[(height - idx)][parents[idx]]++;
           }
         }
+        */
 
         queryStats.selectTime += std::chrono::system_clock::now() - sstart;
         auto fstart = std::chrono::system_clock::now();
@@ -197,7 +214,7 @@ public:
 
 mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
                                 CQF<KeyObject> &dbg, MSFQuery &msfQuery,
-                                cache::lru_cache <uint64_t, std::vector<uint64_t>> &lru_cache,
+                                LRUCacheMap& lru_cache,
                                 RankScores& rs,
                                 QueryStats &queryStats) {
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
@@ -372,7 +389,7 @@ int main(int argc, char *argv[]) {
     uint64_t eqCount = msfQuery.parentbv.size() - 1;
     std::cerr << "total # of equivalence classes is : " << eqCount << "\n";
 
-    cache::lru_cache <uint64_t, std::vector<uint64_t>> cache_lru(100000);
+    LRUCacheMap cache_lru(100000);
     QueryStats queryStats;
 
     if (selected == mode::validate) {
@@ -443,8 +460,7 @@ int main(int argc, char *argv[]) {
                                                           20,
                                                           total_kmers);
         std::cerr << "Done loading query file : # of seqs: " << multi_kmers.size() << "\n";
-        RankScores rs(12000);
-        std::cerr << "here\n";
+        RankScores rs(1);
         std::ofstream opfile(opt.outputfile);
         {
             CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};

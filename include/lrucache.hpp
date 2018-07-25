@@ -8,14 +8,15 @@
 #ifndef _LRUCACHE_HPP_INCLUDED_
 #define	_LRUCACHE_HPP_INCLUDED_
 
-#include <unordered_map>
+//#include <unordered_map>
+#include "tsl/hopscotch_map.h"
 #include <list>
 #include <cstddef>
 #include <stdexcept>
 
 namespace cache {
 
-template<typename key_t, typename value_t>
+  template<typename key_t, typename value_t, typename hasher_t = std::hash<key_t>>
 class lru_cache {
 public:
 	typedef typename std::pair<key_t, value_t> key_value_pair_t;
@@ -62,7 +63,8 @@ public:
 	
 private:
 	std::list<key_value_pair_t> _cache_items_list;
-	std::unordered_map<key_t, list_iterator_t> _cache_items_map;
+    //std::unordered_map<key_t, list_iterator_t, hasher_t> _cache_items_map;
+  tsl::hopscotch_map<key_t, list_iterator_t, hasher_t> 	_cache_items_map;
 	size_t _max_size;
 };
 
