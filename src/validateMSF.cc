@@ -20,8 +20,34 @@ struct QueryStats {
     std::chrono::duration<double> flipTime{0};
     uint64_t totEqcls{0};
     uint64_t rootedNonZero{0};
+    uint64_t nextCacheUpdate{10000};
+    uint64_t globalQueryNum{0};
     std::unordered_map<uint32_t, uint64_t> numOcc;
 };
+
+class RankScores {
+public:
+  RankScores(uint64_t nranks) {rs_.resize(nranks);}
+
+  std::unordered_map<uint32_t, uint32_t>& operator[](uint32_t r) {
+    if (r > maxRank_) {
+      maxRank_ = std::min(r, static_cast<uint32_t>(rs_.size()-1));
+    }
+    return (r < rs_.size()) ? rs_[r] : rs_.back();
+  }
+
+  void clear() {
+    for (auto& m : rs_){ m.clear(); }
+    maxRank_ = 0;
+  }
+
+  uint32_t maxRank() const { return maxRank_; }
+
+private:
+  std::vector<std::unordered_map<uint32_t, uint32_t>> rs_;
+  uint32_t maxRank_{0};
+};
+
 
 class MSFQuery {
 
@@ -54,22 +80,28 @@ public:
 
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
                                      cache::lru_cache <uint64_t, std::vector<uint64_t>> *lru_cache,
+                                     RankScores* rs,
                                      bool all = true) {
 
         std::vector<uint32_t> flips(numSamples);
         std::vector<uint32_t> xorflips(numSamples, 0);
         uint64_t i{eqid}, from{0}, to{0};
+        uint64_t height{0};
         std::vector<uint64_t> froms;
+        std::vector<uint32_t> parents;
         froms.reserve(12000);
+        parents.reserve(12000);
         queryStats.totEqcls++;
         auto sstart = std::chrono::system_clock::now();
-        while (parentbv[i] != i) {
-            if (lru_cache->exists(i)) {
+        uint32_t iparent = parentbv[i];
+        while (iparent != i) {
+            if (lru_cache and lru_cache->exists(i)) {
                 const auto &vs = lru_cache->get(i);
                 for (auto v : vs) {
                     xorflips[v] = 1;
                 }
                 queryStats.cacheCntr++;
+                i = iparent;
                 break;
             }
             if (i > 0)
@@ -77,19 +109,31 @@ public:
             else
                 from = 0;
             froms.push_back(from);
-            queryStats.numOcc[i]++;
-            i = parentbv[i];
+            parents.push_back(i);
+            //queryStats.numOcc[i]++;
+            i = iparent;
+            iparent = parentbv[i];
             ++queryStats.totSel;
+            ++height;
         }
-        if (i != zero) {
+        if (i != iparent and i != zero) {
             if (i > 0)
                 from = sbbv(i) + 1;
             else
                 from = 0;
             froms.push_back(from);
+            parents.push_back(i);
             ++queryStats.totSel;
             queryStats.rootedNonZero++;
+            ++height;
         }
+        // update ranks
+        if (rs) {
+          for (size_t idx = 0; idx < froms.size(); ++idx) {
+            (*rs)[(height - idx)][parents[idx]]++;
+          }
+        }
+
         queryStats.selectTime += std::chrono::system_clock::now() - sstart;
         auto fstart = std::chrono::system_clock::now();
         for (auto f : froms) {
@@ -152,6 +196,7 @@ public:
 mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
                                 CQF<KeyObject> &dbg, MSFQuery &msfQuery,
                                 cache::lru_cache <uint64_t, std::vector<uint64_t>> &lru_cache,
+                                RankScores& rs,
                                 QueryStats &queryStats) {
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
     for (auto k : kmers) {
@@ -162,23 +207,57 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
     }
 
     std::unordered_map<uint64_t, uint64_t> sample_map;
-    for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
-         ++it) {
+    size_t numPerLevel = 10;
+    for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first - 1;
         auto count = it->second;
+
         std::vector<uint64_t> setbits;
         if (lru_cache.exists(eqclass_id)) {
             setbits = lru_cache.get(eqclass_id);
             queryStats.cacheCntr++;
         } else {
-            std::vector<uint64_t> setbits = msfQuery.buildColor(eqclass_id,
-                                                                queryStats, &lru_cache, false);
+            setbits = msfQuery.buildColor(eqclass_id, queryStats, &lru_cache, &rs, false);
             lru_cache.put(eqclass_id, setbits);
             queryStats.noCacheCntr++;
         }
         for (auto sb : setbits) {
             sample_map[sb] += count;
         }
+
+        ++queryStats.globalQueryNum;
+        /*
+        if (queryStats.globalQueryNum > queryStats.nextCacheUpdate) {
+          for (int64_t i = rs.maxRank(); i > 50; i-=50) {
+            auto& m = rs[i];
+            if (m.size() > numPerLevel) {
+              std::vector<std::pair<uint32_t, uint32_t>> pairs;
+              pairs.reserve(m.size());
+              std::copy(m.begin(), m.end(), std::back_inserter(pairs));
+              std::nth_element(pairs.begin(), pairs.begin()+numPerLevel, pairs.end(),
+                               [](const std::pair<uint32_t, uint32_t> &a, const std::pair<uint32_t, uint32_t> &b) {
+                                 return a.second > b.second;
+                               });
+              for (auto pit = pairs.begin(); pit != pairs.begin()+numPerLevel; ++pit) {
+                if(!lru_cache.exists(pit->first)) {
+                  auto v = msfQuery.buildColor(pit->first, queryStats, nullptr, nullptr, false);
+                  lru_cache.put(pit->first, v);
+                }
+              }
+            } else if(m.size() > 0){
+              for (auto pit = m.begin(); pit != m.end(); ++pit) {
+                if(!lru_cache.exists(pit->first)) {
+                  auto v = msfQuery.buildColor(pit->first, queryStats, nullptr, nullptr, false);
+                  lru_cache.put(pit->first, v);
+                }
+              }
+            }
+
+          }
+          queryStats.nextCacheUpdate += 10000;
+          rs.clear();
+        }
+        */
     }
     return sample_map;
 }
@@ -299,7 +378,7 @@ int main(int argc, char *argv[]) {
         loadEqs(opt.eqlistfile, bvs);
         uint64_t cntr{0};
         for (uint64_t idx = 0; idx < eqCount; idx++) {
-            std::vector<uint64_t> newEq = msfQuery.buildColor(idx, queryStats, &cache_lru);
+            std::vector<uint64_t> newEq = msfQuery.buildColor(idx, queryStats, &cache_lru, nullptr);
             std::vector<uint64_t> oldEq(numWrds);
             buildColor(bvs, oldEq, idx, opt.numSamples);
             if (newEq != oldEq) {
@@ -327,6 +406,7 @@ int main(int argc, char *argv[]) {
             std::vector<uint64_t> newEq = msfQuery.buildColor(uniform_dist(e1),
                                                               queryStats,
                                                               &cache_lru,
+                                                              nullptr,
                                                               false);
             /*if (idx % 10000000 == 0) {
                 std::cerr << idx << " eqs decoded\n";
@@ -361,13 +441,15 @@ int main(int argc, char *argv[]) {
                                                           20,
                                                           total_kmers);
         std::cerr << "Done loading query file : # of seqs: " << multi_kmers.size() << "\n";
+        RankScores rs(12000);
+        std::cerr << "here\n";
         std::ofstream opfile(opt.outputfile);
         {
             CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
             for (auto &kmers : multi_kmers) {
                 opfile << "seq" << queryStats.cnt++ << '\t' << kmers.size() << '\n';
                 mantis::QueryResult result = findSamples(kmers, dbg, msfQuery, cache_lru,
-                                                         queryStats);
+                                                         rs, queryStats);
                 for (auto it = result.begin(); it != result.end(); ++it) {
                     opfile << it->first/*cdbg.get_sample(it->first)*/ << '\t' << it->second << '\n';
                 }
