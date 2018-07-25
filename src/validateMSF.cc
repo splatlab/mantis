@@ -93,6 +93,7 @@ public:
         parents.reserve(12000);
         queryStats.totEqcls++;
         auto sstart = std::chrono::system_clock::now();
+        bool foundCache = false;
         uint32_t iparent = parentbv[i];
         while (iparent != i) {
             if (lru_cache and lru_cache->exists(i)) {
@@ -101,7 +102,8 @@ public:
                     xorflips[v] = 1;
                 }
                 queryStats.cacheCntr++;
-                i = iparent;
+                //i = iparent;
+                foundCache = true;
                 break;
             }
             if (i > 0)
@@ -116,7 +118,7 @@ public:
             ++queryStats.totSel;
             ++height;
         }
-        if (i != iparent and i != zero) {
+        if (!foundCache and i == iparent and i != zero) {
             if (i > 0)
                 from = sbbv(i) + 1;
             else
@@ -226,7 +228,7 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
         }
 
         ++queryStats.globalQueryNum;
-        /*
+        
         if (queryStats.globalQueryNum > queryStats.nextCacheUpdate) {
           for (int64_t i = rs.maxRank(); i > 50; i-=50) {
             auto& m = rs[i];
@@ -257,7 +259,6 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
           queryStats.nextCacheUpdate += 10000;
           rs.clear();
         }
-        */
     }
     return sample_map;
 }
