@@ -13,6 +13,12 @@
 #include "kmer.h"
 #include "lrucache.hpp"
 
+constexpr uint64_t STARTING_SCORE = 12000;
+constexpr uint64_t ROUNDS = 100;
+constexpr uint64_t KPOP = 10;
+
+
+typedef std::vector<uint64_t> vector1;
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
     uint64_t totSel{0};
@@ -61,9 +67,9 @@ public:
         uint64_t i{eqid}, from{0}, to{0};
         std::vector<uint64_t> froms;
         froms.reserve(12000);
-        queryStats.totEqcls++;
         auto sstart = std::chrono::system_clock::now();
-        while (parentbv[i] != i) {
+        uint32_t iparent = parentbv[i];
+        while (iparent != i) {
             if (lru_cache->exists(i)) {
                 const auto &vs = lru_cache->get(i);
                 for (auto v : vs) {
@@ -77,11 +83,12 @@ public:
             else
                 from = 0;
             froms.push_back(from);
-            queryStats.numOcc[i]++;
-            i = parentbv[i];
+            queryStats.numOcc[iparent] += (queryStats.numOcc[i] - 1);
+            i = iparent;
+            iparent = parentbv[i];
             ++queryStats.totSel;
         }
-        if (i != zero) {
+        if (i == iparent and i != zero) {
             if (i > 0)
                 from = sbbv(i) + 1;
             else
@@ -134,12 +141,13 @@ public:
                     eq.push_back(i);
                 }
             }
+            //std::cerr << "s" << eq.size() << "\n";
             return eq;
         }
         std::vector<uint64_t> eq(numWrds);
         uint64_t one = 1;
         for (i = 0; i < numSamples; i++) {
-            if (flips[i]) {
+            if (flips[i] ^ xorflips[i]) {
                 uint64_t idx = i / 64;
                 eq[idx] = eq[idx] | (one << (i % 64));
             }
@@ -166,18 +174,69 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
          ++it) {
         auto eqclass_id = it->first - 1;
         auto count = it->second;
-        std::vector<uint64_t> setbits;
+        queryStats.totEqcls++;
         if (lru_cache.exists(eqclass_id)) {
-            setbits = lru_cache.get(eqclass_id);
+            std::vector<uint64_t> setbits = lru_cache.get(eqclass_id);
+            for (auto sb : setbits) {
+                sample_map[sb] += count;
+            }
             queryStats.cacheCntr++;
         } else {
+            queryStats.numOcc[eqclass_id] = STARTING_SCORE;
             std::vector<uint64_t> setbits = msfQuery.buildColor(eqclass_id,
                                                                 queryStats, &lru_cache, false);
-            lru_cache.put(eqclass_id, setbits);
+            //lru_cache.put(eqclass_id, setbits);
             queryStats.noCacheCntr++;
+            for (auto sb : setbits) {
+                sample_map[sb] += count;
+            }
+
         }
-        for (auto sb : setbits) {
+       /* for (auto sb : setbits) {
             sample_map[sb] += count;
+        }*/
+
+        /// Here we find the k most requested color-classes in the whole tree
+        // and then add them to the lru_cache
+        if (queryStats.totEqcls % ROUNDS == 0) {
+            std::vector<std::pair<uint32_t, uint64_t>> mostPopular;
+            mostPopular.reserve(KPOP);
+            /*std::cerr << "here: " << queryStats.totEqcls
+                      << " " << queryStats.numOcc.size()
+                      << " " << lru_cache.size() << "\n";*/
+            for (auto &kv : queryStats.numOcc) {
+                if (mostPopular.size() < KPOP) {
+                    mostPopular.emplace_back(kv.first, kv.second);
+                    if (mostPopular.size() == KPOP) {
+                        std::sort(mostPopular.begin(), mostPopular.end(),
+                                  [](std::pair<uint32_t, uint64_t> &a1, std::pair<uint32_t, uint64_t> &a2) {
+                                      return a1.second < a2.second;
+                                  });
+                    }
+                } else {
+                    // replace with a binary search
+                    uint64_t idx{0};
+                    for (idx = 0; idx < mostPopular.size(); idx++) { // the array is sorted asc
+                        if (mostPopular[idx].second >= kv.second) {
+                            break;
+                        }
+                    }
+                    if (idx > 0) { // if found at least 1 element in the least that is less popular than current
+                        mostPopular.insert(mostPopular.begin() + idx, kv);
+                        mostPopular.erase(mostPopular.begin(), mostPopular.begin() + 1);
+                    }
+                }
+            }
+            for (auto kv : mostPopular) {
+                if (!lru_cache.exists(kv.first)) {
+                    std::vector<uint64_t> setbits = msfQuery.buildColor(kv.first,
+                                                                        queryStats, &lru_cache, false);
+                    lru_cache.put(kv.first, setbits);
+                } /*else {
+                    std::cerr << "existed\n";
+                }*/
+            }
+            queryStats.numOcc.clear(); // clear the cache for next batch
         }
     }
     return sample_map;
@@ -324,10 +383,10 @@ int main(int argc, char *argv[]) {
         std::default_random_engine e1(r());
         std::uniform_int_distribution<int> uniform_dist(0, eqCount - 1);
         for (uint64_t idx = 0; idx < 182169; idx++) {
-            std::vector<uint64_t> newEq = msfQuery.buildColor(uniform_dist(e1),
-                                                              queryStats,
-                                                              &cache_lru,
-                                                              false);
+            vector1 newEq = msfQuery.buildColor(uniform_dist(e1),
+                                                queryStats,
+                                                &cache_lru,
+                                                false);
             /*if (idx % 10000000 == 0) {
                 std::cerr << idx << " eqs decoded\n";
             }*/
@@ -374,7 +433,8 @@ int main(int argc, char *argv[]) {
             }
             opfile.close();
         }
-        std::cerr << "cache was used " << queryStats.cacheCntr << " times " << queryStats.noCacheCntr << "\n";
+        std::cerr << "cache was used " << queryStats.cacheCntr << " times vs no-cache "
+                  << queryStats.noCacheCntr << "\n";
         std::cerr << "select time was " << queryStats.selectTime.count() << "s, flip time was "
                   << queryStats.flipTime.count() << '\n';
         std::cerr << "total selects = " << queryStats.totSel << ", time per select = "
