@@ -163,23 +163,24 @@ public:
             //auto j = f;
             uint64_t offset{0};
             auto start = f;
-            do {
+            //do {
                 wrd = bbv.get_int(start, 64);
-                //while (wrd == 0) { offset+= 64; wrd = bbv.get_int(start+offset, 64); }
-                //offset += __builtin_clzll(wrd);
+                while (wrd == 0) { offset+= 64; wrd = bbv.get_int(start+offset, 64); }
+                offset += __builtin_clzll(wrd);
                 //j = 0;
-                for (uint64_t j = 0; j < 64; j++) {
+                //for (uint64_t j = 0; j < 64; j++) {
+                for (uint64_t j = 0; j <= offset; j++) {
                     flips[deltabv[start + j]] ^= 0x01;
                     //j++;
-                    
+                    /*
                     if ((wrd >> j) & 0x01) {
                         found = true;
                         break;
                     }
-                    
+                    */
                 }
-                start += 64;
-                } while (!found/*bbv[j - 1] != 1*/);
+                //start += 64;
+                //} while (!found/*bbv[j - 1] != 1*/);
         }
         queryStats.flipTime += std::chrono::system_clock::now() - fstart;
         /*while (parentbv[i] != i) {
