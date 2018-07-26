@@ -24,6 +24,7 @@ struct QueryStats {
     uint64_t nextCacheUpdate{10000};
     uint64_t globalQueryNum{0};
     std::vector<uint64_t> buffer;
+    uint64_t numSamples{0};
   //std::unordered_map<uint32_t, uint64_t> numOcc;
 };
 
@@ -163,24 +164,22 @@ public:
             //auto j = f;
             uint64_t offset{0};
             auto start = f;
-            //do {
-                wrd = bbv.get_int(start, 64);
-                while (wrd == 0) { offset+= 64; wrd = bbv.get_int(start+offset, 64); }
-                offset += __builtin_clzll(wrd);
-                //j = 0;
-                //for (uint64_t j = 0; j < 64; j++) {
-                for (uint64_t j = 0; j <= offset; j++) {
-                    flips[deltabv[start + j]] ^= 0x01;
-                    //j++;
-                    /*
-                    if ((wrd >> j) & 0x01) {
-                        found = true;
-                        break;
-                    }
-                    */
+            do {
+              wrd = bbv.get_int(start, 64);
+              //while (wrd == 0) { offset+= 64; wrd = bbv.get_int(start+offset, 64); }
+              //offset += __builtin_ctzll(wrd);
+              //j = 0;
+              for (uint64_t j = 0; j < 64; j++) {
+                //for (uint64_t j = 0; j <= offset; j++) {
+                flips[deltabv[start + j]] ^= 0x01;
+                //j++;
+                if ((wrd >> j) & 0x01) {
+                  found = true;
+                  break;
                 }
-                //start += 64;
-                //} while (!found/*bbv[j - 1] != 1*/);
+              }
+              start += 64;
+            } while (!found/*bbv[j - 1] != 1*/);
         }
         queryStats.flipTime += std::chrono::system_clock::now() - fstart;
         /*while (parentbv[i] != i) {
@@ -233,7 +232,7 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
             query_eqclass_map[eqclass] += 1;
     }
 
-    mantis::QueryResult sample_map;
+    mantis::QueryResult sample_map(queryStats.numSamples,0);
     size_t numPerLevel = 10;
     for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first - 1;
@@ -399,6 +398,7 @@ int main(int argc, char *argv[]) {
 
     LRUCacheMap cache_lru(100000);
     QueryStats queryStats;
+    queryStats.numSamples = opt.numSamples;
 
     if (selected == mode::validate) {
         eqvec bvs;
@@ -477,7 +477,11 @@ int main(int argc, char *argv[]) {
                 mantis::QueryResult result = findSamples(kmers, dbg, msfQuery, cache_lru,
                                                          nullptr, queryStats);
                 for (auto it = result.begin(); it != result.end(); ++it) {
-                    opfile << it->first/*cdbg.get_sample(it->first)*/ << '\t' << it->second << '\n';
+                  if (*it > 0) {
+                  auto i = std::distance(result.begin(), it);
+                  opfile << i << '\t' << *it << '\n';
+                  }
+                  //opfile << it->first/*cdbg.get_sample(it->first)*/ << '\t' << it->second << '\n';
                 }
             }
             opfile.close();

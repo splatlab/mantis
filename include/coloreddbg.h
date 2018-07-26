@@ -287,7 +287,7 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 			query_eqclass_map[eqclass] += 1;
 	}
 
-  mantis::QueryResult sample_map;
+  mantis::QueryResult sample_map(num_samples, 0);
 	for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
 			 ++it) {
 		auto eqclass_id = it->first;
