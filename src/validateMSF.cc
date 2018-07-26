@@ -111,7 +111,7 @@ public:
         //froms.reserve(12000);
         //parents.reserve(12000);
         queryStats.totEqcls++;
-        auto sstart = std::chrono::system_clock::now();
+        //auto sstart = std::chrono::system_clock::now();
         bool foundCache = false;
         uint32_t iparent = parentbv[i];
         while (iparent != i) {
@@ -157,8 +157,8 @@ public:
         }
         */
 
-        queryStats.selectTime += std::chrono::system_clock::now() - sstart;
-        auto fstart = std::chrono::system_clock::now();
+        //queryStats.selectTime += std::chrono::system_clock::now() - sstart;
+        //auto fstart = std::chrono::system_clock::now();
         for (auto f : froms) {
             bool found = false;
             uint64_t wrd{0};
@@ -182,7 +182,7 @@ public:
               start += 64;
             } while (!found/*bbv[j - 1] != 1*/);
         }
-        queryStats.flipTime += std::chrono::system_clock::now() - fstart;
+        //queryStats.flipTime += std::chrono::system_clock::now() - fstart;
         /*while (parentbv[i] != i) {
             if (i > 0)
                 from = sbbv(i) + 1;
@@ -441,10 +441,10 @@ int main(int argc, char *argv[]) {
             }*/
         }
         std::cerr << "cache was used " << queryStats.cacheCntr << " times " << queryStats.noCacheCntr << "\n";
-        std::cerr << "select time was " << queryStats.selectTime.count() << "s, flip time was "
-                  << queryStats.flipTime.count() << '\n';
-        std::cerr << "total selects = " << queryStats.totSel << ", time per select = "
-                  << queryStats.selectTime.count() / queryStats.totSel << '\n';
+        //std::cerr << "select time was " << queryStats.selectTime.count() << "s, flip time was "
+        //         << queryStats.flipTime.count() << '\n';
+        //std::cerr << "total selects = " << queryStats.totSel << ", time per select = "
+        //          << queryStats.selectTime.count() / queryStats.totSel << '\n';
         std::cerr << "total # of queries = " << queryStats.totEqcls
                   << ", total # of queries rooted at a non-zero node = " << queryStats.rootedNonZero << "\n";
 
