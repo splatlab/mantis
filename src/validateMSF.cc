@@ -13,6 +13,7 @@
 #include "kmer.h"
 #include "lrucache.hpp"
 #include "hashutil.h"
+#include "lru/lru.hpp"
 
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
@@ -40,7 +41,7 @@ namespace mantis{
   }
 }
 
-using LRUCacheMap =  cache::lru_cache <uint64_t, std::vector<uint64_t>, mantis::util::int_hasher>;
+using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;// cache::lru_cache <uint64_t, std::vector<uint64_t>, mantis::util::int_hasher>;
 
 class RankScores {
 public:
@@ -114,8 +115,8 @@ public:
         bool foundCache = false;
         uint32_t iparent = parentbv[i];
         while (iparent != i) {
-            if (lru_cache and lru_cache->exists(i)) {
-                const auto &vs = lru_cache->get(i);
+            if (lru_cache and lru_cache->contains(i)) {
+                const auto &vs = (*lru_cache)[i];//->get(i);
                 for (auto v : vs) {
                     xorflips[v] = 1;
                 }
@@ -239,12 +240,12 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
         auto count = it->second;
 
         std::vector<uint64_t> setbits;
-        if (lru_cache.exists(eqclass_id)) {
-            setbits = lru_cache.get(eqclass_id);
+        if (lru_cache.contains(eqclass_id)) {
+            setbits = lru_cache[eqclass_id];//.get(eqclass_id);
             queryStats.cacheCntr++;
         } else {
             setbits = msfQuery.buildColor(eqclass_id, queryStats, &lru_cache, rs, false);
-            lru_cache.put(eqclass_id, setbits);
+            lru_cache.emplace(eqclass_id, setbits);
             queryStats.noCacheCntr++;
         }
         for (auto sb : setbits) {
