@@ -51,15 +51,15 @@
 #include "mantisconfig.hpp"
 
 // This function read one byte from each page in the iterator buffer.
-uint64_t tmp_sum;
-void handler_function(union sigval sv) {
-	CQF<KeyObject>::Iterator& it(*((CQF<KeyObject>::Iterator*)sv.sival_ptr));
-	unsigned char *start = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
-	unsigned char *counter = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
-	for (;counter < start + it.buffer_size; counter += 4096) {
-		tmp_sum += *counter;
-	}
-}
+//uint64_t tmp_sum;
+//void handler_function(union sigval sv) {
+	//CQF<KeyObject>::Iterator& it(*((CQF<KeyObject>::Iterator*)sv.sival_ptr));
+	//unsigned char *start = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
+	//unsigned char *counter = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
+	//for (;counter < start + it.buffer_size; counter += 4096) {
+		//tmp_sum += *counter;
+	//}
+//}
 
 /*
  * ===  FUNCTION  =============================================================
