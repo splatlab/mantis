@@ -107,21 +107,16 @@ public:
         uint64_t height{0};
         auto& froms = queryStats.buffer;
         froms.clear();
-        //std::vector<uint64_t> froms;
-        //froms.reserve(12000);
-        //parents.reserve(12000);
         queryStats.totEqcls++;
-        //auto sstart = std::chrono::system_clock::now();
         bool foundCache = false;
         uint32_t iparent = parentbv[i];
         while (iparent != i) {
             if (lru_cache and lru_cache->contains(i)) {
-                const auto &vs = (*lru_cache)[i];//->get(i);
+                const auto &vs = (*lru_cache)[i];
                 for (auto v : vs) {
                     xorflips[v] = 1;
                 }
                 queryStats.cacheCntr++;
-                //i = iparent;
                 foundCache = true;
                 break;
             }
@@ -130,8 +125,6 @@ public:
             else
                 from = 0;
             froms.push_back(from);
-            //parents.push_back(i);
-            //queryStats.numOcc[i]++;
             i = iparent;
             iparent = parentbv[i];
             ++queryStats.totSel;
@@ -143,7 +136,6 @@ public:
             else
                 from = 0;
             froms.push_back(from);
-            //parents.push_back(i);
             ++queryStats.totSel;
             queryStats.rootedNonZero++;
             ++height;
@@ -157,8 +149,6 @@ public:
         }
         */
 
-        //queryStats.selectTime += std::chrono::system_clock::now() - sstart;
-        //auto fstart = std::chrono::system_clock::now();
         for (auto f : froms) {
             bool found = false;
             uint64_t wrd{0};
@@ -167,34 +157,16 @@ public:
             auto start = f;
             do {
               wrd = bbv.get_int(start, 64);
-              //while (wrd == 0) { offset+= 64; wrd = bbv.get_int(start+offset, 64); }
-              //offset += __builtin_ctzll(wrd);
-              //j = 0;
               for (uint64_t j = 0; j < 64; j++) {
-                //for (uint64_t j = 0; j <= offset; j++) {
                 flips[deltabv[start + j]] ^= 0x01;
-                //j++;
                 if ((wrd >> j) & 0x01) {
                   found = true;
                   break;
                 }
               }
               start += 64;
-            } while (!found/*bbv[j - 1] != 1*/);
+            } while (!found);
         }
-        //queryStats.flipTime += std::chrono::system_clock::now() - fstart;
-        /*while (parentbv[i] != i) {
-            if (i > 0)
-                from = sbbv(i) + 1;
-            else
-                from = 0;
-            auto j = from;
-            do {
-                flips[deltabv[j]] ^= 0x01;
-                j++;
-            } while (bbv[j-1] != 1);
-            i = parentbv[i];
-        }*/
 
         if (!all) { // return the indices of set bits
             std::vector<uint64_t> eq;
@@ -210,7 +182,7 @@ public:
         std::vector<uint64_t> eq(numWrds);
         uint64_t one = 1;
         for (i = 0; i < numSamples; i++) {
-            if (flips[i]) {
+            if (flips[i] ^  xorflips[i]) {
                 uint64_t idx = i / 64;
                 eq[idx] = eq[idx] | (one << (i % 64));
             }
@@ -319,7 +291,7 @@ struct Opts {
 };
 
 int main(int argc, char *argv[]) {
-
+    ios_base::sync_with_stdio(false);
     using namespace clipp;
     enum class mode {
         validate, steps, decodeAllEqs, query, help
