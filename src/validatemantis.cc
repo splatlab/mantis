@@ -148,7 +148,7 @@ validate_main ( ValidateOpts& opt )
 	// Query kmers in each experiment CQF ignoring kmers below the cutoff.
 	// Maintain the fraction of kmers present in each experiment CQF.
 	std::vector<std::unordered_map<uint64_t, float>> ground_truth;
-	std::vector<std::unordered_map<uint64_t, uint64_t>> cdbg_output;
+	std::vector<mantis::QueryResult> cdbg_output;
 	bool fail{false};
 	for (auto kmers : multi_kmers) {
 		std::unordered_map<uint64_t, float> fraction_present;
@@ -164,7 +164,7 @@ validate_main ( ValidateOpts& opt )
 			}
 		}
 		// Query kmers in the cdbg
-		std::unordered_map<uint64_t, uint64_t> result = cdbg.find_samples(kmers);
+		auto result = cdbg.find_samples(kmers);
 
 		// Validate the cdbg output
 		for (uint64_t i = 0; i < nqf; i++)

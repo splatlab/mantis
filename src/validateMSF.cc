@@ -23,7 +23,8 @@ struct QueryStats {
     uint64_t rootedNonZero{0};
     uint64_t nextCacheUpdate{10000};
     uint64_t globalQueryNum{0};
-    std::unordered_map<uint32_t, uint64_t> numOcc;
+    std::vector<uint64_t> buffer;
+  //std::unordered_map<uint32_t, uint64_t> numOcc;
 };
 
 
@@ -102,9 +103,10 @@ public:
         std::vector<uint32_t> xorflips(numSamples, 0);
         uint64_t i{eqid}, from{0}, to{0};
         uint64_t height{0};
-        std::vector<uint64_t> froms;
-        std::vector<uint32_t> parents;
-        froms.reserve(12000);
+        auto& froms = queryStats.buffer;
+        froms.clear();
+        //std::vector<uint64_t> froms;
+        //froms.reserve(12000);
         //parents.reserve(12000);
         queryStats.totEqcls++;
         auto sstart = std::chrono::system_clock::now();
@@ -215,7 +217,7 @@ public:
 mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
                                 CQF<KeyObject> &dbg, MSFQuery &msfQuery,
                                 LRUCacheMap& lru_cache,
-                                RankScores& rs,
+                                RankScores* rs,
                                 QueryStats &queryStats) {
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
     for (auto k : kmers) {
@@ -225,7 +227,7 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
             query_eqclass_map[eqclass] += 1;
     }
 
-    std::unordered_map<uint64_t, uint64_t> sample_map;
+    mantis::QueryResult sample_map;
     size_t numPerLevel = 10;
     for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first - 1;
@@ -236,7 +238,7 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
             setbits = lru_cache.get(eqclass_id);
             queryStats.cacheCntr++;
         } else {
-            setbits = msfQuery.buildColor(eqclass_id, queryStats, &lru_cache, &rs, false);
+            setbits = msfQuery.buildColor(eqclass_id, queryStats, &lru_cache, rs, false);
             lru_cache.put(eqclass_id, setbits);
             queryStats.noCacheCntr++;
         }
@@ -467,7 +469,7 @@ int main(int argc, char *argv[]) {
             for (auto &kmers : multi_kmers) {
                 opfile << "seq" << queryStats.cnt++ << '\t' << kmers.size() << '\n';
                 mantis::QueryResult result = findSamples(kmers, dbg, msfQuery, cache_lru,
-                                                         rs, queryStats);
+                                                         nullptr, queryStats);
                 for (auto it = result.begin(); it != result.end(); ++it) {
                     opfile << it->first/*cdbg.get_sample(it->first)*/ << '\t' << it->second << '\n';
                 }
