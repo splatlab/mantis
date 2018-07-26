@@ -17,7 +17,7 @@ namespace mantis {
   };
 
 
-  using QueryResult = tsl::hopscotch_map<uint64_t, uint64_t>;
+  using QueryResult = std::unordered_map<uint64_t, uint64_t>;//tsl::hopscotch_map<uint64_t, uint64_t>;
   using QueryResults = std::vector<QueryResult>;
 }
 
