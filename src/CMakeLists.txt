@@ -23,6 +23,7 @@ target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LAN
 target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
 target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
 target_compile_definitions(mantis_core PUBLIC "${ARCH_DEFS}")
+set_property(TARGET mantis_core PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 # link libmantis_core with the required libraries
 target_link_libraries(mantis_core
@@ -42,6 +43,7 @@ target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
 target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
+set_property(TARGET mantis PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 add_executable(build_eq_graph build_eq_graph.cc)
 target_include_directories(build_eq_graph PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
@@ -51,6 +53,7 @@ target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_
 target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
 target_compile_options(build_eq_graph PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
 target_compile_definitions(build_eq_graph PUBLIC "${ARCH_DEFS}")
+set_property(TARGET build_eq_graph PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 # TODO: look more into why this is necessary
 if (SDSL_INSTALL_PATH)
@@ -67,6 +70,7 @@ target_include_directories(monochromatic_component_iterator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(monochromatic_component_iterator
 				mantis_core)
+set_property(TARGET monochromatic_component_iterator PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 
 add_executable(msf MSF.cc)
@@ -74,18 +78,20 @@ target_include_directories(msf PUBLIC
 				  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(msf
 				                mantis_core)
+set_property(TARGET msf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 add_executable(loadColorCls validateMSF.cc)
 target_include_directories(loadColorCls PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(loadColorCls
 		mantis_core)
+set_property(TARGET loadColorCls PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 add_executable(mstBoost MST_boost.cc)
 		target_include_directories(mstBoost PUBLIC
 						                  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(mstBoost mantis_core)
-
+set_property(TARGET mstBoost PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 #add_executable(walkEqcls walkEqcls.cc)
 #target_include_directories(walkEqcls PUBLIC

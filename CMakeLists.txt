@@ -3,7 +3,7 @@
 # https://rix0r.nl/blog/2015/08/13/cmake-guide/
 #
 
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 project(mantis VERSION 0.2 LANGUAGES C CXX)
 if (NOT CMAKE_BUILD_TYPE)
    set (CMAKE_BUILD_TYPE "Release")

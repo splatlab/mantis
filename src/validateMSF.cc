@@ -14,6 +14,8 @@
 #include "lrucache.hpp"
 #include "hashutil.h"
 #include "lru/lru.hpp"
+#include "tsl/hopscotch_map.h"
+#include "nonstd/optional.hpp"
 
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
@@ -26,6 +28,8 @@ struct QueryStats {
     uint64_t globalQueryNum{0};
     std::vector<uint64_t> buffer;
     uint64_t numSamples{0};
+  tsl::hopscotch_map<uint32_t, uint64_t> numOcc;
+  bool trySample{false};
   //std::unordered_map<uint32_t, uint64_t> numOcc;
 };
 
@@ -99,12 +103,13 @@ public:
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
                                      LRUCacheMap *lru_cache,
                                      RankScores* rs,
+                                     nonstd::optional<uint64_t>& toDecode, // output param.  Also decode these
                                      bool all = true) {
         (void)rs;
         std::vector<uint32_t> flips(numSamples);
         std::vector<uint32_t> xorflips(numSamples, 0);
         uint64_t i{eqid}, from{0}, to{0};
-        uint64_t height{0};
+        int64_t height{0};
         auto& froms = queryStats.buffer;
         froms.clear();
         queryStats.totEqcls++;
@@ -120,25 +125,31 @@ public:
                 foundCache = true;
                 break;
             }
-            if (i > 0)
-                from = sbbv(i) + 1;
-            else
-                from = 0;
+            from = (i > 0) ? (sbbv(i) + 1) : 0;
             froms.push_back(from);
+
+            if (queryStats.trySample) {
+              auto& occ = queryStats.numOcc[iparent];
+              ++occ;
+              if ((!toDecode) and
+                  (occ > 10) and
+                  (height > 10) and
+                  (lru_cache and
+                   !lru_cache->contains(iparent))) {
+                toDecode = iparent;
+              }
+            }
             i = iparent;
             iparent = parentbv[i];
             ++queryStats.totSel;
             ++height;
         }
         if (!foundCache and i != zero) {
-            if (i > 0)
-                from = sbbv(i) + 1;
-            else
-                from = 0;
-            froms.push_back(from);
-            ++queryStats.totSel;
-            queryStats.rootedNonZero++;
-            ++height;
+           from = (i > 0) ? (sbbv(i) + 1) : 0;
+           froms.push_back(from);
+           ++queryStats.totSel;
+           queryStats.rootedNonZero++;
+           ++height;
         }
         // update ranks
         /*
@@ -148,7 +159,7 @@ public:
           }
         }
         */
-
+        uint64_t pctr{0};
         for (auto f : froms) {
             bool found = false;
             uint64_t wrd{0};
@@ -207,6 +218,9 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
 
     mantis::QueryResult sample_map(queryStats.numSamples,0);
     size_t numPerLevel = 10;
+    nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
+    nonstd::optional<uint64_t> dummy{nonstd::nullopt};
+
     for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first - 1;
         auto count = it->second;
@@ -216,9 +230,16 @@ mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
             setbits = lru_cache[eqclass_id];//.get(eqclass_id);
             queryStats.cacheCntr++;
         } else {
-            setbits = msfQuery.buildColor(eqclass_id, queryStats, &lru_cache, rs, false);
-            lru_cache.emplace(eqclass_id, setbits);
             queryStats.noCacheCntr++;
+            toDecode.reset();
+            dummy.reset();
+            queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
+            setbits = msfQuery.buildColor(eqclass_id, queryStats, &lru_cache, rs, toDecode, false);
+            lru_cache.emplace(eqclass_id, setbits);
+            if ((queryStats.trySample) and toDecode) {
+              auto s = msfQuery.buildColor(*toDecode, queryStats, nullptr, nullptr, dummy, false);
+              lru_cache.emplace(*toDecode, s);
+            }
         }
         for (auto sb : setbits) {
             sample_map[sb] += count;
@@ -378,7 +399,8 @@ int main(int argc, char *argv[]) {
         loadEqs(opt.eqlistfile, bvs);
         uint64_t cntr{0};
         for (uint64_t idx = 0; idx < eqCount; idx++) {
-            std::vector<uint64_t> newEq = msfQuery.buildColor(idx, queryStats, &cache_lru, nullptr);
+          nonstd::optional<uint64_t> dummy{nonstd::nullopt};
+            std::vector<uint64_t> newEq = msfQuery.buildColor(idx, queryStats, &cache_lru, nullptr, dummy);
             std::vector<uint64_t> oldEq(numWrds);
             buildColor(bvs, oldEq, idx, opt.numSamples);
             if (newEq != oldEq) {
@@ -403,10 +425,12 @@ int main(int argc, char *argv[]) {
         std::default_random_engine e1(r());
         std::uniform_int_distribution<int> uniform_dist(0, eqCount - 1);
         for (uint64_t idx = 0; idx < 182169; idx++) {
+          nonstd::optional<uint64_t> dummy{nonstd::nullopt};
             std::vector<uint64_t> newEq = msfQuery.buildColor(uniform_dist(e1),
                                                               queryStats,
                                                               &cache_lru,
                                                               nullptr,
+                                                              dummy,
                                                               false);
             /*if (idx % 10000000 == 0) {
                 std::cerr << idx << " eqs decoded\n";
