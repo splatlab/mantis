@@ -151,6 +151,7 @@ int main(int argc, char *argv[]) {
         std::queue<uint32_t> q;
 
         std::vector<uint64_t> degrees(g.mst.size());
+        std::vector<bool> visited(g.mst.size(), false);
         for (auto e = 0; e < g.mst.size(); e++) {
             // put all the mst leaves into the queue
             degrees[e] = g.mst[e].size(); // size of list of neighbors of each node is the degree of the node
@@ -167,6 +168,7 @@ int main(int argc, char *argv[]) {
         while (!q.empty()) {
             uint32_t node = q.front();
             q.pop();
+            visited[node] = true;
             if (degrees[node] == 0) {
                 // this node is the root
                 // and this should be the end of the loop
@@ -187,20 +189,26 @@ int main(int argc, char *argv[]) {
             }
             // what ever is in q (node) is a leaf and has only one edge left
             // fetch the pointer to that edge (bucket+idx)
-            auto buck = g.mst[node][0].bucket;
-            auto idx = g.mst[node][0].idx;
             // fetch the two ends of the edge and based on the node id decide which one is the src/dest
             // Destination is the one that represents current node which has been selected as leaf sooner than the other end
-            uint64_t dest = g.edges[buck][idx].n1;
-            uint64_t src = g.edges[buck][idx].n2;
-            if (src == node) { // swap src & dest since src is the leaf
-                std::swap(src, dest);
+            uint64_t src, dest, weight;
+            for (auto& n : g.mst[node]) {
+                auto &e = g.edges[n.bucket][n.idx];
+                if (!visited[e.n1] or !visited[e.n2]) {
+                    src = e.n1;
+                    dest = e.n2;
+                    if (!visited[e.n2]) {
+                        std::swap(src, dest);
+                    }
+                    weight = e.weight;
+                    break;
+                }
             }
             if (dest == zero) { // we break the tree from node zero
                 parentbv[zero] = zero;
                 // we're breaking the tree, so should remove the edge weight from total weights
                 // But instead we're gonna spend one slot to store 0 as the delta of the zero node from zero node
-                g.mst_totalWeight = g.mst_totalWeight - g.edges[buck][idx].weight + 1;
+                g.mst_totalWeight = g.mst_totalWeight - weight + 1;
             } else {
                 parentbv[dest] = src;
             }
@@ -272,7 +280,6 @@ int main(int argc, char *argv[]) {
         std::cerr << "initialized\n";
         for (auto &neis : nodes) {
             std::unordered_set<uint32_t> immediateNeighbors;
-            std::unordered_map<uint32_t, uint32_t> visited;
             immediateNeighbors.insert(nodeCntr);
             std::priority_queue<Hop> hops;
             std::vector<uint64_t> eq1(eqWrds);
@@ -283,11 +290,11 @@ int main(int argc, char *argv[]) {
             if (neis.size() > maxNei) continue;
             for (auto &nei : neis) {
                 immediateNeighbors.insert(nei.first);
-                //visited.insert(nei.first);
                 Hop nh(nei.first, nei.second, 1);
                 hops.push(nh);
             }
 
+            std::unordered_map<uint32_t, uint32_t> visited;
             while (!hops.empty() && hops.top().level != opt.hops) {
                 auto nei = hops.top();
                 hops.pop();
