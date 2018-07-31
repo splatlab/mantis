@@ -107,8 +107,7 @@ int main(int argc, char *argv[]) {
     opt.numNodes++; // number of nodes is one more than input including the zero node
 
     std::cerr << "Loading all the equivalence classes first .. \n";
-    std::vector<sdsl::rrr_vector < 63>>
-    eqs;
+    std::vector<sdsl::rrr_vector < 63>> eqs;
     eqs.reserve(20);
     loadEqs(opt.eqClsListFile, eqs);
     std::cerr << "Done loading list of equivalence class buckets\n";
@@ -149,12 +148,12 @@ int main(int argc, char *argv[]) {
 
         DisjointSets ds = g.kruskalMSF(opt.numSamples);
         std::queue<uint32_t> q;
-        vector<vector<Child>> p2c(opt.numNodes);
-        vector<uint32_t> c2p(opt.numNodes);
 
+        std::vector<uint64_t> degrees(g.mst.size());
         for (auto e = 0; e < g.mst.size(); e++) {
             // put all the mst leaves into the queue
-            if (g.mst[e].size() == 1) {
+            degrees[e] = g.mst[e].size(); // size of list of neighbors of each node is the degree of the node
+            if (degrees[e] == 1) {
                 q.push(e); // e is a leaf
             }
         }
@@ -167,7 +166,7 @@ int main(int argc, char *argv[]) {
         while (!q.empty()) {
             uint32_t node = q.front();
             q.pop();
-            if (g.mst[node].size() == 0) {
+            if (degrees[node] == 0) {
                 // this node is the root
                 // and this should be the end of the loop
                 // just as a validation, I'll continue and expect the while to end here
@@ -204,22 +203,10 @@ int main(int argc, char *argv[]) {
             } else {
                 parentbv[dest] = src;
             }
-            // erase the edge from src list of edges
-            g.mst[dest].erase(std::remove_if(
-                    g.mst[dest].begin(), g.mst[dest].end(),
-                    [buck, idx](const EdgePtr &x) {
-                        return x.bucket == buck && x.idx == idx;
-                    }), g.mst[dest].end());
-            // erase the edge from dest list of edges
-            g.mst[src].erase(std::remove_if(
-                    g.mst[src].begin(), g.mst[src].end(),
-                    [buck, idx](const EdgePtr &x) {
-                        return x.bucket == buck && x.idx == idx;
-                    }), g.mst[src].end());
-            // the destination has no edges left
-            // but if the src has turned to a leaf (node with one edge)
-            // add it to the queue
-            if (g.mst[src].size() == 1) {
+            // decrease the degrees for src and dest and add the src if it is now a leaf (no children left)
+            degrees[dest]--;
+            degrees[src]--;
+            if (degrees[src] == 1) {
                 q.push(src);
             }
             nodeCntr++; // just a counter for the log
@@ -283,6 +270,7 @@ int main(int argc, char *argv[]) {
         //std::vector<vector<uint32_t>> nodeEqs(nodes.size());
         std::cerr << "initialized\n";
         for (auto &neis : nodes) {
+            std::unordered_set<uint32_t> immediateNeighbors;
             std::unordered_set<uint32_t> visited;
             visited.insert(nodeCntr);
             std::priority_queue<Hop> hops;
@@ -293,7 +281,8 @@ int main(int argc, char *argv[]) {
             uint64_t maxNei{100};
             if (neis.size() > maxNei) continue;
             for (auto &nei : neis) {
-                visited.insert(nei.first);
+                immediateNeighbors.insert(nei.first);
+                //visited.insert(nei.first);
                 Hop nh(nei.first, nei.second, 1);
                 hops.push(nh);
             }
