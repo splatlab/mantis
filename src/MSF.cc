@@ -298,7 +298,7 @@ int main(int argc, char *argv[]) {
                         visited.insert(neinei.first);
                         Hub nh(neinei.first, neinei.second + nei.dist, nei.level + 1);
                         if (id < nh.id) {
-                            auto directDist = manhattanDist(eqs, id, nh.id, opt.numSamples);
+                            auto directDist = hammingDist(eqs, id, nh.id, opt.numSamples);
                             if (directDist < nh.dist) {
                                 of << id << "\t" << nh.id << "\t" << directDist << "\n";
                             }
