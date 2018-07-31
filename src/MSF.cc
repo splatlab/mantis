@@ -10,15 +10,14 @@
 #include "MSF.h"
 #include "sparsepp/spp.h"
 
-struct Hub {
+struct Hop {
     uint32_t id;
     uint32_t dist;
     uint16_t level;
 
-    Hub(uint32_t id, uint32_t dist, uint16_t level) : id(id), dist(dist), level(level) {}
+    Hop(uint32_t id, uint32_t dist, uint16_t level) : id(id), dist(dist), level(level) {}
 
-    bool operator<(const Hub& rhs) const
-    {
+    bool operator<(const Hop &rhs) const {
         return level < rhs.level;
     }
 
@@ -30,7 +29,7 @@ struct Opts {
     uint16_t numSamples;
     std::string eqClsListFile;
     std::string outputDir;
-    uint16_t hubs;
+    uint16_t hops;
 };
 
 
@@ -53,7 +52,8 @@ int main(int argc, char *argv[]) {
                     required("-s", "--numSamples") &
                     value("numSamples", opt.numSamples) % "Total number of experiments (samples).",
                     required("-c", "--eqCls-lst") &
-                    value("eqCls_list_filename", opt.eqClsListFile) % "File containing list of equivalence (color) classes.",
+                    value("eqCls_list_filename", opt.eqClsListFile) %
+                    "File containing list of equivalence (color) classes.",
                     required("-o", "--output_dir") &
                     value("output directory", opt.outputDir) % "Directory that all the int_vectors will be stored in."
     );
@@ -64,12 +64,15 @@ int main(int argc, char *argv[]) {
                     value("edge_filename", opt.filename) % "File containing list of eq. class edges.",
                     required("-s", "--numSamples") &
                     value("numSamples", opt.numSamples) % "Total number of experiments (samples).",
+                    required("-n", "--eqCls-cnt") &
+                    value("equivalenceClass_count", opt.numNodes) % "Total number of equivalence (color) classes.",
                     required("-c", "--eqCls-lst") &
-                    value("eqCls_list_filename", opt.eqClsListFile) % "File containing list of equivalence (color) classes.",
+                    value("eqCls_list_filename", opt.eqClsListFile) %
+                    "File containing list of equivalence (color) classes.",
                     required("-o", "--output_dir") &
                     value("output directory", opt.outputDir) % "Directory that all the int_vectors will be stored in.",
-                    required("-h", "--hubs") &
-                    value("hubs", opt.hubs) % "# of hubs to search for each node for a direct link with smaller weight."
+                    required("-h", "--hops") &
+                    value("hops", opt.hops) % "# of hops to search for each node for a direct link with smaller weight."
     );
 
     auto cli = (
@@ -100,11 +103,12 @@ int main(int argc, char *argv[]) {
               << opt.filename << "\n"
               << opt.numNodes << "\n"
               << opt.numSamples << "\n";
-    uint64_t numWrds = (uint64_t)std::ceil((double)opt.numSamples/64.0);
+    uint64_t numWrds = (uint64_t) std::ceil((double) opt.numSamples / 64.0);
     opt.numNodes++; // number of nodes is one more than input including the zero node
 
     std::cerr << "Loading all the equivalence classes first .. \n";
-    std::vector<sdsl::rrr_vector<63>> eqs;
+    std::vector<sdsl::rrr_vector < 63>>
+    eqs;
     eqs.reserve(20);
     loadEqs(opt.eqClsListFile, eqs);
     std::cerr << "Done loading list of equivalence class buckets\n";
@@ -256,9 +260,9 @@ int main(int argc, char *argv[]) {
         sdsl::store_to_file(parentbv, opt.outputDir + "/parents.bv");
         sdsl::store_to_file(deltabv, opt.outputDir + "/deltas.bv");
         sdsl::store_to_file(bbv, opt.outputDir + "/boundary.bv");
-    }
-    else if (selected == mode::fillGraph) {
-        spp::sparse_hash_map<uint32_t, std::vector<std::pair<uint32_t, uint16_t>>> nodes;
+    } else if (selected == mode::fillGraph) {
+        //spp::sparse_hash_map<uint32_t, std::vector<std::pair<uint32_t, uint16_t>>> nodes;
+        std::vector<std::vector<std::pair<uint32_t, uint16_t>>> nodes(opt.numNodes);
         std::cerr << "Adding edges between color classes .. \n";
         while (file.good()) {
             file >> n1 >> n2 >> w_;
@@ -270,45 +274,59 @@ int main(int argc, char *argv[]) {
             }
         }
         file.close();
-        std::ofstream of(opt.outputDir+"/extraEdges.lst");
+        std::ofstream of(opt.outputDir + "/extraEdges.lst");
         std::cerr << "Done adding edges between color classes .. \n";
         std::cerr << "Total # of nodes : " << nodes.size() << "\n";
-        std::cerr << "Hubs required: " << opt.hubs << "\n";
-        uint64_t nodeCntr{0};
-        for (auto& kv : nodes) {
-            auto& id = kv.first;
-            auto& neis = kv.second;
-            std::set<uint32_t> visited;
+        std::cerr << "Hops required: " << opt.hops << "\n";
+        uint64_t nodeCntr{0}, eqWrds{static_cast<uint64_t>(((opt.numSamples - 1) / 64) + 1)};
+        //std::vector<vector<uint32_t>> nodeEqs(nodes.size());
+        std::cerr << "initialized\n";
+        for (auto &kv : nodes) {
+            auto &id = nodeCntr;//kv.first;
+            auto &neis = kv;//kv.second;
+            std::unordered_set<uint32_t> visited;
             visited.insert(id);
-            std::priority_queue<Hub> hubs;
+            std::priority_queue<Hop> hops;
+            std::vector<uint64_t> eq1(eqWrds);
+            buildColor(eqs, eq1, id, opt.numSamples);
+
             //std::cerr << "n " << id << " " << neis.size() << "\n";
-            for (auto& nei : neis) {
+            uint64_t maxNei{100};
+            if (neis.size() > maxNei) continue;
+            for (auto &nei : neis) {
                 visited.insert(nei.first);
-                Hub nh(nei.first, nei.second, 1);
-                hubs.push(nh);
+                Hop nh(nei.first, nei.second, 1);
+                hops.push(nh);
             }
 
-            while (!hubs.empty() && hubs.top().level != opt.hubs) {
-                auto nei = hubs.top();
-                hubs.pop();
+            while (!hops.empty() && hops.top().level != opt.hops) {
+                auto nei = hops.top();
+                hops.pop();
                 //std::cerr << nei.level << " " << nei.id << " " << nei.dist << " " << nodes[nei.id].size() << "\n";
+                if (nodes[nei.id].size() > maxNei) continue;
                 for (auto &neinei : nodes[nei.id]) {
                     //std::cerr << "  " << neinei.first << "\n";
                     if (visited.find(neinei.first) == visited.end()) {
                         visited.insert(neinei.first);
-                        Hub nh(neinei.first, neinei.second + nei.dist, nei.level + 1);
+                        Hop nh(neinei.first, neinei.second + nei.dist, nei.level + 1);
                         if (id < nh.id) {
-                            auto directDist = hammingDist(eqs, id, nh.id, opt.numSamples);
+                            std::vector<uint64_t> eq2(eqWrds);
+                            buildColor(eqs, eq2, nh.id, opt.numSamples);
+                            uint64_t directDist = 0;//hammingDist(eqs, id, nh.id, opt.numSamples);
+                            for (uint64_t i = 0; i < eq1.size(); i++) {
+                                if (eq1[i] != eq2[i])
+                                    directDist += sdsl::bits::cnt(eq1[i] ^ eq2[i]);
+                            }
                             if (directDist < nh.dist) {
                                 of << id << "\t" << nh.id << "\t" << directDist << "\n";
                             }
                         }
-                        hubs.push(nh);
+                        hops.push(nh);
                     }
                 }
             }
             nodeCntr++;
-            if (nodeCntr % 100000 == 0) {
+            if (nodeCntr % 1000000 == 0) {
                 std::cerr << nodeCntr << " passed\n";
             }
         }
