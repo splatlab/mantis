@@ -5,7 +5,24 @@
 // https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
 //
 
+#include <set>
+#include <queue>
 #include "MSF.h"
+#include "sparsepp/spp.h"
+
+struct Hub {
+    uint32_t id;
+    uint32_t dist;
+    uint16_t level;
+
+    Hub(uint32_t id, uint32_t dist, uint16_t level) : id(id), dist(dist), level(level) {}
+
+    bool operator<(const Hub& rhs) const
+    {
+        return level < rhs.level;
+    }
+
+};
 
 struct Opts {
     std::string filename;
@@ -13,6 +30,7 @@ struct Opts {
     uint16_t numSamples;
     std::string eqClsListFile;
     std::string outputDir;
+    uint16_t hubs;
 };
 
 
@@ -44,14 +62,14 @@ int main(int argc, char *argv[]) {
             command("fillGraph").set(selected, mode::fillGraph),
                     required("-e", "--edge-filename") &
                     value("edge_filename", opt.filename) % "File containing list of eq. class edges.",
-                    required("-n", "--eqCls-cnt") &
-                    value("equivalenceClass_count", opt.numNodes) % "Total number of equivalence (color) classes.",
                     required("-s", "--numSamples") &
                     value("numSamples", opt.numSamples) % "Total number of experiments (samples).",
                     required("-c", "--eqCls-lst") &
                     value("eqCls_list_filename", opt.eqClsListFile) % "File containing list of equivalence (color) classes.",
                     required("-o", "--output_dir") &
-                    value("output directory", opt.outputDir) % "Directory that all the int_vectors will be stored in."
+                    value("output directory", opt.outputDir) % "Directory that all the int_vectors will be stored in.",
+                    required("-h", "--hubs") &
+                    value("hubs", opt.hubs) % "# of hubs to search for each node for a direct link with smaller weight."
     );
 
     auto cli = (
@@ -93,11 +111,11 @@ int main(int argc, char *argv[]) {
 
     ifstream file(opt.filename);
 
+    uint16_t w_;
+    uint32_t n1, n2, edgeCntr{0}, zero{(uint32_t) opt.numNodes - 1};
     if (selected == mode::build) {
         Graph g(opt.numSamples);
 
-        uint16_t w_;
-        uint32_t n1, n2, edgeCntr{0}, zero{(uint32_t) opt.numNodes - 1};
         {
             std::cerr << "Adding edges from 0 to each node with number of set bits in the node as weight .. \n";
             for (uint32_t i = 0; i < opt.numNodes; i++) {
@@ -240,7 +258,60 @@ int main(int argc, char *argv[]) {
         sdsl::store_to_file(bbv, opt.outputDir + "/boundary.bv");
     }
     else if (selected == mode::fillGraph) {
+        spp::sparse_hash_map<uint32_t, std::vector<std::pair<uint32_t, uint16_t>>> nodes;
+        std::cerr << "Adding edges between color classes .. \n";
+        while (file.good()) {
+            file >> n1 >> n2 >> w_;
+            nodes[n1].push_back(std::make_pair(n2, w_));
+            nodes[n2].push_back(std::make_pair(n1, w_));
+            edgeCntr++;
+            if (edgeCntr % 10000000 == 0) {
+                std::cerr << edgeCntr << " passed\n";
+            }
+        }
+        file.close();
+        std::ofstream of(opt.outputDir+"/extraEdges.lst");
+        std::cerr << "Done adding edges between color classes .. \n";
+        std::cerr << "Total # of nodes : " << nodes.size() << "\n";
+        std::cerr << "Hubs required: " << opt.hubs << "\n";
+        uint64_t nodeCntr{0};
+        for (auto& kv : nodes) {
+            auto& id = kv.first;
+            auto& neis = kv.second;
+            std::set<uint32_t> visited;
+            visited.insert(id);
+            std::priority_queue<Hub> hubs;
+            //std::cerr << "n " << id << " " << neis.size() << "\n";
+            for (auto& nei : neis) {
+                visited.insert(nei.first);
+                Hub nh(nei.first, nei.second, 1);
+                hubs.push(nh);
+            }
 
+            while (!hubs.empty() && hubs.top().level != opt.hubs) {
+                auto nei = hubs.top();
+                hubs.pop();
+                //std::cerr << nei.level << " " << nei.id << " " << nei.dist << " " << nodes[nei.id].size() << "\n";
+                for (auto &neinei : nodes[nei.id]) {
+                    //std::cerr << "  " << neinei.first << "\n";
+                    if (visited.find(neinei.first) == visited.end()) {
+                        visited.insert(neinei.first);
+                        Hub nh(neinei.first, neinei.second + nei.dist, nei.level + 1);
+                        if (id < nh.id) {
+                            auto directDist = manhattanDist(eqs, id, nh.id, opt.numSamples);
+                            if (directDist < nh.dist) {
+                                of << id << "\t" << nh.id << "\t" << directDist << "\n";
+                            }
+                        }
+                        hubs.push(nh);
+                    }
+                }
+            }
+            nodeCntr++;
+            if (nodeCntr % 100000 == 0) {
+                std::cerr << nodeCntr << " passed\n";
+            }
+        }
     }
     return 0;
 }

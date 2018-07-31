@@ -285,4 +285,17 @@ res.push_back(i*64+j);
 return res; // rely on c++ optimization
 }
 
+uint64_t manhattanDist(eqvec &bvs, uint64_t eqid1, uint64_t eqid2, uint64_t num_samples) {
+    uint64_t dist{0};
+    std::vector<uint64_t> eq1(((num_samples - 1) / 64) + 1), eq2(((num_samples - 1) / 64) + 1);
+    buildColor(bvs, eq1, eqid1, num_samples);
+    buildColor(bvs, eq2, eqid2, num_samples);
+
+    for (uint64_t i = 0; i < eq1.size(); i++) {
+        if (eq1[i] != eq2[i])
+            dist += sdsl::bits::cnt(eq1[i] ^ eq2[i]);
+    }
+    return dist;
+}
+
 #endif //MANTIS_MSF_H
