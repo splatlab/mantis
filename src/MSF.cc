@@ -159,6 +159,7 @@ int main(int argc, char *argv[]) {
             }
         }
         // now go run the algorithm to find the root of the tree and all the edge directions
+        std::cerr << "Creating parentBV...\n";
         sdsl::int_vector<> parentbv(opt.numNodes, 0, ceil(log2(opt.numNodes)));
 
         bool check = false;
@@ -227,13 +228,12 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        // create the data structures
+        std::cerr << "Sum of MST weights: " << g.mst_totalWeight << "\n";
+        std::cerr << "Creating deltaBV and bBV...\n";
         sdsl::int_vector<> deltabv(g.mst_totalWeight, 0, ceil(log2(opt.numSamples)));
         sdsl::bit_vector bbv(g.mst_totalWeight, 0);
 
-        // calculate all the stats!!
-        // create the data structures
-        std::cerr << "Calculate Stats .. \n";
-        std::cerr << "Sum of MST weights: " << g.mst_totalWeight << "\n";
         uint64_t deltaOffset{0};
         for (uint64_t i = 0; i < parentbv.size(); i++) {
             std::vector<uint32_t> deltas;
@@ -278,19 +278,18 @@ int main(int argc, char *argv[]) {
         std::cerr << "Done adding edges between color classes .. \n";
         std::cerr << "Total # of nodes : " << nodes.size() << "\n";
         std::cerr << "Hops required: " << opt.hops << "\n";
-        uint64_t nodeCntr{0}, eqWrds{static_cast<uint64_t>(((opt.numSamples - 1) / 64) + 1)};
+        uint32_t nodeCntr{0};
+        uint64_t eqWrds{static_cast<uint64_t>(((opt.numSamples - 1) / 64) + 1)};
         //std::vector<vector<uint32_t>> nodeEqs(nodes.size());
         std::cerr << "initialized\n";
-        for (auto &kv : nodes) {
-            auto &id = nodeCntr;//kv.first;
-            auto &neis = kv;//kv.second;
+        for (auto &neis : nodes) {
             std::unordered_set<uint32_t> visited;
-            visited.insert(id);
+            visited.insert(nodeCntr);
             std::priority_queue<Hop> hops;
             std::vector<uint64_t> eq1(eqWrds);
-            buildColor(eqs, eq1, id, opt.numSamples);
+            buildColor(eqs, eq1, nodeCntr, opt.numSamples);
 
-            //std::cerr << "n " << id << " " << neis.size() << "\n";
+            //std::cerr << "n " << nodeCntr << " " << neis.size() << "\n";
             uint64_t maxNei{100};
             if (neis.size() > maxNei) continue;
             for (auto &nei : neis) {
@@ -309,7 +308,7 @@ int main(int argc, char *argv[]) {
                     if (visited.find(neinei.first) == visited.end()) {
                         visited.insert(neinei.first);
                         Hop nh(neinei.first, neinei.second + nei.dist, nei.level + 1);
-                        if (id < nh.id) {
+                        if (nodeCntr < nh.id) {
                             std::vector<uint64_t> eq2(eqWrds);
                             buildColor(eqs, eq2, nh.id, opt.numSamples);
                             uint64_t directDist = 0;//hammingDist(eqs, id, nh.id, opt.numSamples);
@@ -318,7 +317,7 @@ int main(int argc, char *argv[]) {
                                     directDist += sdsl::bits::cnt(eq1[i] ^ eq2[i]);
                             }
                             if (directDist < nh.dist) {
-                                of << id << "\t" << nh.id << "\t" << directDist << "\n";
+                                of << nodeCntr << "\t" << nh.id << "\t" << directDist << "\n";
                             }
                         }
                         hops.push(nh);
