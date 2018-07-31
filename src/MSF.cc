@@ -7,6 +7,7 @@
 
 #include <set>
 #include <queue>
+#include <unordered_map>
 #include "MSF.h"
 #include "sparsepp/spp.h"
 
@@ -237,7 +238,7 @@ int main(int argc, char *argv[]) {
             }
             bbv[deltaOffset - 1] = 1;
             if (i % 10000000 == 0) {
-                std::cerr << i << " nodes parents processed\n";
+                std::cerr << i << " nodes processed\n";
             }
         }
 
@@ -271,8 +272,8 @@ int main(int argc, char *argv[]) {
         std::cerr << "initialized\n";
         for (auto &neis : nodes) {
             std::unordered_set<uint32_t> immediateNeighbors;
-            std::unordered_set<uint32_t> visited;
-            visited.insert(nodeCntr);
+            std::unordered_map<uint32_t, uint32_t> visited;
+            immediateNeighbors.insert(nodeCntr);
             std::priority_queue<Hop> hops;
             std::vector<uint64_t> eq1(eqWrds);
             buildColor(eqs, eq1, nodeCntr, opt.numSamples);
@@ -294,22 +295,28 @@ int main(int argc, char *argv[]) {
                 if (nodes[nei.id].size() > maxNei) continue;
                 for (auto &neinei : nodes[nei.id]) {
                     //std::cerr << "  " << neinei.first << "\n";
-                    if (visited.find(neinei.first) == visited.end()) {
-                        visited.insert(neinei.first);
+                    if (immediateNeighbors.find(neinei.first) == immediateNeighbors.end()) {
                         Hop nh(neinei.first, neinei.second + nei.dist, nei.level + 1);
-                        if (nodeCntr < nh.id) {
-                            std::vector<uint64_t> eq2(eqWrds);
-                            buildColor(eqs, eq2, nh.id, opt.numSamples);
-                            uint64_t directDist = 0;//hammingDist(eqs, id, nh.id, opt.numSamples);
-                            for (uint64_t i = 0; i < eq1.size(); i++) {
-                                if (eq1[i] != eq2[i])
-                                    directDist += sdsl::bits::cnt(eq1[i] ^ eq2[i]);
-                            }
-                            if (directDist < nh.dist) {
-                                of << nodeCntr << "\t" << nh.id << "\t" << directDist << "\n";
-                            }
+                        if (visited.find(nh.id) == visited.end()) {
+                            visited[nh.id] = nh.dist;
+                        } else if (visited[nh.id] > nh.dist) {
+                            visited[nh.id] = nh.dist;
                         }
                         hops.push(nh);
+                    }
+                }
+            }
+            for (auto &kv : visited) {
+                if (nodeCntr < kv.first) {
+                    std::vector<uint64_t> eq2(eqWrds);
+                    buildColor(eqs, eq2, kv.first, opt.numSamples);
+                    uint64_t directDist = 0;//hammingDist(eqs, id, nh.id, opt.numSamples);
+                    for (uint64_t i = 0; i < eq1.size(); i++) {
+                        if (eq1[i] != eq2[i])
+                            directDist += sdsl::bits::cnt(eq1[i] ^ eq2[i]);
+                    }
+                    if (directDist < kv.second) {
+                        of << nodeCntr << "\t" << kv.first << "\t" << directDist << "\n";
                     }
                 }
             }
