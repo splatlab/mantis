@@ -31,11 +31,13 @@
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"
-#include "bitvector.h"
 #include "cqf.h"
 #include "hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
+
+typedef sdsl::bit_vector BitVector;
+typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 struct hash128 {
 	uint64_t operator()(const __uint128_t& val128) const
@@ -86,7 +88,7 @@ class ColoredDbg {
     // returns true if adding this k-mer increased the number of equivalence classes
     // and false otherwise.
 		bool add_kmer(key_obj& hash, BitVector& vector);
-		void add_bitvector(BitVector& vector, uint64_t eq_id);
+		void add_bitvector(const BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
 		void bv_buffer_serialize();
@@ -148,7 +150,7 @@ template <class qf_obj, class key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::get_num_bitvectors(void) const {
 	uint64_t total = 0;
 	for (uint32_t i = 0; i < num_serializations; i++)
-		total += eqclasses[i].bit_size();
+		total += eqclasses[i].size();
 
 	return total / num_samples;
 }
@@ -170,7 +172,7 @@ void ColoredDbg<qf_obj,
 			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
 			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
 				if (bv_buffer[src_idx])
-					new_bv_buffer.set(dest_idx);
+					new_bv_buffer[dest_idx] = 1;
 		}
 	}
 	bv_buffer = new_bv_buffer;
@@ -197,9 +199,9 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
-	uint64_t eq_id = 1;
+	uint64_t eq_id;
 	__uint128_t vec_hash = HashUtil::MurmurHash128A((void*)vector.data(),
-																								 vector.capacity(), 2038074743,
+																								 vector.capacity()/8, 2038074743,
 																								 2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
@@ -227,12 +229,12 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
 }
 
 template <class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
+void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector, uint64_t
 																								eq_id) {
 	uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
 	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
 		if (vector[i])
-			bv_buffer.set(start_idx);
+			bv_buffer[start_idx] = 1;
 }
 
 template <class qf_obj, class key_obj>
@@ -245,8 +247,8 @@ void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 	BitVectorRRR final_com_bv(bv_temp);
 	std::string bv_file(prefix + std::to_string(num_serializations) + "_" +
                       mantis::EQCLASS_FILE);
-	final_com_bv.serialize(bv_file);
-	bv_buffer.reset();
+	sdsl::store_to_file(final_com_bv, bv_file);
+	bv_buffer = BitVector(bv_buffer.bit_size());
 	num_serializations++;
 }
 
@@ -343,14 +345,14 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		BitVector eq_class(num_samples);
 		// Get the smallest key from minheap and update the eqclass vector
 		cur = minheap.top();
-		eq_class.set(cur.id);
+		eq_class[cur.id] = 1;
 		minheap.pop();
 		// Keep poping keys from minheap until you see a different key.
 		// While poping keys build the eq class for cur.
 		// Increment iterators for all CQFs whose keys are popped.
 		while (!minheap.empty() && cur.obj.key == minheap.top().obj.key) {
 			uint32_t id = minheap.top().id;
-			eq_class.set(id);
+			eq_class[id] = 1;
 			minheap.pop();
 			++it_incqfs[id];
 			if (it_incqfs[id].done())	// If the iterator is done then decrement nqf
@@ -432,8 +434,10 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	}
 
 	eqclasses.reserve(sorted_files.size());
+	BitVectorRRR bv;
 	for (auto file : sorted_files) {
-		eqclasses.push_back(BitVectorRRR(file.second));
+		sdsl::load_from_file(bv, file.second);
+		eqclasses.push_back(bv);
 		num_serializations++;
 	}
 

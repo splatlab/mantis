@@ -6,7 +6,6 @@ add_library(mantis_core STATIC
   hashutil.cc
   query.cc
   util.cc
-  bitvector.cc
   validatemantis.cc
   coloreddbg.cc
   MantisFS.cc
