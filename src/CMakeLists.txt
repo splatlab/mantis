@@ -93,6 +93,13 @@ add_executable(mstBoost MST_boost.cc)
 target_link_libraries(mstBoost mantis_core)
 set_property(TARGET mstBoost PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
+#add_executable(walkCqf walkCqf.cc)
+#target_include_directories(walkCqf PUBLIC
+#		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+#target_link_libraries(walkCqf
+#		mantis_core)
+#set_property(TARGET walkCqf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+
 #add_executable(walkEqcls walkEqcls.cc)
 #target_include_directories(walkEqcls PUBLIC
 #		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/SIMDCompressionAndIntersection>)
