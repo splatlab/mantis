@@ -115,14 +115,13 @@ class ColoredDbg {
 template <class T>
 class SampleObject {
 	public:
-		SampleObject() : obj(), cutoff(0), sample_id(), id(0) {};
-		SampleObject(T o, uint32_t c = 0, std::string& s = std::string(),
-								 uint32_t id = 0) : obj(o), cutoff(c), sample_id(s), id(id) {};
-		SampleObject(const SampleObject& o) : obj(o.obj), cutoff(o.cutoff),
-		sample_id(o.sample_id), id(o.id) {} ;
+		SampleObject() : obj(), sample_id(), id(0) {}
+		SampleObject(T o, std::string& s = std::string(),
+								 uint32_t id = 0) : obj(o), sample_id(s), id(id) {}
+		SampleObject(const SampleObject& o) : obj(o.obj),
+		sample_id(o.sample_id), id(o.id) {}
 
 		T obj;
-		uint32_t cutoff;
 		std::string sample_id;
 		uint32_t id;
 };
