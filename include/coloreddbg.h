@@ -39,6 +39,9 @@
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
+template<class KeyObject> std::vector<QFi> CQF<KeyObject>::qfi;
+template<class KeyObject> std::vector<typename KeyObject::kmer_t> CQF<KeyObject>::keys;
+
 struct hash128 {
 	uint64_t operator()(const __uint128_t& val128) const
 	{
@@ -87,7 +90,7 @@ class ColoredDbg {
 	private:
     // returns true if adding this k-mer increased the number of equivalence classes
     // and false otherwise.
-		bool add_kmer(key_obj& hash, BitVector& vector);
+		bool add_kmer(const typename key_obj::kmer_t& hash, const BitVector& vector);
 		void add_bitvector(const BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
@@ -195,7 +198,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 }
 
 template <class qf_obj, class key_obj>
-bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
+bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, const BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
@@ -223,8 +226,7 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
     it->second.second += 1; // update the abundance.
 	}
 
-	k.count = eq_id;	// we use the count to store the eqclass ids
-	dbg.insert(k);
+	dbg.insert(KeyObject(key,0,eq_id)); // we use the count to store the eqclass ids
   return added_eq_class;
 }
 
@@ -314,65 +316,53 @@ template <class qf_obj, class key_obj>
 cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	key_obj>::construct(qf_obj *incqfs, uint64_t num_kmers)
 {
-	uint32_t nqf = 0;
 	uint64_t counter = 0;
 
   bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
-	// merge all input CQFs into the final QF
-  std::vector<typename CQF<key_obj>::Iterator> it_incqfs;
-  it_incqfs.reserve(num_samples);
 
-	// Initialize all iterators with sample specific cutoffs.
+  struct Minheap_PQ {
+		void push(const typename CQF<key_obj>::Iterator& obj) {
+			c.emplace_back(obj);
+			std::push_heap(c.begin(), c.end(), std::greater<typename CQF<key_obj>::Iterator>());
+		}
+		void pop() {
+			std::pop_heap(c.begin(), c.end(), std::greater<typename CQF<key_obj>::Iterator>());
+			c.pop_back();
+		}
+		void replace_top(const typename CQF<key_obj>::Iterator& obj) {
+			c.emplace_back(obj);
+			pop();
+		}
+		typename CQF<key_obj>::Iterator& top() { return c.front(); }
+		bool empty() const { return c.empty(); }
+	private:
+		std::vector<typename CQF<key_obj>::Iterator> c;
+	};
+	Minheap_PQ minheap;
+
 	for (uint32_t i = 0; i < num_samples; i++) {
-		it_incqfs.emplace_back(incqfs[i].obj->begin(incqfs[i].cutoff));
+		typename CQF<key_obj>::Iterator qfi(i, *incqfs[i].obj);
+		if (qfi.end()) continue;
+		minheap.push(qfi);
   }
 
-	std::priority_queue<SampleObject<KeyObject>,
-		std::vector<SampleObject<KeyObject>>, compare<KeyObject>> minheap;
-	// Insert the first key from each CQF in minheap.
-	for (uint32_t i = 0; i < num_samples; i++) {
-		if (it_incqfs[i].done())
-			continue;
-		KeyObject key = *it_incqfs[i];
-		minheap.emplace(key, incqfs[i].cutoff, incqfs[i].sample_id, i);
-		nqf++;
-	}
-
 	while (!minheap.empty()) {
-		assert(minheap.size() == nqf);
-		SampleObject<KeyObject> cur;
 		BitVector eq_class(num_samples);
-		// Get the smallest key from minheap and update the eqclass vector
-		cur = minheap.top();
-		eq_class[cur.id] = 1;
-		minheap.pop();
-		// Keep poping keys from minheap until you see a different key.
-		// While poping keys build the eq class for cur.
-		// Increment iterators for all CQFs whose keys are popped.
-		while (!minheap.empty() && cur.obj.key == minheap.top().obj.key) {
-			uint32_t id = minheap.top().id;
-			eq_class[id] = 1;
-			minheap.pop();
-			++it_incqfs[id];
-			if (it_incqfs[id].done())	// If the iterator is done then decrement nqf
-				nqf--;
-			else {	// Insert the current iterator head in minHeap
-				KeyObject key = *it_incqfs[id];
-				minheap.emplace(key, incqfs[id].cutoff, incqfs[id].sample_id, id);
-			}
-		}
-		// Move the iterator of the smallest key.
-		++it_incqfs[cur.id];
-		if (it_incqfs[cur.id].done())	// If the iterator is done then decrement nqf
-			nqf--;
-		else {	// Insert the current iterator head in minHeap
-			KeyObject key = *it_incqfs[cur.id];
-			minheap.emplace(key, incqfs[cur.id].cutoff, incqfs[cur.id].sample_id, cur.id);
-		}
-		// Add <kmer, vector> in the cdbg
-		bool added_eq_class = add_kmer(cur.obj, eq_class);
-		counter++;
+		KeyObject::kmer_t last_key;
+		do {
+			typename CQF<key_obj>::Iterator& cur = minheap.top();
+			last_key = cur.key();
+			eq_class[cur.id] = 1;
+			if (cur.advance())
+				minheap.replace_top(cur);
+			else
+				minheap.pop();
+		} while(!minheap.empty() && last_key == minheap.top().key());
+
+		bool added_eq_class = add_kmer(last_key, eq_class);
+		++counter;
+		if (dbg.size() > 75000000) { console->info("exiting for quick profile run"); break; }
 
 		// Progress tracker
 		static uint64_t last_size = 0;
