@@ -318,20 +318,20 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 
 	struct Iterator {
 		struct IteratorData {
-			qf::QFi qfi;
+			QFi qfi;
 			key_obj key;
 			uint32_t id;
 		} d;
-		Iterator(uint32_t id, const qf::QF& cqf) {
+		Iterator(uint32_t id, const QF& cqf) {
 			d.id = id;
-			if (qf::qf_iterator(&cqf, &d.qfi, 0)) get_key();
+			if (qf_iterator(&cqf, &d.qfi, 0)) get_key();
 		}
 		void next() {
-			qf::qfi_next(&d.qfi);
+			qfi_next(&d.qfi);
 			get_key();
 		}
 		bool end() const {
-			return qf::qfi_end(&d.qfi);
+			return qfi_end(&d.qfi);
 		}
 		bool operator>(const Iterator& rhs) const {
 			return key() > rhs.key();
@@ -341,7 +341,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	private:
 		void get_key() {
 			//uint64_t value, count;
-			qf::qfi_get(&d.qfi, &d.key.key, &d.key.value, &d.key.count);
+			qfi_get(&d.qfi, &d.key.key, &d.key.value, &d.key.count);
 		}
 	};
 
