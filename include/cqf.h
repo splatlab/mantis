@@ -41,21 +41,28 @@ static uint64_t tmp_sum_local;
 template <class key_obj>
 class CQF {
 	public:
-		CQF();
-		CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed);
-		CQF(std::string& filename, bool flag);
-		CQF(const CQF<key_obj>& copy_cqf);
+		CQF() { qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", 23423); }
+		CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed) { qf_init(&cqf, 1ULL << qbits, key_bits, 0, true, "", seed); }
+		CQF(const CQF<key_obj>& copy_cqf) { memcpy(reinterpret_cast<void*>(&cqf), reinterpret_cast<void*>(const_cast<QF*>(&copy_cqf.cqf)), sizeof(QF)); }
+		CQF(std::string& filename, bool flag) {
+			if (flag)
+				qf_read(&cqf, filename.c_str());
+			else
+				qf_deserialize(&cqf, filename.c_str());
+		}
 
-		void insert(const key_obj& k);
+		void insert(const key_obj& k) {
+			qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN);
+			// To validate the CQF
+			//set.insert(k.key);
+		}
 
 		/* Will return the count. */
-		uint64_t query(const key_obj& k);
+		uint64_t query(const key_obj& k) { return qf_count_key_value(&cqf, k.key, k.value); }
 
-		uint64_t get_index(const key_obj& k);
+		uint64_t get_index(const key_obj& k) { return get_bucket_index(k.key); }
 
-		void serialize(std::string filename) {
-			qf_serialize(&cqf, filename.c_str());
-		}
+		void serialize(std::string filename) { qf_serialize(&cqf, filename.c_str()); }
 
 		uint64_t range(void) const { return cqf.metadata->range; }
 		uint32_t seed(void) const { return cqf.metadata->seed; }
@@ -69,30 +76,7 @@ class CQF {
 
 		void drop_pages(uint64_t cur);
 
-		struct Iterator {
-			QFi qfi;
-			key_obj key;
-			uint32_t id;
-			Iterator(uint32_t id, const CQF<key_obj>& cqf): id(id) {
-				if (qf_iterator(&cqf.cqf, &qfi, 0)) get_key();
-			}
-			void next() {
-				qfi_next(&qfi);
-				get_key();
-			}
-			bool end() const {
-				return qfi_end(&qfi);
-			}
-			bool operator>(const Iterator& rhs) const {
-				return key.key > rhs.key.key;
-			}
-		private:
-			void get_key() {
-				//uint64_t value, count;
-				qfi_get(&qfi, &key.key, &key.value, &key.count);
-			}
-		};
-		friend class Iterator;
+		const QF& get_QF() const { return cqf; }
 
 	private:
 		QF cqf;
@@ -114,45 +98,5 @@ class KeyObject {
 		uint64_t value;
 		uint64_t count;
 };
-
-template <class key_obj>
-CQF<key_obj>::CQF() {
-	qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", 23423);
-}
-
-template <class key_obj>
-CQF<key_obj>::CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed) {
-	qf_init(&cqf, 1ULL << qbits, key_bits, 0, true, "", seed);
-}
-
-template <class key_obj>
-CQF<key_obj>::CQF(std::string& filename, bool flag) {
-	if (flag)
-		qf_read(&cqf, filename.c_str());
-	else
-		qf_deserialize(&cqf, filename.c_str());
-}
-
-template <class key_obj>
-CQF<key_obj>::CQF(const CQF<key_obj>& copy_cqf) {
-  memcpy(reinterpret_cast<void*>(&cqf), reinterpret_cast<void*>(const_cast<QF*>(&copy_cqf.cqf)), sizeof(QF));
-}
-
-template <class key_obj>
-void CQF<key_obj>::insert(const key_obj& k) {
-	qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN);
-	// To validate the CQF
-	//set.insert(k.key);
-}
-
-template <class key_obj>
-uint64_t CQF<key_obj>::query(const key_obj& k) {
-	return qf_count_key_value(&cqf, k.key, k.value);
-}
-
-template <class key_obj>
-uint64_t CQF<key_obj>::get_index(const key_obj& k) {
-	return get_bucket_index(k.key);
-}
 
 #endif
