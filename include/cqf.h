@@ -37,7 +37,7 @@
 #define PAGE_BUFFER_SIZE 4096
 
 template <class key_obj>
-class CQF {
+class CQF : public qf {
 	public:
 		CQF() { qf_init(&cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0, true, "", 23423); }
 		CQF(uint64_t qbits, uint64_t key_bits, uint32_t seed) { qf_init(&cqf, 1ULL << qbits, key_bits, 0, true, "", seed); }
@@ -63,13 +63,10 @@ class CQF {
 
 		void reset(void) { qf_reset(&cqf); }
 
-		void dump_metadata(void) const { DEBUG_DUMP(&cqf); }
+		void dump_metadata(void) { DEBUG_DUMP(&cqf); }
 
 		void drop_pages(uint64_t cur);
 
-		const QF& get_QF() const { return cqf; }
-
-	private:
 		QF cqf;
 };
 
