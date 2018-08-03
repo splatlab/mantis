@@ -39,9 +39,6 @@
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
-template<class KeyObject> std::vector<QFi> CQF<KeyObject>::qfi;
-template<class KeyObject> std::vector<typename KeyObject::kmer_t> CQF<KeyObject>::keys;
-
 struct hash128 {
 	uint64_t operator()(const __uint128_t& val128) const
 	{
@@ -351,17 +348,14 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		KeyObject::kmer_t last_key;
 		do {
 			typename CQF<key_obj>::Iterator& cur = minheap.top();
-			last_key = cur.key();
+			last_key = cur.key.key;
 			eq_class[cur.id] = 1;
-			if (cur.advance())
-				minheap.replace_top(cur);
-			else
-				minheap.pop();
-		} while(!minheap.empty() && last_key == minheap.top().key());
+			cur.next();
+			minheap.replace_top(cur);
+		} while(!minheap.empty() && last_key == minheap.top().key.key);
 
 		bool added_eq_class = add_kmer(last_key, eq_class);
 		++counter;
-		if (dbg.size() > 75000000) { console->info("exiting for quick profile run"); break; }
 
 		// Progress tracker
 		static uint64_t last_size = 0;
@@ -387,6 +381,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
       // Check if the sampling phase is finished based on the number of k-mers.
 			break;
     }
+
+		while(!minheap.empty() && minheap.top().end()) minheap.pop();
 	}
 
 	return eqclass_map;

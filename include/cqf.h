@@ -69,32 +69,27 @@ class CQF {
 
 		void drop_pages(uint64_t cur);
 
-		static std::vector<QFi> qfi;
-		static std::vector<typename key_obj::kmer_t> keys;
 		struct Iterator {
+			QFi qfi;
+			key_obj key;
+			uint32_t id;
 			Iterator(uint32_t id, const CQF<key_obj>& cqf): id(id) {
-				if (qfi.size() <= id) qfi.resize(id*2+1), keys.resize(id*2+1);
-				if (qf_iterator(&cqf.cqf, &qfi[id], 0)) get_key();
+				if (qf_iterator(&cqf.cqf, &qfi, 0)) get_key();
 			}
-			bool advance() {
-				if (qfi_next(&qfi[id])) return false;
+			void next() {
+				qfi_next(&qfi);
 				get_key();
-				return true;
 			}
 			bool end() const {
-				return qfi_end(&qfi[id]);
+				return qfi_end(&qfi);
 			}
-			uint32_t id;
 			bool operator>(const Iterator& rhs) const {
-				return key() > rhs.key();
-			}
-			const typename key_obj::kmer_t& key() const {
-				return keys[id];
+				return key.key > rhs.key.key;
 			}
 		private:
 			void get_key() {
-				uint64_t value, count;
-				qfi_get(&qfi[id], &keys[id], &value, &count);
+				//uint64_t value, count;
+				qfi_get(&qfi, &key.key, &key.value, &key.count);
 			}
 		};
 		friend class Iterator;
