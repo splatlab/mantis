@@ -36,8 +36,6 @@
 #define PAGE_DROP_GRANULARITY (1ULL << 21)
 #define PAGE_BUFFER_SIZE 4096
 
-static uint64_t tmp_sum_local;
-
 template <class key_obj>
 class CQF {
 	public:
@@ -51,15 +49,8 @@ class CQF {
 				qf_deserialize(&cqf, filename.c_str());
 		}
 
-		void insert(const key_obj& k) {
-			qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN);
-			// To validate the CQF
-			//set.insert(k.key);
-		}
-
-		/* Will return the count. */
+		void insert(const key_obj& k) { qf_insert(&cqf, k.key, k.value, k.count, LOCK_AND_SPIN); }
 		uint64_t query(const key_obj& k) { return qf_count_key_value(&cqf, k.key, k.value); }
-
 		uint64_t get_index(const key_obj& k) { return get_bucket_index(k.key); }
 
 		void serialize(std::string filename) { qf_serialize(&cqf, filename.c_str()); }
@@ -69,7 +60,7 @@ class CQF {
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t size(void) const { return cqf.metadata->ndistinct_elts; }
 		uint64_t capacity() const {return cqf.metadata->nslots; }
-		//uint64_t set_size(void) const { return set.size(); }
+
 		void reset(void) { qf_reset(&cqf); }
 
 		void dump_metadata(void) const { DEBUG_DUMP(&cqf); }
