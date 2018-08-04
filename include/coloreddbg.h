@@ -317,31 +317,27 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
   bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
 	struct Iterator {
-		struct IteratorData {
-			QFi qfi;
-			key_obj key;
-			uint32_t id;
-		} d;
-		Iterator(uint32_t id, const QF& cqf) {
-			d.id = id;
-			if (qf_iterator(&cqf, &d.qfi, 0)) get_key();
+		QFi qfi;
+		typename key_obj::kmer_t kmer;
+		uint32_t id;
+		Iterator(uint32_t id, const QF& cqf): id(id) {
+			if (qf_iterator(&cqf, &qfi, 0)) get_key();
 		}
 		void next() {
-			qfi_next(&d.qfi);
+			qfi_next(&qfi);
 			get_key();
 		}
 		bool end() const {
-			return qfi_end(&d.qfi);
+			return qfi_end(&qfi);
 		}
 		bool operator>(const Iterator& rhs) const {
 			return key() > rhs.key();
 		}
-		const uint32_t& id() const { return d.id; }
-		const typename key_obj::kmer_t& key() const { return d.key.key; }
+		const typename key_obj::kmer_t& key() const { return kmer; }
 	private:
 		void get_key() {
-			//uint64_t value, count;
-			qfi_get(&d.qfi, &d.key.key, &d.key.value, &d.key.count);
+			uint64_t value, count;
+			qfi_get(&qfi, &kmer, &value, &count);
 		}
 	};
 
@@ -377,14 +373,14 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		do {
 			Iterator& cur = minheap.top();
 			last_key = cur.key();
-			eq_class[cur.id()] = 1;
+			eq_class[cur.id] = 1;
 			cur.next();
 			minheap.replace_top(cur);
 		} while(!minheap.empty() && last_key == minheap.top().key());
 
 		bool added_eq_class = add_kmer(last_key, eq_class);
 		++counter;
-		if (dbg.size() > 10000000) { console->info("exiting for quick profile run"); exit(0); }
+		if (dbg.size() > 50000000) { console->info("exiting for quick profile run"); exit(0); }
 
 		// Progress tracker
 		static uint64_t last_size = 0;
