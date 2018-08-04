@@ -48,6 +48,7 @@ class BitVector {
 		void resize(const uint64_t len);
 		uint64_t get_int(uint64_t startP, uint64_t len=64) {return bits.get_int(startP, len);}
 		bool operator==(const BitVector& b) const { return bits == b.bits; }
+		void set_int(uint64_t startP, uint64_t wrd, uint64_t len=64) {return bits.set_int(startP, wrd, len);}
 
 	private:
 		sdsl::bit_vector bits;

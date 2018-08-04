@@ -103,6 +103,7 @@ class ColoredDbg {
 		uint64_t num_samples;
 		uint64_t num_serializations;
 		bool flush_eqclass_dis{false};
+		std::vector<uint64_t> wrdLengths;
     std::time_t start_time_;
 		spdlog::logger* console;
 };
@@ -168,9 +169,19 @@ void ColoredDbg<qf_obj,
 						 <= mantis::NUM_BV_BUFFER);
 			uint64_t src_idx = ((it_local->second.first - 1) * num_samples);
 			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
-			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
+			// here:
+			uint64_t i{0}, wrdCntr{0};
+			while (i < num_samples) {
+				auto bitCnt = wrdLengths[wrdCntr];
+				uint64_t wrd = bv_buffer.get_int(src_idx+i, bitCnt);
+				//std::cerr << wrd << " ";
+				new_bv_buffer.set_int(dest_idx+i, wrd, bitCnt);
+				i+=bitCnt;
+				wrdCntr++;
+			}
+			/*for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
 				if (bv_buffer[src_idx])
-					new_bv_buffer.set(dest_idx);
+					new_bv_buffer.set(dest_idx);*/
 		}
 	}
 	bv_buffer = new_bv_buffer;
@@ -446,6 +457,11 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 		num_samples++;
 	}
 	sampleid.close();
+	wrdLengths.resize( (num_samples-1)/64+1);
+	for (auto i = 0; i < wrdLengths.size()-1; i++) {
+		wrdLengths[i] = 64;
+	}
+	wrdLengths[wrdLengths.size()-1] = num_samples-((wrdLengths.size()-1)*64);
 }
 
 #endif
