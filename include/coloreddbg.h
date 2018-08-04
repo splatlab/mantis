@@ -174,7 +174,6 @@ void ColoredDbg<qf_obj,
 			while (i < num_samples) {
 				auto bitCnt = wrdLengths[wrdCntr];
 				uint64_t wrd = bv_buffer.get_int(src_idx+i, bitCnt);
-				//std::cerr << wrd << " ";
 				new_bv_buffer.set_int(dest_idx+i, wrd, bitCnt);
 				i+=bitCnt;
 				wrdCntr++;
@@ -246,9 +245,8 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
 			bv_buffer.set(start_idx);*/
     uint64_t i{0}, wrdCntr{0};
     while (i < num_samples) {
-        auto bitCnt = vector[wrdCntr];
-        uint64_t wrd = bv_buffer.get_int(i, bitCnt);
-        //std::cerr << wrd << " ";
+        auto bitCnt = wrdLengths[wrdCntr];
+        uint64_t wrd = vector.get_int(i, bitCnt);
         bv_buffer.set_int(start_idx+i, wrd, bitCnt);
         i+=bitCnt;
         wrdCntr++;
