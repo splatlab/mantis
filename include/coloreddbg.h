@@ -230,9 +230,10 @@ template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector, uint64_t
 																								eq_id) {
 	uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
-	for (uint32_t i = 0; i < num_samples; i++, start_idx++)
-		if (vector[i])
-			bv_buffer[start_idx] = 1;
+	for (uint32_t i = 0; i < num_samples/64*64; i+=64)
+		bv_buffer.set_int(start_idx+i, vector.get_int(i, 64), 64);
+	if (num_samples%64)
+		bv_buffer.set_int(num_samples/64*64, vector.get_int(num_samples, num_samples%64), num_samples%64);
 }
 
 template <class qf_obj, class key_obj>
