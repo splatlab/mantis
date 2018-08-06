@@ -78,6 +78,15 @@ extern "C" {
 
 	typedef struct quotient_filter_iterator {
 		const QF *qf;
+		struct {
+			uint64_t nslots;
+			uint64_t xnslots;
+			uint64_t bits_per_slot;
+			uint64_t sizeof_qfblock_SLOTS_PER_BLOCK_times_bits_per_slot_div_8;
+			uint64_t value_bits;
+			uint64_t key_remainder_bits;
+			uint64_t nblocks;
+		} cache;
 		uint64_t run;
 		uint64_t current;
 		uint64_t cur_start_index;
