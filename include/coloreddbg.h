@@ -233,7 +233,7 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector, uint64_
 	for (uint32_t i = 0; i < num_samples/64*64; i+=64)
 		bv_buffer.set_int(start_idx+i, vector.get_int(i, 64), 64);
 	if (num_samples%64)
-		bv_buffer.set_int(num_samples/64*64, vector.get_int(num_samples, num_samples%64), num_samples%64);
+		bv_buffer.set_int(start_idx+num_samples/64*64, vector.get_int(num_samples/64*64, num_samples%64), num_samples%64);
 }
 
 template <class qf_obj, class key_obj>
