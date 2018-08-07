@@ -381,7 +381,6 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 
 		bool added_eq_class = add_kmer(last_key, eq_class);
 		++counter;
-		if (dbg.size() > 50000000) { console->info("exiting for quick profile run"); exit(0); }
 
 		// Progress tracker
 		static uint64_t last_size = 0;
