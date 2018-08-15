@@ -31,11 +31,13 @@
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"
-#include "bitvector.h"
 #include "cqf.h"
 #include "hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
+
+typedef sdsl::bit_vector BitVector;
+typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 struct hash128 {
 	uint64_t operator()(const __uint128_t& val128) const
@@ -85,8 +87,8 @@ class ColoredDbg {
 	private:
     // returns true if adding this k-mer increased the number of equivalence classes
     // and false otherwise.
-		bool add_kmer(key_obj& hash, BitVector& vector);
-		void add_bitvector(BitVector& vector, uint64_t eq_id);
+		bool add_kmer(const typename key_obj::kmer_t& hash, const BitVector& vector);
+		void add_bitvector(const BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
 		void bv_buffer_serialize();
@@ -103,7 +105,7 @@ class ColoredDbg {
 		uint64_t num_samples;
 		uint64_t num_serializations;
 		bool flush_eqclass_dis{false};
-		std::vector<uint64_t> wrdLengths;
+
     std::time_t start_time_;
 		spdlog::logger* console;
 };
@@ -111,14 +113,13 @@ class ColoredDbg {
 template <class T>
 class SampleObject {
 	public:
-		SampleObject() : obj(), cutoff(0), sample_id(), id(0) {};
-		SampleObject(T o, uint32_t c = 0, std::string& s = std::string(),
-								 uint32_t id = 0) : obj(o), cutoff(c), sample_id(s), id(id) {};
-		SampleObject(const SampleObject& o) : obj(o.obj), cutoff(o.cutoff),
-		sample_id(o.sample_id), id(o.id) {} ;
+		SampleObject() : obj(), sample_id(), id(0) {}
+		SampleObject(T o, std::string& s = std::string(),
+								 uint32_t id = 0) : obj(o), sample_id(s), id(id) {}
+		SampleObject(const SampleObject& o) : obj(o.obj),
+		sample_id(o.sample_id), id(o.id) {}
 
 		T obj;
-		uint32_t cutoff;
 		std::string sample_id;
 		uint32_t id;
 };
@@ -149,7 +150,7 @@ template <class qf_obj, class key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::get_num_bitvectors(void) const {
 	uint64_t total = 0;
 	for (uint32_t i = 0; i < num_serializations; i++)
-		total += eqclasses[i].bit_size();
+		total += eqclasses[i].size();
 
 	return total / num_samples;
 }
@@ -169,18 +170,9 @@ void ColoredDbg<qf_obj,
 						 <= mantis::NUM_BV_BUFFER);
 			uint64_t src_idx = ((it_local->second.first - 1) * num_samples);
 			uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
-			// here:
-			uint64_t i{0}, wrdCntr{0};
-			while (i < num_samples) {
-				auto bitCnt = wrdLengths[wrdCntr];
-				uint64_t wrd = bv_buffer.get_int(src_idx+i, bitCnt);
-				new_bv_buffer.set_int(dest_idx+i, wrd, bitCnt);
-				i+=bitCnt;
-				wrdCntr++;
-			}
-			/*for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
+			for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
 				if (bv_buffer[src_idx])
-					new_bv_buffer.set(dest_idx);*/
+					new_bv_buffer[dest_idx] = 1;
 		}
 	}
 	bv_buffer = new_bv_buffer;
@@ -203,13 +195,13 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 }
 
 template <class qf_obj, class key_obj>
-bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
+bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, const BitVector&
 																					 vector) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
-	uint64_t eq_id = 1;
+	uint64_t eq_id;
 	__uint128_t vec_hash = HashUtil::MurmurHash128A((void*)vector.data(),
-																								 vector.capacity(), 2038074743,
+																								 vector.capacity()/8, 2038074743,
 																								 2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
@@ -231,26 +223,18 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(key_obj& k, BitVector&
     it->second.second += 1; // update the abundance.
 	}
 
-	k.count = eq_id;	// we use the count to store the eqclass ids
-	dbg.insert(k);
+	dbg.insert(KeyObject(key,0,eq_id)); // we use the count to store the eqclass ids
   return added_eq_class;
 }
 
 template <class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_bitvector(BitVector& vector, uint64_t
+void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector, uint64_t
 																								eq_id) {
 	uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
-	/*for (uint32_t i = 0; i < num_samples; i++, start_idx++)
-		if (vector[i])
-			bv_buffer.set(start_idx);*/
-    uint64_t i{0}, wrdCntr{0};
-    while (i < num_samples) {
-        auto bitCnt = wrdLengths[wrdCntr];
-        uint64_t wrd = vector.get_int(i, bitCnt);
-        bv_buffer.set_int(start_idx+i, wrd, bitCnt);
-        i+=bitCnt;
-        wrdCntr++;
-    }
+	for (uint32_t i = 0; i < num_samples/64*64; i+=64)
+		bv_buffer.set_int(start_idx+i, vector.get_int(i, 64), 64);
+	if (num_samples%64)
+		bv_buffer.set_int(start_idx+num_samples/64*64, vector.get_int(num_samples/64*64, num_samples%64), num_samples%64);
 }
 
 template <class qf_obj, class key_obj>
@@ -263,8 +247,8 @@ void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 	BitVectorRRR final_com_bv(bv_temp);
 	std::string bv_file(prefix + std::to_string(num_serializations) + "_" +
                       mantis::EQCLASS_FILE);
-	final_com_bv.serialize(bv_file);
-	bv_buffer.reset();
+	sdsl::store_to_file(final_com_bv, bv_file);
+	bv_buffer = BitVector(bv_buffer.bit_size());
 	num_serializations++;
 }
 
@@ -305,7 +289,7 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 			query_eqclass_map[eqclass] += 1;
 	}
 
-  mantis::QueryResult sample_map(num_samples, 0);
+  	mantis::QueryResult sample_vec(num_samples, 0);
 	for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
 			 ++it) {
 		auto eqclass_id = it->first;
@@ -319,80 +303,89 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
 			for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
 					if ((wrd >> i) & 0x01)
-							sample_map[sCntr] += count;
+							sample_vec[sCntr] += count;
 			bucket_offset += len;
 		}
 	}
-	return sample_map;
+	return sample_vec;
 }
 
 template <class qf_obj, class key_obj>
 cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	key_obj>::construct(qf_obj *incqfs, uint64_t num_kmers)
 {
-	uint32_t nqf = 0;
 	uint64_t counter = 0;
 
   bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
-	// merge all input CQFs into the final QF
-  std::vector<typename CQF<key_obj>::Iterator> it_incqfs;
-  it_incqfs.reserve(num_samples);
+	struct Iterator {
+		QFi qfi;
+		typename key_obj::kmer_t kmer;
+		uint32_t id;
+		Iterator(uint32_t id, const QF& cqf): id(id) {
+			if (qf_iterator(&cqf, &qfi, 0)) get_key();
+		}
+		void next() {
+			qfi_next(&qfi);
+			get_key();
+		}
+		bool end() const {
+			return qfi_end(&qfi);
+		}
+		bool operator>(const Iterator& rhs) const {
+			return key() > rhs.key();
+		}
+		const typename key_obj::kmer_t& key() const { return kmer; }
+	private:
+		void get_key() {
+			uint64_t value, count;
+			qfi_get(&qfi, &kmer, &value, &count);
+		}
+	};
 
-	// Initialize all iterators with sample specific cutoffs.
+  struct Minheap_PQ {
+		void push(const Iterator& obj) {
+			c.emplace_back(obj);
+			std::push_heap(c.begin(), c.end(), std::greater<Iterator>());
+		}
+		void pop() {
+			std::pop_heap(c.begin(), c.end(), std::greater<Iterator>());
+			c.pop_back();
+		}
+		void replace_top(const Iterator& obj) {
+			c.emplace_back(obj);
+			pop();
+		}
+		Iterator& top() { return c.front(); }
+		bool empty() const { return c.empty(); }
+	private:
+		std::vector<Iterator> c;
+	};
+	Minheap_PQ minheap;
+
 	for (uint32_t i = 0; i < num_samples; i++) {
-		it_incqfs.emplace_back(incqfs[i].obj->begin(incqfs[i].cutoff));
+		Iterator qfi(i, incqfs[i].obj->cqf);
+		if (qfi.end()) continue;
+		minheap.push(qfi);
   }
 
-	std::priority_queue<SampleObject<KeyObject>,
-		std::vector<SampleObject<KeyObject>>, compare<KeyObject>> minheap;
-	// Insert the first key from each CQF in minheap.
-	for (uint32_t i = 0; i < num_samples; i++) {
-		if (it_incqfs[i].done())
-			continue;
-		KeyObject key = *it_incqfs[i];
-		minheap.emplace(key, incqfs[i].cutoff, incqfs[i].sample_id, i);
-		nqf++;
-	}
-
 	while (!minheap.empty()) {
-		assert(minheap.size() == nqf);
-		SampleObject<KeyObject> cur;
 		BitVector eq_class(num_samples);
-		// Get the smallest key from minheap and update the eqclass vector
-		cur = minheap.top();
-		eq_class.set(cur.id);
-		minheap.pop();
-		// Keep poping keys from minheap until you see a different key.
-		// While poping keys build the eq class for cur.
-		// Increment iterators for all CQFs whose keys are popped.
-		while (!minheap.empty() && cur.obj.key == minheap.top().obj.key) {
-			uint32_t id = minheap.top().id;
-			eq_class.set(id);
-			minheap.pop();
-			++it_incqfs[id];
-			if (it_incqfs[id].done())	// If the iterator is done then decrement nqf
-				nqf--;
-			else {	// Insert the current iterator head in minHeap
-				KeyObject key = *it_incqfs[id];
-				minheap.emplace(key, incqfs[id].cutoff, incqfs[id].sample_id, id);
-			}
-		}
-		// Move the iterator of the smallest key.
-		++it_incqfs[cur.id];
-		if (it_incqfs[cur.id].done())	// If the iterator is done then decrement nqf
-			nqf--;
-		else {	// Insert the current iterator head in minHeap
-			KeyObject key = *it_incqfs[cur.id];
-			minheap.emplace(key, incqfs[cur.id].cutoff, incqfs[cur.id].sample_id, cur.id);
-		}
-		// Add <kmer, vector> in the cdbg
-		bool added_eq_class = add_kmer(cur.obj, eq_class);
-		counter++;
+		KeyObject::kmer_t last_key;
+		do {
+			Iterator& cur = minheap.top();
+			last_key = cur.key();
+			eq_class[cur.id] = 1;
+			cur.next();
+			minheap.replace_top(cur);
+		} while(!minheap.empty() && last_key == minheap.top().key());
+
+		bool added_eq_class = add_kmer(last_key, eq_class);
+		++counter;
 
 		// Progress tracker
 		static uint64_t last_size = 0;
-		if (dbg.size() % 10000000 == 0 &&
+		if (dbg.size() % 1000000 == 0 &&
 				dbg.size() != last_size) {
 			last_size = dbg.size();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
@@ -414,6 +407,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
       // Check if the sampling phase is finished based on the number of k-mers.
 			break;
     }
+
+		while(!minheap.empty() && minheap.top().end()) minheap.pop();
 	}
 
 	return eqclass_map;
@@ -450,8 +445,10 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	}
 
 	eqclasses.reserve(sorted_files.size());
+	BitVectorRRR bv;
 	for (auto file : sorted_files) {
-		eqclasses.push_back(BitVectorRRR(file.second));
+		sdsl::load_from_file(bv, file.second);
+		eqclasses.push_back(bv);
 		num_serializations++;
 	}
 
@@ -464,11 +461,6 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 		num_samples++;
 	}
 	sampleid.close();
-	wrdLengths.resize( (num_samples-1)/64+1);
-	for (auto i = 0; i < wrdLengths.size()-1; i++) {
-		wrdLengths[i] = 64;
-	}
-	wrdLengths[wrdLengths.size()-1] = num_samples-((wrdLengths.size()-1)*64);
 }
 
 #endif

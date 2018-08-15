@@ -51,15 +51,15 @@
 #include "mantisconfig.hpp"
 
 // This function read one byte from each page in the iterator buffer.
-uint64_t tmp_sum;
-void handler_function(union sigval sv) {
-	CQF<KeyObject>::Iterator& it(*((CQF<KeyObject>::Iterator*)sv.sival_ptr));
-	unsigned char *start = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
-	unsigned char *counter = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
-	for (;counter < start + it.buffer_size; counter += 4096) {
-		tmp_sum += *counter;
-	}
-}
+//uint64_t tmp_sum;
+//void handler_function(union sigval sv) {
+	//CQF<KeyObject>::Iterator& it(*((CQF<KeyObject>::Iterator*)sv.sival_ptr));
+	//unsigned char *start = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
+	//unsigned char *counter = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
+	//for (;counter < start + it.buffer_size; counter += 4096) {
+		//tmp_sum += *counter;
+	//}
+//}
 
 /*
  * ===  FUNCTION  =============================================================
@@ -144,9 +144,8 @@ build_main ( BuildOpts& opt )
 	// mmap all the input cqfs
 	std::string cqf_file;
 	uint32_t nqf = 0;
-	uint32_t cutoff;
 	console->info("Reading input Squeakr files.");
-	while (infile >> cqf_file >> cutoff) {
+	while (infile >> cqf_file) {
 		if (!mantis::fs::FileExists(cqf_file.c_str())) {
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
@@ -155,9 +154,9 @@ build_main ( BuildOpts& opt )
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut off {}", sample_id, cutoff);
+		console->info("Sample id {} cut off {}", sample_id);
 		cqfs.back().dump_metadata();
-    inobjects.emplace_back(&cqfs[nqf], cutoff, sample_id, nqf);
+    inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
     nqf++;
 	}
 

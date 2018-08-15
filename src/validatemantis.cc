@@ -61,7 +61,7 @@ validate_main ( ValidateOpts& opt )
 {
 
 	spdlog::logger* console = opt.console.get();
-	// Read experiment CQFs and cutoffs
+	// Read experiment CQFs
 	std::ifstream infile(opt.inlist);
   uint64_t num_samples{0};
   if (infile.is_open()) {
@@ -82,19 +82,10 @@ validate_main ( ValidateOpts& opt )
 	cqfs = (CQF<KeyObject>*)calloc(num_samples, sizeof(CQF<KeyObject>));
 
 
-	// Read cutoffs files
-	//std::unordered_map<std::string, uint64_t> cutoffs;
-	//std::string sample_id;
-	//while (cutofffile >> sample_id >> cutoff) {
-	//std::pair<std::string, uint32_t> pair(last_part(sample_id, '/'), cutoff);
-	//cutoffs.insert(pair);
-	//}
-
 	// mmap all the input cqfs
 	std::string cqf_file;
 	uint32_t nqf = 0;
-	uint32_t cutoff;
-	while (infile >> cqf_file >> cutoff) {
+	while (infile >> cqf_file) {
 		if (!mantis::fs::FileExists(cqf_file.c_str())) {
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
@@ -103,9 +94,9 @@ validate_main ( ValidateOpts& opt )
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}", nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut-off {}", sample_id, cutoff);
+		console->info("Sample id {} cut-off {}", sample_id);
 		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
+		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf],
 																									 sample_id, nqf);
 		nqf++;
 	}
@@ -145,7 +136,7 @@ validate_main ( ValidateOpts& opt )
 																										total_kmers);
 	console->info("Total k-mers to query: {}", total_kmers);
 
-	// Query kmers in each experiment CQF ignoring kmers below the cutoff.
+	// Query kmers in each experiment CQF
 	// Maintain the fraction of kmers present in each experiment CQF.
 	std::vector<std::unordered_map<uint64_t, float>> ground_truth;
 	std::vector<mantis::QueryResult> cdbg_output;
@@ -153,14 +144,10 @@ validate_main ( ValidateOpts& opt )
 	for (auto kmers : multi_kmers) {
 		std::unordered_map<uint64_t, float> fraction_present;
 		for (uint64_t i = 0; i < nqf; i++) {
-			uint32_t cutoff = inobjects[i].cutoff;
 			for (auto kmer : kmers) {
 				KeyObject k(kmer, 0, 0);
 				uint64_t count = cqfs[i].query(k);
-				if (count < cutoff)
-					continue;
-				else
-					fraction_present[inobjects[i].id] += 1;
+				fraction_present[inobjects[i].id] += 1;
 			}
 		}
 		// Query kmers in the cdbg

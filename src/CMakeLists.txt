@@ -64,13 +64,13 @@ endif()
 install(TARGETS mantis
         RUNTIME DESTINATION bin)
 
-add_executable(monochromatic_component_iterator
-		monochromatic_component_iterator.cc)
-target_include_directories(monochromatic_component_iterator PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_link_libraries(monochromatic_component_iterator
-				mantis_core)
-set_property(TARGET monochromatic_component_iterator PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+#add_executable(monochromatic_component_iterator
+#		monochromatic_component_iterator.cc)
+#target_include_directories(monochromatic_component_iterator PUBLIC
+#  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+#target_link_libraries(monochromatic_component_iterator
+#				mantis_core)
+#set_property(TARGET monochromatic_component_iterator PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 
 add_executable(msf MSF.cc)

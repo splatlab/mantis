@@ -32,6 +32,8 @@
 
 #define METADATA_WORD(qf,field,slot_index) (get_block((qf), (slot_index) / \
 					SLOTS_PER_BLOCK)->field[((slot_index)  % SLOTS_PER_BLOCK) / 64])
+#define QFI_METADATA_WORD(qfi,field,slot_index) (qfi_get_block((qfi), (slot_index) / \
+					SLOTS_PER_BLOCK)->field[((slot_index)  % SLOTS_PER_BLOCK) / 64])
 
 #define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
 #define BILLION 1000000000L
@@ -462,11 +464,22 @@ static inline qfblock * get_block(const QF *qf, uint64_t block_index)
 	return (qfblock *)(((char *)qf->blocks) + block_index * (sizeof(qfblock) +
 						SLOTS_PER_BLOCK * qf->metadata->bits_per_slot / 8));
 }
+static inline qfblock * qfi_get_block(const QFi *qfi, uint64_t block_index)
+{
+	return (qfblock *)(((char *)qfi->qf->blocks) + block_index *
+						qfi->cache.sizeof_qfblock_SLOTS_PER_BLOCK_times_bits_per_slot_div_8);
+}
 #endif
 
 static inline int is_runend(const QF *qf, uint64_t index)
 {
 	return (METADATA_WORD(qf, runends, index) >> ((index % SLOTS_PER_BLOCK) %
+																								64)) & 1ULL;
+}
+
+static inline int qfi_is_runend(const QFi *qfi, uint64_t index)
+{
+	return (QFI_METADATA_WORD(qfi, runends, index) >> ((index % SLOTS_PER_BLOCK) %
 																								64)) & 1ULL;
 }
 
@@ -482,6 +495,12 @@ static inline uint64_t get_slot(const QF *qf, uint64_t index)
 {
 	assert(index < qf->metadata->xnslots);
 	return get_block(qf, index / SLOTS_PER_BLOCK)->slots[index % SLOTS_PER_BLOCK];
+}
+
+static inline uint64_t qfi_get_slot(const QFi *qfi, uint64_t index)
+{
+	assert(index < qfi->qf->metadata->xnslots);
+	return qfi_get_block(qfi, index / SLOTS_PER_BLOCK)->slots[index % SLOTS_PER_BLOCK];
 }
 
 static inline void set_slot(const QF *qf, uint64_t index, uint64_t value)
@@ -501,6 +520,19 @@ static inline uint64_t get_slot(const QF *qf, uint64_t index)
 	 * to generate buggy code.  :/  */
 	assert(index < qf->metadata->xnslots);
 	uint64_t *p = (uint64_t *)&get_block(qf, index /
+																			 SLOTS_PER_BLOCK)->slots[(index %
+																																SLOTS_PER_BLOCK)
+																			 * BITS_PER_SLOT / 8];
+	return (uint64_t)(((*p) >> (((index % SLOTS_PER_BLOCK) * BITS_PER_SLOT) %
+															8)) & BITMASK(BITS_PER_SLOT));
+}
+
+static inline uint64_t qfi_get_slot(const QFi *qfi, uint64_t index)
+{
+	/* Should use __uint128_t to support up to 64-bit remainders, but gcc seems
+	 * to generate buggy code.  :/  */
+	assert(index < qfi->qf->metadata->xnslots);
+	uint64_t *p = (uint64_t *)&qfi_get_block(qfi, index /
 																			 SLOTS_PER_BLOCK)->slots[(index %
 																																SLOTS_PER_BLOCK)
 																			 * BITS_PER_SLOT / 8];
@@ -544,6 +576,20 @@ static inline uint64_t get_slot(const QF *qf, uint64_t index)
 	return (uint64_t)(((*p) >> (((index % SLOTS_PER_BLOCK) *
 															 qf->metadata->bits_per_slot) % 8)) &
 										BITMASK(qf->metadata->bits_per_slot));
+}
+
+static inline uint64_t qfi_get_slot(const QFi *qfi, uint64_t index)
+{
+	assert(index < qfi->qf->metadata->xnslots);
+	/* Should use __uint128_t to support up to 64-bit remainders, but gcc seems
+	 * to generate buggy code.  :/  */
+	uint64_t *p = (uint64_t *)&qfi_get_block(qfi, index /
+																			 SLOTS_PER_BLOCK)->slots[(index %
+																																SLOTS_PER_BLOCK)
+																			 * qfi->cache.bits_per_slot / 8];
+	return (uint64_t)(((*p) >> (((index % SLOTS_PER_BLOCK) *
+															 qfi->cache.bits_per_slot) % 8)) &
+										BITMASK(qfi->cache.bits_per_slot));
 }
 
 static inline void set_slot(const QF *qf, uint64_t index, uint64_t value)
@@ -1195,6 +1241,80 @@ static inline uint64_t decode_counter(const QF *qf, uint64_t index, uint64_t
 	}
 
 	if (is_runend(qf, end) || get_slot(qf, end + 1) != 0) {
+		*count = 1;
+		return index;
+	}
+
+	*count = cnt + 4;
+	return end + 1;
+}
+
+/* Returns the length of the encoding. 
+REQUIRES: index points to first slot of a counter. */
+static inline uint64_t qfi_decode_counter(const QFi *qfi, uint64_t index, uint64_t
+																			*remainder, uint64_t *count)
+{
+	uint64_t base;
+	uint64_t rem;
+	uint64_t cnt;
+	uint64_t digit;
+	uint64_t end;
+
+	*remainder = rem = qfi_get_slot(qfi, index);
+
+	if (qfi_is_runend(qfi, index)) { /* Entire run is "0" */
+		*count = 1; 
+		return index;
+	}
+
+	digit = qfi_get_slot(qfi, index + 1);
+
+	if (qfi_is_runend(qfi, index + 1)) {
+		*count = digit == rem ? 2 : 1;
+		return index + (digit == rem ? 1 : 0);
+	}
+
+	if (rem > 0 && digit >= rem) {
+		*count = digit == rem ? 2 : 1;
+		return index + (digit == rem ? 1 : 0);
+	}
+
+	if (rem > 0 && digit == 0 && qfi_get_slot(qfi, index + 2) == rem) {
+		*count = 3;
+		return index + 2;
+	}
+
+	if (rem == 0 && digit == 0) {
+		if (qfi_get_slot(qfi, index + 2) == 0) {
+			*count = 3;
+			return index + 2;
+		} else {
+			*count = 2;
+			return index + 1;
+		}
+	}
+
+	cnt = 0;
+	base = (1ULL << qfi->qf->metadata->bits_per_slot) - (rem ? 2 : 1);
+
+	end = index + 1;
+	while (digit != rem && !qfi_is_runend(qfi, end)) {
+		if (digit > rem)
+			digit--;
+		if (digit && rem)
+			digit--;
+		cnt = cnt * base + digit;
+
+		end++;
+		digit = qfi_get_slot(qfi, end);
+	}
+
+	if (rem) {
+		*count = cnt + 3;
+		return end;
+	}
+
+	if (qfi_is_runend(qfi, end) || qfi_get_slot(qfi, end + 1) != 0) {
 		*count = 1;
 		return index;
 	}
@@ -2006,6 +2126,15 @@ bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position)
 	if (qfi->current < position)
 		qfi->current = position;
 
+	qfi->cache.nslots = qf->metadata->nslots;
+	qfi->cache.xnslots = qf->metadata->xnslots;
+	qfi->cache.sizeof_qfblock_SLOTS_PER_BLOCK_times_bits_per_slot_div_8 =
+						(sizeof(qfblock) + SLOTS_PER_BLOCK * qf->metadata->bits_per_slot / 8);
+	qfi->cache.bits_per_slot = qf->metadata->bits_per_slot;
+	qfi->cache.value_bits = qf->metadata->value_bits;
+	qfi->cache.key_remainder_bits = qf->metadata->key_remainder_bits;
+	qfi->cache.nblocks = qf->metadata->nblocks;
+
 #ifdef LOG_CLUSTER_LENGTH
 	qfi->c_info = (cluster_data* )calloc(qf->metadata->nslots/32,
 																			 sizeof(cluster_data));
@@ -2088,11 +2217,11 @@ int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 	assert(qfi->current < qfi->qf->metadata->nslots);
 
 	uint64_t current_remainder, current_count;
-	decode_counter(qfi->qf, qfi->current, &current_remainder, &current_count);
+	qfi_decode_counter(qfi, qfi->current, &current_remainder, &current_count);
 
-	*value = current_remainder & BITMASK(qfi->qf->metadata->value_bits);
-	current_remainder = current_remainder >> qfi->qf->metadata->value_bits;
-	*key = (qfi->run << qfi->qf->metadata->key_remainder_bits) | current_remainder;
+	*value = current_remainder & BITMASK(qfi->cache.value_bits);
+	current_remainder = current_remainder >> qfi->cache.value_bits;
+	*key = (qfi->run << qfi->cache.key_remainder_bits) | current_remainder;
 	*count = current_count; 
 
 	/*qfi->current = end_index;*/ 		//get should not change the current index
@@ -2106,7 +2235,7 @@ int qfi_next(QFi *qfi) {
 int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 {
 	uint64_t block_index = qfi->run / SLOTS_PER_BLOCK;
-	qfblock* addr = get_block(qfi->qf, block_index);
+	qfblock* addr = qfi_get_block(qfi, block_index);
 	if (read_offset) *read_offset = (char*)addr - (char*)(qfi->qf->metadata);
 
 	if (qfi_end(qfi))
@@ -2114,15 +2243,15 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 	else {
 		/* move to the end of the current counter*/
 		uint64_t current_remainder, current_count;
-		qfi->current = decode_counter(qfi->qf, qfi->current, &current_remainder,
+		qfi->current = qfi_decode_counter(qfi, qfi->current, &current_remainder,
 																	&current_count);
 
-		if (!is_runend(qfi->qf, qfi->current)) {
+		if (!qfi_is_runend(qfi, qfi->current)) {
 			qfi->current++;
 #ifdef LOG_CLUSTER_LENGTH
 			qfi->cur_length++;
 #endif
-			if (qfi->current > qfi->qf->metadata->nslots)
+			if (qfi->current > qfi->cache.nslots)
 				return 1;
 			return 0;
 		}
@@ -2133,20 +2262,20 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 #endif
 			uint64_t rank = bitrank(addr->occupieds[0],
 															qfi->run % SLOTS_PER_BLOCK);
-			uint64_t next_run = bitselect(get_block(qfi->qf,
+			uint64_t next_run = bitselect(qfi_get_block(qfi,
 																							block_index)->occupieds[0],
 																		rank);
 			if (next_run == 64) {
 				rank = 0;
-				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks) {
+				while (next_run == 64 && block_index < qfi->cache.nblocks) {
 					block_index++;
-					next_run = bitselect(get_block(qfi->qf, block_index)->occupieds[0],
+					next_run = bitselect(qfi_get_block(qfi, block_index)->occupieds[0],
 															 rank);
 				}
 			}
-			if (block_index == qfi->qf->metadata->nblocks) {
+			if (block_index == qfi->cache.nblocks) {
 				/* set the index values to max. */
-				qfi->run = qfi->current = qfi->qf->metadata->xnslots;
+				qfi->run = qfi->current = qfi->cache.xnslots;
 				return 1;
 			}
 			qfi->run = block_index * SLOTS_PER_BLOCK + next_run;
@@ -2173,7 +2302,7 @@ int qfi_nextx(QFi *qfi, uint64_t* read_offset)
 
 inline int qfi_end(const QFi *qfi)
 {
-	if (qfi->current >= qfi->qf->metadata->xnslots /*&& is_runend(qfi->qf, qfi->current)*/)
+	if (qfi->current >= qfi->cache.xnslots /*&& is_runend(qfi->qf, qfi->current)*/)
 		return 1;
 	else
 		return 0;
