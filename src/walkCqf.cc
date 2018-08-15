@@ -46,6 +46,34 @@
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
+struct Iterator {
+	QFi qfi;
+	uint64_t kmer;
+	uint64_t val;
+	uint64_t cnt;
+	Iterator(const QF& cqf) {
+		if (qf_iterator(&cqf, &qfi, 0)) get_key();
+	}
+	void next() {
+		qfi_next(&qfi);
+		get_key();
+	}
+	bool end() const {
+		return qfi_end(&qfi);
+	}
+	bool operator>(const Iterator& rhs) const {
+		return key() > rhs.key();
+	}
+	const uint64_t key() const { return kmer; }
+	const uint64_t value() const { return val; }
+	const uint64_t count() const { return cnt; }
+
+private:
+	void get_key() {
+		qfi_get(&qfi, &kmer, &val, &cnt);
+	}
+};
+
 /* Print elapsed time using the start and end timeval */
 void print_time_elapsed(string desc, struct timeval* start, struct timeval* end) 
 {
@@ -74,7 +102,7 @@ void run_filter(std::string ds_file,
 	cout << "Done loading cqf in time: ";
 	gettimeofday(&end, &tzp);
 	print_time_elapsed("", &start, &end);
-	typename CQF<KeyObject>::Iterator it = cqf.begin(0);
+	Iterator it(cqf.cqf);//= cqf.begin(0);
 
 	uint64_t quotientBits = std::ceil(std::log2(approximate_num_of_kmers_greater_than_cutoff))+1;
 	std::cout << "quotientBits : " << quotientBits << "\n";
@@ -83,20 +111,22 @@ void run_filter(std::string ds_file,
 	gettimeofday(&start, &tzp);
 	uint64_t cntr = 1;
 	uint64_t insertedCntr = 0;
-	while (!it.done()) {
-		KeyObject k = *it;
+	while (!it.end()) {
+		//KeyObject k = *it;
+		KeyObject k(it.key(), it.value(), it.count());
 		if (k.count >= cutoff) {
 			k.count = 1;//cutoff;
 			newCqf.insert(k);
 			insertedCntr++;
 		}
-		++it;
+		//++it;
+		it.next();
 		if (cntr % 10000000 == 0) {
 			std::cout << cntr << " kmers passed, " 
-					  << insertedCntr << " kmers inserted, " 
-					  << newCqf.noccupied_slots() << " slots occupied, "
-					  << " load factor: " 
-					  << static_cast<double>(newCqf.noccupied_slots())/static_cast<double>(1ULL << quotientBits) << "\n"; 
+					  << insertedCntr << " kmers inserted" ;
+					  //<< newCqf.noccupied_slots() << " slots occupied, "
+					  //<< " load factor: "
+					  //<< static_cast<double>(newCqf.noccupied_slots())/static_cast<double>(1ULL << quotientBits) << "\n";
 		}
 		cntr++;
 	}
@@ -108,6 +138,7 @@ void run_filter(std::string ds_file,
 
 void run_list_kmers(std::string ds_file, 
 				std::string out_file) {
+/*
 	struct timeval start, end;
 	struct timezone tzp;
 	
@@ -118,23 +149,26 @@ void run_list_kmers(std::string ds_file,
 	cout << "Done loading cqf in time: ";
 	gettimeofday(&end, &tzp);
 	print_time_elapsed("", &start, &end);
-	typename CQF<KeyObject>::Iterator it = cqf.begin(0);
+	//typename CQF<KeyObject>::Iterator it = cqf.begin(0);
 
 	gettimeofday(&start, &tzp);
 	std::ofstream fout(out_file, ios::out);
-	while (!it.done()) {
-		KeyObject k = *it;
+	while (!it.end()) {
+		//KeyObject k = *it;
+		KeyObject k(it.key(), it.value(), it.count());
 		// kmers.push_back(HashUtil::hash_64i(k.key, BITMASK(cqf.keybits())));
 		uint64_t kint = HashUtil::hash_64i(k.key, BITMASK(cqf.keybits()));
 		//if (k.count >= cutoff) {
 			std::string kstr = Kmer::int_to_str(kint);
 			fout << kstr << "\t" << k.count << "\n";
 		//}
-		++it;
+		//++it;
+		it.next();
 	}
 	fout.close();
 	gettimeofday(&end, &tzp);
 	print_time_elapsed("", &start, &end);
+*/
 }
 
 /*
