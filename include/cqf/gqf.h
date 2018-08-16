@@ -150,7 +150,6 @@ extern "C" {
 		 value, into qf. */
 	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value);
 
-	uint64_t qf_key_value_index(const QF *qf, uint64_t key, uint64_t value, uint64_t* idx);
 	/* Initialize an iterator */
 	bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position);
 
