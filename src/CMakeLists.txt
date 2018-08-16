@@ -80,12 +80,12 @@ target_link_libraries(msf
 				                mantis_core)
 set_property(TARGET msf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-add_executable(loadColorCls validateMSF.cc)
-target_include_directories(loadColorCls PUBLIC
+add_executable(walkMSF walkMSF.cc)
+target_include_directories(walkMSF PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_link_libraries(loadColorCls
+target_link_libraries(walkMSF
 		mantis_core)
-set_property(TARGET loadColorCls PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+set_property(TARGET walkMSF PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 add_executable(mstBoost MST_boost.cc)
 		target_include_directories(mstBoost PUBLIC
