@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
     deltaManager.insertDeltas(0, d);
 
     d.clear();
-    d.push_back(0);
+    d.push_back(2999);
     deltaManager.insertDeltas(1, d);
 
     d.clear();
@@ -102,9 +102,11 @@ int main(int argc, char* argv[]) {
     d.push_back(400);
     d.push_back(500);
     d.push_back(600);
-    d.push_back(700);
+    /*d.push_back(700);
     d.push_back(800);
     d.push_back(900);
+    d.push_back(1000);
+    d.push_back(1100);*/
     deltaManager.insertDeltas(2, d);
 
     auto vec = deltaManager.getDeltas(2);
@@ -113,6 +115,7 @@ int main(int argc, char* argv[]) {
         std::cerr << v << " ";
     }
 
+    std::cerr << "\n";
     vec = deltaManager.getDeltas(0);
     std::cerr << "\n\ndeltas for 0\n";
     for (auto v : vec) {
@@ -124,7 +127,7 @@ int main(int argc, char* argv[]) {
     for (auto v : vec) {
         std::cerr << v << " ";
     }
-
+/*
     deltaManager.swapDeltas(0,2);
     std::cerr << "After swap:\n";
     vec = deltaManager.getDeltas(0);
@@ -138,5 +141,5 @@ int main(int argc, char* argv[]) {
     for (auto v : vec) {
         std::cerr << v << " ";
     }
-
+    std::cerr << "\n";*/
 }
