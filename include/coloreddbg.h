@@ -31,8 +31,8 @@
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
 #include "sdsl/bit_vectors.hpp"
-#include "cqf.h"
-#include "hashutil.h"
+#include "gqf_cpp.h"
+#include "gqf/hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
 
@@ -44,7 +44,7 @@ struct hash128 {
 	{
 		__uint128_t val = val128;
 		// Using the same seed as we use in k-mer hashing.
-		return HashUtil::MurmurHash64A((void*)&val, sizeof(__uint128_t),
+		return MurmurHash64A((void*)&val, sizeof(__uint128_t),
 																	 2038074743);
 	}
 };
@@ -60,8 +60,8 @@ class ColoredDbg {
 		ColoredDbg(std::string& cqf_file, std::vector<std::string>& eqclass_files,
 							 std::string& sample_file);
 
-		ColoredDbg(uint64_t qbits, uint64_t key_bits, uint32_t seed,
-							 std::string& prefix, uint64_t nqf);
+		ColoredDbg(uint64_t qbits, uint64_t key_bits, enum qf_hashmode hashmode,
+							 uint32_t seed, std::string& prefix, uint64_t nqf);
 		
 		void build_sampleid_map(qf_obj *incqfs);
 
@@ -199,9 +199,9 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, 
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	uint64_t eq_id;
-	__uint128_t vec_hash = HashUtil::MurmurHash128A((void*)vector.data(),
-																								 vector.capacity()/8, 2038074743,
-																								 2038074751);
+	__uint128_t vec_hash = MurmurHash128A((void*)vector.data(),
+																				vector.capacity()/8, 2038074743,
+																				2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
   bool added_eq_class{false};
@@ -222,7 +222,7 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, 
     it->second.second += 1; // update the abundance.
 	}
 
-	dbg.insert(KeyObject(key,0,eq_id)); // we use the count to store the eqclass ids
+	dbg.insert(KeyObject(key,0,eq_id), QF_KEY_IS_HASH); // we use the count to store the eqclass ids
   return added_eq_class;
 }
 
@@ -283,7 +283,7 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 	std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
 	for (auto k : kmers) {
 		key_obj key(k, 0, 0);
-		uint64_t eqclass = dbg.query(key);
+		uint64_t eqclass = dbg.query(key, 0);
 		if (eqclass)
 			query_eqclass_map[eqclass] += 1;
 	}
@@ -321,8 +321,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		QFi qfi;
 		typename key_obj::kmer_t kmer;
 		uint32_t id;
-		Iterator(uint32_t id, const QF& cqf): id(id) {
-			if (qf_iterator(&cqf, &qfi, 0)) get_key();
+		Iterator(uint32_t id, const QF* cqf): id(id) {
+			if (qf_iterator_from_position(cqf, &qfi, 0)) get_key();
 		}
 		void next() {
 			qfi_next(&qfi);
@@ -338,7 +338,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	private:
 		void get_key() {
 			uint64_t value, count;
-			qfi_get(&qfi, &kmer, &value, &count);
+			qfi_get_hash(&qfi, &kmer, &value, &count);
 		}
 	};
 
@@ -363,7 +363,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	Minheap_PQ minheap;
 
 	for (uint32_t i = 0; i < num_samples; i++) {
-		Iterator qfi(i, incqfs[i].obj->cqf);
+		Iterator qfi(i, incqfs[i].obj->get_cqf());
 		if (qfi.end()) continue;
 		minheap.push(qfi);
   }
@@ -384,11 +384,12 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 
 		// Progress tracker
 		static uint64_t last_size = 0;
-		if (dbg.size() % 1000000 == 0 &&
-				dbg.size() != last_size) {
-			last_size = dbg.size();
+		if (dbg.dist_elts() % 1000000 == 0 &&
+				dbg.dist_elts() != last_size) {
+			last_size = dbg.dist_elts();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
-										dbg.size(), get_num_eqclasses(), time(nullptr) - start_time_);
+										dbg.dist_elts(), get_num_eqclasses(), time(nullptr) -
+										start_time_);
 		}
 
 		// Check if the bit vector buffer is full and needs to be serialized.
@@ -423,9 +424,10 @@ void ColoredDbg<qf_obj, key_obj>::build_sampleid_map(qf_obj *incqfs) {
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
+																				enum qf_hashmode hashmode,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
-	dbg(qbits, key_bits, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
+	dbg(qbits, key_bits, hashmode, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
     prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {}
 
 template <class qf_obj, class key_obj>
@@ -433,7 +435,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 																				std::vector<std::string>&
 																				eqclass_files, std::string&
 																				sample_file)
-    : dbg(cqf_file, false), bv_buffer(), start_time_(std::time(nullptr)) {
+    : dbg(cqf_file, CQF_FREAD), bv_buffer(), start_time_(std::time(nullptr)) {
 	num_samples = 0;
 	num_serializations = 0;
 

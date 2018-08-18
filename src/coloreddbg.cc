@@ -1,15 +1,6 @@
 /*
  * ============================================================================
  *
- *       Filename:  main.cc
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2016-11-10 03:31:54 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
@@ -70,14 +61,6 @@
 	int
 build_main ( BuildOpts& opt )
 {
-	/* calling asyc read init */
-	struct aioinit aioinit;
-	memset(&aioinit, 0, sizeof(struct aioinit));
-	aioinit.aio_num = 2500;
-	aioinit.aio_threads = 100;
-	aioinit.aio_idle_time = 60;
-	aio_init(&aioinit);
-
 	spdlog::logger* console = opt.console.get();
 	std::ifstream infile(opt.inlist);
   uint64_t num_samples{0};
@@ -150,18 +133,23 @@ build_main ( BuildOpts& opt )
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
 		}
-    cqfs.emplace_back(cqf_file, true);
+    cqfs.emplace_back(cqf_file, CQF_MMAP);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
 		console->info("Sample id {} cut off {}", sample_id);
 		cqfs.back().dump_metadata();
     inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
+		if (!cqfs.front().check_similarity(&cqfs.back())) {
+			console->error("Passed Squeakr files are not similar.", cqf_file);
+			exit(1);
+		}
     nqf++;
 	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
 																														inobjects[0].obj->keybits(),
+																														cqfs[0].hash_mode(),
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
 	cdbg.set_console(console);
@@ -208,7 +196,7 @@ build_main ( BuildOpts& opt )
 	cdbg.construct(inobjects.data(), std::numeric_limits<uint64_t>::max());
 
 	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
-								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
+								cdbg.get_cqf()->dist_elts(), cdbg.get_num_eqclasses());
 
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());

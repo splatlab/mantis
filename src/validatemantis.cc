@@ -1,15 +1,6 @@
 /*
  * =====================================================================================
  *
- *       Filename:  validate_mantis.cc
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2017-10-31 12:13:49 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
@@ -90,7 +81,7 @@ validate_main ( ValidateOpts& opt )
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
 		}
-		cqfs[nqf] = CQF<KeyObject>(cqf_file, false);
+		cqfs[nqf] = CQF<KeyObject>(cqf_file, CQF_FREAD);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}", nqf, cqfs[nqf].seed());
@@ -123,15 +114,13 @@ validate_main ( ValidateOpts& opt )
 
 	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
 	console->info("Read colored dbg with {} k-mers and {} color classes",
-								cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+								cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
 
 	std::string query_file = opt.query_file;
 	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
 	uint64_t total_kmers = 0;
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-																										seed,
-																										cdbg.range(),
 																										kmer_size,
 																										total_kmers);
 	console->info("Total k-mers to query: {}", total_kmers);
@@ -146,7 +135,7 @@ validate_main ( ValidateOpts& opt )
 		for (uint64_t i = 0; i < nqf; i++) {
 			for (auto kmer : kmers) {
 				KeyObject k(kmer, 0, 0);
-				uint64_t count = cqfs[i].query(k);
+				uint64_t count = cqfs[i].query(k, 0);
 				fraction_present[inobjects[i].id] += 1;
 			}
 		}
