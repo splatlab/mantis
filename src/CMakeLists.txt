@@ -8,6 +8,7 @@ add_library(mantis_core STATIC
   validatemantis.cc
   coloreddbg.cc
   MantisFS.cc
+	squeakrconfig.cc
   gqf/gqf.c
 	gqf/gqf_file.c
 	gqf/hashutil.c)
