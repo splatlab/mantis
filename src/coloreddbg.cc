@@ -111,10 +111,11 @@ build_main ( BuildOpts& opt )
 
 	// mmap all the input cqfs
 	std::string squeakr_file;
+	uint32_t cutoff;
 	uint32_t nqf = 0;
 	uint32_t kmer_size{0};
 	console->info("Reading input Squeakr files.");
-	while (infile >> squeakr_file) {
+	while (infile >> squeakr_file >> cutoff) {
 		if (!mantis::fs::FileExists(squeakr_file.c_str())) {
 			console->error("Squeakr file {} does not exist.", squeakr_file);
 			exit(1);
@@ -144,7 +145,7 @@ build_main ( BuildOpts& opt )
 		std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut off {}", sample_id);
+		console->info("Sample id {} cut off {}", sample_id, cutoff);
 		cqfs.back().dump_metadata();
     inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
 		if (!cqfs.front().check_similarity(&cqfs.back())) {
