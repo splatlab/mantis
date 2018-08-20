@@ -9,7 +9,7 @@
 #include <math.h>
 #include <assert.h>
 #include <iostream>
-
+//#include <bitset>
 class DeltaManager {
 public:
 
@@ -23,7 +23,6 @@ public:
             slotsPerColorCls = (64 / slotWidth + 1) + 1;
         } else {
             slotsPerColorCls = approximateAvgDeltaPerColorCls + 1; // 1 for storing count of deltas per index
-            std::cerr << "here: " << slotWidth << " " << slotsPerColorCls << "\n";
         }
         deltas.reserve(approximateColorClsCnt * slotsPerColorCls);
         // assumption: count of slots * their width is greater than 64 bits
@@ -34,25 +33,22 @@ public:
 
     void insertDeltas(uint64_t colorId, const std::vector<uint64_t> &dlta) {
         // see if we need to split deltas between main DS and heap
-        //std::cerr << colorId << " currentCnt: " << colorCnt << "\n";
         assert(colorId <= colorCnt);
+        auto startBit = colorId*slotsPerColorCls*slotWidth;
+        auto nextStartBit = (colorId+1)*slotsPerColorCls*slotWidth;
         // We always want to assign slotsPerColorCls slots to each index
         // even if deltas in that index are fewer than the avg num of deltas
         if (colorId == colorCnt) {
-            while (deltas.size() < ((colorCnt+1)*slotsPerColorCls*slotWidth)/64+1) {
+            while (deltas.size() < nextStartBit/64+1) {
                 deltas.push_back(0);
             }
         }
         // now assuming we've already reserved the space for the new colorId, insert deltas
         uint64_t mainDSDeltaCnt = dlta.size() < slotsPerColorCls ? dlta.size() : slotsPerColorClsWithPtrs - 1;
-        uint64_t startBit = colorId * slotWidth * slotsPerColorCls; // index for next color
-        //std::cerr << mainDSDeltaCnt << " " << dlta.size() << "\nstartBits:\n";
-        //std::cerr << "for cnt: " << startBit << "\n";
         insertValIntoDeltaV(startBit, dlta.size(), slotWidth); // insert count of deltas
         startBit += slotWidth;
         for (uint64_t i = 0; i < mainDSDeltaCnt; i++) { // insert values into main DS
             insertValIntoDeltaV(startBit, dlta[i], slotWidth);
-            //std::cerr << startBit << ":" << dlta[i] << "\n";
             startBit += slotWidth;
         }
         if (mainDSDeltaCnt < dlta.size()) { // in case count of deltas exceeds the reserved count
@@ -62,23 +58,19 @@ public:
                                 64); // store the pointer to the heap in the main DS
             insertValIntoHeap(dlta, mainDSDeltaCnt, theRest, slotWidth);
         }
-        colorCnt++;
+        if (colorId == colorCnt)
+            colorCnt++;
     }
 
     std::vector<uint64_t> getDeltas(uint64_t colorId) {
-        //std::cerr << "\n\ngetDeltas:";
-//        std::cerr << colorId << " cnt: " << colorCnt << "\n";
         assert(colorId < colorCnt);
         std::vector<uint64_t> res;
         uint64_t startBit = colorId * slotWidth * slotsPerColorCls; // index for next color
         uint64_t deltaCnt = getValFromMDeltaV(startBit, slotWidth);
         uint64_t mainDSDeltaCnt = deltaCnt < slotsPerColorCls ? deltaCnt : slotsPerColorClsWithPtrs - 1;
-//        std::cerr << "deltaCnt: " << mainDSDeltaCnt <<  "\nstartBits:\n";
-//        std::cerr << "for cnt: " << startBit << "\n";
         startBit += slotWidth;
         for (uint64_t i = 0; i < mainDSDeltaCnt; i++) { // insert values into main DS
             uint64_t delta = getValFromMDeltaV(startBit, slotWidth);
-//            std::cerr << startBit << ":" << delta << "\n";
             res.push_back(delta);
             startBit += slotWidth;
         }
@@ -107,17 +99,18 @@ private:
 
     // width is limited to 64 (word size)
     bool insertValIntoDeltaV(uint64_t startBit, uint64_t val, uint64_t width) {
+        uint64_t localMask = (((uint64_t)1 << width) - 1);
         assert(startBit < deltas.size() * 64);
         uint64_t &wrd = deltas[startBit / 64];
         uint64_t startBitInwrd = startBit % 64;
-        std::cerr << "gstart: " << startBit << " with wrdIdx = " << startBit/64 <<" start = " << startBitInwrd << " curval =" << wrd <<  " val =" << val << " -> ";
+        wrd &= ~(localMask << startBitInwrd);
         wrd |= (val << startBitInwrd);
-        std::cerr << wrd << "\n";
         uint64_t shiftRight = 64 - startBitInwrd;
         if (shiftRight < width) {
             assert(startBit < (deltas.size()-1)*64);
-            wrd = deltas[startBit/64+1];
-            wrd |= (val >> shiftRight);
+            auto &nextWrd = deltas[startBit/64+1];
+            nextWrd &= ~(localMask >> shiftRight);
+            nextWrd |= (val >> shiftRight);
         }
 
         return true;
@@ -151,8 +144,8 @@ private:
             wrd |= (val << startBitInwrd);
             uint64_t shiftRight = 64 - startBitInwrd;
             if (shiftRight < width) {
-                wrd = vecPtr[startBit / 64 + 1];
-                wrd |= (val >> shiftRight);
+                auto &nextWrd = vecPtr[startBit / 64 + 1];
+                nextWrd |= (val >> shiftRight);
             }
             startBit += width;
         }
