@@ -85,28 +85,29 @@ bool ColorEncoder::hasEdge(uint64_t i, uint64_t j) {
 
 int main(int argc, char* argv[]) {
     DeltaManager deltaManager(3000, 10, 6);
+    //DeltaManager deltaManager(20, 10, 6);
     std::vector<uint64_t> d;
-    d.push_back(1100);
-    d.push_back(1200);
-    d.push_back(1300);
+    d.push_back(11);
+    d.push_back(2999);
+    d.push_back(13);
     deltaManager.insertDeltas(0, d);
 
     d.clear();
-    d.push_back(2999);
+    d.push_back(2);
     deltaManager.insertDeltas(1, d);
 
     d.clear();
-    d.push_back(100);
-    d.push_back(200);
-    d.push_back(300);
-    d.push_back(400);
-    d.push_back(500);
-    d.push_back(600);
-    /*d.push_back(700);
-    d.push_back(800);
-    d.push_back(900);
-    d.push_back(1000);
-    d.push_back(1100);*/
+    d.push_back(1);
+    d.push_back(2);
+    d.push_back(3);
+    d.push_back(4);
+    d.push_back(5);
+    d.push_back(6);
+    d.push_back(7);
+    d.push_back(8);
+    d.push_back(9);
+    d.push_back(10);
+    d.push_back(11);
     deltaManager.insertDeltas(2, d);
 
     auto vec = deltaManager.getDeltas(0);

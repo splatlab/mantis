@@ -7,33 +7,45 @@
 
 #include <vector>
 #include <math.h>
-#include <assert.h>
 #include <iostream>
 //#include <bitset>
+#include <math.h>
+#include <exception>
+
+struct DeltaManagerException : public std::exception {
+private:
+    std::string message_;
+public:
+
+    DeltaManagerException(const std::string& message) : message_(message) {}
+    const char * what () const throw () {
+        return message_.c_str();
+    }
+};
+
 class DeltaManager {
 public:
 
-    DeltaManager(uint64_t numSamples,
+    DeltaManager(uint64_t numSamplesIn,
                  uint64_t approximateColorClsCnt,
-                 uint64_t approximateAvgDeltaPerColorCls) {
+                 uint64_t approximateAvgDeltaCntPerColorCls) : numSamples(numSamplesIn) {
         slotWidth = ceil(log2(numSamples));
-        if (slotWidth * numSamples < 64) {
+        if (slotWidth * (numSamples+1) < 64) {
             slotsPerColorCls = numSamples + 1;
-        } else if (slotWidth * approximateAvgDeltaPerColorCls < 64) {
+        } else if (slotWidth * (approximateAvgDeltaCntPerColorCls+1) < 64) {
             slotsPerColorCls = (64 / slotWidth + 1) + 1;
         } else {
-            slotsPerColorCls = approximateAvgDeltaPerColorCls + 1; // 1 for storing count of deltas per index
+            slotsPerColorCls = approximateAvgDeltaCntPerColorCls + 1; // 1 for storing count of deltas per index
         }
         deltas.reserve(approximateColorClsCnt * slotsPerColorCls);
         // assumption: count of slots * their width is greater than 64 bits
         slotsPerColorClsWithPtrs = ((slotsPerColorCls - 1) * slotWidth - 64) / slotWidth + 1;
         colorCnt = 0;
-        mask = (((uint64_t) 1) << slotWidth) - 1;
     }
 
     void insertDeltas(uint64_t colorId, const std::vector<uint64_t> &dlta) {
         // see if we need to split deltas between main DS and heap
-        assert(colorId <= colorCnt);
+        if (colorId > colorCnt) throw DeltaManagerException("colorId > colorCnt");
         auto startBit = colorId*slotsPerColorCls*slotWidth;
         auto nextStartBit = (colorId+1)*slotsPerColorCls*slotWidth;
         // We always want to assign slotsPerColorCls slots to each index
@@ -53,7 +65,7 @@ public:
         }
         if (mainDSDeltaCnt < dlta.size()) { // in case count of deltas exceeds the reserved count
             // store the rest in an array in heap
-            uint64_t *theRest = new uint64_t[(dlta.size() - mainDSDeltaCnt) * slotWidth / 64 + 1];
+            uint64_t *theRest = new uint64_t[(uint64_t)std::ceil((double)((dlta.size() - mainDSDeltaCnt) * slotWidth) / 64.0)]();
             insertValIntoDeltaV(startBit, reinterpret_cast<uint64_t>(theRest),
                                 64); // store the pointer to the heap in the main DS
             insertValIntoHeap(dlta, mainDSDeltaCnt, theRest, slotWidth);
@@ -63,7 +75,7 @@ public:
     }
 
     std::vector<uint64_t> getDeltas(uint64_t colorId) {
-        assert(colorId < colorCnt);
+        if (colorId > colorCnt) throw DeltaManagerException("colorId > colorCnt");
         std::vector<uint64_t> res;
         uint64_t startBit = colorId * slotWidth * slotsPerColorCls; // index for next color
         uint64_t deltaCnt = getValFromMDeltaV(startBit, slotWidth);
@@ -90,26 +102,33 @@ public:
     }
 
 private:
+    uint64_t numSamples;
     uint64_t slotWidth;
     uint64_t slotsPerColorCls;
     uint64_t slotsPerColorClsWithPtrs;
     std::vector<uint64_t> deltas;
     uint64_t colorCnt;
-    uint64_t mask;
 
     // width is limited to 64 (word size)
     bool insertValIntoDeltaV(uint64_t startBit, uint64_t val, uint64_t width) {
-        uint64_t localMask = (((uint64_t)1 << width) - 1);
-        assert(startBit < deltas.size() * 64);
+        uint64_t mask = width < 64? (((uint64_t)1 << width) - 1) : -1;
+        if (startBit >= deltas.size() * 64) throw DeltaManagerException("startBit exceeds bit_size");
+        if (width == slotWidth and val >= numSamples) {
+            std::string msg = "delta index is larger than num_samples. val:"+
+                    std::to_string(val)+
+                              " num_samples:" +std::to_string(numSamples);
+            throw DeltaManagerException(msg);
+        }
+
         uint64_t &wrd = deltas[startBit / 64];
         uint64_t startBitInwrd = startBit % 64;
-        wrd &= ~(localMask << startBitInwrd);
+        wrd &= ~(mask << startBitInwrd);
         wrd |= (val << startBitInwrd);
         uint64_t shiftRight = 64 - startBitInwrd;
         if (shiftRight < width) {
-            assert(startBit < (deltas.size()-1)*64);
+            if (startBit >= (deltas.size() - 1) * 64) throw DeltaManagerException("startBit exceeds bit_size");
             auto &nextWrd = deltas[startBit/64+1];
-            nextWrd &= ~(localMask >> shiftRight);
+            nextWrd &= ~(mask >> shiftRight);
             nextWrd |= (val >> shiftRight);
         }
 
@@ -118,14 +137,16 @@ private:
 
     // width is limited to 64 (word size)
     uint64_t getValFromMDeltaV(uint64_t startBit, uint64_t width) {
-        assert(startBit < deltas.size() * 64);
+        if (startBit >= deltas.size() * 64) throw DeltaManagerException("startBit exceeds bit_size");
+        uint64_t mask = width < 64? (((uint64_t)1 << width) - 1) : -1;
         uint64_t res{0};
         uint64_t wrd = deltas[startBit / 64];
         uint64_t startBitInwrd = startBit % 64;
         res |= (mask & (wrd >> startBitInwrd));
+
         uint64_t shiftLeft = 64 - startBitInwrd;
         if (shiftLeft < width) {
-            assert(startBit < (deltas.size() - 1) * 64);
+            if (startBit >= (deltas.size() - 1) * 64) throw DeltaManagerException("startBit exceeds bit_size");
             wrd = deltas[startBit / 64 + 1];
             res |= (mask & (wrd << shiftLeft));
         }
@@ -139,10 +160,18 @@ private:
         uint64_t startBit{0};
         for (uint64_t i = startIdx; i < dlta.size(); i++) {
             uint64_t val = dlta[i];
+            if (width == slotWidth and val >= numSamples) {
+                std::string msg = "delta index is larger than num_samples. val:"+
+                        std::to_string(val)+
+                                  " num_samples:" +std::to_string(numSamples);
+                throw DeltaManagerException(msg);
+            }
+
             uint64_t &wrd = vecPtr[startBit / 64];
             uint64_t startBitInwrd = startBit % 64;
             wrd |= (val << startBitInwrd);
             uint64_t shiftRight = 64 - startBitInwrd;
+
             if (shiftRight < width) {
                 auto &nextWrd = vecPtr[startBit / 64 + 1];
                 nextWrd |= (val >> shiftRight);
@@ -157,6 +186,7 @@ private:
                         uint64_t *vecPtr,
                         uint64_t width) {
         uint64_t startBit{0};
+        uint64_t mask = width < 64? (((uint64_t)1 << width) - 1) : -1;
         for (uint64_t i = 0; i < cnt; i++) {
             uint64_t res{0};
             uint64_t wrd = vecPtr[startBit / 64];
