@@ -100,7 +100,7 @@ target_link_libraries(walkCqf
 		mantis_core)
 set_property(TARGET walkCqf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-add_executable(colorEncoder ColorEncoder.cc)
+add_executable(colorEncoder colorEncoder.cc)
 target_include_directories(colorEncoder PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(colorEncoder
