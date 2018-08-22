@@ -60,6 +60,8 @@ public:
 
     bool addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_vector &bv);
 
+    bool serialize(std::string prefix);
+
 private:
     uint64_t numSamples;
     uint64_t bvSize;

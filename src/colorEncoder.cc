@@ -44,19 +44,28 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     return false;
 }
 
+bool ColorEncoder::serialize(std::string prefix) {
+    std::string parentbv_file = prefix + "/parent.bv";
+    parentbv.resize(colorClsCnt);
+    bool parentSuccessfullyStored = sdsl::store_to_file(parentbv, parentbv_file);
+    parentbv.resize(0);
+
+    return deltaM.serialize(prefix) and parentSuccessfullyStored;
+}
+
 // deltas should *NOT* be passed by reference
 bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas) { // n2 > n1
-    // If n2 is a new color Id (next color Id)
-    if (n1 == colorClsCnt) {
+    if (n1 > n2) {
         std::swap(n1, n2);
     }
-    if (n2 == colorClsCnt) {
+    while (parentbv.size() < colorClsCnt) {
+        parentbv.resize(parentbv.size()+parentbv.size()/2);
+    }
+    // The only time that we will see the edge zero -> n2 is when n2 is observed for the first time
+    if (n1 == zero) {
         parentbv[n2] = n1;
         deltaM.insertDeltas(n2, deltas);
-        colorClsCnt++;
-        if (parentbv.size() == colorClsCnt) {
-            parentbv.resize(parentbv.size()+parentbv.size()/2);
-        }
+        colorClsCnt = n1+1; // n1 i the index
         return true;
     }
     // find the max weight edge from each of the ends to their lca, called w1, w2

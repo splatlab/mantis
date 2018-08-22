@@ -11,6 +11,7 @@
 //#include <bitset>
 #include <math.h>
 #include <exception>
+#include "sdsl/bit_vectors.hpp"
 
 struct DeltaManagerException : public std::exception {
 private:
@@ -46,22 +47,27 @@ public:
     void insertDeltas(uint64_t colorId, const std::vector<uint64_t> &dlta) {
 
         // see if we need to split deltas between main DS and heap
-        if (colorId > colorCnt) throw DeltaManagerException("colorId > colorCnt");
+        // TODO not an expected behaviour, but we have no choice
+        //if (colorId > colorCnt) throw DeltaManagerException("colorId > colorCnt");
+
         auto startBit = colorId*slotsPerColorCls*slotWidth;
         auto nextStartBit = (colorId+1)*slotsPerColorCls*slotWidth;
         // We always want to assign slotsPerColorCls slots to each index
         // even if deltas in that index are fewer than the avg num of deltas
-        if (colorId == colorCnt) {
+        if (colorId >= colorCnt) {
             while (deltas.size() < nextStartBit/64+1) {
                 deltas.push_back(0);
             }
+            colorCnt = colorId+1;
         } else {
             // take care of deleting the pointer in case of previously creating one here:
             deletePtr(colorId);
         }
+
         // now assuming we've already reserved the space for the new colorId, insert deltas
         uint64_t mainDSDeltaCnt = dlta.size() < slotsPerColorCls ? dlta.size() : slotsPerColorClsWithPtrs - 1;
         insertValIntoDeltaV(startBit, dlta.size(), slotWidth); // insert count of deltas
+        totDeltaCnt += dlta.size();
         startBit += slotWidth;
         for (uint64_t i = 0; i < mainDSDeltaCnt; i++) { // insert values into main DS
             insertValIntoDeltaV(startBit, dlta[i], slotWidth);
@@ -74,8 +80,6 @@ public:
                                 64); // store the pointer to the heap in the main DS
             insertValIntoHeap(dlta, mainDSDeltaCnt, theRest, slotWidth);
         }
-        if (colorId == colorCnt)
-            colorCnt++;
     }
 
     std::vector<uint64_t> getDeltas(uint64_t colorId) {
@@ -105,6 +109,27 @@ public:
         insertDeltas(colorId2, c1deltas);
     }
 
+    bool serialize(std::string prefix) {
+        std::string deltabv_file = prefix + "/delta.bv";
+        std::string boundarybv_file = prefix + "/boundary.bv";
+
+        sdsl::int_vector<> deltabv(totDeltaCnt, 0, slotWidth);
+        sdsl::bit_vector boundarybv(totDeltaCnt, 0);
+        uint64_t j = 0;
+        for (uint64_t i = 0; i < colorCnt; i++) {
+            auto dltas = getDeltas(i);
+            for (auto dlt : dltas) {
+                deltabv[j] = dlt;
+                j++;
+            }
+            boundarybv[j-1] = 1;
+        }
+        bool deltabvSuccessfullyStored = sdsl::store_to_file(deltabv, deltabv_file);
+        bool boundarybvSuccessfullyStored = sdsl::store_to_file(boundarybv, boundarybv_file);
+
+        return deltabvSuccessfullyStored and boundarybvSuccessfullyStored;
+    }
+
 private:
     uint64_t numSamples;
     uint64_t slotWidth;
@@ -112,10 +137,12 @@ private:
     uint64_t slotsPerColorClsWithPtrs;
     std::vector<uint64_t> deltas;
     uint64_t colorCnt;
+    uint64_t totDeltaCnt{0};
 
     void deletePtr(uint64_t colorId) {
         uint64_t startBit = colorId * slotWidth * slotsPerColorCls; // index for next color
-        uint64_t deltaCnt = getValFromMDeltaV(startBit, slotWidth);
+        uint64_t deltaCnt = getValFromMDeltaV(startBit, slotWidth); // get num of deltas in this slot
+        totDeltaCnt -= deltaCnt;
         uint64_t mainDSDeltaCnt = deltaCnt < slotsPerColorCls ? deltaCnt : slotsPerColorClsWithPtrs - 1;
         if (mainDSDeltaCnt < deltaCnt) { // in case count of deltas exceeds the reserved count
             // fetch the pointer to the heap in the main DS and DELETE it
