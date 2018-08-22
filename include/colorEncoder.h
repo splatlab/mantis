@@ -40,7 +40,8 @@ public:
             bvSize(approximateClrClsesIn),
             parentbv(bvSize, 0, log2((double)bvSize)+5),//TODO take care of this constant!!
             deltaM(numSamplesIn, bvSize, approximateDeltaCntPerClrCls),
-            colorClsCnt(0) {}
+            colorClsCnt(1) // start with the dummy node
+            {}
 
 
     bool addColorClass(uint64_t kmer, uint64_t eqId, const std::vector<uint32_t> bv);

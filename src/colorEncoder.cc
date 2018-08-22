@@ -4,6 +4,8 @@
 
 #include "colorEncoder.h"
 #include <iostream>
+#include <iterator>
+#include <algorithm>
 
 bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const std::vector<uint32_t> bv) {
     // create list of edges to be processed
@@ -42,7 +44,7 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const std::vector
 // deltas should *NOT* be passed by reference
 bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas) { // n2 > n1
     // If n2 is a new color Id (next color Id)
-    if (n2 == colorClsCnt + 1) {
+    if (n2 == colorClsCnt) {
         parentbv[n2] = n1;
         deltaM.insertDeltas(n2, deltas);
         colorClsCnt++;
@@ -81,7 +83,13 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     return true;
 }
 
+// returns list of set bits
 std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
+    std::vector<uint64_t> eq;
+    if (eqid == zero) { // if dummy node, return an empty list (no set bits)
+        return eq;
+    }
+
     std::vector<uint32_t> flips(numSamples);
     std::vector<uint32_t> xorflips(numSamples, 0);
 /*
@@ -130,7 +138,6 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
 */
 
     // return the indices of set bits
-    std::vector<uint64_t> eq;
     uint64_t numWrds = numSamples/64+1;
     eq.reserve(numWrds);
     uint64_t one = 1;
@@ -144,8 +151,33 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
 
 std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
     std::vector<uint64_t> res{0};
-    // If i is the dummy node zero
-    // ow
+    auto n1 = buildColor(i);
+    auto n2 = buildColor(j);
+    // merge
+    // with slight difference of not inserting values that appear in both vectors
+    uint64_t i1{0}, i2{0};
+    while (i1 < n1.size() or i2 < n2.size()) {
+        if (i1 == n1.size()) {
+            copy(n2.begin()+i2, n2.end(), back_inserter(res));
+            i2 = n2.size();
+        }
+        else if (i2 == n2.size()) {
+            copy(n1.begin()+i1, n1.end(), back_inserter(res));
+            i1 = n1.size();
+        }
+        else {
+            if (n1[i1] < n2[i2]) {
+                res.push_back(n1[i1]);
+                i1++;
+            } else if (n2[i2] < n1[i1]) {
+                res.push_back(n2[i2]);
+                i2++;
+            } else { //n1[i1] == n2[i2] both have a set bit at the same index
+                i1++;
+                i2++;
+            }
+        }
+    }
     return res;
 }
 
