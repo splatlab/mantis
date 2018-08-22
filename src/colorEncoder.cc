@@ -86,17 +86,20 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
 // returns list of set bits
 std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     std::vector<uint64_t> eq;
-    if (eqid == zero) { // if dummy node, return an empty list (no set bits)
+    if (eqid == zero) { // if dummy node "zero", return an empty list (no set bits)
         return eq;
     }
+    uint64_t numWrds = numSamples/64+1;
+    eq.reserve(numWrds);
 
     std::vector<uint32_t> flips(numSamples);
     std::vector<uint32_t> xorflips(numSamples, 0);
-/*
-    uint64_t i{eqid}, from{0}, to{0};
+    uint64_t i{eqid};
+    std::vector<uint64_t> deltaIndices;
+    deltaIndices.reserve(numWrds);
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
-    while (iparent != i) {
+    while (i != zero) {
         if (lru_cache.contains(i)) {
             const auto &vs = lru_cache[i];
             for (auto v : vs) {
@@ -105,41 +108,20 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
             foundCache = true;
             break;
         }
-        from = (i > 0) ? (sbbv(i) + 1) : 0;
-        froms.push_back(from);
-
+        deltaIndices.push_back(i);
         i = iparent;
         iparent = parentbv[i];
     }
-    if (!foundCache and i != zero) {
-        from = (i > 0) ? (sbbv(i) + 1) : 0;
-        froms.push_back(from);
-    }
 
     uint64_t pctr{0};
-    for (auto f : froms) {
-        bool found = false;
-        uint64_t wrd{0};
-        //auto j = f;
-        uint64_t offset{0};
-        auto start = f;
-        do {
-            wrd = bbv.get_int(start, 64);
-            for (uint64_t j = 0; j < 64; j++) {
-                flips[deltabv[start + j]] ^= 0x01;
-                if ((wrd >> j) & 0x01) {
-                    found = true;
-                    break;
-                }
-            }
-            start += 64;
-        } while (!found);
+    for (auto index : deltaIndices) {
+        auto deltas = deltaM.getDeltas(index);
+        for (auto d : deltas) {
+            flips[d] ^= 0x01;
+        }
     }
-*/
 
     // return the indices of set bits
-    uint64_t numWrds = numSamples/64+1;
-    eq.reserve(numWrds);
     uint64_t one = 1;
     for (auto i = 0; i < numSamples; i++) {
         if (flips[i] ^ xorflips[i]) {
