@@ -10,7 +10,9 @@ add_library(mantis_core STATIC
   validatemantis.cc
   coloreddbg.cc
   MantisFS.cc
-  cqf/gqf.c)
+  cqf/gqf.c
+  colorEncoder.cc
+		canonKmer.cc)
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
 set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")
@@ -99,13 +101,6 @@ target_include_directories(walkCqf PUBLIC
 target_link_libraries(walkCqf
 		mantis_core)
 set_property(TARGET walkCqf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
-
-add_executable(colorEncoder colorEncoder.cc)
-target_include_directories(colorEncoder PUBLIC
-		$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_link_libraries(colorEncoder
-		mantis_core)
-set_property(TARGET colorEncoder PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 #add_executable(walkEqcls walkEqcls.cc)
 #target_include_directories(walkEqcls PUBLIC

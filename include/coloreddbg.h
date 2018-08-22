@@ -35,6 +35,7 @@
 #include "hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
+#include "colorEncoder.h"
 
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
@@ -87,7 +88,7 @@ class ColoredDbg {
 	private:
     // returns true if adding this k-mer increased the number of equivalence classes
     // and false otherwise.
-		bool add_kmer(const typename key_obj::kmer_t& hash, const BitVector& vector);
+		bool add_kmer(const typename key_obj::kmer_t& hash, const BitVector& vector, bool isSampling);
 		void add_bitvector(const BitVector& vector, uint64_t eq_id);
 		void add_eq_class(BitVector vector, uint64_t id);
 		uint64_t get_next_available_id(void);
@@ -106,8 +107,9 @@ class ColoredDbg {
 		uint64_t num_serializations;
 		bool flush_eqclass_dis{false};
 
-    std::time_t start_time_;
+    	std::time_t start_time_;
 		spdlog::logger* console;
+		ColorEncoder* colorEncoder;
 };
 
 template <class T>
@@ -195,8 +197,9 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 }
 
 template <class qf_obj, class key_obj>
-bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, const BitVector&
-																					 vector) {
+bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key,
+										   const BitVector& vector,
+											bool isSampling) {
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	uint64_t eq_id;
@@ -205,7 +208,29 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, 
 																								 2038074751);
 
 	auto it = eqclass_map.find(vec_hash);
-  bool added_eq_class{false};
+	bool added_eq_class{false};
+	// Find if the eqclass of the kmer is already there.
+	// If it is there then increment the abundance.
+	// Else create a new eq class.
+	if (it == eqclass_map.end()) {
+		// eq class is seen for the first time.
+		eq_id = get_next_available_id();
+		eqclass_map.emplace(std::piecewise_construct,
+							std::forward_as_tuple(vec_hash),
+							std::forward_as_tuple(eq_id, 1));
+		added_eq_class = true;
+	} else { // eq class is seen before so increment the abundance.
+		eq_id = it->second.first;
+		// with standard map
+		it->second.second += 1; // update the abundance.
+	}
+
+	if (!isSampling) {
+		colorEncoder->addColorClass(key, eq_id, vector);
+	}
+
+/*	auto it = eqclass_map.find(vec_hash);
+  	bool added_eq_class{false};
 	// Find if the eqclass of the kmer is already there.
 	// If it is there then increment the abundance.
 	// Else create a new eq class.
@@ -216,15 +241,15 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key, 
 															std::forward_as_tuple(vec_hash),
 															std::forward_as_tuple(eq_id, 1));
 		add_bitvector(vector, eq_id - 1);
-    added_eq_class = true;
+    	added_eq_class = true;
 	} else { // eq class is seen before so increment the abundance.
 		eq_id = it->second.first;
-    // with standard map
-    it->second.second += 1; // update the abundance.
-	}
+    	// with standard map
+    	it->second.second += 1; // update the abundance.
+	}*/
 
 	dbg.insert(KeyObject(key,0,eq_id)); // we use the count to store the eqclass ids
-  return added_eq_class;
+  	return added_eq_class;
 }
 
 template <class qf_obj, class key_obj>
@@ -380,7 +405,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			minheap.replace_top(cur);
 		} while(!minheap.empty() && last_key == minheap.top().key());
 
-		bool added_eq_class = add_kmer(last_key, eq_class);
+		bool added_eq_class = add_kmer(last_key, eq_class, is_sampling);
 		++counter;
 
 		// Progress tracker
@@ -461,6 +486,8 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 		num_samples++;
 	}
 	sampleid.close();
+
+	colorEncoder = new ColorEncoder(num_samples, dbg, num_samples*100000, ceil(log2(num_samples))-3);
 }
 
 #endif

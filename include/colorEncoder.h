@@ -9,12 +9,13 @@
 #include <unordered_set>
 #include "lru/lru.hpp"
 #include "deltaManager.h"
-#include "bitvector.h"
+#include "sdsl/bit_vectors.hpp"
 #include "cqf.h"
 #include "canonKmer.h"
+#include "hashutil.h"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
-typedef std::pair<dna::canonical_kmer, uint64_t> node;
+typedef std::pair<duplicated_dna::canonical_kmer, uint64_t> node;
 constexpr uint64_t zero = 0;
 
 struct Edge {
@@ -43,6 +44,7 @@ struct pair_hash {
 
 class ColorEncoder {
 public:
+
     ColorEncoder(uint64_t numSamplesIn,
                  CQF<KeyObject> &cqfIn,
                  uint64_t approximateClrClsesIn,
@@ -56,7 +58,7 @@ public:
             {}
 
 
-    bool addColorClass(uint64_t kmer, uint64_t eqId, const std::vector<uint32_t> bv);
+    bool addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_vector &bv);
 
 private:
     uint64_t numSamples;
@@ -71,13 +73,15 @@ private:
 
     std::vector<uint64_t> buildColor(uint64_t eqid);
 
+    std::vector<uint64_t> buildColor(const sdsl::bit_vector &bv);
+
     bool updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas);
 
     std::vector<uint64_t> hammingDist(uint64_t i, uint64_t j);
 
-    std::unordered_set<uint64_t> neighbors(dna::canonical_kmer n);
+    std::unordered_set<uint64_t> neighbors(duplicated_dna::canonical_kmer n);
 
-    bool exists(dna::canonical_kmer e, uint64_t &eqid);
+    bool exists(duplicated_dna::canonical_kmer e, uint64_t &eqid);
 
     std::pair<Edge, Edge> maxWeightsTillLCA(uint64_t n1, uint64_t n2);
 

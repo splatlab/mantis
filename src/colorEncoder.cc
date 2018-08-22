@@ -7,15 +7,22 @@
 #include <iterator>
 #include <algorithm>
 
-bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const std::vector<uint32_t> bv) {
+bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_vector &bv) {
     // create list of edges to be processed
-    // 1. list of neighbors
-    // 2. zero to node
+    // 1. zero to node
+    // 2. list of neighbors
     // calc. the distance between the node and any of the neighbors
     // that exist and the edge hasn't been seen
-    dna::canonical_kmer cur(k, kmer);
+    duplicated_dna::canonical_kmer cur(k, kmer);
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
-    // case 1. edges between the node and its neighbors
+    // case 1. edge from zero to the node
+    if (!hasEdge(zero, eqId)) {
+        auto deltas = buildColor(bv);
+        updateMST(zero, eqId, deltas);
+        addEdge(zero, eqId, deltas.size());
+    }
+
+    // case 2. edges between the node and its neighbors
     for (auto nei_eqId : neighbors(cur)) {
         uint64_t cur_eqId{eqId};
         if (nei_eqId != cur_eqId) {
@@ -26,10 +33,6 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const std::vector
                 newEdges.insert(std::make_pair(cur_eqId, nei_eqId));
             }
         }
-    }
-    // case 2. edge from zero to the node
-    if (!hasEdge(zero, eqId)) {
-        newEdges.insert(std::make_pair(zero, eqId));
     }
     for (auto &newEdge : newEdges) {
         auto deltas = hammingDist(newEdge.first, newEdge.second);
@@ -44,6 +47,9 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const std::vector
 // deltas should *NOT* be passed by reference
 bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas) { // n2 > n1
     // If n2 is a new color Id (next color Id)
+    if (n1 == colorClsCnt) {
+        std::swap(n1, n2);
+    }
     if (n2 == colorClsCnt) {
         parentbv[n2] = n1;
         deltaM.insertDeltas(n2, deltas);
@@ -81,7 +87,7 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
         auto prevDeltas = deltaM.getDeltas(child);
         deltaM.insertDeltas(child, deltas);
         deltas = prevDeltas;
-        parent = n2;
+        parent = child;
         child = tmp;
     }
     return true;
@@ -133,6 +139,22 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
         }
     }
     return eq;
+}
+
+std::vector<uint64_t> ColorEncoder::buildColor(const sdsl::bit_vector &bv) {
+    std::vector<uint64_t> setBits;
+    setBits.reserve(numSamples);
+    uint64_t i = 0;
+    while (i < bv.bit_size()) {
+        auto wrd = bv.get_int(i, 64);
+        for (uint64_t c=0; c < 64; c++) {
+            if ( (wrd >> c) & 0x01) {
+                setBits.push_back(i+c);
+            }
+        }
+        i+=64;
+    }
+    return setBits;
 }
 
 std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
@@ -222,9 +244,9 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
     return std::make_pair(e1, e2);
 }
 
-std::unordered_set<uint64_t> ColorEncoder::neighbors(dna::canonical_kmer n) {
+std::unordered_set<uint64_t> ColorEncoder::neighbors(duplicated_dna::canonical_kmer n) {
     std::unordered_set<uint64_t > result;
-    for (const auto b : dna::bases) {
+    for (const auto b : duplicated_dna::bases) {
         uint64_t eqid, idx;
         if (exists(b >> n, eqid))
             result.insert(eqid);
@@ -234,7 +256,7 @@ std::unordered_set<uint64_t> ColorEncoder::neighbors(dna::canonical_kmer n) {
     return result;
 }
 
-bool ColorEncoder::exists(dna::canonical_kmer e, uint64_t &eqid) {
+bool ColorEncoder::exists(duplicated_dna::canonical_kmer e, uint64_t &eqid) {
     uint64_t tmp = e.val;
     KeyObject key(HashUtil::hash_64(tmp, BITMASK(cqf.keybits())), 0, 0);
     auto eq_idx = cqf.query(key);
@@ -271,8 +293,4 @@ uint32_t ColorEncoder::getEdge(uint64_t i, uint64_t j) {
         std::swap(i, j);
     }
     return edges[std::make_pair(i, j)];
-}
-
-int main(int argc, char* argv[]) {
-
 }
