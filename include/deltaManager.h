@@ -44,6 +44,7 @@ public:
     }
 
     void insertDeltas(uint64_t colorId, const std::vector<uint64_t> &dlta) {
+
         // see if we need to split deltas between main DS and heap
         if (colorId > colorCnt) throw DeltaManagerException("colorId > colorCnt");
         auto startBit = colorId*slotsPerColorCls*slotWidth;
@@ -54,6 +55,9 @@ public:
             while (deltas.size() < nextStartBit/64+1) {
                 deltas.push_back(0);
             }
+        } else {
+            // take care of deleting the pointer in case of previously creating one here:
+            deletePtr(colorId);
         }
         // now assuming we've already reserved the space for the new colorId, insert deltas
         uint64_t mainDSDeltaCnt = dlta.size() < slotsPerColorCls ? dlta.size() : slotsPerColorClsWithPtrs - 1;
@@ -109,6 +113,17 @@ private:
     std::vector<uint64_t> deltas;
     uint64_t colorCnt;
 
+    void deletePtr(uint64_t colorId) {
+        uint64_t startBit = colorId * slotWidth * slotsPerColorCls; // index for next color
+        uint64_t deltaCnt = getValFromMDeltaV(startBit, slotWidth);
+        uint64_t mainDSDeltaCnt = deltaCnt < slotsPerColorCls ? deltaCnt : slotsPerColorClsWithPtrs - 1;
+        if (mainDSDeltaCnt < deltaCnt) { // in case count of deltas exceeds the reserved count
+            // fetch the pointer to the heap in the main DS and DELETE it
+            startBit += slotWidth * (mainDSDeltaCnt + 1);
+            uint64_t *theRestV = reinterpret_cast<uint64_t *>(getValFromMDeltaV(startBit, 64));
+            delete theRestV;
+        }
+    }
     // width is limited to 64 (word size)
     bool insertValIntoDeltaV(uint64_t startBit, uint64_t val, uint64_t width) {
         uint64_t mask = width < 64? (((uint64_t)1 << width) - 1) : -1;
