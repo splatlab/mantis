@@ -56,7 +56,11 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     // find the max weight edge from each of the ends to their lca, called w1, w2
     uint64_t w1, w2, p1, p2;
     uint64_t w = deltas.size();
-    maxWeightsTillLCA(n1, n2, w1, w2, p1, p2);
+    std::pair<Edge, Edge> lr = maxWeightsTillLCA(n1, n2);
+    w1 = lr.first.weight;
+    w2 = lr.second.weight;
+    p1 = lr.first.parent;
+    p2 = lr.second.parent;
     // if w >= w1 and w >= w2, happily do nothing
     if (w >= w1 and w >= w2)
         return false;
@@ -163,9 +167,59 @@ std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
     return res;
 }
 
-void ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2,
-                                     uint64_t &w1, uint64_t &w2,
-                                     uint64_t &p1, uint64_t &p2) {
+//TODO we definitely need to discuss this. This function in its current way is super inefficient
+// time/space tradeoff
+std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) {
+    std::vector<uint64_t> nodes1;
+    std::vector<uint64_t> nodes2;
+    auto n = n1;
+    while (n != zero) {
+        nodes1.push_back(n);
+        n = parentbv[n];
+    }
+    n = n2;
+    while (n != zero) {
+        nodes2.push_back(n);
+        n = parentbv[n];
+    }
+
+    auto &n1ref = nodes1;
+    auto &n2ref = nodes2;
+    if (n1ref.size() < n2ref.size()) {
+        std::swap(n1ref, n2ref);
+    }
+
+    // find lca
+    uint64_t lca = 0;
+    for (uint64_t j = 0, i = n1ref.size()-n2ref.size(); j < n2ref.size(); i++, j++) {
+        if (n1ref[i] == n2ref[j]) {
+            lca = n1ref[i];
+            break;
+        }
+    }
+
+    // walk from n1 to lca and find the edge with maximum weight
+    Edge e1;
+    uint64_t i = 0;
+    while (n1ref[i] != lca) {
+        auto curW = getEdge(n1ref[i], n1ref[i+1]);
+        if (e1.weight < curW) {
+            e1 = Edge(n1ref[i+1], n1ref[i], curW);
+        }
+        i++;
+    }
+
+    // walk from n2 to lca and find the edge with maximum weight
+    Edge e2;
+    i = 0;
+    while (n2ref[i] != lca) {
+        auto curW = getEdge(n2ref[i], n2ref[i+1]);
+        if (e2.weight < curW) {
+            e2 = Edge(n2ref[i+1], n2ref[i], curW);
+        }
+        i++;
+    }
+    return std::make_pair(e1, e2);
 }
 
 std::unordered_set<uint64_t> ColorEncoder::neighbors(dna::canonical_kmer n) {
@@ -210,6 +264,13 @@ bool ColorEncoder::hasEdge(uint64_t i, uint64_t j) {
         std::swap(i, j);
     }
     return i == j or edges.find(std::make_pair(i, j)) != edges.end();
+}
+
+uint32_t ColorEncoder::getEdge(uint64_t i, uint64_t j) {
+    if (i > j) {
+        std::swap(i, j);
+    }
+    return edges[std::make_pair(i, j)];
 }
 
 int main(int argc, char* argv[]) {

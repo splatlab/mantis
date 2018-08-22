@@ -17,6 +17,18 @@ using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 typedef std::pair<dna::canonical_kmer, uint64_t> node;
 constexpr uint64_t zero = 0;
 
+struct Edge {
+    uint64_t parent;
+    uint64_t child;
+    uint64_t weight;
+
+    Edge() {
+        parent = 0; child = 0; weight = 0;
+    }
+    Edge(uint64_t inParent, uint64_t inChild, uint64_t inWeight) :
+            parent(inParent), child(inChild), weight(inWeight) {}
+};
+
 struct pair_hash {
     template<class T1, class T2>
     std::size_t operator()(const std::pair<T1, T2> &p) const {
@@ -57,10 +69,6 @@ private:
     std::unordered_map<std::pair<uint64_t, uint64_t>, uint32_t, pair_hash> edges;
     LRU::Cache<uint64_t, std::vector<uint64_t>> lru_cache;
 
-    void addEdge(uint64_t i, uint64_t j, uint32_t w);
-
-    bool hasEdge(uint64_t i, uint64_t j);
-
     std::vector<uint64_t> buildColor(uint64_t eqid);
 
     bool updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas);
@@ -71,9 +79,13 @@ private:
 
     bool exists(dna::canonical_kmer e, uint64_t &eqid);
 
-    void maxWeightsTillLCA(uint64_t n1, uint64_t n2,
-                           uint64_t &w1, uint64_t &w2,
-                           uint64_t &p1, uint64_t &p2);
+    std::pair<Edge, Edge> maxWeightsTillLCA(uint64_t n1, uint64_t n2);
+
+    void addEdge(uint64_t i, uint64_t j, uint32_t w);
+
+    bool hasEdge(uint64_t i, uint64_t j);
+
+    uint32_t getEdge(uint64_t i, uint64_t j);
 };
 
 #endif //MANTIS_COLORENCODER_H
