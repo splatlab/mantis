@@ -17,7 +17,7 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
     // case 1. edge from zero to the node
     if (!hasEdge(zero, eqId)) {
-        std::cerr << "case1: " << eqId << " " << colorClsCnt << "\n";
+        //std::cerr << "case1: " << eqId << " " << colorClsCnt << "\n";
         auto deltas = buildColor(bv);
         updateMST(zero, eqId, deltas);
         addEdge(zero, eqId, deltas.size());
@@ -39,7 +39,7 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     for (auto &newEdge : newEdges) {
         auto deltas = hammingDist(newEdge.first, newEdge.second);
         if (updateMST(newEdge.first, newEdge.second, deltas)) {
-            std::cerr << "case2 " << eqId << " " << colorClsCnt << "\n";
+            //std::cerr << "case2 " << eqId << " " << colorClsCnt << "\n";
         }
         addEdge(newEdge.first, newEdge.second, deltas.size());
     }
@@ -75,7 +75,8 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
         std::cerr << "\n";
         std::cerr << "insertDeltas 1\n";*/
         deltaM.insertDeltas(n2, deltas);
-        colorClsCnt = n1+1; // n1 i the index
+        if (colorClsCnt < n2)
+            colorClsCnt = n2+1; // n2 is the index
         return true;
     }
     // find the max weight edge from each of the ends to their lca, called w1, w2
@@ -100,13 +101,15 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     // starting from node n2 toward the c2, child node of the edge with weight w2
     auto parent = n1;
     auto child = n2;
+    //6 8 0 0 4
     //std::cerr << "here: " << n1 << " " << n2 << " " << parentbv[n2] << " " << p1 << " " << p2 << " ";
     while (child != p2) {
         uint64_t tmp = parentbv[child];
         //std::cerr << " first: " << tmp << " then ";
         parentbv[child] = parent;
         auto prevDeltas = deltaM.getDeltas(child);
-        //std::cerr << "insertDeltas 2 " << parent << "->" << child << " " << tmp << "\n";
+        /*if (n1 == 6 and n2 == 8)
+         std::cerr << parent << "->" << child << " " << tmp << ", ";*/
         deltaM.insertDeltas(child, deltas);
         deltas = prevDeltas;
         parent = child;
@@ -132,7 +135,7 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     deltaIndices.reserve(numWrds);
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
-    std::cerr << "\nwalking mst\n";
+    //std::cerr << "\nwalking mst\n";
     while (i != zero) {
         if (lru_cache.contains(i)) {
             const auto &vs = lru_cache[i];
@@ -142,16 +145,16 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
             foundCache = true;
             break;
         }
-        std::cerr << " " << i;
+        //std::cerr << " " << i;
         deltaIndices.push_back(i);
         i = iparent;
         iparent = parentbv[i];
     }
-    std::cerr << "\n";
+    //std::cerr << "\n";
 
     uint64_t pctr{0};
     for (auto index : deltaIndices) {
-        std::cerr << "getDeltas 1 " << index << "\n";
+        //std::cerr << "getDeltas " << index << "\n";
         auto deltas = deltaM.getDeltas(index);
         for (auto d : deltas) {
             flips[d] ^= 0x01;
@@ -172,7 +175,7 @@ std::vector<uint64_t> ColorEncoder::buildColor(const sdsl::bit_vector &bv) {
     std::vector<uint64_t> setBits;
     setBits.reserve(numSamples);
     uint64_t i = 0;
-    std::cerr << " bv bitsize: " << bv.bit_size() << " ";
+    //std::cerr << " bv bitsize: " << bv.bit_size() << " ";
     while (i < bv.bit_size()) {
         uint64_t bitcnt = numSamples - i >= 64?64:(numSamples - i);
         auto wrd = bv.get_int(i, bitcnt);
@@ -183,11 +186,11 @@ std::vector<uint64_t> ColorEncoder::buildColor(const sdsl::bit_vector &bv) {
         }
         i+=64;
     }
-    std::cerr << " setBits: ";
+    /*std::cerr << " setBits: ";
     for (auto s : setBits) {
         std::cerr << s << " ";
     }
-    std::cerr << "\n";
+    std::cerr << "\n";*/
     return setBits;
 }
 
@@ -236,17 +239,28 @@ std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
 std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) {
     std::vector<uint64_t> nodes1;
     std::vector<uint64_t> nodes2;
-    auto n = n1;
+    uint64_t n = n1;
+//    if (n1 == 6 and n2 == 8)
+//    std::cerr << "1 ";
     while (n != zero) {
+//        if (n1 == 6 and n2 == 8)
+//            std::cerr << n << " ";
         nodes1.push_back(n);
         n = parentbv[n];
     }
+    nodes1.push_back(zero);
+//    if (n1 == 6 and n2 == 8)
+//    std::cerr << "\n2 ";
     n = n2;
     while (n != zero) {
+//        if (n1 == 6 and n2 == 8)
+//            std::cerr << n << " ";
         nodes2.push_back(n);
         n = parentbv[n];
     }
-
+    nodes2.push_back(zero);
+//    if (n1 == 6 and n2 == 8)
+//    std::cerr << "\n3 lca=";
     auto &n1ref = nodes1;
     auto &n2ref = nodes2;
     if (n1ref.size() < n2ref.size()) {
@@ -258,6 +272,8 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
     for (uint64_t j = 0, i = n1ref.size()-n2ref.size(); j < n2ref.size(); i++, j++) {
         if (n1ref[i] == n2ref[j]) {
             lca = n1ref[i];
+//            if (n1 == 6 and n2 == 8)
+//            std::cerr << lca;
             break;
         }
     }
@@ -265,9 +281,13 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
     // walk from n1 to lca and find the edge with maximum weight
     Edge e1;
     uint64_t i = 0;
+//    if (n1 == 6 and n2 == 8)
+//    std::cerr << "\n4 ";
     while (n1ref[i] != lca) {
         auto curW = getEdge(n1ref[i], n1ref[i+1]);
         if (e1.weight < curW) {
+//            if (n1 == 6 and n2 == 8)
+//            std::cerr << n1ref[i+1] << " " << n1ref[i] << " " << curW << "\n";
             e1 = Edge(n1ref[i+1], n1ref[i], curW);
         }
         i++;

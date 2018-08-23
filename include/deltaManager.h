@@ -122,6 +122,9 @@ public:
     }
 
     bool serialize(std::string prefix) {
+        std::cerr << "\nSerializing Deltas:\nTotal delta count:" <<
+                  totDeltaCnt << " Total color count:" << colorCnt << "\n";
+
         std::string deltabv_file = prefix + "/delta.bv";
         std::string boundarybv_file = prefix + "/boundary.bv";
 
@@ -129,6 +132,7 @@ public:
         sdsl::bit_vector boundarybv(totDeltaCnt, 0);
         uint64_t j = 0;
         for (uint64_t i = 0; i < colorCnt; i++) {
+            std::cerr << i << " ";
             auto dltas = getDeltas(i);
             for (auto dlt : dltas) {
                 deltabv[j] = dlt;

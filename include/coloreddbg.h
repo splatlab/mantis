@@ -281,14 +281,16 @@ void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serialize() {
-	// serialize the CQF
-	dbg.serialize(prefix + mantis::CQF_FILE);
 
 	//todo fatemeh
-	colorEncoder->serialize(prefix);
 	// serialize the bv buffer last time if needed
 	/*if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 1)
 		bv_buffer_serialize();*/
+	colorEncoder->serialize(prefix);
+
+	// serialize the CQF
+	dbg.serialize(prefix + mantis::CQF_FILE);
+
 
 	//serialize the eq class id map
 	std::ofstream opfile(prefix + mantis::SAMPLEID_FILE);
