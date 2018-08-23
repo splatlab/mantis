@@ -66,7 +66,6 @@ void output_results(mantis::QuerySets& multi_kmers,
   }
 }
 
-
 void output_results_json(mantis::QuerySets& multi_kmers,
 												 ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
 												 cdbg, std::ofstream& opfile) {
