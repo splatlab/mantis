@@ -98,16 +98,18 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     // starting from node n2 toward the c2, child node of the edge with weight w2
     auto parent = n1;
     auto child = n2;
+    std::cerr << "here: " << p2 << " ";
     while (child != p2) {
         auto tmp = parentbv[child];
         parentbv[child] = parent;
         auto prevDeltas = deltaM.getDeltas(child);
-        std::cerr << "insertDeltas 2\n";
+        std::cerr << "insertDeltas 2 " << parent << "->" << child << " ";
         deltaM.insertDeltas(child, deltas);
         deltas = prevDeltas;
         parent = child;
         child = tmp;
     }
+    std::cerr << "\n";
     return true;
 }
 
@@ -284,7 +286,7 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
 std::unordered_set<uint64_t> ColorEncoder::neighbors(duplicated_dna::canonical_kmer n) {
     std::unordered_set<uint64_t > result;
     for (const auto b : duplicated_dna::bases) {
-        uint64_t eqid, idx;
+        uint64_t eqid{0}, idx;
         if (exists(b >> n, eqid)) {
             std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
             result.insert(eqid);
@@ -300,8 +302,8 @@ std::unordered_set<uint64_t> ColorEncoder::neighbors(duplicated_dna::canonical_k
 bool ColorEncoder::exists(duplicated_dna::canonical_kmer e, uint64_t &eqid) {
     uint64_t tmp = e.val;
     KeyObject key(HashUtil::hash_64(tmp, BITMASK(cqf.keybits())), 0, 0);
-    auto eq_idx = cqf.query(key);
-    return eq_idx != 0;
+    eqid = cqf.query(key);
+    return eqid != 0;
     // commenting this line, eqIds start from 1 (rather than 0)
 /*
         if (eq_idx) {
