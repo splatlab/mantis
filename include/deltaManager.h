@@ -131,7 +131,8 @@ public:
         sdsl::int_vector<> deltabv(totDeltaCnt, 0, slotWidth);
         sdsl::bit_vector boundarybv(totDeltaCnt, 0);
         uint64_t j = 0;
-        for (uint64_t i = 0; i < colorCnt; i++) {
+        boundarybvbv[0] = 1; // TODO careful to add an if in case we're gonna change zero to something other than 0
+        for (uint64_t i = 1; i < colorCnt; i++) {
             std::cerr << i << " ";
             auto dltas = getDeltas(i);
             for (auto dlt : dltas) {

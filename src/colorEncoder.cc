@@ -15,12 +15,17 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     // that exist and the edge hasn't been seen
     duplicated_dna::canonical_kmer cur(k, HashUtil::hash_64i(kmer, BITMASK(cqf.keybits())));
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
+
+    std::vector<uint64_t> setBits;
+    if (!lru_cache.contains(eqId)) {
+        setBits = buildColor(bv);
+        lru_cache.emplace(eqId, setBits);
+    }
     // case 1. edge from zero to the node
     if (!hasEdge(zero, eqId)) {
         //std::cerr << "case1: " << eqId << " " << colorClsCnt << "\n";
-        auto deltas = buildColor(bv);
-        updateMST(zero, eqId, deltas);
-        addEdge(zero, eqId, deltas.size());
+        updateMST(zero, eqId, setBits);
+        addEdge(zero, eqId, setBits.size());
     }
 
     // case 2. edges between the node and its neighbors

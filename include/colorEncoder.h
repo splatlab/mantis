@@ -54,7 +54,8 @@ public:
             bvSize(approximateClrClsesIn),
             parentbv(bvSize, 0, log2((double)bvSize)+5),//TODO take care of this constant!!
             deltaM(numSamplesIn, bvSize, approximateDeltaCntPerClrCls),
-            colorClsCnt(1) // start with the dummy node
+            colorClsCnt(1), // start with the dummy node
+            lru_cache(100000)
             {
                 std::cerr << "\nColorEncoder Constructor:  bvSize: "
                              << bvSize << " parent size: " << parentbv.size()
@@ -75,7 +76,7 @@ private:
     CQF<KeyObject> &cqf;
     int k = 20;
     std::unordered_map<std::pair<uint64_t, uint64_t>, uint32_t, pair_hash> edges;
-    LRU::Cache<uint64_t, std::vector<uint64_t>> lru_cache;
+    LRUCacheMap lru_cache;
 
     std::vector<uint64_t> buildColor(uint64_t eqid);
 
