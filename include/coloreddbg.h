@@ -218,7 +218,7 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 	}
 
 	// we use the count to store the eqclass ids
-	int ret = dbg.insert(KeyObject(key,0,eq_id), QF_KEY_IS_HASH);
+	int ret = dbg.insert(KeyObject(key,0,eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
 	if (ret == QF_NO_SPACE) {
 		// This means that auto_resize failed. 
 		console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
@@ -328,7 +328,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		typename key_obj::kmer_t kmer;
 		uint32_t id;
 		Iterator(uint32_t id, const QF* cqf): id(id) {
-			if (qf_iterator_from_position(cqf, &qfi, 0)) get_key();
+			if (qf_iterator_from_position(cqf, &qfi, 0) != QFI_INVALID)
+				get_key();
 		}
 		void next() {
 			qfi_next(&qfi);
