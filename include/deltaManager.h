@@ -66,10 +66,22 @@ public:
 
         // now assuming we've already reserved the space for the new colorId, insert deltas
         uint64_t mainDSDeltaCnt = dlta.size() < slotsPerColorCls ? dlta.size() : slotsPerColorClsWithPtrs - 1;
+        if (dlta.size() > numSamples) {
+            std::string msg = "number of deltas is greater than num_samples. val:"+
+                              std::to_string(dlta.size())+
+                              " num_samples:" +std::to_string(numSamples);
+            throw DeltaManagerException(msg);
+        }
         insertValIntoDeltaV(startBit, dlta.size(), slotWidth); // insert count of deltas
         totDeltaCnt += dlta.size();
         startBit += slotWidth;
         for (uint64_t i = 0; i < mainDSDeltaCnt; i++) { // insert values into main DS
+            if (dlta[i] >= numSamples) {
+                std::string msg = "delta index is larger than num_samples. val:"+
+                                  std::to_string(dlta[i])+
+                                  " num_samples:" +std::to_string(numSamples);
+                throw DeltaManagerException(msg);
+            }
             insertValIntoDeltaV(startBit, dlta[i], slotWidth);
             startBit += slotWidth;
         }
@@ -155,13 +167,6 @@ private:
     bool insertValIntoDeltaV(uint64_t startBit, uint64_t val, uint64_t width) {
         uint64_t mask = width < 64? (((uint64_t)1 << width) - 1) : -1;
         if (startBit >= deltas.size() * 64) throw DeltaManagerException("startBit exceeds bit_size");
-        if (width == slotWidth and val >= numSamples) {
-            std::string msg = "delta index is larger than num_samples. val:"+
-                    std::to_string(val)+
-                              " num_samples:" +std::to_string(numSamples);
-            throw DeltaManagerException(msg);
-        }
-
         uint64_t &wrd = deltas[startBit / 64];
         uint64_t startBitInwrd = startBit % 64;
         wrd &= ~(mask << startBitInwrd);

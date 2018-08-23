@@ -55,7 +55,11 @@ public:
             parentbv(bvSize, 0, log2((double)bvSize)+5),//TODO take care of this constant!!
             deltaM(numSamplesIn, bvSize, approximateDeltaCntPerClrCls),
             colorClsCnt(1) // start with the dummy node
-            {}
+            {
+                std::cerr << "\nColorEncoder Constructor:  bvSize: "
+                             << bvSize << " parent size: " << parentbv.size()
+                          << " colorClsCnt: " << colorClsCnt << "\n";
+            }
 
 
     bool addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_vector &bv);

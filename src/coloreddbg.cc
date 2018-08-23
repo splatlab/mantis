@@ -204,6 +204,7 @@ build_main ( BuildOpts& opt )
 
 	console->info("Constructing the colored dBG.");
 
+	console->info("\n\n\n\n\n\nDONE WITH SAMPLING PHASE\n\n\n\n\n");
 	// Reconstruct the colored dbg using the new set of equivalence classes.
 	cdbg.construct(inobjects.data(), std::numeric_limits<uint64_t>::max());
 

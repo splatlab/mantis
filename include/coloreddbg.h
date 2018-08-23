@@ -184,7 +184,8 @@ template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
 	dbg.reset();
-	reshuffle_bit_vectors(map);
+	//todo fatemeh
+	/*reshuffle_bit_vectors(map);
 	// Check if the current bit vector buffer is full and needs to be serialized.
 	// This happens when the sampling phase fills up the bv buffer.
 	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0) {
@@ -192,7 +193,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 		console->info("Serializing bit vector with {} eq classes.",
 									get_num_eqclasses());
 		bv_buffer_serialize();
-	}
+	}*/
 	eqclass_map = map;
 }
 
@@ -200,6 +201,7 @@ template <class qf_obj, class key_obj>
 bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t& key,
 										   const BitVector& vector,
 											bool isSampling) {
+	//todo fatemeh
 	// A kmer (hash) is seen only once during the merge process.
 	// So we insert every kmer in the dbg
 	uint64_t eq_id;
@@ -282,9 +284,11 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 	// serialize the CQF
 	dbg.serialize(prefix + mantis::CQF_FILE);
 
+	//todo fatemeh
+	colorEncoder->serialize(prefix);
 	// serialize the bv buffer last time if needed
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 1)
-		bv_buffer_serialize();
+	/*if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 1)
+		bv_buffer_serialize();*/
 
 	//serialize the eq class id map
 	std::ofstream opfile(prefix + mantis::SAMPLEID_FILE);
@@ -422,12 +426,14 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			// Check if the process is in the sampling phase.
 			if (is_sampling) {
 				break;
-      } else {
+      }
+      //todo fatemeh
+      /*else {
 				// The bit vector buffer is full.
 				console->info("Serializing bit vector with {} eq classes.",
 											get_num_eqclasses());
 				bv_buffer_serialize();
-			}
+			}*/
 		} else if (counter > num_kmers) {
       // Check if the sampling phase is finished based on the number of k-mers.
 			break;
@@ -452,7 +458,10 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf) :
 	dbg(qbits, key_bits, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
-    prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {}
+    prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
+    colorEncoder = new ColorEncoder(num_samples, dbg, num_samples*100000, ceil(log2(num_samples))-3);
+
+}
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
@@ -487,7 +496,6 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 	}
 	sampleid.close();
 
-	colorEncoder = new ColorEncoder(num_samples, dbg, num_samples*100000, ceil(log2(num_samples))-3);
 }
 
 #endif

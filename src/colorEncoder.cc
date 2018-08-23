@@ -13,10 +13,11 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     // 2. list of neighbors
     // calc. the distance between the node and any of the neighbors
     // that exist and the edge hasn't been seen
-    duplicated_dna::canonical_kmer cur(k, kmer);
+    duplicated_dna::canonical_kmer cur(k, HashUtil::hash_64i(kmer, BITMASK(cqf.keybits())));
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
     // case 1. edge from zero to the node
     if (!hasEdge(zero, eqId)) {
+        std::cerr << "case1: " << eqId << " " << colorClsCnt << " " << parentbv.size() << " ";
         auto deltas = buildColor(bv);
         updateMST(zero, eqId, deltas);
         addEdge(zero, eqId, deltas.size());
@@ -27,13 +28,14 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
         uint64_t cur_eqId{eqId};
         if (nei_eqId != cur_eqId) {
             if (nei_eqId < cur_eqId) {
-                std::swap(nei_eqId, cur_eqId);
+                std::swap(cur_eqId, nei_eqId);
             }
             if (!hasEdge(cur_eqId, nei_eqId)) {
                 newEdges.insert(std::make_pair(cur_eqId, nei_eqId));
             }
         }
     }
+    //std::cerr << "case2 " << eqId << " " << colorClsCnt << " " << newEdges.size() << "\n";
     for (auto &newEdge : newEdges) {
         auto deltas = hammingDist(newEdge.first, newEdge.second);
         updateMST(newEdge.first, newEdge.second, deltas);
@@ -55,6 +57,7 @@ bool ColorEncoder::serialize(std::string prefix) {
 
 // deltas should *NOT* be passed by reference
 bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas) { // n2 > n1
+    std::cerr << "updateMST: n1= " << n1 << " , n2=" << n2 << " ";
     if (n1 > n2) {
         std::swap(n1, n2);
     }
@@ -64,6 +67,11 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     // The only time that we will see the edge zero -> n2 is when n2 is observed for the first time
     if (n1 == zero) {
         parentbv[n2] = n1;
+        for (auto d : deltas) {
+            std::cerr << d << " ";
+        }
+        std::cerr << "\n";
+        std::cerr << "insertDeltas 1\n";
         deltaM.insertDeltas(n2, deltas);
         colorClsCnt = n1+1; // n1 i the index
         return true;
@@ -94,6 +102,7 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
         auto tmp = parentbv[child];
         parentbv[child] = parent;
         auto prevDeltas = deltaM.getDeltas(child);
+        std::cerr << "insertDeltas 2\n";
         deltaM.insertDeltas(child, deltas);
         deltas = prevDeltas;
         parent = child;
@@ -118,6 +127,7 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     deltaIndices.reserve(numWrds);
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
+    std::cerr << "\nwalking mst\n";
     while (i != zero) {
         if (lru_cache.contains(i)) {
             const auto &vs = lru_cache[i];
@@ -127,13 +137,16 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
             foundCache = true;
             break;
         }
+        std::cerr << " " << i;
         deltaIndices.push_back(i);
         i = iparent;
         iparent = parentbv[i];
     }
+    std::cerr << "\n";
 
     uint64_t pctr{0};
     for (auto index : deltaIndices) {
+        std::cerr << "getDeltas 1 " << index << "\n";
         auto deltas = deltaM.getDeltas(index);
         for (auto d : deltas) {
             flips[d] ^= 0x01;
@@ -154,31 +167,42 @@ std::vector<uint64_t> ColorEncoder::buildColor(const sdsl::bit_vector &bv) {
     std::vector<uint64_t> setBits;
     setBits.reserve(numSamples);
     uint64_t i = 0;
+    std::cerr << " bv bitsize: " << bv.bit_size() << " ";
     while (i < bv.bit_size()) {
-        auto wrd = bv.get_int(i, 64);
-        for (uint64_t c=0; c < 64; c++) {
+        uint64_t bitcnt = numSamples - i >= 64?64:(numSamples - i);
+        auto wrd = bv.get_int(i, bitcnt);
+        for (uint64_t c=0; c < bitcnt; c++) {
             if ( (wrd >> c) & 0x01) {
                 setBits.push_back(i+c);
             }
         }
         i+=64;
     }
+    std::cerr << " setBits: ";
+    for (auto s : setBits) {
+        std::cerr << s << " ";
+    }
+    std::cerr << "\n";
     return setBits;
 }
 
 std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
+    std::cerr << "\nhamming dist between " << i << "," << j << "\n";
     std::vector<uint64_t> res{0};
     auto n1 = buildColor(i);
     auto n2 = buildColor(j);
+    std::cerr << " merge, ";
     // merge
     // with slight difference of not inserting values that appear in both vectors
     uint64_t i1{0}, i2{0};
     while (i1 < n1.size() or i2 < n2.size()) {
         if (i1 == n1.size()) {
+            std::cerr << " i1=n1: " << n1.size() << " " << n2.size() << " ";
             copy(n2.begin()+i2, n2.end(), back_inserter(res));
             i2 = n2.size();
         }
         else if (i2 == n2.size()) {
+            std::cerr << " i2=n2: " << n2.size() << " " << n1.size() << " ";
             copy(n1.begin()+i1, n1.end(), back_inserter(res));
             i1 = n1.size();
         }
@@ -195,6 +219,10 @@ std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
             }
         }
     }
+    for (auto r : res) {
+        std::cerr << r << " ";
+    }
+    std::cerr << "\n";
     return res;
 }
 
@@ -257,10 +285,14 @@ std::unordered_set<uint64_t> ColorEncoder::neighbors(duplicated_dna::canonical_k
     std::unordered_set<uint64_t > result;
     for (const auto b : duplicated_dna::bases) {
         uint64_t eqid, idx;
-        if (exists(b >> n, eqid))
+        if (exists(b >> n, eqid)) {
+            std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
             result.insert(eqid);
-        if (exists(n << b, eqid))
+        }
+        if (exists(n << b, eqid)) {
+            std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
             result.insert(eqid);
+        }
     }
     return result;
 }

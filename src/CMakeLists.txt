@@ -66,15 +66,7 @@ endif()
 install(TARGETS mantis
         RUNTIME DESTINATION bin)
 
-#add_executable(monochromatic_component_iterator
-#		monochromatic_component_iterator.cc)
-#target_include_directories(monochromatic_component_iterator PUBLIC
-#  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-#target_link_libraries(monochromatic_component_iterator
-#				mantis_core)
-#set_property(TARGET monochromatic_component_iterator PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
-
-
+#[[
 add_executable(msf MSF.cc)
 target_include_directories(msf PUBLIC
 				  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
@@ -101,6 +93,9 @@ target_include_directories(walkCqf PUBLIC
 target_link_libraries(walkCqf
 		mantis_core)
 set_property(TARGET walkCqf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+]]
+
+
 
 #add_executable(walkEqcls walkEqcls.cc)
 #target_include_directories(walkEqcls PUBLIC
@@ -108,3 +103,12 @@ set_property(TARGET walkCqf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 #find_library(compression_library NAMES SIMDCompressionAndIntersection HINTS "${CMAKE_SOURCE_DIR}/lib")
 #target_link_libraries(walkEqcls
 #				mantis_core ${compression_library})
+
+
+#add_executable(monochromatic_component_iterator
+#		monochromatic_component_iterator.cc)
+#target_include_directories(monochromatic_component_iterator PUBLIC
+#  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+#target_link_libraries(monochromatic_component_iterator
+#				mantis_core)
+#set_property(TARGET monochromatic_component_iterator PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
