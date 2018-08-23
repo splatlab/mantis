@@ -17,7 +17,7 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
     // case 1. edge from zero to the node
     if (!hasEdge(zero, eqId)) {
-        std::cerr << "case1: " << eqId << " " << colorClsCnt << " " << parentbv.size() << " ";
+        std::cerr << "case1: " << eqId << " " << colorClsCnt << "\n";
         auto deltas = buildColor(bv);
         updateMST(zero, eqId, deltas);
         addEdge(zero, eqId, deltas.size());
@@ -38,7 +38,9 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     //std::cerr << "case2 " << eqId << " " << colorClsCnt << " " << newEdges.size() << "\n";
     for (auto &newEdge : newEdges) {
         auto deltas = hammingDist(newEdge.first, newEdge.second);
-        updateMST(newEdge.first, newEdge.second, deltas);
+        if (updateMST(newEdge.first, newEdge.second, deltas)) {
+            std::cerr << "case2 " << eqId << " " << colorClsCnt << "\n";
+        }
         addEdge(newEdge.first, newEdge.second, deltas.size());
     }
     if (newEdges.size())
@@ -57,7 +59,7 @@ bool ColorEncoder::serialize(std::string prefix) {
 
 // deltas should *NOT* be passed by reference
 bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> deltas) { // n2 > n1
-    std::cerr << "updateMST: n1= " << n1 << " , n2=" << n2 << " ";
+    //std::cerr << "updateMST: n1= " << n1 << " , n2=" << n2 << " ";
     if (n1 > n2) {
         std::swap(n1, n2);
     }
@@ -67,11 +69,11 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     // The only time that we will see the edge zero -> n2 is when n2 is observed for the first time
     if (n1 == zero) {
         parentbv[n2] = n1;
-        for (auto d : deltas) {
+        /*for (auto d : deltas) {
             std::cerr << d << " ";
         }
         std::cerr << "\n";
-        std::cerr << "insertDeltas 1\n";
+        std::cerr << "insertDeltas 1\n";*/
         deltaM.insertDeltas(n2, deltas);
         colorClsCnt = n1+1; // n1 i the index
         return true;
@@ -98,18 +100,19 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     // starting from node n2 toward the c2, child node of the edge with weight w2
     auto parent = n1;
     auto child = n2;
-    std::cerr << "here: " << p2 << " ";
+    //std::cerr << "here: " << n1 << " " << n2 << " " << parentbv[n2] << " " << p1 << " " << p2 << " ";
     while (child != p2) {
-        auto tmp = parentbv[child];
+        uint64_t tmp = parentbv[child];
+        //std::cerr << " first: " << tmp << " then ";
         parentbv[child] = parent;
         auto prevDeltas = deltaM.getDeltas(child);
-        std::cerr << "insertDeltas 2 " << parent << "->" << child << " ";
+        //std::cerr << "insertDeltas 2 " << parent << "->" << child << " " << tmp << "\n";
         deltaM.insertDeltas(child, deltas);
         deltas = prevDeltas;
         parent = child;
         child = tmp;
     }
-    std::cerr << "\n";
+    //std::cerr << "\n";
     return true;
 }
 
@@ -189,22 +192,22 @@ std::vector<uint64_t> ColorEncoder::buildColor(const sdsl::bit_vector &bv) {
 }
 
 std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
-    std::cerr << "\nhamming dist between " << i << "," << j << "\n";
+    //std::cerr << "\nhamming dist between " << i << "," << j << "\n";
     std::vector<uint64_t> res{0};
     auto n1 = buildColor(i);
     auto n2 = buildColor(j);
-    std::cerr << " merge, ";
+    //std::cerr << " merge, ";
     // merge
     // with slight difference of not inserting values that appear in both vectors
     uint64_t i1{0}, i2{0};
     while (i1 < n1.size() or i2 < n2.size()) {
         if (i1 == n1.size()) {
-            std::cerr << " i1=n1: " << n1.size() << " " << n2.size() << " ";
+            //std::cerr << " i1=n1: " << n1.size() << " " << n2.size() << " ";
             copy(n2.begin()+i2, n2.end(), back_inserter(res));
             i2 = n2.size();
         }
         else if (i2 == n2.size()) {
-            std::cerr << " i2=n2: " << n2.size() << " " << n1.size() << " ";
+            //std::cerr << " i2=n2: " << n2.size() << " " << n1.size() << " ";
             copy(n1.begin()+i1, n1.end(), back_inserter(res));
             i1 = n1.size();
         }
@@ -221,10 +224,10 @@ std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
             }
         }
     }
-    for (auto r : res) {
+    /*for (auto r : res) {
         std::cerr << r << " ";
     }
-    std::cerr << "\n";
+    std::cerr << "\n";*/
     return res;
 }
 
@@ -288,11 +291,11 @@ std::unordered_set<uint64_t> ColorEncoder::neighbors(duplicated_dna::canonical_k
     for (const auto b : duplicated_dna::bases) {
         uint64_t eqid{0}, idx;
         if (exists(b >> n, eqid)) {
-            std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
+            //std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
             result.insert(eqid);
         }
         if (exists(n << b, eqid)) {
-            std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
+            //std::cerr << std::string(n) << "\n" << std::string(b >> n) << "\n";
             result.insert(eqid);
         }
     }
