@@ -262,7 +262,7 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 	dbg.serialize(prefix + mantis::CQF_FILE);
 
 	// serialize the bv buffer last time if needed
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 1)
+	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
 		bv_buffer_serialize();
 
 	//serialize the eq class id map
