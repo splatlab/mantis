@@ -287,8 +287,9 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 	/*if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 1)
 		bv_buffer_serialize();*/
 	colorEncoder->serialize(prefix);
-
+	console->info("Done serializing the color class info");
 	// serialize the CQF
+	console->info("Serializing the CQF .. ");
 	dbg.serialize(prefix + mantis::CQF_FILE);
 
 

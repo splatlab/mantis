@@ -31,7 +31,6 @@ struct QueryStats {
     uint64_t numSamples{0};
   tsl::hopscotch_map<uint32_t, uint64_t> numOcc;
   bool trySample{false};
-  //std::unordered_map<uint32_t, uint64_t> numOcc;
 };
 
 
@@ -141,7 +140,6 @@ public:
                 toDecode = iparent;
               }
             }
-            //std::cerr << i << "->" << iparent << ", ";
             i = iparent;
             iparent = parentbv[i];
             ++queryStats.totSel;
@@ -154,27 +152,15 @@ public:
            queryStats.rootedNonZero++;
            ++height;
         }
-        // update ranks
-        /*
-        if (rs) {
-          for (size_t idx = 0; idx < froms.size(); ++idx) {
-            (*rs)[(height - idx)][parents[idx]]++;
-          }
-        }
-        */
-        //std::cerr << "\n";
         uint64_t pctr{0};
         for (auto f : froms) {
             bool found = false;
             uint64_t wrd{0};
-            //auto j = f;
             uint64_t offset{0};
             auto start = f;
-            //std::cerr << "\n" << f << "\n";
             do {
               wrd = bbv.get_int(start, 64);
               for (uint64_t j = 0; j < 64; j++) {
-                //std::cerr << deltabv[start+j] << ",";
                 flips[deltabv[start + j]] ^= 0x01;
                 if ((wrd >> j) & 0x01) {
                   found = true;
@@ -183,9 +169,7 @@ public:
               }
               start += 64;
             } while (!found);
-            //std::cerr << " -- ";
         }
-        //std::cerr << "\n";
 
         if (!all) { // return the indices of set bits
             std::vector<uint64_t> eq;
@@ -414,7 +398,6 @@ int main(int argc, char *argv[]) {
             if (newEq != oldEq) {
                 std::cerr << "AAAAA! LOOOSER!!\n";
                 std::cerr << cntr << ": index=" << idx << "\n";
-                //std::cerr << "new size: " << newEq.size() << " old size: " << oldEq.size() << "\n";
                 std::cerr << "n ";
                 for (auto k = 0; k < newEq.size(); k++) {
                     std::cerr << std::bitset<64>(newEq[k]);
@@ -424,13 +407,9 @@ int main(int argc, char *argv[]) {
                     std::cerr << std::bitset<64>(oldEq[k]);
                 }
                 std::cerr << "\n";
-                //std::exit(1);
-            }
-            //std::cerr << "\n";
-            cntr++;
-            /*if (cntr == 20) {
                 std::exit(1);
-            }*/
+            }
+            cntr++;
             if (cntr % 10000000 == 0) {
                 std::cerr << cntr << " eqs were the same\n";
             }
