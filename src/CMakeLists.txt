@@ -66,7 +66,6 @@ endif()
 install(TARGETS mantis
         RUNTIME DESTINATION bin)
 
-#[[
 add_executable(msf MSF.cc)
 target_include_directories(msf PUBLIC
 				  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
@@ -93,7 +92,6 @@ target_include_directories(walkCqf PUBLIC
 target_link_libraries(walkCqf
 		mantis_core)
 set_property(TARGET walkCqf PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
-]]
 
 
 

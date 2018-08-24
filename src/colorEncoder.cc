@@ -54,7 +54,7 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
 }
 
 bool ColorEncoder::serialize(std::string prefix) {
-    std::string parentbv_file = prefix + "/parent.bv";
+    std::string parentbv_file = prefix + "/parents.bv";
     parentbv.resize(colorClsCnt);
     bool parentSuccessfullyStored = sdsl::store_to_file(parentbv, parentbv_file);
     parentbv.resize(0);
@@ -133,7 +133,7 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     uint64_t numWrds = numSamples/64+1;
     eq.reserve(numWrds);
 
-    std::vector<uint32_t> flips(numSamples);
+    std::vector<uint32_t> flips(numSamples, 0);
     std::vector<uint32_t> xorflips(numSamples, 0);
     uint64_t i{eqid};
     std::vector<uint64_t> deltaIndices;
@@ -142,14 +142,14 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     uint32_t iparent = parentbv[i];
     //std::cerr << "\nwalking mst\n";
     while (i != zero) {
-        if (lru_cache.contains(i)) {
+        /*if (lru_cache.contains(i)) {
             const auto &vs = lru_cache[i];
             for (auto v : vs) {
                 xorflips[v] = 1;
             }
             foundCache = true;
             break;
-        }
+        }*/
         //std::cerr << " " << i;
         deltaIndices.push_back(i);
         i = iparent;
@@ -169,6 +169,9 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     // return the indices of set bits
     uint64_t one = 1;
     for (auto i = 0; i < numSamples; i++) {
+        /*if (i == 0 and (flips[i] ^ xorflips[i])) {
+            std::cerr << eqid << " " << flips[i] << " " << xorflips[i] << "\n";
+        }*/
         if (flips[i] ^ xorflips[i]) {
             eq.push_back(i);
         }
@@ -201,17 +204,36 @@ std::vector<uint64_t> ColorEncoder::buildColor(const sdsl::bit_vector &bv) {
 
 std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
     //std::cerr << "\nhamming dist between " << i << "," << j << "\n";
-    std::vector<uint64_t> res{0};
+    std::vector<uint64_t> res;
+    //std::cerr << "\n";
     auto n1 = buildColor(i);
     auto n2 = buildColor(j);
+    /*std::cerr << "\nLook\n";
+    for (auto cc : n1) {
+        std::cerr << cc << " ";
+    }
+    std::cerr << "\n";
+    for (auto cc : n2) {
+        std::cerr << cc << " ";
+    }
+    std::cerr <<"\n";*/
     //std::cerr << " merge, ";
     // merge
     // with slight difference of not inserting values that appear in both vectors
     uint64_t i1{0}, i2{0};
     while (i1 < n1.size() or i2 < n2.size()) {
         if (i1 == n1.size()) {
-            //std::cerr << " i1=n1: " << n1.size() << " " << n2.size() << " ";
+//            std::cerr << " i1=n1: " << i1 << " " << i2 << ", ";
+//            for (auto kk : n2) {
+//                std::cerr << kk << " ";
+//            }
+//            std::cerr <<"\n";
             copy(n2.begin()+i2, n2.end(), back_inserter(res));
+//            std::cerr << res.size() << ", ";
+//            for (auto kk : res) {
+//                std::cerr << kk << " ";
+//            }
+//            std::cerr <<"\n";
             i2 = n2.size();
         }
         else if (i2 == n2.size()) {
@@ -221,21 +243,28 @@ std::vector<uint64_t> ColorEncoder::hammingDist(uint64_t i, uint64_t j) {
         }
         else {
             if (n1[i1] < n2[i2]) {
+                //std::cerr << "pushing n1[i1] " << n1[i1] << ", ";
                 res.push_back(n1[i1]);
                 i1++;
             } else if (n2[i2] < n1[i1]) {
+                //std::cerr << "pushing n2[i2] " << n2[i2] << ", ";
                 res.push_back(n2[i2]);
                 i2++;
             } else { //n1[i1] == n2[i2] both have a set bit at the same index
+                //std::cerr << i1 << " " << i2 << " to ";
                 i1++;
                 i2++;
+                //std::cerr << i1 << " " << i2 << ", ";
             }
         }
     }
     /*for (auto r : res) {
-        std::cerr << r << " ";
-    }
-    std::cerr << "\n";*/
+        if (r == 0) {
+            std::cerr << "haming: " << i << " " << j << " " << n1.size() << " " << n2.size() << "\n";
+            exit(1);
+        }
+    }*/
+    //std::cerr << "\n";
     return res;
 }
 

@@ -16,6 +16,7 @@
 #include "lru/lru.hpp"
 #include "tsl/hopscotch_map.h"
 #include "nonstd/optional.hpp"
+#include <bitset>
 
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
@@ -93,7 +94,7 @@ public:
         sdsl::load_from_file(deltabv, indexDir + "/deltas.bv");
         sdsl::load_from_file(bbv, indexDir + "/boundary.bv");
         sbbv = sdsl::bit_vector::select_1_type(&bbv);
-        zero = parentbv.size() - 1; // maximum color id which
+        zero = 0; //parentbv.size() - 1; // maximum color id which
         std::cerr << "Loaded the new color class index\n";
         std::cerr << "--> parent size: " << parentbv.size() << "\n"
                   << "--> delta size: " << deltabv.size() << "\n"
@@ -105,6 +106,7 @@ public:
                                      RankScores* rs,
                                      nonstd::optional<uint64_t>& toDecode, // output param.  Also decode these
                                      bool all = true) {
+        eqid++;
         (void)rs;
         std::vector<uint32_t> flips(numSamples);
         std::vector<uint32_t> xorflips(numSamples, 0);
@@ -139,6 +141,7 @@ public:
                 toDecode = iparent;
               }
             }
+            //std::cerr << i << "->" << iparent << ", ";
             i = iparent;
             iparent = parentbv[i];
             ++queryStats.totSel;
@@ -159,6 +162,7 @@ public:
           }
         }
         */
+        //std::cerr << "\n";
         uint64_t pctr{0};
         for (auto f : froms) {
             bool found = false;
@@ -166,9 +170,11 @@ public:
             //auto j = f;
             uint64_t offset{0};
             auto start = f;
+            //std::cerr << "\n" << f << "\n";
             do {
               wrd = bbv.get_int(start, 64);
               for (uint64_t j = 0; j < 64; j++) {
+                //std::cerr << deltabv[start+j] << ",";
                 flips[deltabv[start + j]] ^= 0x01;
                 if ((wrd >> j) & 0x01) {
                   found = true;
@@ -177,7 +183,9 @@ public:
               }
               start += 64;
             } while (!found);
+            //std::cerr << " -- ";
         }
+        //std::cerr << "\n";
 
         if (!all) { // return the indices of set bits
             std::vector<uint64_t> eq;
@@ -406,13 +414,23 @@ int main(int argc, char *argv[]) {
             if (newEq != oldEq) {
                 std::cerr << "AAAAA! LOOOSER!!\n";
                 std::cerr << cntr << ": index=" << idx << "\n";
-                std::cerr << "new size: " << newEq.size() << " old size: " << oldEq.size() << "\n";
+                //std::cerr << "new size: " << newEq.size() << " old size: " << oldEq.size() << "\n";
+                std::cerr << "n ";
                 for (auto k = 0; k < newEq.size(); k++) {
-                    std::cerr << newEq[k] << " " << oldEq[k] << "\n";
+                    std::cerr << std::bitset<64>(newEq[k]);
                 }
-                std::exit(1);
+                std::cerr << "\no ";
+                for (auto k = 0; k < oldEq.size(); k++) {
+                    std::cerr << std::bitset<64>(oldEq[k]);
+                }
+                std::cerr << "\n";
+                //std::exit(1);
             }
+            //std::cerr << "\n";
             cntr++;
+            /*if (cntr == 20) {
+                std::exit(1);
+            }*/
             if (cntr % 10000000 == 0) {
                 std::cerr << cntr << " eqs were the same\n";
             }
