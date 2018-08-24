@@ -52,7 +52,7 @@ public:
             numSamples(numSamplesIn),
             cqf(cqfIn),
             bvSize(approximateClrClsesIn),
-            parentbv(bvSize, 0, log2((double)bvSize)+5),//TODO take care of this constant!!
+            parentbv(bvSize, 0, ceil(log2((double)bvSize))),//TODO take care of this constant!!
             deltaM(numSamplesIn, bvSize, approximateDeltaCntPerClrCls),
             colorClsCnt(1), // start with the dummy node
             lru_cache(100000)
@@ -60,6 +60,7 @@ public:
                 std::cerr << "\nColorEncoder Constructor:  bvSize: "
                              << bvSize << " parent size: " << parentbv.size()
                           << " colorClsCnt: " << colorClsCnt << "\n";
+                lru_cache.monitor();
             }
 
 

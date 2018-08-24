@@ -50,9 +50,22 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
 }
 
 bool ColorEncoder::serialize(std::string prefix) {
+    std::cerr << "\n\nCACHE STATS:\n";
+    std::cerr << "total hits: " << lru_cache.stats().total_hits(); // Hits for any key
+    std::cerr << " total misses: " << lru_cache.stats().total_misses(); // Misses for any key
+    std::cerr << " total hit rate: " << lru_cache.stats().hit_rate() << "\n"; // Hit rate in [0, 1]
     std::string parentbv_file = prefix + "/parents.bv";
-    parentbv.resize(colorClsCnt);
+    // resize parentbv if it is larger than required size
+    if (colorClsCnt < parentbv.size()) {
+        uint64_t newSize = colorClsCnt;
+        sdsl::int_vector<> parentTmp(newSize, 0, ceil(log2((double)newSize)));
+        for (uint64_t i = 0; i < newSize; i++) {
+            parentTmp[i] = parentbv[i];
+        }
+        parentbv = parentTmp;
+    }
     bool parentSuccessfullyStored = sdsl::store_to_file(parentbv, parentbv_file);
+    std::cerr << " parentbv final size: " << parentbv.size() << " , bits: " << parentbv.bit_size() << "\n";
     parentbv.resize(0);
 
     return deltaM.serialize(prefix) and parentSuccessfullyStored;
@@ -63,8 +76,14 @@ bool ColorEncoder::updateMST(uint64_t n1, uint64_t n2, std::vector<uint64_t> del
     if (n1 > n2) {
         std::swap(n1, n2);
     }
-    while (parentbv.size() < colorClsCnt) {
-        parentbv.resize(parentbv.size()+parentbv.size()/2);
+    if (parentbv.size() < colorClsCnt) {
+        uint64_t newSize = parentbv.size()+parentbv.size()/2 > colorClsCnt?
+                parentbv.size()+parentbv.size()/2 : colorClsCnt + 1;
+        sdsl::int_vector<> parentTmp(newSize, 0, ceil(log2((double)newSize)));
+        for (uint64_t i = 0; i < parentbv.size(); i++) {
+            parentTmp[i] = parentbv[i];
+        }
+        parentbv = parentTmp;
     }
     // The only time that we will see the edge zero -> n2 is when n2 is observed for the first time
     if (n1 == zero) {
