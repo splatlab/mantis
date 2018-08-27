@@ -44,7 +44,11 @@ struct pair_hash {
 
 class ColorEncoder {
 public:
-
+    struct Stats {
+        uint64_t cache_hits{0};
+        uint64_t tot_hits{0};
+    };
+    Stats stats;
     ColorEncoder(uint64_t numSamplesIn,
                  CQF<KeyObject> &cqfIn,
                  uint64_t approximateClrClsesIn,

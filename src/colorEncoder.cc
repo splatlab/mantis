@@ -17,10 +17,11 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
 
     std::vector<uint64_t> setBits;
+    stats.tot_hits++;
     if (!lru_cache.contains(eqId)) {
         setBits = buildColor(bv);
         lru_cache.emplace(eqId, setBits);
-    }
+    } else stats.cache_hits++;
     // case 1. edge from zero to the node
     if (!hasEdge(zero, eqId)) {
         updateMST(zero, eqId, setBits);
@@ -144,8 +145,10 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
     while (i != zero) {
+        stats.tot_hits++;
         if (lru_cache.contains(i)) {
             const auto &vs = lru_cache[i];
+            stats.cache_hits++;
             for (auto v : vs) {
                 xorflips[v] = 1;
             }
@@ -156,7 +159,6 @@ std::vector<uint64_t> ColorEncoder::buildColor(uint64_t eqid) {
         i = iparent;
         iparent = parentbv[i];
     }
-
     uint64_t pctr{0};
     for (auto index : deltaIndices) {
         auto deltas = deltaM.getDeltas(index);
@@ -314,9 +316,7 @@ void ColorEncoder::addEdge(uint64_t i, uint64_t j, uint32_t w) {
     if (i > j) {
         std::swap(i,j);
     }
-    if (edges.find(std::make_pair(i, j)) == edges.end()) {
-        edges[std::make_pair(i, j)] = w;
-    }
+    edges[std::make_pair(i, j)] = w;
 }
 
 bool ColorEncoder::hasEdge(uint64_t i, uint64_t j) {

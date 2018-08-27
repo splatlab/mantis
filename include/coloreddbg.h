@@ -286,6 +286,10 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 	// serialize the bv buffer last time if needed
 	/*if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 1)
 		bv_buffer_serialize();*/
+	std::cerr << "cache hits: " << colorEncoder->stats.cache_hits << " "
+              << colorEncoder->stats.tot_hits << " "
+              << (colorEncoder->stats.cache_hits*100)/colorEncoder->stats.tot_hits << "%\n";
+
 	colorEncoder->serialize(prefix);
 	console->info("Done serializing the color class info");
 	// serialize the CQF
