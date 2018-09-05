@@ -290,7 +290,7 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
               << colorEncoder->stats.tot_hits << " "
               << (colorEncoder->stats.cache_hits*100)/colorEncoder->stats.tot_hits << "%\n";
 
-	colorEncoder->serialize(prefix);
+	colorEncoder->serialize();
 	console->info("Done serializing the color class info");
 	// serialize the CQF
 	console->info("Serializing the CQF .. ");
@@ -466,7 +466,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				uint64_t nqf) :
 	dbg(qbits, key_bits, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
     prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
-    colorEncoder = new ColorEncoder(num_samples, dbg, num_samples*100000, ceil(log2(num_samples))-3);
+    colorEncoder = new ColorEncoder(prefix, num_samples, dbg, num_samples*100000, ceil(log2(num_samples))-3);
 
 }
 

@@ -47,12 +47,19 @@ public:
     struct Stats {
         uint64_t cache_hits{0};
         uint64_t tot_hits{0};
+        uint64_t tot_edge_access{0};
+        uint64_t tot_edge_access_request{0};
+        uint64_t edge_access_for_updateMST{0};
+        uint64_t add_edge{0};
+        uint64_t parentbv_access_for_updateMST{0};
     };
     Stats stats;
-    ColorEncoder(uint64_t numSamplesIn,
+    ColorEncoder(std::string prefixIn,
+                 uint64_t numSamplesIn,
                  CQF<KeyObject> &cqfIn,
                  uint64_t approximateClrClsesIn,
                  uint64_t approximateDeltaCntPerClrCls = 8) :
+            prefix(prefixIn),
             numSamples(numSamplesIn),
             cqf(cqfIn),
             bvSize(approximateClrClsesIn),
@@ -61,7 +68,9 @@ public:
             colorClsCnt(1), // start with the dummy node
             lru_cache(100000)
             {
-                std::cerr << "\nColorEncoder Constructor:  bvSize: "
+                std::string f = prefix+"/weight.lst";
+                weightDistFile = new std::ofstream(f);
+                        std::cerr << "\nColorEncoder Constructor:  bvSize: "
                              << bvSize << " parent size: " << parentbv.size()
                           << " colorClsCnt: " << colorClsCnt << "\n";
                 lru_cache.monitor();
@@ -70,16 +79,19 @@ public:
 
     bool addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_vector &bv);
 
-    bool serialize(std::string prefix);
+    bool serialize();
 
 private:
     uint64_t numSamples;
     uint64_t bvSize;
     uint64_t colorClsCnt;
+    uint64_t kmerCntr{0};
+    std::ofstream* weightDistFile;
     sdsl::int_vector<> parentbv;
     DeltaManager deltaM;
     CQF<KeyObject> &cqf;
     int k = 20;
+    std::string prefix;
     std::unordered_map<std::pair<uint64_t, uint64_t>, uint32_t, pair_hash> edges;
     LRUCacheMap lru_cache;
 

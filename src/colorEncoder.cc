@@ -8,6 +8,10 @@
 #include <algorithm>
 
 bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_vector &bv) {
+    kmerCntr++;
+    if (kmerCntr % 10000 == 0) {
+        (*weightDistFile) << deltaM.getDeltaCnt() << "\n";
+    }
     // create list of edges to be processed
     // 1. zero to node
     // 2. list of neighbors
@@ -17,11 +21,11 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     std::unordered_set<std::pair<uint64_t, uint64_t>, pair_hash> newEdges;
 
     std::vector<uint64_t> setBits;
-    stats.tot_hits++;
+    //stats.tot_hits++;
     if (!lru_cache.contains(eqId)) {
         setBits = buildColor(bv);
         lru_cache.emplace(eqId, setBits);
-    } else stats.cache_hits++;
+    } //else stats.cache_hits++;
     // case 1. edge from zero to the node
     if (!hasEdge(zero, eqId)) {
         updateMST(zero, eqId, setBits);
@@ -50,11 +54,23 @@ bool ColorEncoder::addColorClass(uint64_t kmer, uint64_t eqId, const sdsl::bit_v
     return false;
 }
 
-bool ColorEncoder::serialize(std::string prefix) {
-    std::cerr << "\n\nCACHE STATS:\n";
-    std::cerr << "total hits: " << lru_cache.stats().total_hits(); // Hits for any key
-    std::cerr << " total misses: " << lru_cache.stats().total_misses(); // Misses for any key
-    std::cerr << " total hit rate: " << lru_cache.stats().hit_rate() << "\n"; // Hit rate in [0, 1]
+bool ColorEncoder::serialize() {
+    (*weightDistFile) << deltaM.getDeltaCnt() << "\n";
+    weightDistFile->close();
+    std::string statsf = prefix + "/stats.txt";
+    std::ofstream stats_out(statsf);
+    stats_out << "\n\nCACHE STATS:";
+    stats_out << "\n\ttotal hits: " << lru_cache.stats().total_hits(); // Hits for any key
+    stats_out << "\n\ttotal misses: " << lru_cache.stats().total_misses(); // Misses for any key
+    stats_out << "\n\ttotal hit rate: " << lru_cache.stats().hit_rate() << "\n"; // Hit rate in [0, 1]
+    stats_out << "\nEDGE STATS:";
+    stats_out << "\n\t# of times searching for an edge: " << stats.tot_edge_access_request;
+    stats_out << "\n\t# of times edge not found: " << stats.add_edge;
+    stats_out << "\n\t# of times calling operator [] on edge map: " << stats.tot_edge_access;
+    stats_out << "\n\t# of times calling operator [] on edge map in updateMST: " << stats.edge_access_for_updateMST;
+    stats_out << "\n\t# of times accessing parentbv in updateMST: " << stats.parentbv_access_for_updateMST;
+    stats_out << "\n";
+    stats_out.close();
     std::string parentbv_file = prefix + "/parents.bv";
     // resize parentbv if it is larger than required size
     if (colorClsCnt < parentbv.size()) {
@@ -233,12 +249,14 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
     std::vector<uint64_t> nodes2;
     uint64_t n = n1;
     while (n != zero) {
+        stats.parentbv_access_for_updateMST++;
         nodes1.push_back(n);
         n = parentbv[n];
     }
     nodes1.push_back(zero);
     n = n2;
     while (n != zero) {
+        stats.parentbv_access_for_updateMST++;
         nodes2.push_back(n);
         n = parentbv[n];
     }
@@ -262,6 +280,7 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
     Edge e1;
     uint64_t i = 0;
     while (n1ref[i] != lca) {
+        stats.edge_access_for_updateMST++;
         auto curW = getEdge(n1ref[i], n1ref[i+1]);
         if (e1.weight < curW) {
             e1 = Edge(n1ref[i+1], n1ref[i], curW);
@@ -273,6 +292,7 @@ std::pair<Edge, Edge> ColorEncoder::maxWeightsTillLCA(uint64_t n1, uint64_t n2) 
     Edge e2;
     i = 0;
     while (n2ref[i] != lca) {
+        stats.edge_access_for_updateMST++;
         auto curW = getEdge(n2ref[i], n2ref[i+1]);
         if (e2.weight < curW) {
             e2 = Edge(n2ref[i+1], n2ref[i], curW);
@@ -312,6 +332,8 @@ bool ColorEncoder::exists(duplicated_dna::canonical_kmer e, uint64_t &eqid) {
 }
 
 void ColorEncoder::addEdge(uint64_t i, uint64_t j, uint32_t w) {
+    stats.tot_edge_access++;
+    stats.add_edge++;
     if (i == j) return;
     if (i > j) {
         std::swap(i,j);
@@ -320,6 +342,7 @@ void ColorEncoder::addEdge(uint64_t i, uint64_t j, uint32_t w) {
 }
 
 bool ColorEncoder::hasEdge(uint64_t i, uint64_t j) {
+    stats.tot_edge_access_request++;
     if (i > j) {
         std::swap(i, j);
     }
@@ -327,6 +350,7 @@ bool ColorEncoder::hasEdge(uint64_t i, uint64_t j) {
 }
 
 uint32_t ColorEncoder::getEdge(uint64_t i, uint64_t j) {
+    stats.tot_edge_access++;
     if (i > j) {
         std::swap(i, j);
     }

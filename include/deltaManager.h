@@ -147,6 +147,8 @@ public:
         return deltabvSuccessfullyStored and boundarybvSuccessfullyStored;
     }
 
+    uint64_t getDeltaCnt() {return totDeltaCnt;}
+
 private:
     uint64_t numSamples;
     uint64_t slotWidth;
