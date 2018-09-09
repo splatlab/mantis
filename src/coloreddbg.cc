@@ -111,24 +111,23 @@ build_main ( BuildOpts& opt )
 
 	// mmap all the input cqfs
 	std::string squeakr_file;
-	uint32_t cutoff;
 	uint32_t nqf = 0;
 	uint32_t kmer_size{0};
 	console->info("Reading input Squeakr files.");
-	while (infile >> squeakr_file >> cutoff) {
+	while (infile >> squeakr_file) {
 		if (!mantis::fs::FileExists(squeakr_file.c_str())) {
 			console->error("Squeakr file {} does not exist.", squeakr_file);
 			exit(1);
 		}
 		squeakr::squeakrconfig config;
 		int ret = squeakr::read_config(squeakr_file, &config);
-		if (ret == squeakr::SQUEAKR_INVALID_ENDIAN) {
-			console->error("Can't read Squeakr file. It was written on a different endian machine.");
-			exit(1);
-		}
 		if (ret == squeakr::SQUEAKR_INVALID_VERSION) {
 			console->error("Squeakr index version is invalid. Expected: {} Available: {}",
 										 squeakr::INDEX_VERSION, config.version);
+			exit(1);
+		}
+		if (ret == squeakr::SQUEAKR_INVALID_ENDIAN) {
+			console->error("Can't read Squeakr file. It was written on a different endian machine.");
 			exit(1);
 		}
 		if (cqfs.size() == 0)
@@ -140,12 +139,15 @@ build_main ( BuildOpts& opt )
 				exit(1);
 			}
 		}
+		if (config.cutoff == 1) {
+			console->warn("Squeakr file {} is not filtered.", squeakr_file);
+		}
 
     cqfs.emplace_back(squeakr_file, CQF_MMAP);
 		std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut off {}", sample_id, cutoff);
+		console->info("Sample id {}", sample_id);
 		cqfs.back().dump_metadata();
     inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
 		if (!cqfs.front().check_similarity(&cqfs.back())) {
