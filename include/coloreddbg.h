@@ -391,7 +391,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 
 		// Progress tracker
 		static uint64_t last_size = 0;
-		if (dbg.dist_elts() % 1000000 == 0 &&
+		if (dbg.dist_elts() % 10000000 == 0 &&
 				dbg.dist_elts() != last_size) {
 			last_size = dbg.dist_elts();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
