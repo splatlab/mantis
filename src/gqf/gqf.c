@@ -919,11 +919,22 @@ static inline bool insert_replace_slots_and_shift_remainders_and_runends_and_off
 				get_block(qf, i)->offset = (uint8_t) BITMASK(8*sizeof(qf->blocks[0].offset));
 		}
 	}
-						
+
 	for (i = 0; i < total_remainders; i++)
 		set_slot(qf, overwrite_index + i, remainders[i]);
-	
+
 	modify_metadata(qf, &qf->metadata->noccupied_slots, ninserts);
+
+	static uint64_t counter = 0;
+	static uint64_t last_cnt = 0;
+	counter++;
+	if (counter % 10000000 == 0 &&
+			counter != last_cnt) {
+		last_cnt = counter;
+		fprintf(stdout, "Home slot: %ld Insertion slot: %ld Difference: %ld Fraction done: %lf\n",
+						bucket_index, overwrite_index, overwrite_index - bucket_index,
+						bucket_index / (float)qf->metadata->nslots);
+	}
 
 	return true;
 }
