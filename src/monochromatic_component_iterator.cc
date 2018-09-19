@@ -472,7 +472,7 @@ int main(int argc, char *argv[]) {
     if (argc > 4)
         num_samples = std::stoull(argv[4]);
     std::cerr << "num samples: " << num_samples << "\n";
-    CQF<KeyObject> cqf(cqf_file, false);
+    CQF<KeyObject> cqf(cqf_file, true);
     std::cerr << "cqf loaded: " << cqf.size() << "\n";
     std::string eqfile;
     std::ifstream eqlist(eqlistfile);
