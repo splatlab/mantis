@@ -1,15 +1,6 @@
 /*
  * ============================================================================
  *
- *       Filename:  util.h
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2017-09-21 12:39:52 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
@@ -32,6 +23,18 @@
 #else
 #define PRINT_DEBUG 0
 #endif
+
+#define DEBUG(x) do { \
+	if (PRINT_DEBUG) { std::cerr << x << std::endl; } \
+} while (0)
+
+#define ERROR(x) do { \
+	{ std::cerr << x << std::endl; } \
+} while (0)
+
+#define PRINT(x) do { \
+	{ std::cout << x << std::endl; } \
+} while (0)
 
 #define DEBUG_CDBG(x) do { \
 	  if (PRINT_DEBUG) { std::cerr << x << std::endl; } \

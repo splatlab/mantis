@@ -3,14 +3,15 @@
 # most of the relevant API
 add_library(mantis_core STATIC
   kmer.cc
-  hashutil.cc
   query.cc
   util.cc
-  bitvector.cc
   validatemantis.cc
   coloreddbg.cc
   MantisFS.cc
-  cqf/gqf.c
+	squeakrconfig.cc
+  gqf/gqf.c
+	gqf/gqf_file.c
+	gqf/hashutil.c,
   colorEncoder.cc
 		canonKmer.cc)
 
