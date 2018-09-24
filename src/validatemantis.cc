@@ -1,15 +1,6 @@
 /*
  * =====================================================================================
  *
- *       Filename:  validate_mantis.cc
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2017-10-31 12:13:49 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
@@ -61,7 +52,7 @@ validate_main ( ValidateOpts& opt )
 {
 
 	spdlog::logger* console = opt.console.get();
-	// Read experiment CQFs and cutoffs
+	// Read experiment CQFs
 	std::ifstream infile(opt.inlist);
   uint64_t num_samples{0};
   if (infile.is_open()) {
@@ -82,30 +73,21 @@ validate_main ( ValidateOpts& opt )
 	cqfs = (CQF<KeyObject>*)calloc(num_samples, sizeof(CQF<KeyObject>));
 
 
-	// Read cutoffs files
-	//std::unordered_map<std::string, uint64_t> cutoffs;
-	//std::string sample_id;
-	//while (cutofffile >> sample_id >> cutoff) {
-	//std::pair<std::string, uint32_t> pair(last_part(sample_id, '/'), cutoff);
-	//cutoffs.insert(pair);
-	//}
-
 	// mmap all the input cqfs
 	std::string cqf_file;
 	uint32_t nqf = 0;
-	uint32_t cutoff;
-	while (infile >> cqf_file >> cutoff) {
+	while (infile >> cqf_file) {
 		if (!mantis::fs::FileExists(cqf_file.c_str())) {
 			console->error("Squeakr file {} does not exist.", cqf_file);
 			exit(1);
 		}
-		cqfs[nqf] = CQF<KeyObject>(cqf_file, false);
+		cqfs[nqf] = CQF<KeyObject>(cqf_file, CQF_FREAD);
 		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}", nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut-off {}", sample_id, cutoff);
+		console->info("Sample id {} cut-off {}", sample_id);
 		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf], cutoff,
+		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf],
 																									 sample_id, nqf);
 		nqf++;
 	}
@@ -132,39 +114,33 @@ validate_main ( ValidateOpts& opt )
 
 	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
 	console->info("Read colored dbg with {} k-mers and {} color classes",
-								cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+								cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
 
 	std::string query_file = opt.query_file;
 	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
 	uint64_t total_kmers = 0;
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-																										seed,
-																										cdbg.range(),
 																										kmer_size,
 																										total_kmers);
 	console->info("Total k-mers to query: {}", total_kmers);
 
-	// Query kmers in each experiment CQF ignoring kmers below the cutoff.
+	// Query kmers in each experiment CQF
 	// Maintain the fraction of kmers present in each experiment CQF.
 	std::vector<std::unordered_map<uint64_t, float>> ground_truth;
-	std::vector<std::unordered_map<uint64_t, uint64_t>> cdbg_output;
+	std::vector<mantis::QueryResult> cdbg_output;
 	bool fail{false};
 	for (auto kmers : multi_kmers) {
 		std::unordered_map<uint64_t, float> fraction_present;
 		for (uint64_t i = 0; i < nqf; i++) {
-			uint32_t cutoff = inobjects[i].cutoff;
 			for (auto kmer : kmers) {
 				KeyObject k(kmer, 0, 0);
-				uint64_t count = cqfs[i].query(k);
-				if (count < cutoff)
-					continue;
-				else
-					fraction_present[inobjects[i].id] += 1;
+				uint64_t count = cqfs[i].query(k, 0);
+				fraction_present[inobjects[i].id] += 1;
 			}
 		}
 		// Query kmers in the cdbg
-		std::unordered_map<uint64_t, uint64_t> result = cdbg.find_samples(kmers);
+		auto result = cdbg.find_samples(kmers);
 
 		// Validate the cdbg output
 		for (uint64_t i = 0; i < nqf; i++)

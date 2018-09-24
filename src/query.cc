@@ -1,15 +1,6 @@
 /*
  * ============================================================================
  *
- *       Filename:  query.cc
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2017-10-27 12:56:50 AM
- *       Revision:  none
- *       Compiler:  gcc
- *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
@@ -68,13 +59,16 @@ void output_results(mantis::QuerySets& multi_kmers,
       opfile <<  cnt++ << '\t' << kmers.size() << '\n';
       mantis::QueryResult result = cdbg.find_samples(kmers);
       for (auto it = result.begin(); it != result.end(); ++it) {
-        opfile << cdbg.get_sample(it->first) << '\t' << it->second << '\n';
+        if (*it > 0) {
+          auto i = std::distance(result.begin(), it);
+          opfile << i << '\t' << *it << '\n';
+        }
+        //opfile << cdbg.get_sample(it->first) << '\t' << it->second << '\n';
       }
       //++qctr;
     }
   }
 }
-
 
 void output_results_json(mantis::QuerySets& multi_kmers,
 												 ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
@@ -90,10 +84,17 @@ void output_results_json(mantis::QuerySets& multi_kmers,
       //std::sort(kmers.begin(), kmers.end());
       opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": {\n";
       mantis::QueryResult result = cdbg.find_samples(kmers);
+      bool first{true};
       for (auto it = result.begin(); it != result.end(); ++it) {
-        opfile << " \"" <<cdbg.get_sample(it->first) << "\": " << it->second ;
-        if (std::next(it) != result.end()) {
-          opfile << ",\n";
+        if (*it > 0) {
+          if (!first) {opfile << ",\n"; first=false;}
+          auto i = std::distance(result.begin(), it);
+          opfile << " \"" <<cdbg.get_sample(i) << "\": " << *it;
+          /*
+          if (std::next(it) != result.end()) {
+            opfile << ",\n";
+          }
+          */
         }
       }
       opfile << "}}";
@@ -150,7 +151,7 @@ int query_main (QueryOpts& opt)
 																														sample_file);
 	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
   console->info("Read colored dbg with {} k-mers and {} color classes",
-                cdbg.get_cqf()->size(), cdbg.get_num_bitvectors());
+                cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
 
 	//cdbg.get_cqf()->dump_metadata(); 
 	//CQF<KeyObject> cqf(query_file, false);
@@ -169,8 +170,6 @@ int query_main (QueryOpts& opt)
 	uint32_t seed = 2038074743;
 	uint64_t total_kmers = 0;
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
-																										seed,
-																										cdbg.range(),
 																										kmer_size,
 																										total_kmers);
 	console->info("Total k-mers to query: {}", total_kmers);

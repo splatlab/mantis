@@ -1,15 +1,6 @@
 /*
  * ============================================================================
  *
- *       Filename:  main.cc
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2016-11-10 03:31:54 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
@@ -41,25 +32,17 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <openssl/rand.h>
-#include "MantisFS.h"
+
 #include "sparsepp/spp.h"
 #include "tsl/sparse_map.h"
+
+#include "MantisFS.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
+#include "squeakrconfig.h"
 #include "json.hpp"
 #include "mantis_utils.hpp"
 #include "mantisconfig.hpp"
-
-// This function read one byte from each page in the iterator buffer.
-//uint64_t tmp_sum;
-//void handler_function(union sigval sv) {
-	//CQF<KeyObject>::Iterator& it(*((CQF<KeyObject>::Iterator*)sv.sival_ptr));
-	//unsigned char *start = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
-	//unsigned char *counter = (unsigned char*)(it.iter.qf->metadata) + it.last_prefetch_offset;
-	//for (;counter < start + it.buffer_size; counter += 4096) {
-		//tmp_sum += *counter;
-	//}
-//}
 
 /*
  * ===  FUNCTION  =============================================================
@@ -70,14 +53,6 @@
 	int
 build_main ( BuildOpts& opt )
 {
-	/* calling asyc read init */
-	struct aioinit aioinit;
-	memset(&aioinit, 0, sizeof(struct aioinit));
-	aioinit.aio_num = 2500;
-	aioinit.aio_threads = 100;
-	aioinit.aio_idle_time = 60;
-	aio_init(&aioinit);
-
 	spdlog::logger* console = opt.console.get();
 	std::ifstream infile(opt.inlist);
   uint64_t num_samples{0};
@@ -91,16 +66,6 @@ build_main ( BuildOpts& opt )
     console->error("Input file {} does not exist or could not be opened.", opt.inlist);
     std::exit(1);
   }
-	//struct timeval start1, end1;
-	//struct timezone tzp;
-
-  // C++-izing
-  // This is C++ ... not C.  Why do we have raw pointers
-  // and calloc them.  We use vectors instead.
-	//SampleObject<CQF<KeyObject>*> *inobjects;
-	//CQF<KeyObject> *cqfs;
-  std::vector<SampleObject<CQF<KeyObject>*>> inobjects;
-  std::vector<CQF<KeyObject>> cqfs;
 
   /** try and create the output directory
    *  and write a file to it.  Complain to the user
@@ -137,32 +102,64 @@ build_main ( BuildOpts& opt )
     jfile.close();
   }
 
+	std::vector<SampleObject<CQF<KeyObject>*>> inobjects;
+  std::vector<CQF<KeyObject>> cqfs;
+
 	// reserve QF structs for input CQFs
   inobjects.reserve(num_samples);
   cqfs.reserve(num_samples);
 
 	// mmap all the input cqfs
-	std::string cqf_file;
+	std::string squeakr_file;
 	uint32_t nqf = 0;
-	uint32_t cutoff;
+	uint32_t kmer_size{0};
 	console->info("Reading input Squeakr files.");
-	while (infile >> cqf_file >> cutoff) {
-		if (!mantis::fs::FileExists(cqf_file.c_str())) {
-			console->error("Squeakr file {} does not exist.", cqf_file);
+	while (infile >> squeakr_file) {
+		if (!mantis::fs::FileExists(squeakr_file.c_str())) {
+			console->error("Squeakr file {} does not exist.", squeakr_file);
 			exit(1);
 		}
-    cqfs.emplace_back(cqf_file, true);
-		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
+		squeakr::squeakrconfig config;
+		int ret = squeakr::read_config(squeakr_file, &config);
+		if (ret == squeakr::SQUEAKR_INVALID_VERSION) {
+			console->error("Squeakr index version is invalid. Expected: {} Available: {}",
+										 squeakr::INDEX_VERSION, config.version);
+			exit(1);
+		}
+		if (ret == squeakr::SQUEAKR_INVALID_ENDIAN) {
+			console->error("Can't read Squeakr file. It was written on a different endian machine.");
+			exit(1);
+		}
+		if (cqfs.size() == 0)
+			kmer_size = config.kmer_size;
+		else {
+			if (kmer_size != config.kmer_size) {
+				console->error("Squeakr file {} has a different k-mer size. Expected: {} Available: {}",
+											 squeakr_file, kmer_size, config.kmer_size);
+				exit(1);
+			}
+		}
+		if (config.cutoff == 1) {
+			console->warn("Squeakr file {} is not filtered.", squeakr_file);
+		}
+
+    cqfs.emplace_back(squeakr_file, CQF_MMAP);
+		std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut off {}", sample_id, cutoff);
+		console->info("Sample id {}", sample_id);
 		cqfs.back().dump_metadata();
-    inobjects.emplace_back(&cqfs[nqf], cutoff, sample_id, nqf);
+    inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
+		if (!cqfs.front().check_similarity(&cqfs.back())) {
+			console->error("Passed Squeakr files are not similar.", squeakr_file);
+			exit(1);
+		}
     nqf++;
 	}
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(opt.qbits,
 																														inobjects[0].obj->keybits(),
+																														cqfs[0].hash_mode(),
 																														inobjects[0].obj->seed(),
 																														prefix, nqf);
 	cdbg.set_console(console);
@@ -205,11 +202,12 @@ build_main ( BuildOpts& opt )
 
 	console->info("Constructing the colored dBG.");
 
+	console->info("\n\n\n\n\n\nDONE WITH SAMPLING PHASE\n\n\n\n\n");
 	// Reconstruct the colored dbg using the new set of equivalence classes.
 	cdbg.construct(inobjects.data(), std::numeric_limits<uint64_t>::max());
 
 	console->info("Final colored dBG has {} k-mers and {} equivalence classes",
-								cdbg.get_cqf()->size(), cdbg.get_num_eqclasses());
+								cdbg.get_cqf()->dist_elts(), cdbg.get_num_eqclasses());
 
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());

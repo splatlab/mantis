@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <vector>
+#include "tsl/hopscotch_map.h"
 
 namespace mantis {
   using KmerHash = uint64_t;
@@ -16,7 +17,7 @@ namespace mantis {
   };
 
 
-  using QueryResult = std::unordered_map<uint64_t, uint64_t>;
+  using QueryResult = std::vector<uint64_t>;//std::unordered_map<uint64_t, uint64_t>;//tsl::hopscotch_map<uint64_t, uint64_t>;
   using QueryResults = std::vector<QueryResult>;
 }
 
