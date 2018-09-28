@@ -445,11 +445,14 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 	bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
 	num_serializations(0), start_time_(std::time(nullptr)) {
 		if (flag == MANTIS_DBG_IN_MEMORY) {
-			dbg(qbits, key_bits, hashmode, seed);
+			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed);
+			std::swap(dbg, cqf);
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		}
 		else if (flag == MANTIS_DBG_ON_DISK) {
-			dbg(qbits, key_bits, hashmode, seed, prefix + mantis::CQF_FILE);
+			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed, prefix +
+											mantis::CQF_FILE);
+			std::swap(dbg, cqf);
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
 			ERROR("Wrong Mantis alloc mode.");
@@ -468,10 +471,12 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 		num_serializations = 0;
 
 		if (flag == MANTIS_DBG_IN_MEMORY) {
-			dbg(cqf_file, CQF_FREAD);
+			CQF<key_obj>cqf(cqf_file, CQF_FREAD);
+			std::swap(dbg, cqf);
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		} else if (flag == MANTIS_DBG_ON_DISK) {
-			dbg(cqf_file, CQF_MMAP);
+			CQF<key_obj>cqf(cqf_file, CQF_MMAP);
+			std::swap(dbg, cqf);
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
 			ERROR("Wrong Mantis alloc mode.");

@@ -25,8 +25,8 @@
 #include "gqf/gqf_file.h"
 #include "util.h"
 
-#define NUM_HASH_BITS 24
-#define NUM_Q_BITS 16
+#define NUM_HASH_BITS 14
+#define NUM_Q_BITS 6
 #define SEED 2038074761
 
 enum readmode {
