@@ -28,6 +28,9 @@
 #include "common_types.h"
 #include "mantisconfig.hpp"
 
+#define MANTIS_DBG_IN_MEMORY (0x01)
+#define MANTIS_DBG_ON_DISK (0x02)
+
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
@@ -51,10 +54,10 @@ template <class qf_obj, class key_obj>
 class ColoredDbg {
 	public:
 		ColoredDbg(std::string& cqf_file, std::vector<std::string>& eqclass_files,
-							 std::string& sample_file);
+							 std::string& sample_file, int flag);
 
 		ColoredDbg(uint64_t qbits, uint64_t key_bits, enum qf_hashmode hashmode,
-							 uint32_t seed, std::string& prefix, uint64_t nqf);
+							 uint32_t seed, std::string& prefix, uint64_t nqf, int flag);
 
 		void build_sampleid_map(qf_obj *incqfs);
 
@@ -99,6 +102,7 @@ class ColoredDbg {
 		std::string prefix;
 		uint64_t num_samples;
 		uint64_t num_serializations;
+		int dbg_alloc_flag;
 		bool flush_eqclass_dis{false};
 		std::time_t start_time_;
 		spdlog::logger* console;
@@ -259,7 +263,10 @@ void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serialize() {
 	// serialize the CQF
-	dbg.serialize(prefix + mantis::CQF_FILE);
+	if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+		dbg.serialize(prefix + mantis::CQF_FILE);
+	else
+		dbg.close();
 
 	// serialize the bv buffer last time if needed
 	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
@@ -434,10 +441,20 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				enum qf_hashmode hashmode,
 																				uint32_t seed, std::string& prefix,
-																				uint64_t nqf) :
-	dbg(qbits, key_bits, hashmode, seed), bv_buffer(mantis::NUM_BV_BUFFER * nqf),
-	prefix(prefix), num_samples(nqf), num_serializations(0),
-	start_time_(std::time(nullptr)) {
+																				uint64_t nqf, int flag) :
+	bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
+	num_serializations(0), start_time_(std::time(nullptr)) {
+		if (flag == MANTIS_DBG_IN_MEMORY) {
+			dbg(qbits, key_bits, hashmode, seed);
+			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		}
+		else if (flag == MANTIS_DBG_ON_DISK) {
+			dbg(qbits, key_bits, hashmode, seed, prefix + mantis::CQF_FILE);
+			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		} else {
+			ERROR("Wrong Mantis alloc mode.");
+			exit(EXIT_FAILURE);
+		}
 		dbg.set_auto_resize();
 	}
 
@@ -445,34 +462,45 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 																				std::vector<std::string>&
 																				eqclass_files, std::string&
-																				sample_file)
-: dbg(cqf_file, CQF_FREAD), bv_buffer(), start_time_(std::time(nullptr)) {
-	num_samples = 0;
-	num_serializations = 0;
+																				sample_file, int flag) : bv_buffer(),
+	start_time_(std::time(nullptr)) {
+		num_samples = 0;
+		num_serializations = 0;
 
-	std::map<int, std::string> sorted_files;
-	for (std::string file : eqclass_files) {
-		int id = std::stoi(first_part(last_part(file, '/'), '_'));
-		sorted_files[id] = file;
-	}
+		if (flag == MANTIS_DBG_IN_MEMORY) {
+			dbg(cqf_file, CQF_FREAD);
+			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		} else if (flag == MANTIS_DBG_ON_DISK) {
+			dbg(cqf_file, CQF_MMAP);
+			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		} else {
+			ERROR("Wrong Mantis alloc mode.");
+			exit(EXIT_FAILURE);
+		}
 
-	eqclasses.reserve(sorted_files.size());
-	BitVectorRRR bv;
-	for (auto file : sorted_files) {
-		sdsl::load_from_file(bv, file.second);
-		eqclasses.push_back(bv);
-		num_serializations++;
-	}
+		std::map<int, std::string> sorted_files;
+		for (std::string file : eqclass_files) {
+			int id = std::stoi(first_part(last_part(file, '/'), '_'));
+			sorted_files[id] = file;
+		}
 
-	std::ifstream sampleid(sample_file.c_str());
-	std::string sample;
-	uint32_t id;
-	while (sampleid >> id >> sample) {
-		std::pair<uint32_t, std::string> pair(id, sample);
-		sampleid_map.insert(pair);
-		num_samples++;
-	}
-	sampleid.close();
+		eqclasses.reserve(sorted_files.size());
+		BitVectorRRR bv;
+		for (auto file : sorted_files) {
+			sdsl::load_from_file(bv, file.second);
+			eqclasses.push_back(bv);
+			num_serializations++;
+		}
+
+		std::ifstream sampleid(sample_file.c_str());
+		std::string sample;
+		uint32_t id;
+		while (sampleid >> id >> sample) {
+			std::pair<uint32_t, std::string> pair(id, sample);
+			sampleid_map.insert(pair);
+			num_samples++;
+		}
+		sampleid.close();
 }
 
 #endif

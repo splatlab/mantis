@@ -38,7 +38,10 @@ template <class key_obj>
 class CQF {
 	public:
 		CQF();
-		CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash, uint32_t seed);
+		CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash, uint32_t
+				seed);
+		CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash, uint32_t
+				seed, std::string filename);
 		CQF(std::string& filename, enum readmode flag);
 		CQF(const CQF<key_obj>& copy_cqf);
 
@@ -52,6 +55,8 @@ class CQF {
 		void serialize(std::string filename) {
 			qf_serialize(&cqf, filename.c_str());
 		}
+
+		void close() { qf_closefile(&cqf); }
 
 		void set_auto_resize(void) { qf_set_auto_resize(&cqf, true); }
 		int64_t get_unique_index(const key_obj& k, uint8_t flags) const {
@@ -127,7 +132,17 @@ CQF<key_obj>::CQF() {
 template <class key_obj>
 CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
 									uint32_t seed) {
-	if (!qf_malloc(&cqf, 1ULL << q_bits, key_bits, 0, hash, SEED)) {
+	if (!qf_malloc(&cqf, 1ULL << q_bits, key_bits, 0, hash, seed)) {
+		ERROR("Can't allocate the CQF");
+		exit(EXIT_FAILURE);
+	}
+}
+
+template <class key_obj>
+CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
+									uint32_t seed, std::string filename) {
+	if (!qf_initfile(&cqf, 1ULL << q_bits, key_bits, 0, hash, seed,
+									 filename.c_str())) {
 		ERROR("Can't allocate the CQF");
 		exit(EXIT_FAILURE);
 	}
@@ -137,9 +152,13 @@ template <class key_obj>
 CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 	uint64_t size = 0;
 	if (flag == CQF_MMAP)
-	 size = qf_usefile(&cqf, filename.c_str(), PROT_READ);
-	else
+	 size = qf_usefile(&cqf, filename.c_str(), QF_USEFILE_READ_ONLY);
+	else if (flag == CQF_FREAD)
 		size = qf_deserialize(&cqf, filename.c_str());
+	else {
+		ERROR("Wrong CQF read mode.");
+		exit(EXIT_FAILURE);
+	}
 
 	if (size == 0) {
 		ERROR("Can't read/deserialize the CQF");

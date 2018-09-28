@@ -137,7 +137,8 @@ int query_main (QueryOpts& opt)
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbg_file,
 																														eqclass_files,
-																														sample_file);
+																														sample_file,
+																														MANTIS_DBG_IN_MEMORY);
 	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
   console->info("Read colored dbg with {} k-mers and {} color classes",
                 cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
