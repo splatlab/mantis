@@ -179,7 +179,15 @@ void ColoredDbg<qf_obj,
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 																				 std::pair<uint64_t, uint64_t>>& map) {
-	dbg.reset();
+	// dbg.reset();
+	uint64_t qbits = log2(dbg.numslots());
+	uint64_t keybits = dbg.keybits();
+	enum qf_hashmode hashmode = dbg.hash_mode();
+	uint64_t seed = dbg.seed();
+	dbg.delete_file();
+	CQF<key_obj>cqf(qbits, keybits, hashmode, seed, prefix + mantis::CQF_FILE);
+	std::swap(dbg, cqf);
+
 	reshuffle_bit_vectors(map);
 	// Check if the current bit vector buffer is full and needs to be serialized.
 	// This happens when the sampling phase fills up the bv buffer.
