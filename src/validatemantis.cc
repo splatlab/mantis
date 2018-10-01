@@ -38,6 +38,7 @@
 #include "kmer.h"
 #include "coloreddbg.h"
 #include "mantisconfig.hpp"
+#include "squeakrconfig.h"
 
 #include	<stdlib.h>
 
@@ -64,31 +65,54 @@ validate_main ( ValidateOpts& opt )
     console->error("Input filter list {} does not exist or could not be opened.", opt.inlist);
     std::exit(1);
   }
-	SampleObject<CQF<KeyObject>*> *inobjects;
-	CQF<KeyObject> *cqfs;
 
-	// Allocate QF structs for input CQFs
-	inobjects = (SampleObject<CQF<KeyObject>*>*)calloc(num_samples,
-																										 sizeof(SampleObject<CQF<KeyObject>*>));
-	cqfs = (CQF<KeyObject>*)calloc(num_samples, sizeof(CQF<KeyObject>));
+	std::vector<SampleObject<CQF<KeyObject>*>> inobjects;
+  std::vector<CQF<KeyObject>> cqfs;
 
+	// reserve QF structs for input CQFs
+  inobjects.reserve(num_samples);
+  cqfs.reserve(num_samples);
 
 	// mmap all the input cqfs
-	std::string cqf_file;
+	std::string squeakr_file;
 	uint32_t nqf = 0;
-	while (infile >> cqf_file) {
-		if (!mantis::fs::FileExists(cqf_file.c_str())) {
-			console->error("Squeakr file {} does not exist.", cqf_file);
+	uint64_t kmer_size;
+	while (infile >> squeakr_file) {
+		if (!mantis::fs::FileExists(squeakr_file.c_str())) {
+			console->error("Squeakr file {} does not exist.", squeakr_file);
 			exit(1);
 		}
-		cqfs[nqf] = CQF<KeyObject>(cqf_file, CQF_FREAD);
-		std::string sample_id = first_part(first_part(last_part(cqf_file, '/'),
+		squeakr::squeakrconfig config;
+		int ret = squeakr::read_config(squeakr_file, &config);
+		if (ret == squeakr::SQUEAKR_INVALID_VERSION) {
+			console->error("Squeakr index version is invalid. Expected: {} Available: {}",
+										 squeakr::INDEX_VERSION, config.version);
+			exit(1);
+		}
+		if (cqfs.size() == 0)
+			kmer_size = config.kmer_size;
+		else {
+			if (kmer_size != config.kmer_size) {
+				console->error("Squeakr file {} has a different k-mer size. Expected: {} Available: {}",
+											 squeakr_file, kmer_size, config.kmer_size);
+				exit(1);
+			}
+		}
+		if (config.cutoff == 1) {
+			console->warn("Squeakr file {} is not filtered.", squeakr_file);
+		}
+
+    cqfs.emplace_back(squeakr_file, CQF_FREAD);
+		std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
 																									'.'), '_');
 		console->info("Reading CQF {} Seed {}", nqf, cqfs[nqf].seed());
-		console->info("Sample id {} cut-off {}", sample_id);
+		console->info("Sample id {}", sample_id);
 		cqfs[nqf].dump_metadata();
-		inobjects[nqf] = SampleObject<CQF<KeyObject>*>(&cqfs[nqf],
-																									 sample_id, nqf);
+    inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
+		if (!cqfs.front().check_similarity(&cqfs.back())) {
+			console->error("Passed Squeakr files are not similar.", squeakr_file);
+			exit(1);
+		}
 		nqf++;
 	}
 
@@ -113,13 +137,11 @@ validate_main ( ValidateOpts& opt )
 																														sample_file,
 																														MANTIS_DBG_IN_MEMORY);
 
-	uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
 	console->info("Read colored dbg with {} k-mers and {} color classes",
 								cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
 
 	std::string query_file = opt.query_file;
 	console->info("Reading query kmers from disk.");
-	uint32_t seed = 2038074743;
 	uint64_t total_kmers = 0;
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										kmer_size,
@@ -137,7 +159,8 @@ validate_main ( ValidateOpts& opt )
 			for (auto kmer : kmers) {
 				KeyObject k(kmer, 0, 0);
 				uint64_t count = cqfs[i].query(k, 0);
-				fraction_present[inobjects[i].id] += 1;
+				if (count > 0)
+					fraction_present[inobjects[i].id] += 1;
 			}
 		}
 		// Query kmers in the cdbg
