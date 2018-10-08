@@ -144,8 +144,9 @@ build_main ( BuildOpts& opt )
 		}
 
     cqfs.emplace_back(squeakr_file, CQF_MMAP);
-		std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
-																									'.'), '_');
+		//std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
+																									//'.'), '_');
+		std::string sample_id = squeakr_file;
 		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
 		console->info("Sample id {}", sample_id);
 		cqfs.back().dump_metadata();

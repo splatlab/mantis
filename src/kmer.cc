@@ -112,7 +112,7 @@ start_read:
 					if (i + 1 < read.length())
 						read = read.substr(i + 1, read.length());
 					else
-						continue;
+						goto next_read;
 					goto start_read;
 				}
 				first = first | curr;
@@ -141,7 +141,7 @@ start_read:
 					if (i + 1 < read.length())
 						read = read.substr(i + 1, read.length());
 					else
-						continue;
+						goto next_read;
 					goto start_read;
 				}
 				next |= curr;
@@ -159,6 +159,7 @@ start_read:
 				next_rev = next_rev >> 2;
 			}
 		}
+next_read:
 		total_kmers += kmers_set.size();
 		//if (kmers_set.size() != kmers.size())
 		//std::cout << "set size: " << kmers_set.size() << " vector size: " << kmers.size() << endl;
