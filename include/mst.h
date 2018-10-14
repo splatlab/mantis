@@ -6,8 +6,9 @@
 #define MANTIS_MST_H
 
 #include <set>
+#include <vector>
 
-// sparsepp include should be above gqf_cpp! ow, we'll get a conflict in MAGIC_NUMBER
+// sparsepp should be included before gqf_cpp! ow, we'll get a conflict in MAGIC_NUMBER
 #include "sparsepp/spp.h"
 
 #include "mantisconfig.hpp"
@@ -15,6 +16,10 @@
 #include "spdlog/spdlog.h"
 
 #include "canonicalKmer.h"
+#include "sdsl/bit_vectors.hpp"
+
+typedef sdsl::bit_vector BitVector;
+typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 struct Edge {
     uint32_t n1;
@@ -41,7 +46,7 @@ struct workItem {
 
     workItem(dna::canonical_kmer n, uint64_t c) : node(n), colorId(c) {}
 
-    // To be able to use in as a key in set
+    // Required to be able to use it as a key in set
     bool operator<(const workItem &item2) const {
         return (*this).node < item2.node;
     }
@@ -49,7 +54,7 @@ struct workItem {
 
 class MST {
 public:
-    explicit MST(std::string prefix);
+    MST(std::string prefix);
     void buildMST();
 
 private:
@@ -60,14 +65,19 @@ private:
 
     std::set<workItem> neighbors(CQF<KeyObject>& cqf, workItem n);
     bool exists(CQF<KeyObject>& cqf, dna::canonical_kmer e, uint64_t &eqid);
+    uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2);
+    void buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv);
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
 
     std::string prefix;
+    uint32_t numSamples = 0;
     uint64_t k;
     uint64_t num_of_ccBuffers;
     uint64_t num_edges = 0;
+    BitVectorRRR *bv1, *bv2;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
+    std::vector<std::vector<Edge>> weightBuckets;
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 #endif //MANTIS_MST_H
