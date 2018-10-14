@@ -60,7 +60,7 @@ private:
 
     std::set<workItem> neighbors(CQF<KeyObject>& cqf, workItem n);
     bool exists(CQF<KeyObject>& cqf, dna::canonical_kmer e, uint64_t &eqid);
-    inline uint64_t fetchBucketId(uint64_t c1, uint64_t c2);
+    inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
 
     std::string prefix;
