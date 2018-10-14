@@ -121,8 +121,10 @@ bool MST::calculateWeights() {
             }
             edgeset.clear();
         }
-
     }
+    delete bv1;
+    delete bv2;
+    edgesetList.clear();
     return true;
 }
 
