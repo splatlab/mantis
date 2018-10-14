@@ -2,16 +2,18 @@
 # make a library libmantis_core that will contain
 # most of the relevant API
 add_library(mantis_core STATIC
-  kmer.cc
-  query.cc
-  util.cc
-  validatemantis.cc
-  coloreddbg.cc
-  MantisFS.cc
-	squeakrconfig.cc
-  gqf/gqf.c
-	gqf/gqf_file.c
-	gqf/hashutil.c)
+		kmer.cc
+  		query.cc
+  		util.cc
+  		validatemantis.cc
+  		coloreddbg.cc
+		canonicalKmer.cc
+  		mst.cc
+  		MantisFS.cc
+  		squeakrconfig.cc
+  		gqf/gqf.c
+  		gqf/gqf_file.c
+  		gqf/hashutil.c)
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
 set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")

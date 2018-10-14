@@ -15,6 +15,7 @@
 #include "clipp.h"
 #include "spdlog/spdlog.h"
 #include "mantisconfig.hpp"
+#include "mst.h"
 
 template <typename T>
 void explore_options_verbose(T& res) {
@@ -43,7 +44,7 @@ void explore_options_verbose(T& res) {
 int query_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
-
+int build_mst_main (QueryOpts& opt);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -52,7 +53,7 @@ int validate_main (ValidateOpts& opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, query, validate, help};
+  enum class mode {build, build_mst, query, validate, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -90,6 +91,11 @@ int main ( int argc, char *argv[] ) {
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
+  auto build_mst_mode = (
+          command("mst").set(selected, mode::build),
+                  required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "Prefix of input files."
+  );
+
   auto query_mode = (
                      command("query").set(selected, mode::query),
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
@@ -106,7 +112,7 @@ int main ( int argc, char *argv[] ) {
                      );
 
   auto cli = (
-              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mst_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -130,6 +136,7 @@ int main ( int argc, char *argv[] ) {
   if(res) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
+    case mode::build_mst: build_mst_main(qopt); break;
     case mode::query: query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
