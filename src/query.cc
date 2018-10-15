@@ -102,7 +102,7 @@ void output_results_json(mantis::QuerySets& multi_kmers,
  *  Description:  
  * ============================================================================
  */
-int query_main (QueryOpts& opt)
+int old_query_main (QueryOpts& opt)
 {
   //CLI::App app("Mantis query");
 
@@ -179,6 +179,7 @@ int query_main (QueryOpts& opt)
     }
   }
   */
+
 
 	std::ofstream opfile(output_file);
 	console->info("Querying the colored dbg.");
