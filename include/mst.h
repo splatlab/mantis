@@ -129,6 +129,7 @@ private:
     std::set<workItem> neighbors(CQF<KeyObject>& cqf, workItem n);
     bool exists(CQF<KeyObject>& cqf, dna::canonical_kmer e, uint64_t &eqid);
     uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2);
+    std::vector<uint32_t> getDeltaList(uint64_t eqid1,uint64_t eqid2);
     void buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv);
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
@@ -142,9 +143,10 @@ private:
     uint64_t mstTotalWeight = 0;
     colorIdType zero = 0;
     BitVectorRRR *bv1, *bv2;
+    std::vector<std::string> eqclass_files;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
     std::vector<std::vector<Edge>> weightBuckets;
-    std::vector<std::vector<colorIdType>> mst;
+    std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 #endif //MANTIS_MST_H

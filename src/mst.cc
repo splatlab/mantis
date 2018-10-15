@@ -24,8 +24,22 @@ MST::MST(std::string prefixIn) : prefix(std::move(prefixIn)) {
         std::exit(1);
     }
 
-    std::vector<std::string> eqclass_files =
+    eqclass_files =
             mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
+
+    // sort eqclass_files
+    // note to @robP: It terribly statically relies on the format of the input files!!
+    std::sort(eqclass_files.begin(), eqclass_files.end(), [this](std::string &s1, std::string &s2) {
+        uint32_t id1, id2;
+        std::stringstream ss1(first_part(last_part(s1, '/'), '_'));
+        std::stringstream ss2(first_part(last_part(s2, '/'), '_'));
+        if ((ss1 >> id1).fail() || !(ss1 >> std::ws).eof() ||
+            (ss2 >> id2).fail() || !(ss2 >> std::ws).eof()) {
+            console->error("file name does not start with a number : {}, {}", s1, s2);
+        }
+        return id1 < id2;
+    });
+
     num_of_ccBuffers = eqclass_files.size();
 
     std::string sample_file(prefix.c_str(), mantis::SAMPLEID_FILE);
@@ -102,23 +116,8 @@ bool MST::buildEdgeSets() {
  * @return true if successful
  */
 bool MST::calculateWeights() {
-    std::vector<std::string> eqclass_files =
-            mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
 
-    // sort eqclass_files
-    // note to @robP: It terribly statically relies on the format of the input files!!
-    std::sort(eqclass_files.begin(), eqclass_files.end(), [this](std::string &s1, std::string &s2) {
-        uint32_t id1, id2;
-        std::stringstream ss1(first_part(last_part(s1, '/'), '_'));
-        std::stringstream ss2(first_part(last_part(s2, '/'), '_'));
-        if ((ss1 >> id1).fail() || !(ss1 >> std::ws).eof() ||
-            (ss2 >> id2).fail() || !(ss2 >> std::ws).eof()) {
-            console->error("file name does not start with a number : {}, {}", s1, s2);
-        }
-        return id1 < id2;
-    });
-
-    console->info("Start going over all the edges and calculating the weights.");
+    console->info("Going over all the edges and calculating the weights.");
     for (auto i = 0; i < eqclass_files.size(); i++) {
         sdsl::load_from_file(*bv1, eqclass_files[i]);
         for (auto j = i; j < eqclass_files.size(); j++) {
@@ -145,61 +144,142 @@ bool MST::calculateWeights() {
     return true;
 }
 
+/**
+ * Finding Minimim Spanning Forest of color graph using Kruskal Algorithm
+ *
+ * The algorithm's basic implementation taken from
+ * https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
+ * @return List of connected components in the Minimum Spanning Forest
+ */
+DisjointSets MST::kruskalMSF() {
+    uint64_t numNodes = numSamples + 1;//for the dummy node with all bits=0
+    uint32_t bucketCnt = numSamples;
+    // Create disjoint sets
+    DisjointSets ds(numNodes);
+
+    uint64_t edgeCntr{0}, selectedEdgeCntr{0};
+    uint32_t w{0};
+    // Iterate through all sorted edges
+    for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
+        uint32_t edgeIdxInBucket = 0;
+        for (auto it = weightBuckets[bucketCntr].begin(); it != weightBuckets[bucketCntr].end(); it++) {
+            w = bucketCntr + 1;
+            colorIdType u = it->n1;
+            colorIdType v = it->n2;
+            colorIdType root_of_u = ds.find(u);
+            colorIdType root_of_v = ds.find(v);
+
+            // Check if the selected edge is causing a cycle or not
+            // (A cycle is induced if u and v belong to the same set)
+            if (root_of_u != root_of_v) {
+                // Merge two sets
+                ds.merge(root_of_u, root_of_v, w);
+                // Current edge will be in the MST
+                mst[u].emplace_back(v, w);
+                mst[v].emplace_back(u, w);
+                mstTotalWeight += w;
+                selectedEdgeCntr++;
+            }
+            edgeCntr++;
+            if (edgeCntr % 1000000 == 0) {
+                console->info("\r{} edges processed and {} were selected", edgeCntr, selectedEdgeCntr);
+            }
+            edgeIdxInBucket++;
+        }
+        weightBuckets[bucketCntr].clear();
+    }
+    mstTotalWeight++;//1 empty slot for root (zero)
+    console->info("MST Construction finished:"
+                  "\n\t# of edges: {}"
+                  "\n\t# of merges: {}"
+                  "\n\tmst weight sum: {}",
+                  edgeCntr, selectedEdgeCntr, mstTotalWeight);
+    return ds;
+}
+
 bool MST::encodeColorClassUsingMST() {
     // build mst of color class graph
     kruskalMSF();
 
+    uint64_t nodeCntr{0};
     // encode the color classes using mst
     std::cerr << "Creating parentBV...\n";
     sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
+    // create and fill the deltabv and boundarybv data structures
+    sdsl::bit_vector bbv;
+    {// putting weightbv inside the scope so its memory is freed after we're done with it
+        sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
 
-    {
-        sdsl::bit_vector visited(num_colorClasses, 0);
-        bool check = false;
-        uint64_t nodeCntr{0};
-        std::queue<colorIdType> q;
-        q.push(zero); // Root of the tree is zero
-        parentbv[zero] = zero; // and it's its own parent (has no parent)
-        while (!q.empty()) {
-            colorIdType parent = q.front();
-            q.pop();
-            for (auto &neighbor :mst[parent]) {
-                if (!visited[neighbor]) {
-                    parentbv[neighbor] = parent;
-                    q.push(neighbor);
+        {
+            sdsl::bit_vector visited(num_colorClasses, 0);
+            bool check = false;
+            std::queue<colorIdType> q;
+            q.push(zero); // Root of the tree is zero
+            parentbv[zero] = zero; // and it's its own parent (has no parent)
+            while (!q.empty()) {
+                colorIdType parent = q.front();
+                q.pop();
+                for (auto &neighbor :mst[parent]) {
+                    if (!visited[neighbor.first]) {
+                        parentbv[neighbor.first] = parent;
+                        weightbv[neighbor.first] = neighbor.second;
+                        q.push(neighbor.first);
+                    }
+                }
+                visited[parent] = 1;
+                nodeCntr++; // just a counter for the log
+                if (nodeCntr % 10000000 == 0) {
+                    std::cerr << "\rset parent of " << nodeCntr << " ccs";
                 }
             }
-            visited[parent] = 1;
-            nodeCntr++; // just a counter for the log
-            if (nodeCntr % 10000000 == 0) {
-                std::cerr << "\rset parent of " << nodeCntr << " ccs";
+        }
+
+        // filling bbv
+        // resize bbv
+        nodeCntr=0;
+        bbv.resize(mstTotalWeight);
+        uint64_t deltaOffset{0};
+        for (uint64_t i = 0; i < num_colorClasses; i++) {
+            std::vector<uint32_t> deltas;
+            if (i == parentbv[i]) { //it's the root (zero here)
+                deltaOffset++;
+            } else {
+                deltaOffset += weightbv[i];
+            }
+            bbv[deltaOffset - 1] = 1;
+            if (i % 10000000 == 0) {
+                std::cerr << "\rset delta vals for " << nodeCntr << " ccs";
             }
         }
     }
-    // create and fill the deltabv and boundarybv data structures
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
-    sdsl::bit_vector bbv(mstTotalWeight, 0);
-
     sdsl::bit_vector visited(num_colorClasses, 0);
 
-
-    uint64_t deltaOffset{0};
-    for (uint64_t i = 0; i < num_colorClasses; i++) {
-        std::vector<uint32_t> deltas;
-        if (i == parentbv[i]) { //it's the root (zero here)
-            deltaOffset++;
-        } else {
-            //deltas = getDeltaList(eqs, parentbv[i], i, numSamples, numWrds);
-        }
-        for (auto &v : deltas) {
-            deltabv[deltaOffset] = v;
-            deltaOffset++;
-        }
-        bbv[deltaOffset - 1] = 1;
-        if (i % 10000000 == 0) {
-            std::cerr << "\rset delta vals for " << nodeCntr << " ccs";
+    // fill in deltabv
+    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
+    console->info("Start going over all the edges and calculating the weights.");
+    for (auto i = 0; i < eqclass_files.size(); i++) {
+        sdsl::load_from_file(*bv1, eqclass_files[i]);
+        for (auto j = i; j < eqclass_files.size(); j++) {
+            std::cerr << "\rset delta vals for cc buffers " << i << " & " << j;
+            if (i == j) {
+                bv2 = bv1;
+            } else {
+                sdsl::load_from_file(*bv2, eqclass_files[j]);
+            }
+            for (colorIdType p=0; p < parentbv.size(); p++) {
+                if (getBucketId(p, parentbv[p]) == i*mantis::NUM_BV_BUFFER+j) {
+                    auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
+                    for (auto &v : getDeltaList(p, parentbv[p])) {
+                        deltabv[deltaOffset] = v;
+                        deltaOffset++;
+                    }
+                }
+            }
         }
     }
+    delete bv1;
+    delete bv2;
 
     sdsl::store_to_file(parentbv, std::string(prefix + mantis::PARENTBV_FILE));
     sdsl::store_to_file(deltabv, std::string(prefix + mantis::DELTABV_FILE) );
@@ -285,6 +365,33 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
     return dist;
 }
 
+//
+/**
+ * for two non-zero nodes, list indices that xor of the bits is 1
+ * for one non-zero node, list indices that the bit is 1
+ *
+ * @param eqid1
+ * @param eqid2
+ * @return delta list
+ */
+std::vector<uint32_t> MST::getDeltaList(uint64_t eqid1,uint64_t eqid2) {
+    std::vector<uint32_t> res;
+    std::vector<uint64_t> eq1(((numSamples - 1) / 64) + 1, 0), eq2(((numSamples - 1) / 64) + 1, 0);
+    buildColor(eq1, eqid1, bv1);
+    buildColor(eq2, eqid2, bv2);
+
+    for (uint32_t i = 0; i < eq1.size(); i += 1) {
+        uint64_t eq12xor = eq1[i] ^ eq2[i];
+        for (uint32_t j = 0; j < 64; j++) {
+            if ( (eq12xor >> j) & 0x01 ) {
+                res.push_back(i*64+j);
+            }
+        }
+    }
+
+    return res; // rely on c++ optimization
+}
+
 /**
  * Loads the bitvector corresponding to eqId
  * @param eq list of words each representing 64 bits of eqId bv (output)
@@ -310,62 +417,11 @@ void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv)
  * @return bucket id
  */
 inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
+    if (c1 > c2)
+        std::swap(c1, c2);
     uint64_t cb1 = c1 / mantis::NUM_BV_BUFFER;
     uint64_t cb2 = c2 / mantis::NUM_BV_BUFFER;
     return cb1 * num_of_ccBuffers + cb2;
-}
-
-/**
- * Finding Minimim Spanning Forest of color graph using Kruskal Algorithm
- *
- * The algorithm's basic implementation taken from
- * https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
- * @return List of connected components in the Minimum Spanning Forest
- */
-DisjointSets MST::kruskalMSF() {
-    uint64_t numNodes = numSamples + 1;//for the dummy node with all bits=0
-    uint32_t bucketCnt = numSamples;
-    // Create disjoint sets
-    DisjointSets ds(numNodes);
-
-    uint64_t edgeCntr{0}, selectedEdgeCntr{0};
-    uint32_t w{0};
-    // Iterate through all sorted edges
-    for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
-        uint32_t edgeIdxInBucket = 0;
-        for (auto it = weightBuckets[bucketCntr].begin(); it != weightBuckets[bucketCntr].end(); it++) {
-            w = bucketCntr + 1;
-            colorIdType u = it->n1;
-            colorIdType v = it->n2;
-            colorIdType root_of_u = ds.find(u);
-            colorIdType root_of_v = ds.find(v);
-
-            // Check if the selected edge is creating
-            // a cycle or not (Cycle is induced if u
-            // and v belong to the same set)
-            if (root_of_u != root_of_v) {
-                // Merge two sets
-                ds.merge(root_of_u, root_of_v, w);
-                // Current edge will be in the MST
-                mst[u].emplace_back(v);
-                mst[v].emplace_back(u);
-                mstTotalWeight += w;
-                selectedEdgeCntr++;
-            }
-            edgeCntr++;
-            if (edgeCntr % 1000000 == 0) {
-                console->info("\r{} edges processed and {} were selected", edgeCntr, selectedEdgeCntr);
-            }
-            edgeIdxInBucket++;
-        }
-        weightBuckets[bucketCntr].clear();
-    }
-
-    console->info("MST Construction finished:"
-                  "\n\t# of edges: {}"
-                  "\n\t# of merges: {}",
-                  edgeCntr, selectedEdgeCntr);
-    return ds;
 }
 
 /**
