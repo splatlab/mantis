@@ -102,7 +102,7 @@ void output_results_json(mantis::QuerySets& multi_kmers,
  *  Description:  
  * ============================================================================
  */
-int old_query_main (QueryOpts& opt)
+int query_main (QueryOpts& opt)
 {
   //CLI::App app("Mantis query");
 
