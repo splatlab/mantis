@@ -330,8 +330,13 @@ void MST::findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj) {
         neighborCnt++;
         if (cur.colorId < nei.colorId) {
             Edge e(static_cast<colorIdType>(cur.colorId), static_cast<colorIdType>(nei.colorId));
-
-            auto &edgeset = edgesetList[getBucketId(cur.colorId, nei.colorId)];
+            auto bucketId = getBucketId(cur.colorId, nei.colorId);
+            if (bucketId >= edgesetList.size()) {
+                logger->error("\nBucket ID passes total number of possible buckets {}. "
+                              "cid1: {}, cid2: {}", edgesetList.size(), cur.colorId, nei.colorId);
+                std::exit(1);
+            }
+            auto &edgeset = edgesetList[bucketId];
             if (edgeset.find(e) == edgeset.end()) {
                 edgeset.insert(e);
                 num_edges++;
