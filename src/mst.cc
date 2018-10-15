@@ -64,15 +64,38 @@ bool MST::buildEdgeSets() {
     console->info("Done Reading colored dbg from disk. k is {}", k);
     console->info("Starting to iterate over cqf ...");
     uint64_t kmerCntr{0};
+    zero = num_of_ccBuffers*mantis::NUM_BV_BUFFER; // assuming last buffer is full
+    sdsl::bit_vector nodes(zero, 0);
     auto it = cqf.begin();
     while (!it.done()) {
-        findNeighborEdges(cqf, it);
+        KeyObject keyObject = *it;
+        // Add an edge between the color class and node zero
+        uint32_t c1{static_cast<uint32_t >(keyObject.count-1)}, c2{static_cast<uint32_t >(zero)};
+        if (nodes[c1] == 0) { // haven't seen the color class ID yet
+            nodes[c1] = 1;
+            if (c1 == c2) {
+                console->error("We shouldn't have a color class with ID {}", zero);
+                std::exit(1);
+            }
+            if (c1 > c2) {
+                std::swap(c1, c2);
+            }
+            edgesetList[getBucketId(c1, c2)].insert(Edge(c1, c2));
+        }
+        // Add an edge between the color class and each of its neighbors' colors in dbg
+        findNeighborEdges(cqf, keyObject);
         ++it;
         kmerCntr++;
         if (kmerCntr % 10000000 == 0) {
             std::cerr << "\r" << kmerCntr << " kmers & " << num_edges << " edges\n";
         }
     }
+
+    // count total number of color classes:
+    for (uint64_t i = 0; i < nodes.size(); i += 64) {
+        num_colorClasses += sdsl::bits::cnt(nodes.get_int(i, 64));
+    }
+    zero = num_colorClasses;
     return true;
 }
 
@@ -117,7 +140,7 @@ bool MST::calculateWeights() {
                     console->error("Hamming distance of 0 between edges {} & {}", edge.n1, edge.n2);
                     std::exit(1);
                 }
-                weightBuckets[w-1].push_back(edge);
+                weightBuckets[w - 1].push_back(edge);
             }
             edgeset.clear();
         }
@@ -129,6 +152,10 @@ bool MST::calculateWeights() {
 }
 
 bool MST::findMST() {
+    // build mst
+    kruskalMSF();
+    // encode the color classes using mst
+
     return true;
 }
 
@@ -138,8 +165,7 @@ bool MST::findMST() {
  * @param cqf (required to query for existence of neighbors)
  * @param it iterator to the elements of cqf
  */
-void MST::findNeighborEdges(CQF<KeyObject> &cqf, CQF<KeyObject>::Iterator it) {
-    KeyObject keyobj = *it;
+void MST::findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj) {
     dna::canonical_kmer curr_node(static_cast<int>(k), keyobj.key);
     workItem cur = {curr_node, static_cast<uint32_t >(keyobj.count - 1)};
     uint64_t neighborCnt{0};
@@ -200,7 +226,7 @@ bool MST::exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, uint64_t &eqid) {
  */
 uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
     uint64_t dist{0};
-    std::vector<uint64_t> eq1(((numSamples - 1) / 64) + 1), eq2(((numSamples - 1) / 64) + 1);
+    std::vector<uint64_t> eq1(((numSamples - 1) / 64) + 1, 0), eq2(((numSamples - 1) / 64) + 1, 0);
     buildColor(eq1, eqid1, bv1);
     buildColor(eq2, eqid2, bv2);
 
@@ -218,6 +244,7 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
  * @param bv the large bv collapsing all eq ids color bv in a bucket
  */
 void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv) {
+    if (eqid == 0) return;
     uint64_t i{0}, bitcnt{0}, wrdcnt{0};
     uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
     while (i < numSamples) {
@@ -239,6 +266,60 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
     uint64_t cb2 = c2 / mantis::NUM_BV_BUFFER;
     return cb1 * num_of_ccBuffers + cb2;
 }
+
+/**
+ * Finding Minimim Spanning Forest of color graph using Kruskal Algorithm
+ *
+ * The algorithm's basic implementation taken from
+ * https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
+ * @return List of connected components in the Minimum Spanning Forest
+ */
+DisjointSets MST::kruskalMSF() {
+    uint64_t numNodes = numSamples + 1;//for the dummy node with all bits=0
+    uint32_t bucketCnt = numSamples;
+    // Create disjoint sets
+    DisjointSets ds(numNodes);
+
+    uint64_t edgeCntr{0}, selectedEdgeCntr{0};
+    uint32_t w{0};
+    // Iterate through all sorted edges
+    for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
+        uint32_t edgeIdxInBucket = 0;
+        for (auto it = weightBuckets[bucketCntr].begin(); it != weightBuckets[bucketCntr].end(); it++) {
+            w = bucketCntr + 1;
+            uint32_t u = it->n1;
+            uint32_t v = it->n2;
+            uint32_t root_of_u = ds.find(u);
+            uint32_t root_of_v = ds.find(v);
+
+            // Check if the selected edge is creating
+            // a cycle or not (Cycle is induced if u
+            // and v belong to the same set)
+            if (root_of_u != root_of_v) {
+                // Merge two sets
+                ds.merge(root_of_u, root_of_v, w);
+                // Current edge will be in the MST
+                mst[u].emplace_back(v);
+                mst[v].emplace_back(u);
+                mstTotalWeight += w;
+                selectedEdgeCntr++;
+            }
+            edgeCntr++;
+            if (edgeCntr % 1000000 == 0) {
+                console->info("\r{} edges processed and {} were selected", edgeCntr, selectedEdgeCntr);
+            }
+            edgeIdxInBucket++;
+        }
+        weightBuckets[bucketCntr].clear();
+    }
+
+    console->info("MST Construction finished:"
+                  "\n\t# of edges: {}"
+                  "\n\t# of merges: {}",
+                  edgeCntr, selectedEdgeCntr);
+    return ds;
+}
+
 
 int build_mst_main(QueryOpts &opt) {
     MST mst(opt.prefix);
