@@ -92,7 +92,7 @@ int main ( int argc, char *argv[] ) {
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto build_mst_mode = (
-          command("mst").set(selected, mode::build),
+          command("mst").set(selected, mode::build_mst),
                   required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "Prefix of input files."
   );
 

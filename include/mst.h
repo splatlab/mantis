@@ -117,7 +117,7 @@ struct DisjointSets {
 
 class MST {
 public:
-    explicit MST(std::string prefix);
+    MST(std::string prefix, std::shared_ptr<spdlog::logger> logger);
     void buildMST();
 
 private:
@@ -142,11 +142,11 @@ private:
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
     colorIdType zero = 0;
-    BitVectorRRR *bv1, *bv2;
+    BitVectorRRR *bvp1, *bvp2;
     std::vector<std::string> eqclass_files;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
-    std::shared_ptr<spdlog::logger> console{nullptr};
+    spdlog::logger *logger{nullptr};
 };
 #endif //MANTIS_MST_H
