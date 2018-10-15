@@ -3,7 +3,7 @@
 # most of the relevant API
 add_library(mantis_core STATIC
 		kmer.cc
-  		query.cc
+		oldQuery.cc
   		util.cc
   		validatemantis.cc
   		coloreddbg.cc

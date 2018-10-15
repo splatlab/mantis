@@ -129,7 +129,7 @@ bool MST::calculateWeights() {
                 sdsl::load_from_file(*bv2, eqclass_files[j]);
             }
             for (auto &edge : edgeset) {
-                auto w = hammingDist(edge.n1, edge.n2);
+                auto w = hammingDist(edge.n1, edge.n2); // hammingDist uses bv1 and bv2
                 if (w == 0) {
                     console->error("Hamming distance of 0 between edges {} & {}", edge.n1, edge.n2);
                     std::exit(1);
@@ -153,31 +153,35 @@ bool MST::encodeColorClassUsingMST() {
     std::cerr << "Creating parentBV...\n";
     sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
 
-    sdsl::bit_vector visited(num_colorClasses, 0);
-    bool check = false;
-    uint64_t nodeCntr{0};
-    std::queue<colorIdType> q;
-    q.push(zero); // Root of the tree is zero
-    parentbv[zero] = zero; // and it's its own parent (has no parent)
-    while (!q.empty()) {
-        colorIdType parent = q.front();
-        q.pop();
-        for (auto& neighbor :mst[parent]) {
-            if (!visited[neighbor]) {
-                parentbv[neighbor] = parent;
-                q.push(neighbor);
+    {
+        sdsl::bit_vector visited(num_colorClasses, 0);
+        bool check = false;
+        uint64_t nodeCntr{0};
+        std::queue<colorIdType> q;
+        q.push(zero); // Root of the tree is zero
+        parentbv[zero] = zero; // and it's its own parent (has no parent)
+        while (!q.empty()) {
+            colorIdType parent = q.front();
+            q.pop();
+            for (auto &neighbor :mst[parent]) {
+                if (!visited[neighbor]) {
+                    parentbv[neighbor] = parent;
+                    q.push(neighbor);
+                }
+            }
+            visited[parent] = 1;
+            nodeCntr++; // just a counter for the log
+            if (nodeCntr % 10000000 == 0) {
+                std::cerr << "\rset parent of " << nodeCntr << " ccs";
             }
         }
-        visited[parent] = 1;
-        nodeCntr++; // just a counter for the log
-        if (nodeCntr % 10000000 == 0) {
-            std::cerr << "\rset parent of " << nodeCntr << " ccs";
-        }
     }
-
-    // create the data structures
+    // create and fill the deltabv and boundarybv data structures
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
     sdsl::bit_vector bbv(mstTotalWeight, 0);
+
+    sdsl::bit_vector visited(num_colorClasses, 0);
+
 
     uint64_t deltaOffset{0};
     for (uint64_t i = 0; i < num_colorClasses; i++) {
