@@ -7,6 +7,7 @@
 
 #include <set>
 #include <vector>
+#include <queue>
 
 // sparsepp should be included before gqf_cpp! ow, we'll get a conflict in MAGIC_NUMBER
 #include "sparsepp/spp.h"
@@ -20,12 +21,12 @@
 
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
-
+typedef uint32_t colorIdType;
 struct Edge {
-    uint32_t n1;
-    uint32_t n2;
+    colorIdType n1;
+    colorIdType n2;
 
-    Edge(uint32_t inN1, uint32_t inN2) : n1(inN1), n2(inN2) {}
+    Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {}
 
     bool operator==(const Edge& e) const {
         return n1 == e.n1 && n2 == e.n2;
@@ -42,9 +43,9 @@ struct edge_hash {
 
 struct workItem {
     dna::canonical_kmer node;
-    uint64_t colorId;
+    colorIdType colorId;
 
-    workItem(dna::canonical_kmer n, uint64_t c) : node(n), colorId(c) {}
+    workItem(dna::canonical_kmer n, colorIdType c) : node(n), colorId(c) {}
 
     // Required to be able to use it as a key in set
     bool operator<(const workItem &item2) const {
@@ -54,12 +55,12 @@ struct workItem {
 
 
 struct DisjointSetNode {
-    uint32_t parent{0};
+    colorIdType parent{0};
     uint64_t rnk{0}, w{0}, edges{0};
 
-    void setParent(uint32_t p) { parent = p; }
+    void setParent(colorIdType p) { parent = p; }
 
-    void mergeWith(DisjointSetNode &n, uint32_t edgeW, uint32_t id) {
+    void mergeWith(DisjointSetNode &n, uint32_t edgeW, colorIdType id) {
         n.setParent(parent);
         w += (n.w + static_cast<uint64_t>(edgeW));
         edges += (n.edges + 1);
@@ -85,13 +86,13 @@ struct DisjointSets {
         // different sets and have rank 0.
         for (uint64_t i = 0; i <= n; i++) {
             //every element is parent of itself
-            els[i].setParent(static_cast<uint32_t>(i));
+            els[i].setParent(static_cast<colorIdType>(i));
         }
     }
 
     // Find the parent of a node 'u'
     // Path Compression
-    uint32_t find(uint32_t u) {
+    uint32_t find(colorIdType u) {
         /* Make the parent of the nodes in the path
            from u--> parent[u] point to parent[u] */
         if (u != els[u].parent)
@@ -100,7 +101,7 @@ struct DisjointSets {
     }
 
     // Union by rank
-    void merge(uint32_t x, uint32_t y, uint32_t edgeW) {
+    void merge(colorIdType x, colorIdType y, uint32_t edgeW) {
         x = find(x), y = find(y);
 
         /* Make tree with smaller height
@@ -123,7 +124,7 @@ private:
     bool buildEdgeSets();
     void findNeighborEdges(CQF<KeyObject>& cqf, KeyObject &keyobj);
     bool calculateWeights();
-    bool findMST();
+    bool encodeColorClassUsingMST();
     DisjointSets kruskalMSF();
     std::set<workItem> neighbors(CQF<KeyObject>& cqf, workItem n);
     bool exists(CQF<KeyObject>& cqf, dna::canonical_kmer e, uint64_t &eqid);
@@ -139,11 +140,11 @@ private:
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
-    uint64_t zero = 0;
+    colorIdType zero = 0;
     BitVectorRRR *bv1, *bv2;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
     std::vector<std::vector<Edge>> weightBuckets;
-    std::vector<std::vector<uint32_t >> mst;
+    std::vector<std::vector<colorIdType>> mst;
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 #endif //MANTIS_MST_H

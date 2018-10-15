@@ -48,7 +48,7 @@ MST::MST(std::string prefixIn) : prefix(std::move(prefixIn)) {
 void MST::buildMST() {
     buildEdgeSets();
     calculateWeights();
-    findMST();
+    encodeColorClassUsingMST();
 }
 
 /**
@@ -64,24 +64,11 @@ bool MST::buildEdgeSets() {
     console->info("Done Reading colored dbg from disk. k is {}", k);
     console->info("Starting to iterate over cqf ...");
     uint64_t kmerCntr{0};
-    zero = num_of_ccBuffers*mantis::NUM_BV_BUFFER; // assuming last buffer is full
-    sdsl::bit_vector nodes(zero, 0);
+    sdsl::bit_vector nodes(num_of_ccBuffers*mantis::NUM_BV_BUFFER, 0);
     auto it = cqf.begin();
     while (!it.done()) {
         KeyObject keyObject = *it;
-        // Add an edge between the color class and node zero
-        uint32_t c1{static_cast<uint32_t >(keyObject.count-1)}, c2{static_cast<uint32_t >(zero)};
-        if (nodes[c1] == 0) { // haven't seen the color class ID yet
-            nodes[c1] = 1;
-            if (c1 == c2) {
-                console->error("We shouldn't have a color class with ID {}", zero);
-                std::exit(1);
-            }
-            if (c1 > c2) {
-                std::swap(c1, c2);
-            }
-            edgesetList[getBucketId(c1, c2)].insert(Edge(c1, c2));
-        }
+        nodes[keyObject.count-1] = 1; // set the seen color class id bit
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject);
         ++it;
@@ -95,7 +82,14 @@ bool MST::buildEdgeSets() {
     for (uint64_t i = 0; i < nodes.size(); i += 64) {
         num_colorClasses += sdsl::bits::cnt(nodes.get_int(i, 64));
     }
-    zero = num_colorClasses;
+
+    // Add an edge between edch color class ID and node zero
+    console->info("Adding edges from dummy node zero to each color class Id");
+    zero = static_cast<colorIdType>(num_colorClasses);
+    num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
+    for (colorIdType colorId = 0; colorId < num_colorClasses; colorId++) {
+        edgesetList[getBucketId(colorId, zero)].insert(Edge(colorId, zero));
+    }
     return true;
 }
 
@@ -151,11 +145,61 @@ bool MST::calculateWeights() {
     return true;
 }
 
-bool MST::findMST() {
-    // build mst
+bool MST::encodeColorClassUsingMST() {
+    // build mst of color class graph
     kruskalMSF();
-    // encode the color classes using mst
 
+    // encode the color classes using mst
+    std::cerr << "Creating parentBV...\n";
+    sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
+
+    sdsl::bit_vector visited(num_colorClasses, 0);
+    bool check = false;
+    uint64_t nodeCntr{0};
+    std::queue<colorIdType> q;
+    q.push(zero); // Root of the tree is zero
+    parentbv[zero] = zero; // and it's its own parent (has no parent)
+    while (!q.empty()) {
+        colorIdType parent = q.front();
+        q.pop();
+        for (auto& neighbor :mst[parent]) {
+            if (!visited[neighbor]) {
+                parentbv[neighbor] = parent;
+                q.push(neighbor);
+            }
+        }
+        visited[parent] = 1;
+        nodeCntr++; // just a counter for the log
+        if (nodeCntr % 10000000 == 0) {
+            std::cerr << "\rset parent of " << nodeCntr << " ccs";
+        }
+    }
+
+    // create the data structures
+    sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
+    sdsl::bit_vector bbv(mstTotalWeight, 0);
+
+    uint64_t deltaOffset{0};
+    for (uint64_t i = 0; i < num_colorClasses; i++) {
+        std::vector<uint32_t> deltas;
+        if (i == parentbv[i]) { //it's the root (zero here)
+            deltaOffset++;
+        } else {
+            //deltas = getDeltaList(eqs, parentbv[i], i, numSamples, numWrds);
+        }
+        for (auto &v : deltas) {
+            deltabv[deltaOffset] = v;
+            deltaOffset++;
+        }
+        bbv[deltaOffset - 1] = 1;
+        if (i % 10000000 == 0) {
+            std::cerr << "\rset delta vals for " << nodeCntr << " ccs";
+        }
+    }
+
+    sdsl::store_to_file(parentbv, std::string(prefix + mantis::PARENTBV_FILE));
+    sdsl::store_to_file(deltabv, std::string(prefix + mantis::DELTABV_FILE) );
+    sdsl::store_to_file(bbv, std::string(prefix + mantis::BOUNDARYBV_FILE) );
     return true;
 }
 
@@ -167,12 +211,12 @@ bool MST::findMST() {
  */
 void MST::findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj) {
     dna::canonical_kmer curr_node(static_cast<int>(k), keyobj.key);
-    workItem cur = {curr_node, static_cast<uint32_t >(keyobj.count - 1)};
+    workItem cur = {curr_node, static_cast<colorIdType>(keyobj.count - 1)};
     uint64_t neighborCnt{0};
     for (auto &nei : neighbors(cqf, cur)) {
         neighborCnt++;
         if (cur.colorId < nei.colorId) {
-            Edge e(static_cast<uint32_t>(cur.colorId), static_cast<uint32_t>(nei.colorId));
+            Edge e(static_cast<colorIdType>(cur.colorId), static_cast<colorIdType>(nei.colorId));
 
             auto &edgeset = edgesetList[getBucketId(cur.colorId, nei.colorId)];
             if (edgeset.find(e) == edgeset.end()) {
@@ -244,7 +288,7 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
  * @param bv the large bv collapsing all eq ids color bv in a bucket
  */
 void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv) {
-    if (eqid == 0) return;
+    if (eqid == zero) return;
     uint64_t i{0}, bitcnt{0}, wrdcnt{0};
     uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
     while (i < numSamples) {
@@ -287,10 +331,10 @@ DisjointSets MST::kruskalMSF() {
         uint32_t edgeIdxInBucket = 0;
         for (auto it = weightBuckets[bucketCntr].begin(); it != weightBuckets[bucketCntr].end(); it++) {
             w = bucketCntr + 1;
-            uint32_t u = it->n1;
-            uint32_t v = it->n2;
-            uint32_t root_of_u = ds.find(u);
-            uint32_t root_of_v = ds.find(v);
+            colorIdType u = it->n1;
+            colorIdType v = it->n2;
+            colorIdType root_of_u = ds.find(u);
+            colorIdType root_of_v = ds.find(v);
 
             // Check if the selected edge is creating
             // a cycle or not (Cycle is induced if u
@@ -320,7 +364,10 @@ DisjointSets MST::kruskalMSF() {
     return ds;
 }
 
-
+/**
+ ********* MAIN *********
+ * main function to call Color graph and MST construction and color class encoding and serializing
+ */
 int build_mst_main(QueryOpts &opt) {
     MST mst(opt.prefix);
     mst.buildMST();
