@@ -77,8 +77,8 @@ bool MST::buildEdgeSets() {
     std::string cqf_file(prefix + mantis::CQF_FILE);
     CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
     k = cqf.keybits() / 2;
-    logger->info("Done Reading colored dbg from disk. k is {}", k);
-    logger->info("Starting to iterate over cqf ...");
+    logger->info("Done loading cdbg. k is {}", k);
+    logger->info("Iterating over cqf & building edgeSet ...");
     uint64_t kmerCntr{0};
     sdsl::bit_vector nodes(num_of_ccBuffers * mantis::NUM_BV_BUFFER, 0);
     auto it = cqf.begin();
@@ -218,7 +218,7 @@ bool MST::encodeColorClassUsingMST() {
 
     uint64_t nodeCntr{0};
     // encode the color classes using mst
-    logger->info("Filling ParentBV..");
+    logger->info("Filling ParentBV...");
     sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
     // create and fill the deltabv and boundarybv data structures
     sdsl::bit_vector bbv;
@@ -248,10 +248,10 @@ bool MST::encodeColorClassUsingMST() {
                 }
             }
         }
-
+        std::cerr << "\r";
         // filling bbv
         // resize bbv
-        logger->info("Filling BBV..");
+        logger->info("Filling BBV...");
         nodeCntr = 0;
         bbv.resize(mstTotalWeight);
         uint64_t deltaOffset{0};
@@ -268,9 +268,9 @@ bool MST::encodeColorClassUsingMST() {
             }
         }
     }
-
+    std::cerr << "\r";
     // fill in deltabv
-    logger->info("Filling DeltaBV..");
+    logger->info("Filling DeltaBV...");
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
     sdsl::bit_vector visited(num_colorClasses, 0);
     sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
@@ -298,6 +298,7 @@ bool MST::encodeColorClassUsingMST() {
             }
         }
     }
+    std::cerr << "\r";
     /*if (bvp1 == nullptr)
         return false;
     if (bvp1 == bvp2) {
@@ -307,9 +308,11 @@ bool MST::encodeColorClassUsingMST() {
         delete bvp2;
     }
 */
+    logger->info("Serializing data structures parentbv, deltabv, & bbv...");
     sdsl::store_to_file(parentbv, std::string(prefix + mantis::PARENTBV_FILE));
     sdsl::store_to_file(deltabv, std::string(prefix + mantis::DELTABV_FILE));
     sdsl::store_to_file(bbv, std::string(prefix + mantis::BOUNDARYBV_FILE));
+    logger->info("Done Serializing.");
     return true;
 }
 
