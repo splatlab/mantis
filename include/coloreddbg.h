@@ -73,7 +73,7 @@ class ColoredDbg {
 		uint32_t seed(void) const { return dbg.seed(); }
 		uint64_t range(void) const { return dbg.range(); }
 
-		std::unordered_map<uint64_t, uint64_t>
+		std::vector<uint64_t>
 			find_samples(const mantis::QuerySet& kmers);
 
 		void serialize();
@@ -297,7 +297,7 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 }
 
 template <class qf_obj, class key_obj>
-std::unordered_map<uint64_t, uint64_t>
+std::vector<uint64_t>
 ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 	// Find a list of eq classes and the number of kmers that belong those eq
 	// classes.
@@ -309,7 +309,7 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 			query_eqclass_map[eqclass] += 1;
 	}
 
-	std::unordered_map<uint64_t, uint64_t> sample_map;
+	std::vector<uint64_t> sample_map(num_samples, 0);
 	for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
 			 ++it) {
 		auto eqclass_id = it->first;
