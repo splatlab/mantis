@@ -333,7 +333,11 @@ void MST::findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj) {
             auto bucketId = getBucketId(cur.colorId, nei.colorId);
             if (bucketId >= edgesetList.size()) {
                 logger->error("\nBucket ID passes total number of possible buckets {}. "
-                              "cid1: {}, cid2: {}", edgesetList.size(), cur.colorId, nei.colorId);
+                              "\n\tkey1: {}, key2: {}"
+                              "\n\tcid1: {}, cid2: {}",
+                              edgesetList.size(),
+                              std::string(cur.node), std::string(nei.node),
+                              cur.colorId, nei.colorId);
                 std::exit(1);
             }
             auto &edgeset = edgesetList[bucketId];
@@ -399,7 +403,6 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
     return dist;
 }
 
-//
 /**
  * for two non-zero nodes, list indices that xor of the bits is 1
  * for one non-zero node, list indices that the bit is 1
