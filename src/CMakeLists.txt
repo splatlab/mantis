@@ -4,6 +4,7 @@
 add_library(mantis_core STATIC
 		kmer.cc
 		query.cc
+		mstQuery.cc
 		util.cc
   		validatemantis.cc
   		coloreddbg.cc
@@ -45,6 +46,10 @@ target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_RELEASE_CXXFLAGS}>")
 target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
+
+#add_executable(estimateNumOfKners estimateNumOfKmers.cc)
+#target_include_directories(estimateNumOfKners PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+#target_link_libraries(estimateNumOfKners mantis_core)
 
 # TODO: look more into why this is necessary
 if (SDSL_INSTALL_PATH)

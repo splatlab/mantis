@@ -16,6 +16,7 @@
 #include "spdlog/spdlog.h"
 #include "mantisconfig.hpp"
 #include "mst.h"
+#include "mstQuery.h"
 
 template <typename T>
 void explore_options_verbose(T& res) {
@@ -41,10 +42,11 @@ void explore_options_verbose(T& res) {
   }
 }
 
-int query_main (QueryOpts& opt);
+//int query_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
 int build_mst_main (QueryOpts& opt);
+int mst_query_main(QueryOpts &opt);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -137,7 +139,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
     case mode::build_mst: build_mst_main(qopt); break;
-    case mode::query: query_main(qopt);  break;
+    case mode::query: mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
