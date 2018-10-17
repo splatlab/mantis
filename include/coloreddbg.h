@@ -229,6 +229,13 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 		it->second.second += 1; // update the abundance.
 	}
 
+	// check: the k-mer should not already be present.
+	uint64_t count = dbg.query(KeyObject(key,0,eq_id), QF_NO_LOCK |
+														 QF_KEY_IS_HASH);
+	if (count > 0) {
+		console->error("K-mer was already present. kmer: {} eqid: {}", key, count);
+		exit(1);
+	}
 	// we use the count to store the eqclass ids
 	int ret = dbg.insert(KeyObject(key,0,eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
 	if (ret == QF_NO_SPACE) {
