@@ -405,7 +405,12 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			last_key = cur.key();
 			eq_class[cur.id] = 1;
 			cur.next();
-			minheap.replace_top(cur);
+			if(!cur.end()) {
+				minheap.replace_top(cur);
+			} else {
+				minheap.pop();
+			}
+			//minheap.replace_top(cur);
 		} while(!minheap.empty() && last_key == minheap.top().key());
 
 		bool added_eq_class = add_kmer(last_key, eq_class);
