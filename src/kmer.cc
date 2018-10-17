@@ -13,17 +13,7 @@ inline char Kmer::map_int(uint8_t base)
 	}
 }
 
-/*return the integer representation of the base */
-inline uint8_t Kmer::map_base(char base)
-{
-	switch(base) {
-		case 'A': { return DNA_MAP::A; }
-		case 'T': { return DNA_MAP::T; }
-		case 'C': { return DNA_MAP::C; }
-		case 'G': { return DNA_MAP::G; }
-		default:  { return DNA_MAP::G+1; }
-	}
-}
+
 
 /**
  * Converts a string of "ATCG" to a uint64_t
@@ -62,8 +52,6 @@ string int_to_str(uint64_t kmer, uint64_t kmer_size)
 	return str;
 }
 
-/* Return the reverse complement of a base */
-inline int Kmer::reverse_complement_base(int x) { return 3 - x; }
 
 /* Calculate the revsese complement of a kmer */
 __int128_t Kmer::reverse_complement(__int128_t kmer, uint64_t kmer_size)

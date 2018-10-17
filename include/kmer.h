@@ -33,10 +33,22 @@ using namespace std;
 class Kmer {
 	public:
 		static char map_int(uint8_t base);
-		static uint8_t map_base(char base);
+		/*return the integer representation of the base */
+		static inline uint8_t map_base(char base)
+		{
+			switch(base) {
+				case 'A': { return DNA_MAP::A; }
+				case 'T': { return DNA_MAP::T; }
+				case 'C': { return DNA_MAP::C; }
+				case 'G': { return DNA_MAP::G; }
+				default:  { return DNA_MAP::G+1; }
+			}
+		}
+		//static uint8_t map_base(char base);
 		static __int128_t str_to_int(std::string str);
 		static std::string int_to_str(__int128_t kmer, uint64_t kmer_size);
-		static int reverse_complement_base(int x);
+		/* Return the reverse complement of a base */
+		static inline int reverse_complement_base(int x) { return 3 - x; }
 		static __int128_t reverse_complement(__int128_t kmer, uint64_t kmer_size);
 		static bool compare_kmers(__int128_t kmer, __int128_t kmer_rev);
 
