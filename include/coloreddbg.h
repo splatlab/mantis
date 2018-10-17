@@ -343,7 +343,6 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	key_obj>::construct(qf_obj *incqfs, uint64_t num_kmers)
 {
 	uint64_t counter = 0;
-	std::unordered_set<uint64_t> keySet;
 	bool is_sampling = (num_kmers < std::numeric_limits<uint64_t>::max());
 
 	struct Iterator {
@@ -412,7 +411,6 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 				minheap.pop();
 		} while(!minheap.empty() && last_key == minheap.top().key());
 		bool added_eq_class = add_kmer(last_key, eq_class);
-		keySet.insert(last_key);
 		++counter;
 
 		// Progress tracker
@@ -444,29 +442,6 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 
 		//while(!minheap.empty() && minheap.top().end()) minheap.pop();
 	}
-	std::cout << "\n\n\nGOING OVER HASH MAP, QUERYING CQF\n";
-	uint64_t kmerCntr = 0;
-	for (auto key: keySet) {
-		KeyObject keyObject(key, 0, 0);
-		auto count = dbg.query(keyObject, QF_NO_LOCK | QF_KEY_IS_HASH);
-		if (count == 0) {
-			std::cout << key << "\n";
-		}
-		kmerCntr++;
-	}
-	std::cout << "# of kmers in the hash map: " << kmerCntr << "\n";
-	std::cout << "\n\n\nGOING OVER CQF, QUERYING HASH MAP\n";
-	kmerCntr = 0;
-	auto it = dbg.begin();
-	while (!it.done()) {
-		KeyObject ko = it.get_cur_hash();
-		if (keySet.find(ko.key) == keySet.end()) {
-			std::cout << ko.key << "\n";
-		}
-		++it;
-		kmerCntr++;
-	}
-	std::cout << "# of kmers in the hash map: " << kmerCntr << "\n";
 	return eqclass_map;
 }
 
