@@ -10,9 +10,11 @@ namespace mantis {
   using ExperimentID = uint64_t;
   using QuerySet = std::unordered_set<KmerHash>;
   using QuerySets = std::vector<QuerySet>;
+  using QueryMap = std::unordered_map<KmerHash, uint64_t>;
+  using EqMap = std::unordered_map<KmerHash, std::vector<ExperimentID>>;
   struct BulkQuery {
     QuerySet qs;
-    std::unordered_map<KmerHash, std::vector<ExperimentID>> qmap;
+     EqMap qmap;
   };
 
 

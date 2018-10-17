@@ -57,19 +57,24 @@ private:
 
 class MSTQuery {
 private:
+    uint32_t queryK;
+    uint32_t indexK;
     uint64_t numSamples;
     uint64_t numWrds;
     uint32_t zero;
     sdsl::bit_vector bbv;
     spdlog::logger *logger{nullptr};
+    mantis::QueryMap kmer2cidMap;
+    mantis::EqMap cid2expMap;
 
 public:
     sdsl::int_vector<> parentbv;
     sdsl::int_vector<> deltabv;
     sdsl::bit_vector::select_1_type sbbv;
 
-    MSTQuery(std::string prefix, uint64_t numSamplesIn, spdlog::logger *loggerIn) :
-    numSamples(numSamplesIn), logger(loggerIn) {
+    MSTQuery(std::string prefix, uint32_t indexKIn, uint32_t queryKIn,
+            uint64_t numSamplesIn, spdlog::logger *loggerIn) :
+    numSamples(numSamplesIn), indexK(indexKIn), queryK(queryKIn), logger(loggerIn) {
         numWrds = (uint64_t) std::ceil((double) numSamples / 64.0);
         loadIdx(prefix);
     }
@@ -81,12 +86,12 @@ public:
                                      nonstd::optional<uint64_t>& toDecode, // output param.  Also decode these
                                      bool all);
 
-    mantis::QueryResult findSamples(const mantis::QuerySet &kmers,
-                                    CQF<KeyObject> &dbg,
-                                    MSTQuery &mstQuery,
-                                    LRUCacheMap& lru_cache,
-                                    RankScores* rs,
-                                    QueryStats &queryStats);
+    uint64_t parseKmers(std::string filename, uint64_t kmer_size);
+    void findSamples(CQF<KeyObject> &dbg,
+                                        LRUCacheMap &lru_cache,
+                                        RankScores *rs,
+                                        QueryStats &queryStats);
+    mantis::QueryResult convertIndexK2QueryK(std::string &read);
 };
 
 #endif //MANTIS_MSTQUERY_H
