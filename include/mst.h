@@ -18,6 +18,7 @@
 
 #include "canonicalKmer.h"
 #include "sdsl/bit_vectors.hpp"
+#include "gqf/hashutil.h"
 
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
@@ -36,8 +37,9 @@ struct Edge {
 // note: @fatal: careful! The hash highly depends on the length of the edge ID (uint32)
 struct edge_hash {
     uint64_t operator() (const Edge& e) const {
-        uint64_t res = e.n1;
-        return (res << 32) | (uint64_t)e.n2;
+        return MurmurHash64A(&e, sizeof(Edge), 2038074743);
+        /*uint64_t res = e.n1;
+        return (res << 32) | (uint64_t)e.n2;*/
     }
 };
 
