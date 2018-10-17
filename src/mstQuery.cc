@@ -259,10 +259,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
         if (allNuclValid) {
             first = first >> 2;
             first_rev = static_cast<uint64_t >(Kmer::reverse_complement(first, indexK));
-            if (Kmer::compare_kmers(first, first_rev))
-                item = first;
-            else
-                item = first_rev;
+            item = Kmer::compare_kmers(first, first_rev)? first : first_rev;
             for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                 samples[c]++;
                 pastKmers[idx2replace][c] = true;
@@ -286,10 +283,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                 auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
                 tmp <<= (queryK * 2 - 2);
                 next_rev = next_rev | tmp;
-                if (Kmer::compare_kmers(next, next_rev))
-                    item = next;
-                else
-                    item = next_rev;
+                item = Kmer::compare_kmers(first, first_rev)? first : first_rev;
                 for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                     samples[c]++;
                     pastKmers[idx2replace][c] = true;
@@ -321,10 +315,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                     auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
                     tmp <<= (queryK * 2 - 2);
                     next_rev = next_rev | tmp;
-                    if (Kmer::compare_kmers(next, next_rev))
-                        item = next;
-                    else
-                        item = next_rev;
+                    item = Kmer::compare_kmers(first, first_rev)? first : first_rev;
                     for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                         samples[c]++;
                         pastKmers[idx2replace][c] = true;
