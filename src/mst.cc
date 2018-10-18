@@ -40,8 +40,11 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
         return id1 < id2;
     });
 
+    for (auto &eqfile : eqclass_files) {
+        std::cerr << eqfile << "\n";
+    }
     num_of_ccBuffers = eqclass_files.size();
-    edgesetList.resize(num_of_ccBuffers*num_of_ccBuffers);
+    edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
 
     std::string sample_file = prefix + mantis::SAMPLEID_FILE;//(prefix.c_str() , mantis::SAMPLEID_FILE);
     std::ifstream sampleid(sample_file);
@@ -62,6 +65,27 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
  * 3. find MST of the weighted color graph
  */
 void MST::buildMST() {
+    /*BitVectorRRR bv;
+    sdsl::load_from_file(bv, eqclass_files.back());
+    uint64_t eqcnt = ((eqclass_files.size()-1)*mantis::NUM_BV_BUFFER) + (bv.size()/numSamples);
+    std::cerr << "total # of eq classes: " << eqcnt << "\n";
+    std::string cqf_file(prefix + mantis::CQF_FILE);
+    CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
+    k = cqf.keybits() / 2;
+    auto it = cqf.begin();
+    uint64_t kmerCntr = 0;
+    while (!it.done()) {
+        KeyObject keyObject = *it;
+        if (keyObject.count > eqcnt) {
+            std::cout << std::string(dna::canonical_kmer(k, keyObject.key)) << " " << keyObject.count << "\n";
+        }
+        ++it;
+        kmerCntr++;
+        if (kmerCntr % 10000000 == 0) {
+            std::cerr << "\r" << kmerCntr/1000000 << "M kmers & " << num_edges << " edges";
+        }
+    }
+    std::exit(1);*/
     buildEdgeSets();
     calculateWeights();
     encodeColorClassUsingMST();
@@ -80,31 +104,48 @@ bool MST::buildEdgeSets() {
     logger->info("Done loading cdbg. k is {}", k);
     logger->info("Iterating over cqf & building edgeSet ...");
     uint64_t kmerCntr{0};
-    sdsl::bit_vector nodes(num_of_ccBuffers * mantis::NUM_BV_BUFFER, 0);
+    // max possible value and divisible by 64
+    sdsl::bit_vector nodes((1 + (num_of_ccBuffers * mantis::NUM_BV_BUFFER) / 64) * 64, 0);
     auto it = cqf.begin();
+    uint64_t maxId = 0;
     while (!it.done()) {
         KeyObject keyObject = *it;
-        nodes[keyObject.count - 1] = 1; // set the seen color class id bit
+        uint64_t curEqId = keyObject.count - 1;
+        nodes[curEqId] = 1; // set the seen color class id bit
+        if (curEqId > maxId) maxId = curEqId;
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject);
         ++it;
         kmerCntr++;
         if (kmerCntr % 10000000 == 0) {
-            std::cerr << "\r" << kmerCntr/1000000 << "M kmers & " << num_edges << " edges";
+            std::cerr << "\r" << kmerCntr / 1000000 << "M kmers & " << num_edges << " edges";
         }
     }
     std::cerr << "\r";
     logger->info("Observed {} kmers and {} edges", kmerCntr, num_edges);
 
     // count total number of color classes:
-    for (uint64_t i = 0; i < nodes.size(); i += 64) {
-        num_colorClasses += sdsl::bits::cnt(nodes.get_int(i, 64));
+    uint64_t i = 0, maxIdDivisibleBy64 = (maxId / 64) * 64;
+    while (i < maxIdDivisibleBy64) {
+        if (nodes.get_int(i, 64) != UINT64_MAX) {
+            logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, i + 64);
+        }
+        i += 64;
     }
+    uint64_t lastbits = sdsl::bits::cnt(nodes.get_int(i, maxId - maxIdDivisibleBy64));
+    if (lastbits != maxId - maxIdDivisibleBy64)
+        logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, maxId);
+    num_colorClasses = maxId;
+
     // Add an edge between edch color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
-            num_colorClasses);
-    zero = static_cast<colorIdType>(num_colorClasses);
+                 num_colorClasses);
+    zero = static_cast<colorIdType>(num_colorClasses + 1);
     for (colorIdType colorId = 0; colorId < num_colorClasses; colorId++) {
+        /*if (edgesetList[getBucketId(colorId, zero)].find(Edge(colorId, zero)) != edgesetList[getBucketId(colorId, zero)].end()) {
+            logger->error("already existed: {}, {}", colorId, zero);
+            std::exit(1);
+        }*/
         edgesetList[getBucketId(colorId, zero)].insert(Edge(colorId, zero));
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
@@ -122,6 +163,7 @@ bool MST::buildEdgeSets() {
 bool MST::calculateWeights() {
 
     logger->info("Going over all the edges and calculating the weights.");
+    uint64_t numEdges = 0;
     weightBuckets.resize(numSamples);
     for (auto i = 0; i < eqclass_files.size(); i++) {
         BitVectorRRR bv1;
@@ -143,6 +185,7 @@ bool MST::calculateWeights() {
                     std::exit(1);
                 }
                 weightBuckets[w - 1].push_back(edge);
+                numEdges++;
             }
             edgeset.clear();
         }
@@ -156,6 +199,7 @@ bool MST::calculateWeights() {
         delete bvp2;
     }*/
     edgesetList.clear();
+    logger->info("Calculated the weight for {} edges", numEdges);
     return true;
 }
 
@@ -177,10 +221,10 @@ DisjointSets MST::kruskalMSF() {
     // Iterate through all sorted edges
     for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
         uint32_t edgeIdxInBucket = 0;
-        for (auto it = weightBuckets[bucketCntr].begin(); it != weightBuckets[bucketCntr].end(); it++) {
-            w = bucketCntr + 1;
-            colorIdType u = it->n1;
-            colorIdType v = it->n2;
+        w = bucketCntr + 1;
+        for (auto &it : weightBuckets[bucketCntr]) {
+            colorIdType u = it.n1;
+            colorIdType v = it.n2;
             colorIdType root_of_u = ds.find(u);
             colorIdType root_of_v = ds.find(v);
 
@@ -205,10 +249,14 @@ DisjointSets MST::kruskalMSF() {
     }
     mstTotalWeight++;//1 empty slot for root (zero)
     logger->info("MST Construction finished:"
-                  "\n\t# of edges: {}"
-                  "\n\t# of merges: {}"
-                  "\n\tmst weight sum: {}",
-                  edgeCntr, selectedEdgeCntr, mstTotalWeight);
+                 "\n\t# of edges: {}"
+                 "\n\t# of merges: {}"
+                 "\n\tmst weight sum: {}",
+                 edgeCntr, selectedEdgeCntr, mstTotalWeight);
+    std::cerr << "\n\nweights\n";
+    for (auto &t: mst[24243316])
+        std::cerr << t.first << " " << t.second << "\n";
+    std::cerr << "end of weights\n";
     return ds;
 }
 
@@ -223,32 +271,38 @@ bool MST::encodeColorClassUsingMST() {
     // create and fill the deltabv and boundarybv data structures
     sdsl::bit_vector bbv;
     {// putting weightbv inside the scope so its memory is freed after we're done with it
+        std::unordered_set<uint64_t> s;
         sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
-
-        {
-            sdsl::bit_vector visited(num_colorClasses, 0);
-            bool check = false;
-            std::queue<colorIdType> q;
-            q.push(zero); // Root of the tree is zero
-            parentbv[zero] = zero; // and it's its own parent (has no parent)
-            while (!q.empty()) {
-                colorIdType parent = q.front();
-                q.pop();
-                for (auto &neighbor :mst[parent]) {
-                    if (!visited[neighbor.first]) {
-                        parentbv[neighbor.first] = parent;
-                        weightbv[neighbor.first] = neighbor.second;
-                        q.push(neighbor.first);
-                    }
-                }
-                visited[parent] = 1;
-                nodeCntr++; // just a counter for the log
-                if (nodeCntr % 10000000 == 0) {
-                    std::cerr << "\rset parent of " << nodeCntr << " ccs";
+        sdsl::bit_vector visited(num_colorClasses, 0);
+        bool check = false;
+        std::queue<colorIdType> q;
+        q.push(zero); // Root of the tree is zero
+        parentbv[zero] = zero; // and it's its own parent (has no parent)
+        while (!q.empty()) {
+            colorIdType parent = q.front();
+            q.pop();
+            for (auto &neighbor :mst[parent]) {
+                if (!visited[neighbor.first]) {
+                    parentbv[neighbor.first] = parent;
+                    weightbv[neighbor.first] = neighbor.second;
+                    s.insert(neighbor.first);
+                    q.push(neighbor.first);
                 }
             }
+            visited[parent] = 1;
+            nodeCntr++; // just a counter for the log
+            if (nodeCntr % 10000000 == 0) {
+                std::cerr << "\rset parent of " << nodeCntr << " ccs";
+            }
         }
+
         std::cerr << "\r";
+        std::cerr <<"\n\nAAAAAAAAAA\n" << s.size() << "\n";
+        /*for (auto cntrr = 0; cntrr < weightbv.size(); cntrr++) {
+            if (weightbv[cntrr] == 0) {
+                std::cerr << "FOUND THE ID THAT IS NEVER SET: " << cntrr << "\n";
+            }
+        }*/
         // filling bbv
         // resize bbv
         logger->info("Filling BBV...");
@@ -272,7 +326,6 @@ bool MST::encodeColorClassUsingMST() {
     // fill in deltabv
     logger->info("Filling DeltaBV...");
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
-    sdsl::bit_vector visited(num_colorClasses, 0);
     sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
     for (auto i = 0; i < eqclass_files.size(); i++) {
         BitVectorRRR bv1;
@@ -288,7 +341,7 @@ bool MST::encodeColorClassUsingMST() {
                 bvp2 = &bv2;
             }
             for (colorIdType p = 0; p < parentbv.size(); p++) {
-                if (getBucketId(p, parentbv[p]) == i * mantis::NUM_BV_BUFFER + j) {
+                if (getBucketId(p, parentbv[p]) == i * num_of_ccBuffers + j) {
                     auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
                     for (auto &v : getDeltaList(p, parentbv[p])) {
                         deltabv[deltaOffset] = v;
@@ -413,6 +466,7 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
  */
 std::vector<uint32_t> MST::getDeltaList(uint64_t eqid1, uint64_t eqid2) {
     std::vector<uint32_t> res;
+    if (eqid1 == eqid2) return res;
     std::vector<uint64_t> eq1(((numSamples - 1) / 64) + 1, 0), eq2(((numSamples - 1) / 64) + 1, 0);
     buildColor(eq1, eqid1, bvp1);
     buildColor(eq2, eqid2, bvp2);
@@ -460,7 +514,7 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
     uint64_t cb1 = c1 / mantis::NUM_BV_BUFFER;
     uint64_t cb2 = c2 / mantis::NUM_BV_BUFFER;
     if (c2 == zero) // return the corresponding buffer for the non-zero colorId
-        return cb1 * num_of_ccBuffers;
+        return cb1 * num_of_ccBuffers + cb1;
     return cb1 * num_of_ccBuffers + cb2;
 }
 

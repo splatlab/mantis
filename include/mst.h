@@ -8,6 +8,7 @@
 #include <set>
 #include <vector>
 #include <queue>
+#include <cstdint>
 
 // sparsepp should be included before gqf_cpp! ow, we'll get a conflict in MAGIC_NUMBER
 #include "sparsepp/spp.h"
@@ -86,7 +87,7 @@ struct DisjointSets {
         els.resize(n);
         // Initially, all vertices are in
         // different sets and have rank 0.
-        for (uint64_t i = 0; i <= n; i++) {
+        for (uint64_t i = 0; i < n; i++) {
             //every element is parent of itself
             els[i].setParent(static_cast<colorIdType>(i));
         }
@@ -143,7 +144,7 @@ private:
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
-    colorIdType zero = 0;
+    colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
     std::vector<std::string> eqclass_files;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
