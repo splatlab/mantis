@@ -197,7 +197,7 @@ DisjointSets MST::kruskalMSF() {
             }
             edgeCntr++;
             if (edgeCntr % 1000000 == 0) {
-                logger->info("\r{} edges processed and {} were selected", edgeCntr, selectedEdgeCntr);
+                std::cerr << "\r" << edgeCntr << " edges processed and " << selectedEdgeCntr << " were selected";
             }
             edgeIdxInBucket++;
         }
