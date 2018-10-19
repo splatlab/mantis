@@ -401,9 +401,14 @@ std::set<workItem> MST::neighbors(CQF<KeyObject> &cqf, workItem n) {
     std::set<workItem> result;
     for (const auto b : dna::bases) {
         uint64_t eqid = 0;
-        if (exists(cqf, n.node << b, eqid))
+        if (exists(cqf, n.node << b, eqid)) {
             if (eqid != n.colorId)
                 result.insert(workItem(n.node << b, eqid));
+        }
+        if (exists(cqf, b >> n.node, eqid)) {
+            if (eqid != n.colorId)
+                result.insert(workItem(b >> n.node, eqid));
+        }
     }
     return result;
 }
