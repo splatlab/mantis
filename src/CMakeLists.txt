@@ -5,6 +5,7 @@ add_library(mantis_core STATIC
 		kmer.cc
 		query.cc
 		mstQuery.cc
+        validateMST.cc
 		util.cc
   		validatemantis.cc
   		coloreddbg.cc

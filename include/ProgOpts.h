@@ -42,5 +42,12 @@ class ValidateOpts {
   std::shared_ptr<spdlog::logger> console{nullptr};
 };
 
+class MSTValidateOpts {
+public:
+    std::string prefix;
+    std::uint64_t numSamples;
+    std::uint16_t k;
+    std::shared_ptr<spdlog::logger> console{nullptr};
+};
 
 #endif //__MANTIS_PROG_OPTS__

@@ -37,6 +37,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
     while (iparent != i) {
+        //std::cerr << i << " " << iparent << "\n";
         if (lru_cache and lru_cache->contains(i)) {
             const auto &vs = (*lru_cache)[i];
             for (auto v : vs) {
@@ -73,14 +74,17 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         ++height;
     }
     uint64_t pctr{0};
+    //std::cerr << "\n\nnext step:\n";
     for (auto f : froms) {
         bool found = false;
         uint64_t wrd{0};
         uint64_t offset{0};
         auto start = f;
+        //std::cerr << "\n" << start << ": ";
         do {
             wrd = bbv.get_int(start, 64);
             for (uint64_t j = 0; j < 64; j++) {
+                //std::cerr << deltabv[start + j] << " ";
                 flips[deltabv[start + j]] ^= 0x01;
                 if ((wrd >> j) & 0x01) {
                     found = true;

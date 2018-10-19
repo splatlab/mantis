@@ -47,6 +47,7 @@ int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
 int build_mst_main (QueryOpts& opt);
 int mst_query_main(QueryOpts &opt);
+int validate_mst_main(MSTValidateOpts &opt);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -55,7 +56,7 @@ int mst_query_main(QueryOpts &opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, query, validate, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -63,9 +64,11 @@ int main ( int argc, char *argv[] ) {
   BuildOpts bopt;
   QueryOpts qopt;
   ValidateOpts vopt;
+  MSTValidateOpts mvopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
+  mvopt.console = console;
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -98,6 +101,13 @@ int main ( int argc, char *argv[] ) {
                   required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "Prefix of input files."
   );
 
+  auto validate_mst_mode = (
+          command("validatemst").set(selected, mode::validate_mst),
+                  required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "Prefix of input files.",
+                  required("-k", "--kmer") & value("kmer", mvopt.k) % "size of k for kmer.",
+                  required("-n", "--num-samples") & value("num_samples", mvopt.numSamples) % "Number of Experiments."
+  );
+
   auto query_mode = (
                      command("query").set(selected, mode::query),
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
@@ -114,7 +124,7 @@ int main ( int argc, char *argv[] ) {
                      );
 
   auto cli = (
-              (build_mode | build_mst_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -139,6 +149,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
     case mode::build_mst: build_mst_main(qopt); break;
+    case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
