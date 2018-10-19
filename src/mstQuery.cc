@@ -16,16 +16,15 @@ void MSTQuery::loadIdx(std::string indexDir) {
     sbbv = sdsl::bit_vector::select_1_type(&bbv);
     zero = parentbv.size() - 1; // maximum color id which
     logger->info("Loaded the new color class index");
-    logger->info("\t--> parent size: ", parentbv.size());
-    logger->info("\t--> delta size: ", deltabv.size());
-    logger->info("\t--> boundary size: ", bbv.size());
+    logger->info("\t--> parent size: {}", parentbv.size());
+    logger->info("\t--> delta size: {}", deltabv.size());
+    logger->info("\t--> boundary size: {}", bbv.size());
 }
 
 std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats,
                                            LRUCacheMap *lru_cache,
                                            RankScores *rs,
-                                           nonstd::optional<uint64_t> &toDecode, // output param.  Also decode these
-                                           bool all = true) {
+                                           nonstd::optional<uint64_t> &toDecode) {
     (void) rs;
     std::vector<uint32_t> flips(numSamples);
     std::vector<uint32_t> xorflips(numSamples, 0);
@@ -95,40 +94,29 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         } while (!found);
     }
 
-    if (!all) { // return the indices of set bits
-        std::vector<uint64_t> eq;
-        eq.reserve(numWrds);
-        uint64_t one = 1;
-        for (i = 0; i < numSamples; i++) {
-            if (flips[i] ^ xorflips[i]) {
-                eq.push_back(i);
-            }
-        }
-        return eq;
-    }
-    std::vector<uint64_t> eq(numWrds);
+    std::vector<uint64_t> eq;
+    eq.reserve(numWrds);
     uint64_t one = 1;
     for (i = 0; i < numSamples; i++) {
         if (flips[i] ^ xorflips[i]) {
-            uint64_t idx = i / 64;
-            eq[idx] = eq[idx] | (one << (i % 64));
+            eq.push_back(i);
         }
     }
     return eq;
 }
 
 void MSTQuery::findSamples(CQF<KeyObject> &dbg,
-                                          LRUCacheMap &lru_cache,
-                                          RankScores *rs,
-                                          QueryStats &queryStats) {
+                           LRUCacheMap &lru_cache,
+                           RankScores *rs,
+                           QueryStats &queryStats) {
     mantis::EqMap query_eqclass_map;
     std::unordered_set<uint64_t> query_eqclass_set;
     for (auto &kv : kmer2cidMap) {
         KeyObject key(kv.first, 0, 0);
         uint64_t eqclass = dbg.query(key, 0);
         if (eqclass) {
-            kv.second = eqclass-1;
-            query_eqclass_set.insert(eqclass-1);
+            kv.second = eqclass - 1;
+            query_eqclass_set.insert(eqclass - 1);
         }
     }
 
@@ -148,10 +136,10 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
             toDecode.reset();
             dummy.reset();
             queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
-            setbits = buildColor(eqclass_id, queryStats, &lru_cache, rs, toDecode, false);
+            setbits = buildColor(eqclass_id, queryStats, &lru_cache, rs, toDecode);
             lru_cache.emplace(eqclass_id, setbits);
             if ((queryStats.trySample) and toDecode) {
-                auto s = buildColor(*toDecode, queryStats, nullptr, nullptr, dummy, false);
+                auto s = buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
                 lru_cache.emplace(*toDecode, s);
             }
         }
@@ -176,7 +164,7 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
             uint64_t first_rev = 0;
             uint64_t item = 0;
             bool allNuclValid = true;
-            for(uint32_t i = 0; i < kmer_size; i++) { //First kmer
+            for (uint32_t i = 0; i < kmer_size; i++) { //First kmer
                 uint8_t curr = Kmer::map_base(read[i]);
                 if (curr > DNA_MAP::G) { // 'N' is encountered
                     if (i + 1 < read.length())
@@ -235,11 +223,11 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
 
 mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
     mantis::QueryResult res(numSamples);
-    auto requiredCnt = static_cast<uint8_t>(queryK-indexK+1);
+    auto requiredCnt = static_cast<uint8_t>(queryK - indexK + 1);
     while (read.length() > queryK) {
         uint64_t idx2replace = 0;
         std::vector<uint8_t> samples(numSamples);
-        std::vector<std::vector<bool>> pastKmers(queryK-indexK+1);
+        std::vector<std::vector<bool>> pastKmers(queryK - indexK + 1);
         for (auto &v : pastKmers) {
             v.resize(numSamples, false);
         }
@@ -247,7 +235,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
         uint64_t first_rev = 0;
         uint64_t item = 0;
         bool allNuclValid = true;
-        for(uint32_t i = 0; i < indexK; i++) { //First kmer
+        for (uint32_t i = 0; i < indexK; i++) { //First kmer
             uint8_t curr = Kmer::map_base(read[i]);
             if (curr > DNA_MAP::G) { // 'N' is encountered
                 if (i + 1 < read.length())
@@ -263,7 +251,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
         if (allNuclValid) {
             first = first >> 2;
             first_rev = static_cast<uint64_t >(Kmer::reverse_complement(first, indexK));
-            item = Kmer::compare_kmers(first, first_rev)? first : first_rev;
+            item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
             for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                 samples[c]++;
                 pastKmers[idx2replace][c] = true;
@@ -287,7 +275,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                 auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
                 tmp <<= (queryK * 2 - 2);
                 next_rev = next_rev | tmp;
-                item = Kmer::compare_kmers(first, first_rev)? first : first_rev;
+                item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
                 for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                     samples[c]++;
                     pastKmers[idx2replace][c] = true;
@@ -319,7 +307,7 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                     auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
                     tmp <<= (queryK * 2 - 2);
                     next_rev = next_rev | tmp;
-                    item = Kmer::compare_kmers(first, first_rev)? first : first_rev;
+                    item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
                     for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                         samples[c]++;
                         pastKmers[idx2replace][c] = true;
@@ -334,10 +322,10 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
 }
 
 void output_results(std::string &queryFile,
-                          MSTQuery &mstQuery,
-                          std::ofstream &opfile,
-                          std::vector<std::string> &sampleNames,
-                          QueryStats &queryStats) {
+                    MSTQuery &mstQuery,
+                    std::ofstream &opfile,
+                    std::vector<std::string> &sampleNames,
+                    QueryStats &queryStats) {
     std::ifstream ipfile(queryFile);
     std::string read;
     while (ipfile >> read) {
@@ -352,11 +340,11 @@ void output_results(std::string &queryFile,
 }
 
 void output_results_json(std::string &queryFile,
-                               MSTQuery &mstQuery,
-                               std::ofstream &opfile,
-                               std::vector<std::string> &sampleNames,
-                               QueryStats &queryStats,
-                               uint64_t nquery) {
+                         MSTQuery &mstQuery,
+                         std::ofstream &opfile,
+                         std::vector<std::string> &sampleNames,
+                         QueryStats &queryStats,
+                         uint64_t nquery) {
     std::ifstream ipfile(queryFile);
     std::string read;
     opfile << "[\n";

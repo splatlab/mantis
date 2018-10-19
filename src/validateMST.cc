@@ -31,26 +31,28 @@ void loadEqs(spdlog::logger *logger, std::string prefix, eqvec &bvs) {
             bvs.push_back(bv);
             sdsl::load_from_file(bvs.back(), eqfile);
         }
-
-    std::cerr << "loaded all the equivalence classes: "
-              << ((bvs.size() - 1) * mantis::NUM_BV_BUFFER + bvs.back().size())
-              << "\n";
+    logger->info("Done loading all the equivalence classes.");
 }
 
-void buildColor(eqvec &bvs,
-                std::vector<uint64_t> &eq,
+std::vector<uint64_t> buildColor(eqvec &bvs,
                 uint64_t eqid,
                 uint64_t num_samples) {
-    uint64_t i{0}, bitcnt{0}, wrdcnt{0};
+    std::vector<uint64_t> eq;
+    eq.reserve(num_samples);
+    uint64_t i{0}, bitcnt{0};
     uint64_t idx = eqid / mantis::NUM_BV_BUFFER;
     uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
 //std::cerr << eqid << " " << num_samples << " " << idx << " " << offset << "\n";
     while (i<num_samples) {
         bitcnt = std::min(num_samples - i, (uint64_t) 64);
         uint64_t wrd = (bvs[idx]).get_int(offset * num_samples + i, bitcnt);
-        eq[wrdcnt++] = wrd;
+        for (auto j=0; j < bitcnt; j++) {
+            if ((wrd >> j) & 0x01)
+                eq.push_back(i+j);
+        }
         i += bitcnt;
     }
+    return eq;
 }
 
 
@@ -75,17 +77,16 @@ int validate_mst_main(MSTValidateOpts &opt) {
     for (auto &bv:bvs) {
         eqCount += bv.size()/opt.numSamples;
     }
-    logger->info("Done Loading color classes. Total # of color classes is {}", eqCount);
-    std::cerr << "num samples: " << opt.numSamples << "\n";
+    logger->info("Done Loading color classes."
+                 "\n\t# of color classes: {}"
+                 "\n\t# of Samples: {}", eqCount, opt.numSamples);
     uint64_t cntr{0};
     LRUCacheMap cache_lru(100000);
     for (uint64_t idx = 0; idx < eqCount; idx++) {
-        //std::cerr << "\nINDEX: " << idx << "\n";
         nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-        std::vector<uint64_t> newEq = mstQuery.buildColor(idx, queryStats, &cache_lru, nullptr, dummy, true);
-        //cache_lru.emplace(idx, newEq);
-        std::vector<uint64_t> oldEq((uint64_t) std::ceil((double) opt.numSamples / 64.0));
-        buildColor(bvs, oldEq, idx, opt.numSamples);
+        std::vector<uint64_t> newEq = mstQuery.buildColor(idx, queryStats, &cache_lru, nullptr, dummy);
+        cache_lru.emplace(idx, newEq);
+        std::vector<uint64_t> oldEq = buildColor(bvs, idx, opt.numSamples);
         if (newEq != oldEq) {
             std::cerr << "AAAAA! LOOOSER!!\n";
             std::cerr << "index=" << idx << "\n";
@@ -102,9 +103,9 @@ int validate_mst_main(MSTValidateOpts &opt) {
             std::exit(1);
         }
         cntr++;
-        if (cntr % 10000000 == 0) {
-            std::cerr << cntr << " eqs were the same\n";
+        if (cntr % 1000000 == 0) {
+            std::cerr << "\r" << cntr/1000000 << "M eqs were the same";
         }
     }
-    std::cerr << "WOOOOW! Validation passed\n";
+    logger->info("\nWOOOOW! Validation passed\n");
 }

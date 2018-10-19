@@ -83,8 +83,8 @@ public:
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
                                      LRUCacheMap *lru_cache,
                                      RankScores* rs,
-                                     nonstd::optional<uint64_t>& toDecode, // output param.  Also decode these
-                                     bool all);
+                                     nonstd::optional<uint64_t>& toDecode // output param.  Also decode these
+                                     );
 
     uint64_t parseKmers(std::string filename, uint64_t kmer_size);
     void findSamples(CQF<KeyObject> &dbg,
