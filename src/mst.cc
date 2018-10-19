@@ -40,9 +40,6 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
         return id1 < id2;
     });
 
-    for (auto &eqfile : eqclass_files) {
-        std::cerr << eqfile << "\n";
-    }
     num_of_ccBuffers = eqclass_files.size();
     edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
 
@@ -57,7 +54,7 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
 }
 
 /**
- * Building an MST consists of 3 main steps:
+ * Builds an MST consists of 3 main steps:
  * 1. construct the color graph for all the colorIds derived from dbg
  *      This phase just requires loading the CQF
  * 2. calculate the weights of edges in the color graph
@@ -65,34 +62,13 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
  * 3. find MST of the weighted color graph
  */
 void MST::buildMST() {
-    /*BitVectorRRR bv;
-    sdsl::load_from_file(bv, eqclass_files.back());
-    uint64_t eqcnt = ((eqclass_files.size()-1)*mantis::NUM_BV_BUFFER) + (bv.size()/numSamples);
-    std::cerr << "total # of eq classes: " << eqcnt << "\n";
-    std::string cqf_file(prefix + mantis::CQF_FILE);
-    CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
-    k = cqf.keybits() / 2;
-    auto it = cqf.begin();
-    uint64_t kmerCntr = 0;
-    while (!it.done()) {
-        KeyObject keyObject = *it;
-        if (keyObject.count > eqcnt) {
-            std::cout << std::string(dna::canonical_kmer(k, keyObject.key)) << " " << keyObject.count << "\n";
-        }
-        ++it;
-        kmerCntr++;
-        if (kmerCntr % 10000000 == 0) {
-            std::cerr << "\r" << kmerCntr/1000000 << "M kmers & " << num_edges << " edges";
-        }
-    }
-    std::exit(1);*/
     buildEdgeSets();
     calculateWeights();
     encodeColorClassUsingMST();
 }
 
 /**
- * iterate over all elements of CQF,
+ * iterates over all elements of CQF,
  * find all the existing neighbors, and build a color graph based on that
  * @return true if the color graph build was successful
  */
@@ -153,7 +129,7 @@ bool MST::buildEdgeSets() {
 }
 
 /**
- * load the color class table in parts
+ * loads the color class table in parts
  * calculate the hamming distance between the color bitvectors fetched from color class table
  * for each pair of color IDs
  * having w buckets where w is the maximum possible weight (number of experiments)
@@ -204,7 +180,7 @@ bool MST::calculateWeights() {
 }
 
 /**
- * Finding Minimim Spanning Forest of color graph using Kruskal Algorithm
+ * Finds Minimum Spanning Forest of color graph using Kruskal Algorithm
  *
  * The algorithm's basic implementation taken from
  * https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
@@ -259,6 +235,12 @@ DisjointSets MST::kruskalMSF() {
     return ds;
 }
 
+/**
+ * calls kruskal algorithm to build an MST of the color graph
+ * goes over the MST and fills in the int-vectors parentbv, bbv, and deltabv
+ * serializes these three int-vectors as the encoding of color classes
+ * @return true if encoding and serializing the DS is successful
+ */
 bool MST::encodeColorClassUsingMST() {
     // build mst of color class graph
     kruskalMSF();
@@ -359,7 +341,7 @@ bool MST::encodeColorClassUsingMST() {
 }
 
 /**
- * for each element of cqf, finds its neighbors
+ * finds the neighbors of each kmer in the cqf,
  * and adds an edge of the element's colorId and its neighbor's
  * @param cqf (required to query for existence of neighbors)
  * @param it iterator to the elements of cqf
@@ -392,7 +374,7 @@ void MST::findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj) {
 }
 
 /**
- * Find neighbors of a node in cqf
+ * finds neighbors of a node in cqf
  * @param cqf
  * @param n : work_item containing node and colorId (colorId will be filled)
  * @return set of neighbors for current node n and their colorIds
@@ -432,7 +414,7 @@ bool MST::exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, uint64_t &eqid) {
 }
 
 /**
- * calculate hamming distance between the bvs of two color class ids
+ * calculates hamming distance between the bvs of two color class ids
  * @param eqid1 first color class id
  * @param eqid2 second color class id
  * @return
@@ -451,8 +433,8 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
 }
 
 /**
- * for two non-zero nodes, list indices that xor of the bits is 1
- * for one non-zero node, list indices that the bit is 1
+ * for two non-zero nodes, lists indices that xor of the bits is 1
+ * for one non-zero node, lists indices that the bit is 1
  *
  * @param eqid1
  * @param eqid2
