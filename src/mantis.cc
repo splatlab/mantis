@@ -111,6 +111,7 @@ int main ( int argc, char *argv[] ) {
   auto query_mode = (
                      command("query").set(selected, mode::query),
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
+                     required("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "Prefix of input files.",
                      option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
                      value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."

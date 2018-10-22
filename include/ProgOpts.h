@@ -30,6 +30,7 @@ class QueryOpts {
   std::string prefix;
   std::string output{"samples.output"};
   std::string query_file;
+  uint64_t k = 31;
   bool use_json{false};
   std::shared_ptr<spdlog::logger> console{nullptr};
 };

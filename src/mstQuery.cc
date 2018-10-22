@@ -159,7 +159,8 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
     uint64_t numOfQueries{0};
     while (ipfile >> read) {
         numOfQueries++;
-        while (read.length() > kmer_size) {
+        bool done = false;
+        while (!done and read.length() > kmer_size) {
             uint64_t first = 0;
             uint64_t first_rev = 0;
             uint64_t item = 0;
@@ -168,9 +169,9 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
                 uint8_t curr = Kmer::map_base(read[i]);
                 if (curr > DNA_MAP::G) { // 'N' is encountered
                     if (i + 1 < read.length())
-                        read = read.substr(i + 1, read.length());
+                        read = read.substr(i + 1);
                     else
-                        read = ""; // you've reached the end of a sequence (last nucl. is N)
+                        done = true; // you've reached the end of a sequence (last nucl. is N)
                     allNuclValid = false;
                     break;
                 }
@@ -192,15 +193,15 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
 
                 uint64_t next = (first << 2) & BITMASK(2 * kmer_size);
                 uint64_t next_rev = first_rev >> 2;
-
-                for (uint64_t i = kmer_size; i < read.length(); i++) { //next kmers
+                uint64_t i = 0;
+                for (i = kmer_size; i < read.length(); i++) { //next kmers
                     //cout << "K: " << read.substr(i-K+1,K) << endl;
                     uint8_t curr = Kmer::map_base(read[i]);
                     if (curr > DNA_MAP::G) { // 'N' is encountered
                         if (i + 1 < read.length())
-                            read = read.substr(i + 1, read.length());
+                            read = read.substr(i + 1);
                         else
-                            read = "";
+                            done = true;
                         break;
                     }
                     next |= curr;
@@ -215,6 +216,7 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
                     next = (next << 2) & BITMASK(2 * kmer_size);
                     next_rev = next_rev >> 2;
                 }
+                if (i == read.length()) done = true;
             }
         }
     }
@@ -222,12 +224,17 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
 }
 
 mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
-    mantis::QueryResult res(numSamples);
+    mantis::QueryResult res(numSamples, 0);
     auto requiredCnt = static_cast<uint8_t>(queryK - indexK + 1);
-    while (read.length() > queryK) {
+    auto queryIndxKDiff = queryK - indexK + 1;
+//    std::cerr << "required count: " << requiredCnt << " num samples: " << numSamples << "\n";
+    bool done = false;
+    std::cerr << "\n" << read << ": ";
+    while (!done and read.length() > queryK) {
+//        std::cerr << read << "\n";
         uint64_t idx2replace = 0;
         std::vector<uint8_t> samples(numSamples);
-        std::vector<std::vector<bool>> pastKmers(queryK - indexK + 1);
+        std::vector<std::vector<bool>> pastKmers(queryIndxKDiff);
         for (auto &v : pastKmers) {
             v.resize(numSamples, false);
         }
@@ -239,9 +246,9 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
             uint8_t curr = Kmer::map_base(read[i]);
             if (curr > DNA_MAP::G) { // 'N' is encountered
                 if (i + 1 < read.length())
-                    read = read.substr(i + 1, read.length());
+                    read = read.substr(i + 1);
                 else
-                    read = ""; // you've reached the end of a sequence (last nucl. is N)
+                    done = true; // you've reached the end of a sequence (last nucl. is N)
                 allNuclValid = false;
                 break;
             }
@@ -252,30 +259,36 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
             first = first >> 2;
             first_rev = static_cast<uint64_t >(Kmer::reverse_complement(first, indexK));
             item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
+            pastKmers[idx2replace].assign(pastKmers[idx2replace].size(), false);
+            std::cerr << cid2expMap[kmer2cidMap[item]].size() << ", ";
             for (auto &c : cid2expMap[kmer2cidMap[item]]) {
+//                std::cerr << c << " " << pastKmers[idx2replace][c] << " ";
                 samples[c]++;
                 pastKmers[idx2replace][c] = true;
+//                std::cerr << pastKmers[idx2replace][c] << ",";
             }
+//            std::cerr << "\n";
 
             uint64_t next = (first << 2) & BITMASK(2 * indexK);
             uint64_t next_rev = first_rev >> 2;
 
             for (uint64_t i = indexK; i < queryK; i++) { //next kmers
-                idx2replace++;
+                idx2replace = ++idx2replace % queryIndxKDiff;
                 uint8_t curr = Kmer::map_base(read[i]);
                 if (curr > DNA_MAP::G) { // 'N' is encountered
                     if (i + 1 < read.length())
-                        read = read.substr(i + 1, read.length());
+                        read = read.substr(i + 1);
                     else
-                        read = "";
+                        done = true;
                     allNuclValid = false;
                     break;
                 }
                 next |= curr;
                 auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
-                tmp <<= (queryK * 2 - 2);
+                tmp <<= (indexK * 2 - 2);
                 next_rev = next_rev | tmp;
                 item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
+                std::cerr << cid2expMap[kmer2cidMap[item]].size() << ", ";
                 for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                     samples[c]++;
                     pastKmers[idx2replace][c] = true;
@@ -285,40 +298,53 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
             }
             if (allNuclValid) {
                 idx2replace = 0;
-                for (auto c = 0; c < samples.size(); c++) {
-                    if (samples[c] == requiredCnt) {
-                        res[c]++;
+                uint64_t i = 0;
+                for (i = queryK; i < read.length(); i++) { //next kmers
+                    for (auto c = 0; c < samples.size(); c++) {
+                        if (samples[c] == requiredCnt) {
+                            res[c]++;
+                        }
+                        if (pastKmers[idx2replace][c]) {
+                            samples[c]--;
+                        }
+                        pastKmers[idx2replace][c] = false;
                     }
-                    if (pastKmers[idx2replace][c]) {
-                        samples[c]--;
-                    }
-                    pastKmers[idx2replace][c] = false;
-                }
-                for (uint64_t i = queryK; i < read.length(); i++) { //next kmers
+//                    std::cerr << i << "\n";
                     uint8_t curr = Kmer::map_base(read[i]);
                     if (curr > DNA_MAP::G) { // 'N' is encountered
                         if (i + 1 < read.length())
-                            read = read.substr(i + 1, read.length());
+                            read = read.substr(i + 1);
                         else
-                            read = "";
+                            done = true;
                         break;
                     }
                     next |= curr;
                     auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
-                    tmp <<= (queryK * 2 - 2);
+                    tmp <<= (indexK * 2 - 2);
                     next_rev = next_rev | tmp;
                     item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
+                    std::cerr << cid2expMap[kmer2cidMap[item]].size() << ", ";
                     for (auto &c : cid2expMap[kmer2cidMap[item]]) {
                         samples[c]++;
                         pastKmers[idx2replace][c] = true;
                     }
-                    idx2replace++;
+                    idx2replace = ++idx2replace % queryIndxKDiff;
                     next = (next << 2) & BITMASK(2 * queryK);
                     next_rev = next_rev >> 2;
+                }
+//                std::cerr << "next\n";
+                if (i == read.length())  {
+                    for (auto c = 0; c < samples.size(); c++) {
+                        if (samples[c] == requiredCnt) {
+                            res[c]++;
+                        }
+                    }
+                    done = true;
                 }
             }
         }
     }
+    return res;
 }
 
 void output_results(std::string &queryFile,
@@ -328,14 +354,18 @@ void output_results(std::string &queryFile,
                     QueryStats &queryStats) {
     std::ifstream ipfile(queryFile);
     std::string read;
+    CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
     while (ipfile >> read) {
-        CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
         opfile << "seq" << queryStats.cnt++ << '\t' << read.length() << '\n';
         mantis::QueryResult result = mstQuery.convertIndexK2QueryK(read);
+//        std::cerr << "result.size(): " << result.size() << "\n";
         for (uint64_t i = 0; i < result.size(); i++) {
-            if (result[i] > 0)
+            if (result[i] > 0) {
+//                std::cerr << i << "\n";
                 opfile << sampleNames[i] << '\t' << result[i] << '\n';
+            }
         }
+//        std::cerr << "next read\n";
     }
 }
 
@@ -349,8 +379,8 @@ void output_results_json(std::string &queryFile,
     std::string read;
     opfile << "[\n";
     uint64_t qctr{0};
+    CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
     while (ipfile >> read) {
-        CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
         opfile << "{ \"qnum\": " << queryStats.cnt++ << ",  \"num_kmers\": "
                << read.length() << ", \"res\": {\n";
         mantis::QueryResult result = mstQuery.convertIndexK2QueryK(read);
@@ -394,7 +424,7 @@ std::vector<std::string> loadSampleFile(const std::string &sampleFileAddr) {
  * ============================================================================
  */
 int mst_query_main(QueryOpts &opt) {
-    uint32_t queryK = 31;
+    uint32_t queryK = opt.k;
     QueryStats queryStats;
 
     spdlog::logger *logger = opt.console.get();
@@ -415,12 +445,14 @@ int mst_query_main(QueryOpts &opt) {
     logger->info("Done Loading color classes. Total # of color classes is {}",
                  mstQuery.parentbv.size() - 1);
 
-    logger->info("Querying the colored dbg.");
+    logger->info("Querying colored dbg.");
     std::ofstream opfile(opt.output);
     LRUCacheMap cache_lru(100000);
     RankScores rs(1);
     auto numOfQueries = mstQuery.parseKmers(opt.query_file, indexK);
+    logger->info("Done parsing kmers in the query file.");
     mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
+    logger->info("Done first round over the query file and finding samples for index k: {}", cqf.keybits()/2);
     if (opt.use_json) {
         output_results_json(opt.query_file, mstQuery, opfile, sampleNames, queryStats, numOfQueries);
     } else {
