@@ -160,6 +160,7 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
     std::ifstream ipfile(filename);
     std::string read;
     uint64_t numOfQueries{0};
+    CLI::AutoTimer timer{"First round going over the file ", CLI::Timer::Big};
     while (ipfile >> read) {
         numOfQueries++;
         bool done = false;
@@ -357,7 +358,7 @@ void output_results(std::string &queryFile,
                     QueryStats &queryStats) {
     std::ifstream ipfile(queryFile);
     std::string read;
-    CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
+    CLI::AutoTimer timer{"Second round going over the file + query time ", CLI::Timer::Big};
     while (ipfile >> read) {
         opfile << "seq" << queryStats.cnt++ << '\t' << read.length() << '\n';
         mantis::QueryResult result = mstQuery.convertIndexK2QueryK(read);
