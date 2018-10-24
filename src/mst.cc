@@ -11,7 +11,7 @@
 #include "ProgOpts.h"
 
 MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
-        prefix(std::move(prefixIn)) {
+        prefix(std::move(prefixIn)), lru_cache(10000) {
     logger = loggerIn.get();
 
     // Make sure the prefix is a full folder
@@ -51,6 +51,8 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn) :
     }
     sampleid.close();
     logger->info("# of experiments: {}", numSamples);
+
+
 }
 
 /**
@@ -65,6 +67,7 @@ void MST::buildMST() {
     buildEdgeSets();
     calculateWeights();
     encodeColorClassUsingMST();
+    logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
 /**
@@ -468,6 +471,11 @@ std::vector<uint32_t> MST::getDeltaList(uint64_t eqid1, uint64_t eqid2) {
  */
 void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv) {
     if (eqid == zero) return;
+    if (lru_cache.contains(eqid)) {
+        eq = lru_cache[eqid];
+        gcntr++;
+        return;
+    }
     uint64_t i{0}, bitcnt{0}, wrdcnt{0};
     uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
     while (i < numSamples) {
@@ -476,6 +484,7 @@ void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv)
         eq[wrdcnt++] = wrd;
         i += bitcnt;
     }
+    lru_cache.emplace(eqid, eq);
 }
 
 /**

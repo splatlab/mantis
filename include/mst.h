@@ -21,6 +21,9 @@
 #include "sdsl/bit_vectors.hpp"
 #include "gqf/hashutil.h"
 
+#include "lru/lru.hpp"
+
+using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
@@ -146,6 +149,8 @@ private:
     uint64_t mstTotalWeight = 0;
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
+    LRUCacheMap lru_cache;
+    uint64_t gcntr=0;
     std::vector<std::string> eqclass_files;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
     std::vector<std::vector<Edge>> weightBuckets;
