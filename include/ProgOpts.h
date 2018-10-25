@@ -31,6 +31,7 @@ class QueryOpts {
   std::string output{"samples.output"};
   std::string query_file;
   uint64_t k = 31;
+  uint32_t numThreads = 1;
   bool use_json{false};
   std::shared_ptr<spdlog::logger> console{nullptr};
 };

@@ -98,7 +98,8 @@ int main ( int argc, char *argv[] ) {
                      );
   auto build_mst_mode = (
           command("mst").set(selected, mode::build_mst),
-                  required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "Prefix of input files."
+                  required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "Prefix of input files.",
+                  option("-t", "--threads") & value("num_threads", qopt.numThreads) % "number of threads"
   );
 
   auto validate_mst_mode = (

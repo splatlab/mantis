@@ -9,6 +9,8 @@
 #include <vector>
 #include <queue>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 
 // sparsepp should be included before gqf_cpp! ow, we'll get a conflict in MAGIC_NUMBER
 #include "sparsepp/spp.h"
@@ -24,23 +26,27 @@
 #include "lru/lru.hpp"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+using SpinLockT = std::mutex;
+
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
+
+
 struct Edge {
     colorIdType n1;
     colorIdType n2;
 
     Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {}
 
-    bool operator==(const Edge& e) const {
+    bool operator==(const Edge &e) const {
         return n1 == e.n1 && n2 == e.n2;
     }
 };
 
 // note: @fatal: careful! The hash highly depends on the length of the edge ID (uint32)
 struct edge_hash {
-    uint64_t operator() (const Edge& e) const {
+    uint64_t operator()(const Edge &e) const {
         return MurmurHash64A(&e, sizeof(Edge), 2038074743);
         /*uint64_t res = e.n1;
         return (res << 32) | (uint64_t)e.n2;*/
@@ -123,22 +129,35 @@ struct DisjointSets {
 
 class MST {
 public:
-    MST(std::string prefix, std::shared_ptr<spdlog::logger> logger);
+    MST(std::string prefix, std::shared_ptr<spdlog::logger> logger, uint32_t numThreads);
+
     void buildMST();
 
 private:
     bool buildEdgeSets();
-    void findNeighborEdges(CQF<KeyObject>& cqf, KeyObject &keyobj);
+
+    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
+
     bool calculateWeights();
+
     bool encodeColorClassUsingMST();
+
     DisjointSets kruskalMSF();
-    std::set<workItem> neighbors(CQF<KeyObject>& cqf, workItem n);
-    bool exists(CQF<KeyObject>& cqf, dna::canonical_kmer e, uint64_t &eqid);
+
+    std::set<workItem> neighbors(CQF<KeyObject> &cqf, workItem n);
+
+    bool exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, uint64_t &eqid);
+
     uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2);
-    std::vector<uint32_t> getDeltaList(uint64_t eqid1,uint64_t eqid2);
+
+    std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
+
     void buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv);
+
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
+    void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
+                                           sdsl::bit_vector &nodes, uint64_t &maxId);
 
     std::string prefix;
     uint32_t numSamples = 0;
@@ -150,11 +169,15 @@ private:
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
     LRUCacheMap lru_cache;
-    uint64_t gcntr=0;
+    uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;
     std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};
+    uint32_t nThreads = 1;
+    SpinLockT iomutex;
+
 };
+
 #endif //MANTIS_MST_H

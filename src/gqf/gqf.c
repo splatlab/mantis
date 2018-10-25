@@ -2246,7 +2246,7 @@ int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position)
 	return qfi->current;
 }
 
-int64_t qf_iterator_key_value(const QF *qf, QFi *qfi, uint64_t key, uint64_t
+int64_t qf_iterator_from_key_value(const QF *qf, QFi *qfi, uint64_t key, uint64_t
 															value, uint8_t flags)
 {
 	if (key >= qf->metadata->range) {

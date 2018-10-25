@@ -85,19 +85,22 @@ class CQF {
 		class Iterator {
 			public:
 				Iterator(QFi it);
+				Iterator(QFi it, uint64_t endHash);
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
+				bool reachedHashLimit(void) const;
 
 				key_obj get_cur_hash(void) const;
 
 				QFi iter;
 			private:
-				uint64_t end_hash;
+				uint64_t endHash;
 		};
 
 		Iterator begin(void) const;
 		Iterator end(void) const;
+		Iterator setIteratorLimits(uint64_t start_hash, uint64_t end_hash) const;
 
 	private:
 		QF cqf;
@@ -209,6 +212,10 @@ CQF<key_obj>::Iterator::Iterator(QFi it)
 	: iter(it) {};
 
 template <class key_obj>
+CQF<key_obj>::Iterator::Iterator(QFi it, uint64_t endHashIn)
+		: iter(it), endHash(endHashIn) {};
+
+template <class key_obj>
 key_obj CQF<key_obj>::Iterator::operator*(void) const {
 	uint64_t key = 0, value = 0, count = 0;
 	qfi_get_key(&iter, &key, &value, &count);
@@ -235,6 +242,16 @@ bool CQF<key_obj>::Iterator::done(void) const {
 	return qfi_end(&iter);
 }
 
+/* Currently, the iterator only traverses forward. So, we only need to check
+ * the right side limit.
+ */
+template<class key_obj>
+bool CQF<key_obj>::Iterator::reachedHashLimit(void) const {
+	uint64_t key = 0, value = 0, count = 0;
+	qfi_get_hash(&iter, &key, &value, &count);
+	return key >= endHash || qfi_end(&iter);
+}
+
 template<class key_obj>
 typename CQF<key_obj>::Iterator CQF<key_obj>::begin(void) const {
 	QFi qfi;
@@ -248,5 +265,13 @@ typename CQF<key_obj>::Iterator CQF<key_obj>::end(void) const {
 	qf_iterator_from_position(&this->cqf, &qfi, 0xffffffffffffffff);
 	return Iterator(qfi, UINT64_MAX);
 }
+
+template<class key_obj>
+typename CQF<key_obj>::Iterator CQF<key_obj>::setIteratorLimits(uint64_t start_hash, uint64_t end_hash) const {
+	QFi qfi;
+	qf_iterator_from_key_value(&this->cqf, &qfi, start_hash, 0, QF_KEY_IS_HASH);
+	return Iterator(qfi, end_hash);
+}
+
 
 #endif
