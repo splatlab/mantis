@@ -157,7 +157,7 @@ private:
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
-                                           sdsl::bit_vector &nodes, uint64_t &maxId);
+                                           sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
     std::string prefix;
     uint32_t numSamples = 0;
@@ -176,7 +176,7 @@ private:
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
-    SpinLockT iomutex;
+    SpinLockT edgeInsertionMutex;
 
 };
 
