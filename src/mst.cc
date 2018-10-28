@@ -231,6 +231,7 @@ bool MST::calculateWeights() {
                 sdsl::load_from_file(bv2, eqclass_files[j]);
                 bvp2 = &bv2;
             }
+            std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeset.size();
             for (auto &edge : edgeset) {
                 auto w = hammingDist(edge.n1, edge.n2); // hammingDist uses bvp1 and bvp2
                 if (w == 0) {
@@ -243,6 +244,7 @@ bool MST::calculateWeights() {
             edgeset.clear();
         }
     }
+    std::cerr << "\r";
     /*if (bvp1 == nullptr)
         return false;
     if (bvp1 == bvp2) {
