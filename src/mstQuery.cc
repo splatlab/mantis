@@ -5,6 +5,7 @@
 #include <vector>
 #include <CLI/Timer.hpp>
 #include <canonicalKmer.h>
+#include <sparsepp/spp.h>
 
 #include "ProgOpts.h"
 #include "kmer.h"
@@ -229,6 +230,7 @@ uint64_t MSTQuery::parseKmers(std::string filename, uint64_t kmer_size) {
 
 mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
     mantis::QueryResult res(numSamples, 0);
+    spp::sparse_hash_set<uint64_t> readkmers;
     auto requiredCnt = static_cast<uint8_t>(queryK - indexK + 1);
     auto queryIndxKDiff = queryK - indexK + 1;
 //    std::cerr << "required count: " << requiredCnt << " num samples: " << numSamples << "\n";
@@ -287,6 +289,9 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                     allNuclValid = false;
                     break;
                 }
+                first = first << 2;
+                first |= curr;
+
                 next |= curr;
                 auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
                 tmp <<= (indexK * 2 - 2);
@@ -303,9 +308,13 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
             if (allNuclValid) {
                 idx2replace = 0;
                 uint64_t i = 0;
+                uint64_t queryKmer = first, queryKmer_rev, queryItem; // to keep count of **unique** kmers
                 for (i = queryK; i < read.length(); i++) { //next kmers
+                    queryKmer_rev = static_cast<uint64_t >(Kmer::reverse_complement(queryKmer, queryK));
+                    queryItem = Kmer::compare_kmers(queryKmer, queryKmer_rev) ? queryKmer : queryKmer_rev;
+                    bool kmerNotFound = readkmers.find(queryItem) == readkmers.end();
                     for (auto c = 0; c < samples.size(); c++) {
-                        if (samples[c] == requiredCnt) {
+                        if (kmerNotFound and samples[c] == requiredCnt) {
                             res[c]++;
                         }
                         if (pastKmers[idx2replace][c]) {
@@ -313,6 +322,8 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                         }
                         pastKmers[idx2replace][c] = false;
                     }
+                    readkmers.insert(queryItem);
+
 //                    std::cerr << i << "\n";
                     uint8_t curr = Kmer::map_base(read[i]);
                     if (curr > DNA_MAP::G) { // 'N' is encountered
@@ -322,6 +333,10 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                             done = true;
                         break;
                     }
+                    queryKmer <<= 2;
+                    queryKmer |= curr;
+                    queryKmer &= BITMASK(2 * queryK);
+
                     next |= curr;
                     auto tmp = static_cast<uint64_t>(Kmer::reverse_complement_base(curr));
                     tmp <<= (indexK * 2 - 2);
@@ -338,8 +353,11 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                 }
 //                std::cerr << "next\n";
                 if (i == read.length())  {
+                    queryKmer_rev = static_cast<uint64_t >(Kmer::reverse_complement(queryKmer, queryK));
+                    queryItem = Kmer::compare_kmers(queryKmer, queryKmer_rev) ? queryKmer : queryKmer_rev;
+                    bool kmerNotFound = readkmers.find(queryItem) == readkmers.end();
                     for (auto c = 0; c < samples.size(); c++) {
-                        if (samples[c] == requiredCnt) {
+                        if (kmerNotFound and samples[c] == requiredCnt) {
                             res[c]++;
                         }
                     }
