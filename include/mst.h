@@ -159,6 +159,8 @@ private:
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
+    void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
+
     std::string prefix;
     uint32_t numSamples = 0;
     uint64_t k;
@@ -176,7 +178,7 @@ private:
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
-    SpinLockT edgeInsertionMutex;
+    SpinLockT colorMutex;
 
 };
 
