@@ -315,6 +315,11 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                     bool kmerNotFound = readkmers.find(queryItem) == readkmers.end();
                     for (auto c = 0; c < samples.size(); c++) {
                         if (kmerNotFound and samples[c] == requiredCnt) {
+/*
+                            if (c == 19)
+                                std::cerr << std::string(dna::canonical_kmer(queryK, queryItem)) << "\t";
+*/
+
                             res[c]++;
                         }
                         if (pastKmers[idx2replace][c]) {
@@ -358,14 +363,20 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                     bool kmerNotFound = readkmers.find(queryItem) == readkmers.end();
                     for (auto c = 0; c < samples.size(); c++) {
                         if (kmerNotFound and samples[c] == requiredCnt) {
+/*
+                            if (c == 19)
+                                std::cerr << std::string(dna::canonical_kmer(queryK, queryItem)) << "\t";
+*/
                             res[c]++;
                         }
                     }
+                    readkmers.insert(queryItem);
                     done = true;
                 }
             }
         }
     }
+    std::cerr << "\n";
     return res;
 }
 
