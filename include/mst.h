@@ -148,7 +148,8 @@ private:
 
     bool exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, uint64_t &eqid);
 
-    uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2);
+    uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2,
+                         uint64_t &srcId, std::vector<uint64_t> &srcEq);
 
     std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
 
@@ -157,9 +158,14 @@ private:
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
+                                           std::vector<spp::sparse_hash_set<Edge, edge_hash>> &edgesetList,
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
     void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
+
+    void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
+            sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
+            sdsl::bit_vector::select_1_type &sbbv );
 
     std::string prefix;
     uint32_t numSamples = 0;
@@ -173,7 +179,7 @@ private:
     LRUCacheMap lru_cache;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;
-    std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
+    std::vector<std::vector<Edge>> edgeBucketList;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};

@@ -43,7 +43,6 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
     });
 
     num_of_ccBuffers = eqclass_files.size();
-    edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
 
     std::string sample_file = prefix + mantis::SAMPLEID_FILE;//(prefix.c_str() , mantis::SAMPLEID_FILE);
     std::ifstream sampleid(sample_file);
@@ -53,8 +52,6 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
     }
     sampleid.close();
     logger->info("# of experiments: {}", numSamples);
-
-
 }
 
 /**
@@ -78,6 +75,10 @@ void MST::buildMST() {
  * @return true if the color graph build was successful
  */
 bool MST::buildEdgeSets() {
+    std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
+    edgeBucketList.resize(num_of_ccBuffers * num_of_ccBuffers);
+    edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
+
     logger->info("Reading colored dbg from disk.");
     std::string cqf_file(prefix + mantis::CQF_FILE);
     CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
@@ -90,11 +91,12 @@ bool MST::buildEdgeSets() {
 
     // build color class edges in a multi-threaded manner
     std::vector<std::thread> threads;
-    for(uint32_t i = 0; i < nThreads; ++i) {
+    for (uint32_t i = 0; i < nThreads; ++i) {
         threads.emplace_back(std::thread(&MST::buildPairedColorIdEdgesInParallel, this, i,
-                std::ref(cqf), std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
+                                         std::ref(cqf), std::ref(edgesetList),
+                                         std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
     }
-    for (auto& t : threads) { t.join(); }
+    for (auto &t : threads) { t.join(); }
 
     logger->info("Total number of kmers observed: {}", numOfKmers);
     logger->info("Total number of edges observed: {}", num_edges);
@@ -113,29 +115,51 @@ bool MST::buildEdgeSets() {
         logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, maxId);
     num_colorClasses = maxId + 1;
 
+    logger->info("Put edges in each bucket in a sorted list.");
+    for (auto bcntr = 0; bcntr < edgesetList.size(); bcntr++) {
+        auto &edgeset = edgesetList[bcntr];
+        std::vector<Edge> &edgeBucket = edgeBucketList[bcntr];
+        edgeBucket.reserve(edgeset.size());
+        for (auto &edge: edgeset) {
+            edgeBucket.push_back(edge);
+        }
+        std::sort(edgeBucket.begin(), edgeBucket.end(),
+                  [](Edge &e1, Edge &e2) {
+                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+                  });
+    }
+    logger->info("Done sorting the edges.");
+
     // Add an edge between edch color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
     zero = static_cast<colorIdType>(num_colorClasses);
     for (colorIdType colorId = 0; colorId < num_colorClasses; colorId++) {
-        /*if (edgesetList[getBucketId(colorId, zero)].find(Edge(colorId, zero)) != edgesetList[getBucketId(colorId, zero)].end()) {
+        /*if (edgeBucketList[getBucketId(colorId, zero)].find(Edge(colorId, zero)) != edgeBucketList[getBucketId(colorId, zero)].end()) {
             logger->error("already existed: {}, {}", colorId, zero);
             std::exit(1);
         }*/
-        edgesetList[getBucketId(colorId, zero)].insert(Edge(colorId, zero));
+        edgeBucketList[getBucketId(colorId, zero)].push_back(Edge(colorId, zero));
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
     return true;
 }
 
 void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
-                                            CQF<KeyObject> &cqf, sdsl::bit_vector &nodes,
+                                            CQF<KeyObject> &cqf,
+                                            std::vector<spp::sparse_hash_set<Edge, edge_hash>> &edgesetList,
+                                            sdsl::bit_vector &nodes,
                                             uint64_t &maxId, uint64_t &numOfKmers) {
-    //std::cout << "THREAD ..... " << threadId << "\n";
+    //std::cout << "THREAD ..... " << threadId << " " << cqf.range() << "\n";
     uint64_t kmerCntr{0}, localMaxId{0};
-    auto startPoint = threadId * (cqf.range() / nThreads);
-    auto endPoint = threadId+1==nThreads? cqf.range()+1:(threadId+1) * (cqf.range() / nThreads);
-    auto tmpEdgeListSize = MAX_ALLOWED_TMP_EDGES/nThreads;
+    __uint128_t startPoint = threadId * (cqf.range() / (__uint128_t) nThreads);
+    __uint128_t endPoint =
+            threadId + 1 == nThreads ? cqf.range() + 1 : (threadId + 1) * (cqf.range() / (__uint128_t) nThreads);
+        /*std::cerr << threadId << ": s" << (uint64_t) (startPoint/(__uint128_t)0xFFFFFFFFFFFFFFFF) << " "
+                  << "sr" << (uint64_t) (startPoint%(__uint128_t)0xFFFFFFFFFFFFFFFF) << " "
+                << "e" << (uint64_t) (endPoint/(__uint128_t)0xFFFFFFFFFFFFFFFF) << " "
+                << "er" << (uint64_t) (endPoint%(__uint128_t)0xFFFFFFFFFFFFFFFF) << "\n";*/
+    auto tmpEdgeListSize = MAX_ALLOWED_TMP_EDGES / nThreads;
     std::vector<Edge> edgeList;
     edgeList.reserve(tmpEdgeListSize);
     auto it = cqf.setIteratorLimits(startPoint, endPoint);
@@ -146,7 +170,7 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         localMaxId = curEqId > localMaxId ? curEqId : localMaxId;
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject, edgeList);
-        if (edgeList.size() >= tmpEdgeListSize and colorMutex.try_lock())  {
+        if (edgeList.size() >= tmpEdgeListSize and colorMutex.try_lock()) {
             //logger->info("Thread {}: inside the loop Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
             for (auto &e : edgeList) {
                 auto bucketId = getBucketId(e.n1, e.n2);
@@ -178,33 +202,34 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         }
     }
     //if (colorMutex.try_lock()) {
-        colorMutex.lock();
-        //logger->info("Thread {}: Last piece, Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
-        for (auto &e : edgeList) {
-            auto bucketId = getBucketId(e.n1, e.n2);
-            if (bucketId >= edgesetList.size()) {
-                logger->error("\nBucket ID passes total number of possible buckets {}. "
-                              //"\n\tkey1: {}, key2: {}"
-                              "\n\tcid1: {}, cid2: {}",
-                              edgesetList.size(),
-                              e.n1, e.n2);
-                std::exit(1);
-            }
-            auto &edgeset = edgesetList[bucketId];
-            if (edgeset.find(e) == edgeset.end()) {
-                edgeset.insert(e);
-                num_edges++;
-            }
+    colorMutex.lock();
+    //logger->info("Thread {}: Last piece, Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
+    for (auto &e : edgeList) {
+        auto bucketId = getBucketId(e.n1, e.n2);
+        if (bucketId >= edgesetList.size()) {
+            logger->error("\nBucket ID passes total number of possible buckets {}. "
+                          //"\n\tkey1: {}, key2: {}"
+                          "\n\tcid1: {}, cid2: {}",
+                          edgesetList.size(),
+                          e.n1, e.n2);
+            std::exit(1);
         }
-        //logger->info("Thread {}: The END", threadId);
-        maxId = localMaxId > maxId ? localMaxId : maxId;
-        numOfKmers += kmerCntr;
-        std::cerr << "\r";
-        //std::cerr << "Thread " << threadId << ": Observed " << numOfKmers << " kmers and " << num_edges << " edges\n";
-        logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
-        colorMutex.unlock();
+        auto &edgeset = edgesetList[bucketId];
+        if (edgeset.find(e) == edgeset.end()) {
+            edgeset.insert(e);
+            num_edges++;
+        }
+    }
+    //logger->info("Thread {}: The END", threadId);
+    maxId = localMaxId > maxId ? localMaxId : maxId;
+    numOfKmers += kmerCntr;
+    std::cerr << "\r";
+    //std::cerr << "Thread " << threadId << ": Observed " << numOfKmers << " kmers and " << num_edges << " edges\n";
+    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
+    colorMutex.unlock();
     //}
 }
+
 /**
  * loads the color class table in parts
  * calculate the hamming distance between the color bitvectors fetched from color class table
@@ -224,41 +249,21 @@ bool MST::calculateWeights() {
         bvp1 = &bv1;
         for (auto j = i; j < eqclass_files.size(); j++) {
             BitVectorRRR bv2;
-            auto &edgeset = edgesetList[i * num_of_ccBuffers + j];
+            auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
             if (i == j) {
                 bvp2 = bvp1;
             } else {
                 sdsl::load_from_file(bv2, eqclass_files[j]);
                 bvp2 = &bv2;
             }
-            std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeset.size();
-            std::vector<Edge> edgeList;
-            edgeList.reserve(edgeset.size());
-            for (auto &edge: edgeset) {
-                edgeList.push_back(edge);
-            }
-            std::sort(edgeList.begin(), edgeList.end(),
-                    [](Edge &e1, Edge &e2) {
-                return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-            });
-            std::cerr << " copied & sorted";
-            /*for (auto &edge : edgeset) {
-                auto w = hammingDist(edge.n1, edge.n2); // hammingDist uses bvp1 and bvp2
-                if (w == 0) {
-                    logger->error("Hamming distance of 0 between edges {} & {}", edge.n1, edge.n2);
-                    std::exit(1);
-                }
-
-                weightBuckets[w - 1].push_back(edge);
-                numEdges++;
-            }*/
+            std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeBucket.size();
             std::vector<std::thread> threads;
-            for(uint32_t t = 0; t < nThreads; ++t) {
+            for (uint32_t t = 0; t < nThreads; ++t) {
                 threads.emplace_back(std::thread(&MST::calcHammingDistInParallel, this, t,
-                                                 std::ref(edgeList)));
+                                                 std::ref(edgeBucket)));
             }
-            for (auto& t : threads) { t.join(); }
-            edgeset.clear();
+            for (auto &t : threads) { t.join(); }
+            edgeBucket.clear();
         }
     }
     std::cerr << "\r";
@@ -270,12 +275,14 @@ bool MST::calculateWeights() {
         delete bvp1;
         delete bvp2;
     }*/
-    edgesetList.clear();
+    edgeBucketList.clear();
     logger->info("Calculated the weight for {} edges", numEdges);
     return true;
 }
 
 void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList) {
+    uint64_t srcId = (uint64_t)-1;
+    std::vector<uint64_t> srcBV;
     std::vector<std::vector<Edge>> localWeightBucket;
     localWeightBucket.resize(numSamples);
     uint64_t s = 0, e = edgeList.size();
@@ -284,22 +291,23 @@ void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList) {
     if (edgeList.size() < 100 and i > 0) {
         e = 0;
     } else {
-        s = edgeList.size()*i/nThreads;
-        e = edgeList.size()*(i+1)/nThreads;
+        s = edgeList.size() * i / nThreads;
+        e = edgeList.size() * (i + 1) / nThreads;
     }
-    auto itrStart = edgeList.begin()+s;
-    auto itrEnd = e >= edgeList.size() ? edgeList.end() : edgeList.begin()+e;
-    logger->info("Thread {}: {} to {} out of {}", i, s, e, edgeList.size());
+    auto itrStart = edgeList.begin() + s;
+    auto itrEnd = e >= edgeList.size() ? edgeList.end() : edgeList.begin() + e;
+    //logger->info("Thread {}: {} to {} out of {}", i, s, e, edgeList.size());
     for (auto edge = itrStart; edge != itrEnd; edge++) {
-        auto w = hammingDist(edge->n1, edge->n2); // hammingDist uses bvp1 and bvp2
+        auto w = hammingDist(edge->n1, edge->n2,
+                             srcId, srcBV); // hammingDist uses bvp1 and bvp2
         if (w == 0) {
             logger->error("Hamming distance of 0 between edges {} & {}", edge->n1, edge->n2);
             std::exit(1);
         }
-        localWeightBucket[w-1].push_back(*edge);
+        localWeightBucket[w - 1].push_back(*edge);
     }
     colorMutex.lock();
-    for (uint64_t j=0; j < numSamples; j++) {
+    for (uint64_t j = 0; j < numSamples; j++) {
         weightBuckets[j].insert(weightBuckets[j].end(), localWeightBucket[j].begin(), localWeightBucket[j].end());
     }
     colorMutex.unlock();
@@ -415,9 +423,6 @@ bool MST::encodeColorClassUsingMST() {
                 std::exit(1);
             }*/
             bbv[deltaOffset - 1] = 1;
-            if (i % 10000000 == 0) {
-                std::cerr << "\rset delta vals for " << i << " ccs";
-            }
         }
     }
     std::cerr << "\r";
@@ -437,15 +442,13 @@ bool MST::encodeColorClassUsingMST() {
                 sdsl::load_from_file(bv2, eqclass_files[j]);
                 bvp2 = &bv2;
             }
-            for (colorIdType p = 0; p < parentbv.size(); p++) {
-                if (getBucketId(p, parentbv[p]) == i * num_of_ccBuffers + j) {
-                    auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
-                    for (auto &v : getDeltaList(p, parentbv[p])) {
-                        deltabv[deltaOffset] = v;
-                        deltaOffset++;
-                    }
-                }
+            std::vector<std::thread> threads;
+            for (uint32_t t = 0; t < nThreads; ++t) {
+                threads.emplace_back(std::thread(&MST::calcDeltasInParallel, this,
+                        t, i, j,
+                        std::ref(parentbv), std::ref(deltabv), std::ref(sbbv)));
             }
+            for (auto &t : threads) { t.join(); }
         }
     }
     std::cerr << "\r";
@@ -466,6 +469,38 @@ bool MST::encodeColorClassUsingMST() {
     return true;
 }
 
+void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
+                               sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
+                               sdsl::bit_vector::select_1_type &sbbv ) {
+
+    struct Delta {
+        uint64_t startingOffset;
+        std::vector<uint32_t> deltaVals;
+        Delta() {}
+        Delta(uint64_t so) {
+            startingOffset = so;
+        }
+    };
+    std::vector<Delta> deltas;
+
+    colorIdType s = parentbv.size() * threadID / nThreads;
+    colorIdType e = parentbv.size() * ((threadID+1) / nThreads);
+
+    for (colorIdType p = s; p < e; p++) {
+        if (getBucketId(p, parentbv[p]) == cbvID1 * num_of_ccBuffers + cbvID2) {
+            auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
+            deltas.push_back(deltaOffset);
+            deltas.back().deltaVals = getDeltaList(p, parentbv[p]);
+        }
+    }
+    colorMutex.lock();
+    for (auto &v : deltas) {
+        for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
+            deltabv[v.startingOffset+cntr] = v.deltaVals[cntr];
+    }
+    colorMutex.unlock();
+
+}
 /**
  * finds the neighbors of each kmer in the cqf,
  * and adds an edge of the element's colorId and its neighbor's
@@ -531,10 +566,22 @@ bool MST::exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, uint64_t &eqid) {
  * @param eqid2 second color class id
  * @return
  */
-uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2) {
+uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2,
+                          uint64_t &srcId, std::vector<uint64_t> &srcEq) {
     uint64_t dist{0};
     std::vector<uint64_t> eq1(((numSamples - 1) / 64) + 1, 0), eq2(((numSamples - 1) / 64) + 1, 0);
-    buildColor(eq1, eqid1, bvp1);
+    // cache the source color ID and BV
+    if (eqid1 == srcId) {
+        eq1 = srcEq;
+    } else {
+        buildColor(eq1, eqid1, bvp1);
+        srcEq.clear();
+        for (auto &eq: eq1) {
+            srcEq.push_back(eq);
+        }
+        srcId = eqid1;
+    }
+    // fetch the second color ID's BV
     buildColor(eq2, eqid2, bvp2);
 
     for (uint64_t i = 0; i < eq1.size(); i++) {
@@ -580,14 +627,14 @@ std::vector<uint32_t> MST::getDeltaList(uint64_t eqid1, uint64_t eqid2) {
  */
 void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv) {
     if (eqid == zero) return;
-    colorMutex.lock();
-    if (lru_cache.contains(eqid)) {
-        eq = lru_cache[eqid];
-        gcntr++;
-        colorMutex.unlock();
-        return;
-    }
-    colorMutex.unlock();
+    /* colorMutex.lock();
+     if (lru_cache.contains(eqid)) {
+         eq = lru_cache[eqid];
+         gcntr++;
+         colorMutex.unlock();
+         return;
+     }
+     colorMutex.unlock();*/
     uint64_t i{0}, bitcnt{0}, wrdcnt{0};
     uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
     while (i < numSamples) {
@@ -596,9 +643,9 @@ void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv)
         eq[wrdcnt++] = wrd;
         i += bitcnt;
     }
-    colorMutex.lock();
-    lru_cache.emplace(eqid, eq);
-    colorMutex.unlock();
+//    colorMutex.lock();
+//    lru_cache.emplace(eqid, eq);
+//    colorMutex.unlock();
 }
 
 /**

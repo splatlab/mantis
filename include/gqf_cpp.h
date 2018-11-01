@@ -69,7 +69,7 @@ class CQF {
 		bool check_similarity(const CQF *other_cqf) const;
 
 		const QF* get_cqf(void) const { return &cqf; }
-		uint64_t range(void) const { return cqf.metadata->range; }
+		__uint128_t range(void) const { return cqf.metadata->range; }
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint64_t numslots(void) const { return cqf.metadata->nslots; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
@@ -85,7 +85,7 @@ class CQF {
 		class Iterator {
 			public:
 				Iterator(QFi it);
-				Iterator(QFi it, uint64_t endHash);
+				Iterator(QFi it, __uint128_t endHash);
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
@@ -95,12 +95,12 @@ class CQF {
 
 				QFi iter;
 			private:
-				uint64_t endHash;
+				__uint128_t endHash;
 		};
 
 		Iterator begin(void) const;
 		Iterator end(void) const;
-		Iterator setIteratorLimits(uint64_t start_hash, uint64_t end_hash) const;
+		Iterator setIteratorLimits(__uint128_t start_hash, __uint128_t end_hash) const;
 
 	private:
 		QF cqf;
@@ -212,7 +212,7 @@ CQF<key_obj>::Iterator::Iterator(QFi it)
 	: iter(it) {};
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, uint64_t endHashIn)
+CQF<key_obj>::Iterator::Iterator(QFi it, __uint128_t endHashIn)
 		: iter(it), endHash(endHashIn) {};
 
 template <class key_obj>
@@ -249,7 +249,7 @@ template<class key_obj>
 bool CQF<key_obj>::Iterator::reachedHashLimit(void) const {
 	uint64_t key = 0, value = 0, count = 0;
 	qfi_get_hash(&iter, &key, &value, &count);
-	return key >= endHash || qfi_end(&iter);
+	return (__uint128_t)key >= endHash || qfi_end(&iter);
 }
 
 template<class key_obj>
@@ -267,7 +267,7 @@ typename CQF<key_obj>::Iterator CQF<key_obj>::end(void) const {
 }
 
 template<class key_obj>
-typename CQF<key_obj>::Iterator CQF<key_obj>::setIteratorLimits(uint64_t start_hash, uint64_t end_hash) const {
+typename CQF<key_obj>::Iterator CQF<key_obj>::setIteratorLimits(__uint128_t start_hash, __uint128_t end_hash) const {
 	QFi qfi;
 	qf_iterator_from_key_value(&this->cqf, &qfi, start_hash, 0, QF_KEY_IS_HASH);
 	return Iterator(qfi, end_hash);
