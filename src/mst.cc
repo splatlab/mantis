@@ -474,10 +474,11 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
                                sdsl::bit_vector::select_1_type &sbbv ) {
 
     struct Delta {
-        uint64_t startingOffset;
+        uint64_t startingOffset{0};
         std::vector<uint32_t> deltaVals;
-        Delta() {}
-        Delta(uint64_t so) {
+        Delta() = default;
+
+        explicit Delta(uint64_t so) {
             startingOffset = so;
         }
     };
