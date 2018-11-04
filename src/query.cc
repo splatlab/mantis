@@ -47,54 +47,104 @@
 
 void output_results(mantis::QuerySets& multi_kmers,
 										ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
-										cdbg, std::ofstream& opfile) {
+										cdbg, std::ofstream& opfile, bool is_bulk,
+                    std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
   mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
     CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
-    //size_t qctr{0};
-    //size_t nquery{multi_kmers.size()};
-    for (auto& kmers : multi_kmers) {
-      //std::sort(kmers.begin(), kmers.end());
-      opfile <<  cnt++ << '\t' << kmers.size() << '\n';
-      mantis::QueryResult result = cdbg.find_samples(kmers);
-      for (auto i=0; i<result.size(); ++i) {
-          if (result[i] > 0)
-            opfile << cdbg.get_sample(i) << '\t' << result[i] << '\n';
-      }
-      //++qctr;
+    if (is_bulk) {
+        std::unordered_map<uint64_t, std::vector<uint64_t>> result = cdbg.find_samples(uniqueKmers);
+        for (auto& kmers : multi_kmers) {
+            opfile <<  cnt++ << '\t' << kmers.size() << '\n';
+            std::vector<uint64_t> kmerCnt(cdbg.get_num_samples());
+            for (auto &k : kmers) {
+                if (uniqueKmers[k]) {
+                    for (auto experimentId : result[k]) {
+                        kmerCnt[experimentId]++;
+                    }
+                }
+            }
+            for (auto i=0; i<kmerCnt.size(); ++i) {
+                if (kmerCnt[i] > 0)
+                    opfile << cdbg.get_sample(i) << '\t' << kmerCnt[i] << '\n';
+            }
+            //++qctr;
+        }
+    } else {
+        for (auto &kmers : multi_kmers) {
+            //std::sort(kmers.begin(), kmers.end());
+            opfile << cnt++ << '\t' << kmers.size() << '\n';
+            mantis::QueryResult result = cdbg.find_samples(kmers);
+            for (auto i = 0; i < result.size(); ++i) {
+                if (result[i] > 0)
+                    opfile << cdbg.get_sample(i) << '\t' << result[i] << '\n';
+            }
+            //++qctr;
+        }
     }
   }
 }
 
 void output_results_json(mantis::QuerySets& multi_kmers,
 												 ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject>&
-												 cdbg, std::ofstream& opfile) {
+												 cdbg, std::ofstream& opfile, bool is_bulk,
+                         std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
   mantis::QueryResults qres;
 	uint32_t cnt= 0;
   {
     CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
+
     opfile << "[\n";
-    size_t qctr{0};
-    size_t nquery{multi_kmers.size()};
-    for (auto& kmers : multi_kmers) {
-      //std::sort(kmers.begin(), kmers.end());
-      opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": {\n";
-      mantis::QueryResult result = cdbg.find_samples(kmers);
-      uint64_t sampleCntr=0;
-      for (auto it = result.begin(); it != result.end(); ++it) {
-          if (*it > 0)
-            opfile << " \"" <<cdbg.get_sample(sampleCntr) << "\": " << *it ;
-        if (std::next(it) != result.end()) {
-          opfile << ",\n";
-        }
-        sampleCntr++;
+      size_t qctr{0};
+      size_t nquery{multi_kmers.size()};
+
+      if (is_bulk) {
+          std::unordered_map<uint64_t, std::vector<uint64_t>> result = cdbg.find_samples(uniqueKmers);
+          for (auto& kmers : multi_kmers) {
+              opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": {\n";
+              std::vector<uint64_t> kmerCnt(cdbg.get_num_samples());
+              for (auto &k : kmers) {
+                  if (uniqueKmers[k]) {
+                      for (auto experimentId : result[k]) {
+                          kmerCnt[experimentId]++;
+                      }
+                  }
+              }
+              for (auto i=0; i<kmerCnt.size(); ++i) {
+                  if (kmerCnt[i] > 0) {
+                          opfile << " \"" << cdbg.get_sample(i) << "\": " << kmerCnt[i];
+                      if (i != kmerCnt.size()) {
+                          opfile << ",\n";
+                      }
+                  }
+              }
+              opfile << "}}";
+              if (qctr < nquery - 1) { opfile << ","; }
+              opfile << "\n";
+              ++qctr;
+          }
       }
-      opfile << "}}";
-      if (qctr < nquery - 1) { opfile << ","; }
-      opfile << "\n";
-      ++qctr;
-    }
+      else {
+          for (auto &kmers : multi_kmers) {
+              //std::sort(kmers.begin(), kmers.end());
+              opfile << "{ \"qnum\": " << cnt++ << ",  \"num_kmers\": " << kmers.size() << ", \"res\": {\n";
+              mantis::QueryResult result = cdbg.find_samples(kmers);
+              uint64_t sampleCntr = 0;
+              for (auto it = result.begin(); it != result.end(); ++it) {
+                  if (*it > 0)
+                      opfile << " \"" << cdbg.get_sample(sampleCntr) << "\": " << *it;
+                  if (std::next(it) != result.end()) {
+                      opfile << ",\n";
+                  }
+                  sampleCntr++;
+              }
+              opfile << "}}";
+              if (qctr < nquery - 1) { opfile << ","; }
+              opfile << "\n";
+              ++qctr;
+          }
+      }
     opfile << "]\n";
   }
 }
@@ -114,13 +164,6 @@ int query_main (QueryOpts& opt)
   std::string query_file = opt.query_file;
   std::string output_file = opt.output;//{"samples.output"};
   bool use_json = opt.use_json;
-  /*
-  app.add_option("-i,--input-prefix", prefix, "Prefix of input files.")->required();
-  app.add_option("-o,--outout", output_file, "Where to write query output.");
-  app.add_option("query", query_file, "Prefix of input files.")->required();
-  app.add_flag("-j,--json", use_json, "Write the output in JSON format");
-  CLI11_PARSE(app, argc, argv);
-  */
 
   // Make sure the prefix is a full folder
   if (prefix.back() != '/') {
@@ -163,35 +206,21 @@ int query_main (QueryOpts& opt)
 	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
 	uint64_t total_kmers = 0;
+    std::unordered_map<mantis::KmerHash, uint64_t> uniqueKmers;
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										kmer_size,
-																										total_kmers);
+																										total_kmers,
+																										opt.process_in_bulk,
+																										uniqueKmers);
 	console->info("Total k-mers to query: {}", total_kmers);
-
-  // Attempt to optimize bulk query
-  /*
-  bool doBulk = multi_kmers.size() >= 100;
-  BulkQuery bq;
-  if (doBulk) {
-    uint32_t exp_id{0};
-    for (auto& kmers : multi_kmers) {
-      for (auto& k : kmers) {
-        bq.qs.insert(k);
-        bq.map[k].push_back(exp_id);
-      }
-      ++exp_id;
-    }
-  }
-  */
-
 
 	std::ofstream opfile(output_file);
 	console->info("Querying the colored dbg.");
 
   if (use_json) {
-    output_results_json(multi_kmers, cdbg, opfile);
+    output_results_json(multi_kmers, cdbg, opfile, opt.process_in_bulk, uniqueKmers);
   } else {
-    output_results(multi_kmers, cdbg, opfile);
+    output_results(multi_kmers, cdbg, opfile, opt.process_in_bulk, uniqueKmers);
   }
 	//std::cout << "Writing samples and abundances out." << std::endl;
 	opfile.close();

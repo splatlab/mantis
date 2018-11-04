@@ -143,9 +143,12 @@ validate_main ( ValidateOpts& opt )
 	std::string query_file = opt.query_file;
 	console->info("Reading query kmers from disk.");
 	uint64_t total_kmers = 0;
+	std::unordered_map<mantis::KmerHash, uint64_t> _dummy_uniqueKmers;
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										kmer_size,
-																										total_kmers);
+																										total_kmers,
+																										false,
+																										_dummy_uniqueKmers);
 	console->info("Total k-mers to query: {}", total_kmers);
 
 	// Query kmers in each experiment CQF

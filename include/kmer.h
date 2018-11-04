@@ -23,6 +23,7 @@
 #include <string>
 
 #include "common_types.h"
+#include "nonstd/optional.hpp"
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) \
 												- 1ULL)
@@ -52,10 +53,14 @@ class Kmer {
 		static __int128_t reverse_complement(__int128_t kmer, uint64_t kmer_size);
 		static bool compare_kmers(__int128_t kmer, __int128_t kmer_rev);
 
+		static std::unordered_map<mantis::KmerHash, uint64_t> _dummy_uniqueKmers;
 		static mantis::QuerySets parse_kmers(const char *filename,
 																				 uint64_t kmer_size, uint64_t&
-																				 total_kmers);
-		static std::string generate_random_string(uint64_t len);
+																				 total_kmers,
+																				 bool is_bulk,
+											 //nonstd::optional<std::unordered_map<mantis::KmerHash, uint64_t>> &uniqueKmers);
+											 std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers);
+			static std::string generate_random_string(uint64_t len);
 
 	private:
 		Kmer();

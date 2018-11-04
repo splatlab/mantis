@@ -76,6 +76,9 @@ class ColoredDbg {
 		std::vector<uint64_t>
 			find_samples(const mantis::QuerySet& kmers);
 
+        std::unordered_map<uint64_t, std::vector<uint64_t>>
+            find_samples(const std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers);
+
 		void serialize();
 		void reinit(default_cdbg_bv_map_t& map);
 		void set_flush_eqclass_dist(void) { flush_eqclass_dis = true; }
@@ -336,6 +339,42 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 		}
 	}
 	return sample_map;
+}
+
+template <class qf_obj, class key_obj>
+std::unordered_map<uint64_t, std::vector<uint64_t>>
+ColoredDbg<qf_obj,key_obj>::find_samples(const std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
+	// Find a list of eq classes and the number of kmers that belong those eq
+	// classes.
+	std::unordered_map<uint64_t, std::vector<uint64_t>> query_eqclass_map;
+	for (auto kv : uniqueKmers) {
+		key_obj key(kv.first, 0, 0);
+		uint64_t eqclass = dbg.query(key, 0);
+		if (eqclass) {
+		    kv.second = eqclass;
+            query_eqclass_map[eqclass] = std::vector<uint64_t>();
+        }
+	}
+
+	std::vector<uint64_t> sample_map(num_samples, 0);
+	for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
+		 ++it) {
+		auto eqclass_id = it->first;
+		auto &vec = it->second;
+		// counter starts from 1.
+		uint64_t start_idx = (eqclass_id - 1);
+		uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		for (uint32_t w = 0; w <= num_samples / 64; w++) {
+			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
+			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
+			for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
+				if ((wrd >> i) & 0x01)
+					vec.push_back(sCntr);
+			bucket_offset += len;
+		}
+	}
+	return query_eqclass_map;
 }
 
 template <class qf_obj, class key_obj>

@@ -79,7 +79,10 @@ bool Kmer::compare_kmers(__int128_t kmer, __int128_t kmer_rev)
 }
 
 mantis::QuerySets Kmer::parse_kmers(const char *filename, uint64_t kmer_size,
-																		uint64_t& total_kmers) {
+																		uint64_t& total_kmers,
+																		bool is_bulk,
+									//nonstd::optional<std::unordered_map<mantis::KmerHash, uint64_t>> &uniqueKmers
+									std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
 	mantis::QuerySets multi_kmers;
 	total_kmers = 0;
 	std::ifstream ipfile(filename);
@@ -118,6 +121,9 @@ start_read:
 				item = first_rev;
 
 			kmers_set.insert(item);
+			if (is_bulk)
+				if (uniqueKmers.find(item) == uniqueKmers.end())
+					uniqueKmers[item] = 0;
 
 			uint64_t next = (first << 2) & BITMASK(2*kmer_size);
 			uint64_t next_rev = first_rev >> 2;
@@ -142,6 +148,9 @@ start_read:
 					item = next_rev;
 
 				kmers_set.insert(item);
+				if (is_bulk)
+					if (uniqueKmers.find(item) == uniqueKmers.end())
+						uniqueKmers[item] = 0;
 
 				next = (next << 2) & BITMASK(2*kmer_size);
 				next_rev = next_rev >> 2;
