@@ -86,7 +86,7 @@ public:
                                      nonstd::optional<uint64_t>& toDecode // output param.  Also decode these
                                      );
 
-    void parseKmers(std::string &read, uint64_t kmer_size);
+    void parseKmers(std::string read, uint64_t kmer_size);
     void findSamples(CQF<KeyObject> &dbg,
                                         LRUCacheMap &lru_cache,
                                         RankScores *rs,

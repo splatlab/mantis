@@ -157,7 +157,7 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
 }
 
 
-void MSTQuery::parseKmers(std::string &read, uint64_t kmer_size) {
+void MSTQuery::parseKmers(std::string read, uint64_t kmer_size) {
     CLI::AutoTimer timer{"First round going over the file ", CLI::Timer::Big};
     bool done = false;
     while (!done and read.length() >= kmer_size) {
@@ -189,7 +189,7 @@ void MSTQuery::parseKmers(std::string &read, uint64_t kmer_size) {
                 item = first;
             else
                 item = first_rev;
-            kmer2cidMap[item] = 0;
+            kmer2cidMap[item] = std::numeric_limits<uint64_t>::max();
 
             uint64_t next = (first << 2) & BITMASK(2 * kmer_size);
             uint64_t next_rev = first_rev >> 2;
@@ -212,7 +212,7 @@ void MSTQuery::parseKmers(std::string &read, uint64_t kmer_size) {
                     item = next;
                 else
                     item = next_rev;
-                kmer2cidMap[item] = 0;
+                kmer2cidMap[item] = std::numeric_limits<uint64_t>::max();
                 next = (next << 2) & BITMASK(2 * kmer_size);
                 next_rev = next_rev >> 2;
             }
@@ -225,14 +225,14 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
     mantis::QueryResult res(numSamples, 0);
     spp::sparse_hash_set<uint64_t> readkmers;
     auto requiredCnt = static_cast<uint8_t>(queryK - indexK + 1);
-    auto queryIndxKDiff = queryK - indexK + 1;
+    uint16_t queryIndxKDiff = static_cast<uint16_t>(queryK - indexK + 1);
 //    std::cerr << "required count: " << requiredCnt << " num samples: " << numSamples << "\n";
     bool done = false;
 //    std::cerr << "\n" << read << ": ";
     while (!done and read.length() >= queryK) {
 //        std::cerr << read << "\n";
         uint64_t idx2replace = 0;
-        std::vector<uint8_t> samples(numSamples);
+        std::vector<uint8_t> samples(numSamples, 0);
         std::vector<std::vector<bool>> pastKmers(queryIndxKDiff);
         for (auto &v : pastKmers) {
             v.resize(numSamples, false);
@@ -260,11 +260,13 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
             item = Kmer::compare_kmers(first, first_rev) ? first : first_rev;
             pastKmers[idx2replace].assign(pastKmers[idx2replace].size(), false);
 //            std::cerr << cid2expMap[kmer2cidMap[item]].size() << ", ";
-            for (auto &c : cid2expMap[kmer2cidMap[item]]) {
+            if (kmer2cidMap[item] != std::numeric_limits<uint64_t>::max()) {
+                for (auto &c : cid2expMap[kmer2cidMap[item]]) {
 //                std::cerr << c << " " << pastKmers[idx2replace][c] << " ";
-                samples[c]++;
-                pastKmers[idx2replace][c] = true;
+                    samples[c]++;
+                    pastKmers[idx2replace][c] = true;
 //                std::cerr << pastKmers[idx2replace][c] << ",";
+                }
             }
 //            std::cerr << "\n";
 
@@ -291,9 +293,11 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                 next_rev = next_rev | tmp;
                 item = Kmer::compare_kmers(next, next_rev) ? next : next_rev;
 //                std::cerr << cid2expMap[kmer2cidMap[item]].size() << ", ";
-                for (auto &c : cid2expMap[kmer2cidMap[item]]) {
-                    samples[c]++;
-                    pastKmers[idx2replace][c] = true;
+                if (kmer2cidMap[item] != std::numeric_limits<uint64_t>::max()) {
+                    for (auto &c : cid2expMap[kmer2cidMap[item]]) {
+                        samples[c]++;
+                        pastKmers[idx2replace][c] = true;
+                    }
                 }
                 next = (next << 2) & BITMASK(2 * indexK);
                 next_rev = next_rev >> 2;
@@ -341,9 +345,11 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                     next_rev = next_rev | tmp;
                     item = Kmer::compare_kmers(next, next_rev) ? next : next_rev;
 //                    std::cerr << cid2expMap[kmer2cidMap[item]].size() << ", ";
-                    for (auto &c : cid2expMap[kmer2cidMap[item]]) {
-                        samples[c]++;
-                        pastKmers[idx2replace][c] = true;
+                    if (kmer2cidMap[item] != std::numeric_limits<uint64_t>::max()) {
+                        for (auto &c : cid2expMap[kmer2cidMap[item]]) {
+                            samples[c]++;
+                            pastKmers[idx2replace][c] = true;
+                        }
                     }
                     idx2replace = ++idx2replace % queryIndxKDiff;
                     next = (next << 2) & BITMASK(2 * indexK);
@@ -360,6 +366,8 @@ mantis::QueryResult MSTQuery::convertIndexK2QueryK(std::string &read) {
                             if (c == 19)
                                 std::cerr << std::string(dna::canonical_kmer(queryK, queryItem)) << "\t";
 */
+                            std::cerr << queryItem << " " << c << " " << res[c] << "\n";
+
                             res[c]++;
                         }
                     }
