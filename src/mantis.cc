@@ -47,6 +47,7 @@ int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
 int build_mst_main (QueryOpts& opt);
 int mst_query_main(QueryOpts &opt);
+int query_main (QueryOpts& opt);
 int validate_mst_main(MSTValidateOpts &opt);
 /*
  * ===  FUNCTION  =============================================================
@@ -111,6 +112,9 @@ int main ( int argc, char *argv[] ) {
 
   auto query_mode = (
                      command("query").set(selected, mode::query),
+                     option("-b", "--bulk").set(qopt.process_in_bulk) % "Process the whole input query file as a bulk.",
+                     option("-1", "--use-colorclasses").set(qopt.use_colorclasses)
+                     % "Use color classes as the color info representation instead of MST",
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
                      required("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "Prefix of input files.",
@@ -152,7 +156,7 @@ int main ( int argc, char *argv[] ) {
     case mode::build: build_main(bopt);  break;
     case mode::build_mst: build_mst_main(qopt); break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
-    case mode::query: mst_query_main(qopt);  break;
+    case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }

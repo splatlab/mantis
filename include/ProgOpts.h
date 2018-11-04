@@ -34,6 +34,8 @@ class QueryOpts {
   uint32_t numThreads = 1;
   bool use_json{false};
   std::shared_ptr<spdlog::logger> console{nullptr};
+  bool process_in_bulk{false};
+  bool use_colorclasses{false};
 };
 
 class ValidateOpts {

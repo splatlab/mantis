@@ -86,12 +86,14 @@ public:
                                      nonstd::optional<uint64_t>& toDecode // output param.  Also decode these
                                      );
 
-    uint64_t parseKmers(std::string filename, uint64_t kmer_size);
+    void parseKmers(std::string &read, uint64_t kmer_size);
     void findSamples(CQF<KeyObject> &dbg,
                                         LRUCacheMap &lru_cache,
                                         RankScores *rs,
                                         QueryStats &queryStats);
     mantis::QueryResult convertIndexK2QueryK(std::string &read);
+
+    void reset();
 };
 
 #endif //MANTIS_MSTQUERY_H

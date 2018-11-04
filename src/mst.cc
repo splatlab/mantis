@@ -478,7 +478,7 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
         std::vector<uint32_t> deltaVals;
         Delta() = default;
 
-        explicit Delta(uint64_t so) {
+        Delta(uint64_t so) {
             startingOffset = so;
         }
     };
