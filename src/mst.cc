@@ -485,8 +485,7 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
     std::vector<Delta> deltas;
 
     colorIdType s = parentbv.size() * threadID / nThreads;
-    colorIdType e = parentbv.size() * ((threadID+1) / nThreads);
-
+    colorIdType e = parentbv.size() * (threadID+1) / nThreads;
     for (colorIdType p = s; p < e; p++) {
         if (getBucketId(p, parentbv[p]) == cbvID1 * num_of_ccBuffers + cbvID2) {
             auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
