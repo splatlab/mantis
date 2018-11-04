@@ -57,8 +57,6 @@ private:
 
 class MSTQuery {
 private:
-    uint32_t queryK;
-    uint32_t indexK;
     uint64_t numSamples;
     uint64_t numWrds;
     uint32_t zero;
@@ -68,6 +66,8 @@ private:
     mantis::EqMap cid2expMap;
 
 public:
+    uint32_t queryK;
+    uint32_t indexK;
     sdsl::int_vector<> parentbv;
     sdsl::int_vector<> deltabv;
     sdsl::bit_vector::select_1_type sbbv;
@@ -93,7 +93,13 @@ public:
                                         QueryStats &queryStats);
     mantis::QueryResult convertIndexK2QueryK(std::string &read);
 
+    mantis::QueryResult getResultList();
+
     void reset();
+
+    uint64_t getNumOfDistinctKmers() {
+        return kmer2cidMap.size();
+    }
 };
 
 #endif //MANTIS_MSTQUERY_H

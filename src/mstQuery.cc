@@ -386,6 +386,58 @@ void MSTQuery::reset() {
     cid2expMap.clear();
 }
 
+mantis::QueryResult MSTQuery::getResultList() {
+    mantis::QueryResult res(numSamples, 0);
+    for (auto& kv : kmer2cidMap) {
+        if (kv.second != std::numeric_limits<uint64_t>::max()) {
+            for (auto &c : cid2expMap[kv.second]) {
+                res[c]++;
+            }
+        }
+    }
+    return res;
+}
+
+void output_results(MSTQuery &mstQuery,
+                    std::ofstream &opfile,
+                    std::vector<std::string> &sampleNames,
+                    QueryStats &queryStats) {
+    CLI::AutoTimer timer{"Second round going over the file + query time ", CLI::Timer::Big};
+    opfile << "seq" << queryStats.cnt++ << '\t' << mstQuery.getNumOfDistinctKmers() << '\n';
+    mantis::QueryResult result = mstQuery.getResultList();
+    for (uint64_t i = 0; i < result.size(); i++) {
+        if (result[i] > 0) {
+            opfile << sampleNames[i] << '\t' << result[i] << '\n';
+        }
+    }
+}
+
+void output_results_json(MSTQuery &mstQuery,
+                         std::ofstream &opfile,
+                         std::vector<std::string> &sampleNames,
+                         QueryStats &queryStats,
+                         uint64_t nquery) {
+    uint64_t qctr{0};
+    CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
+    opfile << "{ \"qnum\": " << queryStats.cnt++ << ",  \"num_kmers\": "
+           << mstQuery.getNumOfDistinctKmers() << ", \"res\": {\n";
+    mantis::QueryResult result = mstQuery.getResultList();
+    uint64_t kmerCntr = 0;
+    for (auto it = result.begin(); it != result.end(); ++it) {
+        if (*it > 0)
+            opfile << " \"" << sampleNames[kmerCntr] << "\": " << *it;
+        if (std::next(it) != result.end()) {
+            opfile << ",\n";
+        }
+        kmerCntr++;
+    }
+    opfile << "}}";
+    if (qctr < nquery - 1) {
+        opfile << ",";
+    }
+    opfile << "\n";
+    ++qctr;
+}
 void output_results(std::string &read,
                     MSTQuery &mstQuery,
                     std::ofstream &opfile,
@@ -394,10 +446,8 @@ void output_results(std::string &read,
     CLI::AutoTimer timer{"Second round going over the file + query time ", CLI::Timer::Big};
     opfile << "seq" << queryStats.cnt++ << '\t' << read.length() << '\n';
     mantis::QueryResult result = mstQuery.convertIndexK2QueryK(read);
-//        std::cerr << "result.size(): " << result.size() << "\n";
     for (uint64_t i = 0; i < result.size(); i++) {
         if (result[i] > 0) {
-//                std::cerr << i << "\n";
             opfile << sampleNames[i] << '\t' << result[i] << '\n';
         }
     }
@@ -507,7 +557,10 @@ int mst_query_main(QueryOpts &opt) {
                 mstQuery.reset();
                 mstQuery.parseKmers(read, indexK);
                 mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
-                output_results_json(read, mstQuery, opfile, sampleNames, queryStats, numOfQueries);
+                if (mstQuery.indexK == mstQuery.queryK)
+                    output_results_json(mstQuery, opfile, sampleNames, queryStats, numOfQueries);
+                else
+                    output_results_json(read, mstQuery, opfile, sampleNames, queryStats, numOfQueries);
                 numOfQueries++;
             }
             opfile << "]\n";
@@ -516,7 +569,10 @@ int mst_query_main(QueryOpts &opt) {
                 mstQuery.reset();
                 mstQuery.parseKmers(read, indexK);
                 mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
-                output_results(read, mstQuery, opfile, sampleNames, queryStats);
+                if (mstQuery.indexK == mstQuery.queryK)
+                    output_results(mstQuery, opfile, sampleNames, queryStats);
+                else
+                    output_results(read, mstQuery, opfile, sampleNames, queryStats);
                 numOfQueries++;
             }
         }
