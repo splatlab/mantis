@@ -79,22 +79,15 @@ OPTIONS
                     directory where results should be written
 ```
 
-The following are the arguments to mantis build:
- - log-slots: The initial value for log of the number of slots in the CQF (i.e. the number of quotient bits).
- Mantis will automatically resize and go to the next value for log-slots very early on during the build process
- and it'll continue to resize until all the k-mers and their associated count/IDs fit.
- You would want to start from a reasonably small number so that you
- won't have a lot of resizing iterations and at the same time your final CQF
- if not larger than the size it could be. (for example starting from 30, while 
- even 28 was enough for log-slots)
- Suggested starting numbers based on the size of the squeakr you have is as following:
-    - 28 for a small set of genomes like a bacterial genome
+'log-slots': The initial value for log of the number of slots in the CQF (i.e. the number of quotient bits).
+ Mantis will automatically resize when the CQF reaches its capacity during the build process.
+ Starting with a reasonable value is recommended so that the build process does not have to perform a bunch of resizes. Each resize operation will halt the build process and in-turn increase the overall build time.
+
+ Suggested starting values based on the size of input Squeakr files:
+    - 28 for a small set of genomes like a bacterial genomes.
     - 30 for a large set of medium size read files.
-    - 33 for a large set of big read files. 
- Notice that these are just suggestions. You can start with an arbitrarily small log-slot. 
- - input squeakr files: A list of input squeakr files (path to files) and cutoffs separated by tab. 
- A sample input squeakr file in provided in the raw dir. This is a list of squeakr output files that are generated after running squeakr on input experiments. We have provided two sample squeakr files in data dir.
- - build_output: The prefix filepath where all the output files will be written.
+    - 33 for a large set of big read files.
+ Notice that these are just suggestions. You can start with a other smaller values as well.
 
 Build MST
 -------
