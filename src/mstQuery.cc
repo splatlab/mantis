@@ -491,6 +491,7 @@ int mst_query_main(QueryOpts &opt) {
     logger->info("Loading cqf...");
     CQF<KeyObject> cqf(dbg_file, CQF_FREAD);
     auto indexK = cqf.keybits() / 2;
+    if (queryK == 0) queryK = indexK;
     logger->info("Done loading cqf. k is {}", indexK);
 
     logger->info("Loading color classes...");

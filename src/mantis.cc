@@ -99,13 +99,13 @@ int main ( int argc, char *argv[] ) {
                      );
   auto build_mst_mode = (
           command("mst").set(selected, mode::build_mst),
-                  required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "Prefix of input files.",
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "The directory where the index is stored.",
                   option("-t", "--threads") & value("num_threads", qopt.numThreads) % "number of threads"
   );
 
   auto validate_mst_mode = (
           command("validatemst").set(selected, mode::validate_mst),
-                  required("-p", "--input-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "Prefix of input files.",
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "The directory where the index is stored.",
                   required("-k", "--kmer") & value("kmer", mvopt.k) % "size of k for kmer.",
                   required("-n", "--num-samples") & value("num_samples", mvopt.numSamples) % "Number of Experiments."
   );
@@ -116,7 +116,7 @@ int main ( int argc, char *argv[] ) {
                      option("-1", "--use-colorclasses").set(qopt.use_colorclasses)
                      % "Use color classes as the color info representation instead of MST",
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
-                     required("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
+                     option("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "Prefix of input files.",
                      option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
                      value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
@@ -138,6 +138,8 @@ int main ( int argc, char *argv[] ) {
   assert(build_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
   assert(validate_mode.flags_are_prefix_free());
+  assert(build_mst_mode.flags_are_prefix_free());
+  assert(validate_mst_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -166,8 +168,12 @@ int main ( int argc, char *argv[] ) {
     if (std::distance(b,e) > 0) {
       if (b->arg() == "build") {
         std::cout << make_man_page(build_mode, "mantis");
+      } else if (b->arg() == "mst") {
+        std::cout << make_man_page(build_mst_mode, "mantis");
       } else if (b->arg() == "query") {
         std::cout << make_man_page(query_mode, "mantis");
+      } else if (b->arg() == "validatemst") {
+        std::cout << make_man_page(validate_mst_mode, "mantis");
       } else if (b->arg() == "validate") {
         std::cout << make_man_page(validate_mode, "mantis");
       } else {
