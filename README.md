@@ -87,9 +87,9 @@ OPTIONS
 
 Build MST
 -------
-`mantis mst` encodes the Color information into a list of succinct 
-int-vectors and bit-vectors. It creates a Color graph derived from de Bruijn graph of k-mers 
-and encodes its Minimum Spanning Tree in a format to be able to retrieve the color classes.
+`mantis mst` encodes the color information into a list of succinct 
+int-vectors and bit-vectors. It creates a color graph derived from the de Bruijn graph of k-mers 
+and encodes its minimum spanning tree (MST) in a format to be able to retrieve the color classes.
 
 ```bash
  $ ./bin/mantis mst -p raw/ -t 8
