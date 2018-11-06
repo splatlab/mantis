@@ -13,17 +13,7 @@ inline char Kmer::map_int(uint8_t base)
 	}
 }
 
-/*return the integer representation of the base */
-inline uint8_t Kmer::map_base(char base)
-{
-	switch(base) {
-		case 'A': { return DNA_MAP::A; }
-		case 'T': { return DNA_MAP::T; }
-		case 'C': { return DNA_MAP::C; }
-		case 'G': { return DNA_MAP::G; }
-		default:  { return DNA_MAP::G+1; }
-	}
-}
+
 
 /**
  * Converts a string of "ATCG" to a uint64_t
@@ -62,15 +52,13 @@ string int_to_str(uint64_t kmer, uint64_t kmer_size)
 	return str;
 }
 
-/* Return the reverse complement of a base */
-inline int Kmer::reverse_complement_base(int x) { return 3 - x; }
 
 /* Calculate the revsese complement of a kmer */
-uint64_t Kmer::reverse_complement(uint64_t kmer, uint64_t kmer_size)
+__int128_t Kmer::reverse_complement(__int128_t kmer, uint64_t kmer_size)
 {
-	uint64_t rc = 0;
+	__int128_t rc = 0;
 	uint8_t base = 0;
-	for (int i=0; i<kmer_size; i++) {
+	for (uint32_t i = 0; i < kmer_size; i++) {
 		base = kmer & 3ULL;
 		base = reverse_complement_base(base);
 		kmer >>= 2;
@@ -85,63 +73,16 @@ uint64_t Kmer::reverse_complement(uint64_t kmer, uint64_t kmer_size)
  * Return true if the kmer is greater than or equal to its
  * reverse complement. 
  * */
-inline bool Kmer::compare_kmers(uint64_t kmer, uint64_t kmer_rev)
+bool Kmer::compare_kmers(__int128_t kmer, __int128_t kmer_rev)
 {
 	return kmer >= kmer_rev;
 }
 
-/* This code is taken from Jellyfish 2.0
- * git@github.com:gmarcais/Jellyfish.git 
- * */
-
-// Checkered mask. cmask<uint16_t, 1> is every other bit on
-// (0x55). cmask<uint16_t,2> is two bits one, two bits off (0x33). Etc.
-template<typename U, int len, int l = sizeof(U) * 8 / (2 * len)>
-struct cmask {
-	static const U v =
-		(cmask<U, len, l - 1>::v << (2 * len)) | (((U)1 << len) - 1);
-};
-template<typename U, int len>
-struct cmask<U, len, 0> {
-	static const U v = 0;
-};
-
-// Fast reverse complement of one word through bit tweedling.
-inline uint32_t Kmer::word_reverse_complement(uint32_t w) {
-	typedef uint64_t U;
-	w = ((w >> 2)  & cmask<U, 2 >::v) | ((w & cmask<U, 2 >::v) << 2);
-	w = ((w >> 4)  & cmask<U, 4 >::v) | ((w & cmask<U, 4 >::v) << 4);
-	w = ((w >> 8)  & cmask<U, 8 >::v) | ((w & cmask<U, 8 >::v) << 8);
-	w = ( w >> 16                   ) | ( w                    << 16);
-	return ((U)-1) - w;
-}
-
-inline int64_t Kmer::word_reverse_complement(uint64_t w) {
-	typedef uint64_t U;
-	w = ((w >> 2)  & cmask<U, 2 >::v) | ((w & cmask<U, 2 >::v) << 2);
-	w = ((w >> 4)  & cmask<U, 4 >::v) | ((w & cmask<U, 4 >::v) << 4);
-	w = ((w >> 8)  & cmask<U, 8 >::v) | ((w & cmask<U, 8 >::v) << 8);
-	w = ((w >> 16) & cmask<U, 16>::v) | ((w & cmask<U, 16>::v) << 16);
-	w = ( w >> 32                   ) | ( w                    << 32);
-	return ((U)-1) - w;
-}
-
-#ifdef HAVE_INT128
-inline static unsigned __int128 Kmer::word_reverse_complement(unsigned __int128 w) {
-	typedef unsigned __int128 U;
-	w = ((w >> 2)  & cmask<U, 2 >::v) | ((w & cmask<U, 2 >::v) << 2);
-	w = ((w >> 4)  & cmask<U, 4 >::v) | ((w & cmask<U, 4 >::v) << 4);
-	w = ((w >> 8)  & cmask<U, 8 >::v) | ((w & cmask<U, 8 >::v) << 8);
-	w = ((w >> 16) & cmask<U, 16>::v) | ((w & cmask<U, 16>::v) << 16);
-	w = ((w >> 32) & cmask<U, 32>::v) | ((w & cmask<U, 32>::v) << 32);
-	w = ( w >> 64                   ) | ( w                    << 64);
-	return ((U)-1) - w;
-}
-#endif
-
-mantis::QuerySets Kmer::parse_kmers(const char *filename, uint32_t seed,
-																		uint64_t range, uint64_t kmer_size,
-																		uint64_t& total_kmers) {
+mantis::QuerySets Kmer::parse_kmers(const char *filename, uint64_t kmer_size,
+																		uint64_t& total_kmers,
+																		bool is_bulk,
+									//nonstd::optional<std::unordered_map<mantis::KmerHash, uint64_t>> &uniqueKmers
+									std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
 	mantis::QuerySets multi_kmers;
 	total_kmers = 0;
 	std::ifstream ipfile(filename);
@@ -162,7 +103,7 @@ start_read:
 					if (i + 1 < read.length())
 						read = read.substr(i + 1, read.length());
 					else
-						continue;
+						goto next_read;
 					goto start_read;
 				}
 				first = first | curr;
@@ -179,10 +120,10 @@ start_read:
 			else
 				item = first_rev;
 
-			// hash the kmer using murmurhash/xxHash before adding to the list
-			//item = HashUtil::MurmurHash64A(((void*)&item), sizeof(item), seed);
-			item = HashUtil::hash_64(item, BITMASK(2*kmer_size));
-			kmers_set.insert(item % range);
+			kmers_set.insert(item);
+			if (is_bulk)
+				if (uniqueKmers.find(item) == uniqueKmers.end())
+					uniqueKmers[item] = 0;
 
 			uint64_t next = (first << 2) & BITMASK(2*kmer_size);
 			uint64_t next_rev = first_rev >> 2;
@@ -194,7 +135,7 @@ start_read:
 					if (i + 1 < read.length())
 						read = read.substr(i + 1, read.length());
 					else
-						continue;
+						goto next_read;
 					goto start_read;
 				}
 				next |= curr;
@@ -206,15 +147,16 @@ start_read:
 				else
 					item = next_rev;
 
-				// hash the kmer using murmurhash/xxHash before adding to the list
-				//item = HashUtil::MurmurHash64A(((void*)&item), sizeof(item), seed);
-				item = HashUtil::hash_64(item, BITMASK(2*kmer_size));
-				kmers_set.insert(item % range);
+				kmers_set.insert(item);
+				if (is_bulk)
+					if (uniqueKmers.find(item) == uniqueKmers.end())
+						uniqueKmers[item] = 0;
 
 				next = (next << 2) & BITMASK(2*kmer_size);
 				next_rev = next_rev >> 2;
 			}
 		}
+next_read:
 		total_kmers += kmers_set.size();
 		//if (kmers_set.size() != kmers.size())
 		//std::cout << "set size: " << kmers_set.size() << " vector size: " << kmers.size() << endl;

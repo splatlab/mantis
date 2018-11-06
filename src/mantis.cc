@@ -15,6 +15,8 @@
 #include "clipp.h"
 #include "spdlog/spdlog.h"
 #include "mantisconfig.hpp"
+#include "mst.h"
+#include "mstQuery.h"
 
 template <typename T>
 void explore_options_verbose(T& res) {
@@ -40,10 +42,13 @@ void explore_options_verbose(T& res) {
   }
 }
 
-int query_main (QueryOpts& opt);
+//int query_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
-
+int build_mst_main (QueryOpts& opt);
+int mst_query_main(QueryOpts &opt);
+int query_main (QueryOpts& opt);
+int validate_mst_main(MSTValidateOpts &opt);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -52,7 +57,7 @@ int validate_main (ValidateOpts& opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, query, validate, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -60,9 +65,11 @@ int main ( int argc, char *argv[] ) {
   BuildOpts bopt;
   QueryOpts qopt;
   ValidateOpts vopt;
+  MSTValidateOpts mvopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
+  mvopt.console = console;
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -90,9 +97,26 @@ int main ( int argc, char *argv[] ) {
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
+  auto build_mst_mode = (
+          command("mst").set(selected, mode::build_mst),
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "The directory where the index is stored.",
+                  option("-t", "--threads") & value("num_threads", qopt.numThreads) % "number of threads"
+  );
+
+  auto validate_mst_mode = (
+          command("validatemst").set(selected, mode::validate_mst),
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "The directory where the index is stored.",
+                  required("-k", "--kmer") & value("kmer", mvopt.k) % "size of k for kmer.",
+                  required("-n", "--num-samples") & value("num_samples", mvopt.numSamples) % "Number of Experiments."
+  );
+
   auto query_mode = (
                      command("query").set(selected, mode::query),
+                     //option("-b", "--bulk").set(qopt.process_in_bulk) % "Process the whole input query file as a bulk.",
+                     option("-1", "--use-colorclasses").set(qopt.use_colorclasses)
+                     % "Use color classes as the color info representation instead of MST",
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
+                     option("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "Prefix of input files.",
                      option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
                      value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
@@ -106,7 +130,7 @@ int main ( int argc, char *argv[] ) {
                      );
 
   auto cli = (
-              (build_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -114,6 +138,8 @@ int main ( int argc, char *argv[] ) {
   assert(build_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
   assert(validate_mode.flags_are_prefix_free());
+  assert(build_mst_mode.flags_are_prefix_free());
+  assert(validate_mst_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -130,7 +156,9 @@ int main ( int argc, char *argv[] ) {
   if(res) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
-    case mode::query: query_main(qopt);  break;
+    case mode::build_mst: build_mst_main(qopt); break;
+    case mode::validate_mst: validate_mst_main(mvopt); break;
+    case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
@@ -140,8 +168,12 @@ int main ( int argc, char *argv[] ) {
     if (std::distance(b,e) > 0) {
       if (b->arg() == "build") {
         std::cout << make_man_page(build_mode, "mantis");
+      } else if (b->arg() == "mst") {
+        std::cout << make_man_page(build_mst_mode, "mantis");
       } else if (b->arg() == "query") {
         std::cout << make_man_page(query_mode, "mantis");
+      } else if (b->arg() == "validatemst") {
+        std::cout << make_man_page(validate_mst_mode, "mantis");
       } else if (b->arg() == "validate") {
         std::cout << make_man_page(validate_mode, "mantis");
       } else {

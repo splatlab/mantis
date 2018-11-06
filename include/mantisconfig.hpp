@@ -13,6 +13,10 @@ namespace mantis{
     constexpr char CQF_FILE[] = "dbg_cqf.ser";
     constexpr char EQCLASS_FILE[] = "eqclass_rrr.cls";
     constexpr char SAMPLEID_FILE[] = "sampleid.lst";
+    constexpr char PARENTBV_FILE[] = "parents.bv";
+    constexpr char DELTABV_FILE[] = "deltas.bv";
+    constexpr char BOUNDARYBV_FILE[] = "boundaries.bv";
+
     constexpr const uint64_t NUM_BV_BUFFER{20000000};
     constexpr const uint64_t INITIAL_EQ_CLASSES{10000};
     constexpr const uint64_t SAMPLE_SIZE{(1ULL << 26)};

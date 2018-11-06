@@ -22,8 +22,8 @@
 #include <stdio.h>
 #include <string>
 
-#include "hashutil.h"
 #include "common_types.h"
+#include "nonstd/optional.hpp"
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) \
 												- 1ULL)
@@ -33,21 +33,34 @@ using namespace std;
 
 class Kmer {
 	public:
-		static inline char map_int(uint8_t base);
-		static inline uint8_t map_base(char base);
-		static uint64_t str_to_int(string str);
-		static string int_to_str(uint64_t kmer, uint64_t kmer_size);
-		static inline int reverse_complement_base(int x);
-		static uint64_t reverse_complement(uint64_t kmer, uint64_t kmer_size);
-		static inline bool compare_kmers(uint64_t kmer, uint64_t kmer_rev);
-		static inline unsigned __int128 word_reverse_complement(unsigned __int128 w);
-		static inline int64_t word_reverse_complement(uint64_t w);
-		static inline uint32_t word_reverse_complement(uint32_t w);
+		static char map_int(uint8_t base);
+		/*return the integer representation of the base */
+		static inline uint8_t map_base(char base)
+		{
+			switch(base) {
+				case 'A': { return DNA_MAP::A; }
+				case 'T': { return DNA_MAP::T; }
+				case 'C': { return DNA_MAP::C; }
+				case 'G': { return DNA_MAP::G; }
+				default:  { return DNA_MAP::G+1; }
+			}
+		}
+		//static uint8_t map_base(char base);
+		static __int128_t str_to_int(std::string str);
+		static std::string int_to_str(__int128_t kmer, uint64_t kmer_size);
+		/* Return the reverse complement of a base */
+		static inline int reverse_complement_base(int x) { return 3 - x; }
+		static __int128_t reverse_complement(__int128_t kmer, uint64_t kmer_size);
+		static bool compare_kmers(__int128_t kmer, __int128_t kmer_rev);
+
+		static std::unordered_map<mantis::KmerHash, uint64_t> _dummy_uniqueKmers;
 		static mantis::QuerySets parse_kmers(const char *filename,
-																				 uint32_t seed, uint64_t range,
 																				 uint64_t kmer_size, uint64_t&
-																				 total_kmers);
-		static std::string generate_random_string(uint64_t len);
+																				 total_kmers,
+																				 bool is_bulk,
+											 //nonstd::optional<std::unordered_map<mantis::KmerHash, uint64_t>> &uniqueKmers);
+											 std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers);
+			static std::string generate_random_string(uint64_t len);
 
 	private:
 		Kmer();
