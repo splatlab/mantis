@@ -112,7 +112,7 @@ int main ( int argc, char *argv[] ) {
 
   auto query_mode = (
                      command("query").set(selected, mode::query),
-                     option("-b", "--bulk").set(qopt.process_in_bulk) % "Process the whole input query file as a bulk.",
+                     //option("-b", "--bulk").set(qopt.process_in_bulk) % "Process the whole input query file as a bulk.",
                      option("-1", "--use-colorclasses").set(qopt.use_colorclasses)
                      % "Use color classes as the color info representation instead of MST",
                      option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",

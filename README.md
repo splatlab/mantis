@@ -142,11 +142,9 @@ The options and arguments are as follows:
 
 ```bash
 SYNOPSIS
-        mantis query [-b] [-1] [-j] [-k <kmer>] -p <query_prefix> [-o <output_file>] <query>
+        mantis query [-1] [-j] [-k <kmer>] -p <query_prefix> [-o <output_file>] <query>
 
 OPTIONS
-        -b, --bulk  Process the whole input query file as a bulk.
-
         -1, --use-colorclasses
                     Use color classes as the color info representation instead of MST
 
@@ -170,8 +168,6 @@ OPTIONS
 
  There are also a couple of optional inputs:
  - `--use-colorclasses,-1`: This option runs a query over the list of color classes.
- - `--bulk,-b`: mantis supports two types of queries: bulk and serial.
- The default is `serial` unless this option is set.
  - `-k <kmer>`: mantis supports approximate queries for `k`
  larger than the `k` that the index and its de Bruijn graph was built with.
  `k` can only be larger than the `index k`. If not set, the default
