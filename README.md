@@ -58,10 +58,6 @@ Build Mantis
 -------
 `mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
 
-```bash
- $ ./bin/mantis build -s 28 -i txp_filtered_squeakrs.list -o txn_k23.idx/
-```
-
 ```
 SYNOPSIS
         mantis build [-e] -s <log-slots> -i <input_list> -o <build_output>
@@ -96,7 +92,7 @@ int-vectors and bit-vectors. It creates a Color graph derived from de Bruijn gra
 and encodes its Minimum Spanning Tree in a format to be able to retrieve the color classes.
 
 ```bash
- $ ./bin/mantis mst -p txp_k23.idx/ -t 8
+ $ ./bin/mantis mst -p raw/ -t 8
 ```
 
 The options and arguments are as follows:
@@ -112,10 +108,6 @@ OPTIONS
         <num_threads>
                     number of threads
 ```
-The command takes the following options :
- - `--input-prefix,-p`: the index directory.
- - `--threads,-t`: number of threads (default: `1`)
-
 This step is will reduce the size of the color class 
 significantly proportional to the original size of the color classes
 (The larger the color class, the more the size reduction.)
@@ -129,7 +121,7 @@ Query
 `mantis query` lets you query a mantis index with a set of sequences.
 
 ```bash
- $ ./bin/mantis query -p txp_k23.idx/ -o query.res input_txns.fa
+ $ ./bin/mantis query -p raw/ -o query.res raw/input_txns.fa
 ```
 
 The options and arguments are as follows:
