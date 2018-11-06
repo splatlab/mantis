@@ -108,12 +108,10 @@ OPTIONS
         <num_threads>
                     number of threads
 ```
-This step is will reduce the size of the color class 
-significantly proportional to the original size of the color classes
-(The larger the color class, the more the size reduction.)
-So it is highly recommended that you run this step after `mantis build`
+This step is will further compress the color class representation.
+It is highly recommended that you run this step after `mantis build`
 since this makes your query required memory much smaller and doesn't hurt
-the query time. 
+the query time.
 
 Query
 -------
@@ -167,7 +165,7 @@ OPTIONS
  Finally, rather than writing the results in the "simple" output format, they can be written in JSON if you
  provide the `--json,-j` flag to the `query` comamnd.
  
-The output file in contains the list of experiments (i.e., hits) corresponding to each queried transcript.
+The output file contains the list of experiments (i.e., hits) corresponding to each queried transcript.
 
 Contributing
 ------------
