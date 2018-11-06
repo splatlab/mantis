@@ -19,6 +19,7 @@ A preprint of the paper is available [on bioRxiv](https://www.biorxiv.org/conten
 API
 --------
 * `mantis build`: builds a mantis index from a collection of (squeakr) CQF files.
+* `mantis mst`: builds a new encoding based on Minimum Spanning Trees for the color information.
 * `mantis query`: query k-mers in the mantis index.
 
 Build
@@ -53,7 +54,7 @@ the following to the cmake command:
 
 The usage for this command are as follows:
 
-Build
+Build Mantis
 -------
 `mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
 
