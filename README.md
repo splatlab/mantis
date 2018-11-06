@@ -79,11 +79,11 @@ OPTIONS
  Mantis will automatically resize when the CQF reaches its capacity during the build process.
  Starting with a reasonable value is recommended so that the build process does not have to perform a bunch of resizes. Each resize operation will halt the build process and in-turn increase the overall build time.
 
- Suggested starting values based on the size of input Squeakr files:
-    - 28 for a small set of genomes like a bacterial genomes.
-    - 30 for a large set of medium size read files.
-    - 33 for a large set of big read files.
- Notice that these are just suggestions. You can start with a other smaller values as well.
+Suggested starting values based on the size of input Squeakr files:
+* 28 for a small set of genomes like a bacterial genomes.
+* 30 for a large set of medium size read files.
+* 33 for a large set of big read files.
+Notice that these are just suggestions. You can start with a other smaller values as well.
 
 Build MST
 -------
