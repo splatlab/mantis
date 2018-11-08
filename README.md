@@ -85,6 +85,8 @@ Suggested starting values based on the size of input Squeakr files:
 * 33 for a large set of big read files.
 Notice that these are just suggestions. You can start with a other smaller values as well.
 
+Note: build process will open all input Squeakr files at the same time. So, please increase the limit on the number of open file handles to at least the number of input Squeakr files before running build.
+
 Build MST
 -------
 `mantis mst` encodes the color information into a list of succinct 
