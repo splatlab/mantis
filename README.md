@@ -42,7 +42,6 @@ To build on an older hardware (older than Haswell) pass `-DNH=1` as a cmake argu
  $ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=../ ..
  $ make install
  $ cd ..
- $ ./bin/mantis build -s 20 -i raw/incqfs.lst -o raw/
 ```
 
 If SDSL is not installed in a standard location, you can try and tell CMake where to look by adding
@@ -57,6 +56,10 @@ The usage for this command are as follows:
 Build Mantis
 -------
 `mantis build` creates a colored de Bruijn graph representation that can be used to query transcripts.
+
+``` bash
+ $ ./bin/mantis build -s 20 -i raw/incqfs.lst -o raw/
+```
 
 ```
 SYNOPSIS
@@ -94,14 +97,14 @@ int-vectors and bit-vectors. It creates a color graph derived from the de Bruijn
 and encodes its minimum spanning tree (MST) in a format to be able to retrieve the color classes.
 
 ```bash
- $ ./bin/mantis mst -p raw/ -t 8
+ $ ./bin/mantis mst -p raw/ -t 8 -k
 ```
 
 The options and arguments are as follows:
 
 ```bash
 SYNOPSIS
-        mantis mst -p <index_prefix> [-t <num_threads>]
+        mantis mst -p <index_prefix> [-t <num_threads>] (-k|-d)
 
 OPTIONS
         <index_prefix>
@@ -109,11 +112,22 @@ OPTIONS
 
         <num_threads>
                     number of threads
+
+        -k, --keep-RRR
+                    Keep the previous color class RRR representation.
+
+        -d, --delete-RRR
+                    Remove the previous color class RRR representation.
 ```
 This step is will further compress the color class representation.
 It is highly recommended that you run this step after `mantis build`
 since this makes your query required memory much smaller and doesn't hurt
 the query time.
+
+If you want to keep the RRR-compressed representation of color classes
+after having the mst representation you require to use `-k` option
+and if you want to delete this intermediate representation
+you should use `-d`.
 
 Query
 -------
