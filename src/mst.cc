@@ -5,6 +5,7 @@
 //
 #include <string>
 #include <sstream>
+#include <cstdio>
 
 #include "MantisFS.h"
 #include "mst.h"
@@ -672,5 +673,14 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
 int build_mst_main(QueryOpts &opt) {
     MST mst(opt.prefix, opt.console, opt.numThreads);
     mst.buildMST();
+    if (opt.remove_colorClasses && !opt.keep_colorclasses) {
+        for (auto &f : mantis::fs::GetFilesExt(opt.prefix.c_str(), mantis::EQCLASS_FILE)) {
+            std::cerr << f.c_str() << "\n";
+            if (std::remove(f.c_str()) != 0) {
+                std::cerr << "Unable to delete file " << f << "\n";
+                std::exit(1);
+            }
+        }
+    }
     return 0;
 }

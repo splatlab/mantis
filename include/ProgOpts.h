@@ -36,6 +36,8 @@ class QueryOpts {
   std::shared_ptr<spdlog::logger> console{nullptr};
   bool process_in_bulk{false};
   bool use_colorclasses{false};
+  bool keep_colorclasses{false};
+  bool remove_colorClasses{false};
 };
 
 class ValidateOpts {

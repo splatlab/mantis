@@ -100,14 +100,17 @@ int main ( int argc, char *argv[] ) {
   auto build_mst_mode = (
           command("mst").set(selected, mode::build_mst),
                   required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "The directory where the index is stored.",
-                  option("-t", "--threads") & value("num_threads", qopt.numThreads) % "number of threads"
-  );
+                  option("-t", "--threads") & value("num_threads", qopt.numThreads) % "number of threads",
+                  (
+                          required("-k", "--keep-RRR").set(qopt.keep_colorclasses) % "Keep the previous color class RRR representation."
+                          |
+                          required("-d", "--delete-RRR").set(qopt.remove_colorClasses) % "Remove the previous color class RRR representation."
+                  )
+                  );
 
   auto validate_mst_mode = (
           command("validatemst").set(selected, mode::validate_mst),
-                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "The directory where the index is stored.",
-                  required("-k", "--kmer") & value("kmer", mvopt.k) % "size of k for kmer.",
-                  required("-n", "--num-samples") & value("num_samples", mvopt.numSamples) % "Number of Experiments."
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "The directory where the index is stored."
   );
 
   auto query_mode = (
