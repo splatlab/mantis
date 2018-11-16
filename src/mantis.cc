@@ -49,6 +49,7 @@ int build_mst_main (QueryOpts& opt);
 int mst_query_main(QueryOpts &opt);
 int query_main (QueryOpts& opt);
 int validate_mst_main(MSTValidateOpts &opt);
+int stats_main(StatsOpts& statsOpts);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -57,7 +58,7 @@ int validate_mst_main(MSTValidateOpts &opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, stats, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -66,10 +67,12 @@ int main ( int argc, char *argv[] ) {
   QueryOpts qopt;
   ValidateOpts vopt;
   MSTValidateOpts mvopt;
+  StatsOpts sopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
   mvopt.console = console;
+  sopt.console = console;
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -132,8 +135,14 @@ int main ( int argc, char *argv[] ) {
                      value(ensure_file_exists, "query", vopt.query_file) % "Query file."
                      );
 
+  auto stats_mode = (
+          command("stats").set(selected, mode::stats),
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", sopt.prefix) % "The directory where the index is stored.",
+                  required("-n", "--num-samples") & value("number_of_samples", sopt.numSamples) % "Number of experiments.",
+                  option("-t", "--type") & value("type", sopt.type) % "what stats? (mono, cc_density), default:mono"
+          );
   auto cli = (
-              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -163,6 +172,7 @@ int main ( int argc, char *argv[] ) {
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
+    case mode::stats: stats_main(sopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -179,6 +189,8 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(validate_mst_mode, "mantis");
       } else if (b->arg() == "validate") {
         std::cout << make_man_page(validate_mode, "mantis");
+      } else if (b->arg() == "stats") {
+        std::cout << make_man_page(stats_mode, "mantis");
       } else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';
