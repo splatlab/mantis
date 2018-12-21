@@ -61,6 +61,7 @@ public:
     std::string prefix;
     std::string type = "mono";
     std::uint64_t numSamples;
+    std::uint64_t j = 23;
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 

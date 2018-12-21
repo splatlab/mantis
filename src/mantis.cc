@@ -139,7 +139,8 @@ int main ( int argc, char *argv[] ) {
           command("stats").set(selected, mode::stats),
                   required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", sopt.prefix) % "The directory where the index is stored.",
                   required("-n", "--num-samples") & value("number_of_samples", sopt.numSamples) % "Number of experiments.",
-                  option("-t", "--type") & value("type", sopt.type) % "what stats? (mono, cc_density), default:mono"
+                  option("-t", "--type") & value("type", sopt.type) % "what stats? (mono, cc_density, jmerkmer), default: mono",
+                  option("-j", "--jmer-length") & value("size-of-jmer", sopt.j) % "value of j for constituent jmers of a kmer (default: 23)."
           );
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | command("help").set(selected,mode::help) |
