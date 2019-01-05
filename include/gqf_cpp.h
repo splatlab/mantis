@@ -44,26 +44,29 @@ class CQF {
 				seed, std::string filename);
 		CQF(std::string& filename, enum readmode flag);
 		CQF(const CQF<key_obj>& copy_cqf) = delete;
+
 		CQF(CQF<key_obj>&& other) {
 			memcpy(reinterpret_cast<void*>(&cqf),
-						 reinterpret_cast<void*>(const_cast<QF*>(&other.cqf)), sizeof(QF));
+						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
-			qf_malloc(&other.cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0,
-								QF_HASH_DEFAULT, SEED);
+			other.cqf.runtimedata = nullptr;
+			other.cqf.metadata = nullptr;
+			other.cqf.blocks = nullptr;
 			other.is_filebased = false;
 		}
 
 		CQF& operator=(CQF<key_obj>& other) {
 			memcpy(reinterpret_cast<void*>(&cqf),
-						 reinterpret_cast<void*>(const_cast<QF*>(&other.cqf)), sizeof(QF));
+						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
-			qf_malloc(&other.cqf, 1ULL << NUM_Q_BITS, NUM_HASH_BITS, 0,
-								QF_HASH_DEFAULT, SEED);
+			other.cqf.runtimedata = nullptr;
+			other.cqf.metadata = nullptr;
+			other.cqf.blocks = nullptr;
 			other.is_filebased = false;
 			return *this;
 		}
 
-		~CQF();
+		//~CQF();
 
 		int insert(const key_obj& k, uint8_t flags);
 
@@ -194,11 +197,11 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 	is_filebased = true;
 }
 
-template <class key_obj> CQF<key_obj>::~CQF() {
-	if (is_filebased)
-		close();
-	free();
-}
+//template <class key_obj> CQF<key_obj>::~CQF() {
+	//if (is_filebased)
+		//close();
+	//free();
+//}
 
 template <class key_obj>
 int CQF<key_obj>::insert(const key_obj& k, uint8_t flags) {
