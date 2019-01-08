@@ -79,7 +79,7 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
-		void free() { qf_free(&cqf); }
+		void free() { std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() { qf_closefile(&cqf); }
 		void delete_file() { qf_deletefile(&cqf); }
 
