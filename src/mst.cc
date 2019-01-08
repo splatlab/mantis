@@ -143,6 +143,7 @@ bool MST::buildEdgeSets() {
         edgeBucketList[getBucketId(colorId, zero)].push_back(Edge(colorId, zero));
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
+		cqf.free();
     return true;
 }
 
