@@ -98,13 +98,13 @@ bool MST::buildEdgeSets() {
                                          std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
     }
     for (auto &t : threads) { t.join(); }
-
+    cqf.free();
     logger->info("Total number of kmers observed: {}", numOfKmers);
     logger->info("Total number of edges observed: {}", num_edges);
 
 
     // count total number of color classes:
-    uint64_t i = 0, maxIdDivisibleBy64 = (maxId / 64) * 64;
+    /*uint64_t i = 0, maxIdDivisibleBy64 = (maxId / 64) * 64;
     while (i < maxIdDivisibleBy64) {
         if (nodes.get_int(i, 64) != UINT64_MAX) {
             logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, i + 64);
@@ -113,11 +113,45 @@ bool MST::buildEdgeSets() {
     }
     uint64_t lastbits = sdsl::bits::cnt(nodes.get_int(i, maxId - maxIdDivisibleBy64));
     if (lastbits != maxId - maxIdDivisibleBy64)
-        logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, maxId);
+        logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, maxId);*/
     num_colorClasses = maxId + 1;
-
     logger->info("Put edges in each bucket in a sorted list.");
-    for (auto bcntr = 0; bcntr < edgesetList.size(); bcntr++) {
+    for (uint32_t i = 0; i < nThreads; ++i) {
+        std::string filename = "tmp"+std::to_string(i);
+        std::ifstream tmp;
+        tmp.open(filename, std::ios::in | std::ios::binary);
+        uint64_t cnt;
+        tmp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
+        std::vector<Edge> edgeList;
+        edgeList.reserve(cnt);
+        tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
+        tmp.close();
+        std::cerr << "tmp " << i << " size: " << edgeList.size() << "\n";
+        std::sort(edgeList.begin(), edgeList.end(),
+                  [](Edge &e1, Edge &e2) {
+                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+                  });
+        edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
+                [](Edge &e1, Edge &e2) {
+                    return e1.n1 == e2.n1 and e1.n2 == e2.n2;
+                }), edgeList.end());
+        for (auto &edge: edgeList) {
+            edgeBucketList[getBucketId(edge.n1, edge.n2)].push_back(edge);
+        }
+    }
+    for (auto &bucket: edgeBucketList) {
+        std::cerr << "before: " << bucket.size() << " ";
+        std::sort(bucket.begin(), bucket.end(),
+                  [](Edge &e1, Edge &e2) {
+                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+                  });
+        bucket.erase(std::unique(bucket.begin(), bucket.end(),
+                                   [](Edge &e1, Edge &e2) {
+                                       return e1.n1 == e2.n1 and e1.n2 == e2.n2;
+                                   }), bucket.end());
+        std::cerr << "after: " << bucket.size() << "\n";
+    }
+    /*for (auto bcntr = 0; bcntr < edgesetList.size(); bcntr++) {
         auto &edgeset = edgesetList[bcntr];
         std::vector<Edge> &edgeBucket = edgeBucketList[bcntr];
         edgeBucket.reserve(edgeset.size());
@@ -128,10 +162,10 @@ bool MST::buildEdgeSets() {
                   [](Edge &e1, Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
                   });
-    }
+    }*/
     logger->info("Done sorting the edges.");
 
-    // Add an edge between edch color class ID and node zero
+    // Add an edge between each color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
     zero = static_cast<colorIdType>(num_colorClasses);
@@ -143,7 +177,7 @@ bool MST::buildEdgeSets() {
         edgeBucketList[getBucketId(colorId, zero)].push_back(Edge(colorId, zero));
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
-	cqf.free();
+
     return true;
 }
 
@@ -165,16 +199,21 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     std::vector<Edge> edgeList;
     edgeList.reserve(tmpEdgeListSize);
     auto it = cqf.setIteratorLimits(startPoint, endPoint);
+    std::string filename("tmp"+std::to_string(threadId));
+    uint64_t cnt = 0;
+    std::ofstream tmpfile;
+    tmpfile.open(filename, std::ios::out | std::ios::binary);
+    tmpfile.write(reinterpret_cast<const char *>(&cnt), sizeof(cnt));
     while (!it.reachedHashLimit()) {
         KeyObject keyObject = *it;
         uint64_t curEqId = keyObject.count - 1;
-        nodes[curEqId] = 1; // set the seen color class id bit
+        //nodes[curEqId] = 1; // set the seen color class id bit
         localMaxId = curEqId > localMaxId ? curEqId : localMaxId;
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject, edgeList);
-        if (edgeList.size() >= tmpEdgeListSize and colorMutex.try_lock()) {
+        if (edgeList.size() >= tmpEdgeListSize/* and colorMutex.try_lock()*/) {
             //logger->info("Thread {}: inside the loop Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
-            for (auto &e : edgeList) {
+            /*for (auto &e : edgeList) {
                 auto bucketId = getBucketId(e.n1, e.n2);
                 //nodes[e.n1] = 1; // set the seen color class id bit
                 //nodes[e.n2] = 1; // set the seen color class id bit
@@ -193,9 +232,13 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                     num_edges++;
                 }
             }
-            //logger->info("Thread {}: clearing edgeList", threadId);
+             //logger->info("Thread {}: clearing edgeList", threadId);
             edgeList.clear();
             colorMutex.unlock();
+             */
+            tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
+            cnt+=edgeList.size();
+            edgeList.clear();
         }
         ++it;
         kmerCntr++;
@@ -203,8 +246,10 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
             std::cerr << "\r" << (numOfKmers + kmerCntr) / 1000000 << "M kmers";
         }
     }
+    tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
+    cnt+=edgeList.size();
     //if (colorMutex.try_lock()) {
-    colorMutex.lock();
+    /*colorMutex.lock();
     //logger->info("Thread {}: Last piece, Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
     for (auto &e : edgeList) {
         auto bucketId = getBucketId(e.n1, e.n2);
@@ -221,8 +266,9 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
             edgeset.insert(e);
             num_edges++;
         }
-    }
+    }*/
     //logger->info("Thread {}: The END", threadId);
+    colorMutex.lock();
     maxId = localMaxId > maxId ? localMaxId : maxId;
     numOfKmers += kmerCntr;
     std::cerr << "\r";
@@ -230,6 +276,9 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
     colorMutex.unlock();
     //}
+    tmpfile.seekp(0);
+    tmpfile.write(reinterpret_cast<const char *>(&cnt), sizeof(cnt));
+    tmpfile.close();
 }
 
 /**
