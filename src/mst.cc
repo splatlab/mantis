@@ -128,7 +128,6 @@ bool MST::buildEdgeSets() {
         tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
         tmp.close();
         std::remove(filename.c_str());
-        std::cerr << "tmp " << i << " size: " << edgeList.size() << "\n";
         std::sort(edgeList.begin(), edgeList.end(),
                   [](Edge &e1, Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
@@ -142,7 +141,7 @@ bool MST::buildEdgeSets() {
         }
     }
     for (auto &bucket: edgeBucketList) {
-        std::cerr << "before: " << bucket.size() << " ";
+        std::cerr << "before uniqifying: " << bucket.size() << " ";
         std::sort(bucket.begin(), bucket.end(),
                   [](Edge &e1, Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
@@ -153,18 +152,6 @@ bool MST::buildEdgeSets() {
                                    }), bucket.end());
         std::cerr << "after: " << bucket.size() << "\n";
     }
-    /*for (auto bcntr = 0; bcntr < edgesetList.size(); bcntr++) {
-        auto &edgeset = edgesetList[bcntr];
-        std::vector<Edge> &edgeBucket = edgeBucketList[bcntr];
-        edgeBucket.reserve(edgeset.size());
-        for (auto &edge: edgeset) {
-            edgeBucket.push_back(edge);
-        }
-        std::sort(edgeBucket.begin(), edgeBucket.end(),
-                  [](Edge &e1, Edge &e2) {
-                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-                  });
-    }*/
     logger->info("Done sorting the edges.");
 
     // Add an edge between each color class ID and node zero
@@ -214,68 +201,22 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject, edgeList);
         if (edgeList.size() >= tmpEdgeListSize/* and colorMutex.try_lock()*/) {
-            //logger->info("Thread {}: inside the loop Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
-            /*for (auto &e : edgeList) {
-                auto bucketId = getBucketId(e.n1, e.n2);
-                //nodes[e.n1] = 1; // set the seen color class id bit
-                //nodes[e.n2] = 1; // set the seen color class id bit
-                if (bucketId >= edgesetList.size()) {
-                    logger->error("\nBucket ID passes total number of possible buckets {}. "
-                                  //"\n\tkey1: {}, key2: {}"
-                                  "\n\tcid1: {}, cid2: {}",
-                                  edgesetList.size(),
-                            //std::string(), std::string(,
-                                  e.n1, e.n2);
-                    std::exit(1);
-                }
-                auto &edgeset = edgesetList[bucketId];
-                if (edgeset.find(e) == edgeset.end()) {
-                    edgeset.insert(e);
-                    num_edges++;
-                }
-            }
-             //logger->info("Thread {}: clearing edgeList", threadId);
-            edgeList.clear();
-            colorMutex.unlock();
-             */
             tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
             cnt+=edgeList.size();
-            std::cerr << cnt << " ";
             edgeList.clear();
         }
         ++it;
         kmerCntr++;
         if (kmerCntr % 10000000 == 0) {
-            std::cerr << "\r" << (numOfKmers + kmerCntr) / 1000000 << "M kmers";
+            std::cerr << "\rthread " << threadId << ": Observed " << (numOfKmers + kmerCntr) / 1000000 << "M kmers and " << cnt << " edges";
         }
     }
     tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
     cnt+=edgeList.size();
-    //if (colorMutex.try_lock()) {
-    /*colorMutex.lock();
-    //logger->info("Thread {}: Last piece, Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
-    for (auto &e : edgeList) {
-        auto bucketId = getBucketId(e.n1, e.n2);
-        if (bucketId >= edgesetList.size()) {
-            logger->error("\nBucket ID passes total number of possible buckets {}. "
-                          //"\n\tkey1: {}, key2: {}"
-                          "\n\tcid1: {}, cid2: {}",
-                          edgesetList.size(),
-                          e.n1, e.n2);
-            std::exit(1);
-        }
-        auto &edgeset = edgesetList[bucketId];
-        if (edgeset.find(e) == edgeset.end()) {
-            edgeset.insert(e);
-            num_edges++;
-        }
-    }*/
-    //logger->info("Thread {}: The END", threadId);
     colorMutex.lock();
     maxId = localMaxId > maxId ? localMaxId : maxId;
     numOfKmers += kmerCntr;
     std::cerr << "\r";
-    //std::cerr << "Thread " << threadId << ": Observed " << numOfKmers << " kmers and " << num_edges << " edges\n";
     logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, cnt/*num_edges*/);
     colorMutex.unlock();
     //}

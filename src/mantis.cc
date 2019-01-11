@@ -109,8 +109,9 @@ int main ( int argc, char *argv[] ) {
                   );
 
   auto validate_mst_mode = (
-          command("validatemst").set(selected, mode::validate_mst),
-                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "The directory where the index is stored."
+                  command("validatemst").set(selected, mode::validate_mst),
+                  required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", mvopt.prefix) % "The directory where the index is stored.",
+                  required("-n", "--num-experiments") & value("num_experiments", mvopt.numSamples) % "Number of experiments."
   );
 
   auto query_mode = (
