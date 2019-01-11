@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <cstdio>
+#include <stdio.h>
 
 #include "MantisFS.h"
 #include "mst.h"
@@ -126,6 +127,7 @@ bool MST::buildEdgeSets() {
         edgeList.resize(cnt);
         tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
         tmp.close();
+        std::remove(filename.c_str());
         std::cerr << "tmp " << i << " size: " << edgeList.size() << "\n";
         std::sort(edgeList.begin(), edgeList.end(),
                   [](Edge &e1, Edge &e2) {
