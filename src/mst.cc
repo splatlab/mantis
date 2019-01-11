@@ -65,9 +65,6 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
  */
 void MST::buildMST() {
     buildEdgeSets();
-    int tmp;
-    std::cerr << "here\n";
-    std::cin >> tmp;
     calculateWeights();
     encodeColorClassUsingMST();
     logger->info("# of times the node was found in the cache: {}", gcntr);
@@ -675,15 +672,6 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
  * main function to call Color graph and MST construction and color class encoding and serializing
  */
 int build_mst_main(QueryOpts &opt) {
-    std::string cqf_file(opt.prefix + mantis::CQF_FILE);
-    CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
-    cqf.free();
-    cqf.close();
-    int tmp;
-    std::cerr << "\nhere\n";
-    std::cin >> tmp;
-    std::cerr << "\n" << tmp << "\n";
-    std::exit(1);
     MST mst(opt.prefix, opt.console, opt.numThreads);
     mst.buildMST();
     if (opt.remove_colorClasses && !opt.keep_colorclasses) {
