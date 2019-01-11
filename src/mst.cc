@@ -123,7 +123,7 @@ bool MST::buildEdgeSets() {
         uint64_t cnt;
         tmp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
         std::vector<Edge> edgeList;
-        edgeList.reserve(cnt);
+        edgeList.resize(cnt);
         tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
         tmp.close();
         std::cerr << "tmp " << i << " size: " << edgeList.size() << "\n";
@@ -238,6 +238,7 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
              */
             tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
             cnt+=edgeList.size();
+            std::cerr << cnt << " ";
             edgeList.clear();
         }
         ++it;
@@ -273,7 +274,7 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     numOfKmers += kmerCntr;
     std::cerr << "\r";
     //std::cerr << "Thread " << threadId << ": Observed " << numOfKmers << " kmers and " << num_edges << " edges\n";
-    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, num_edges);
+    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, cnt/*num_edges*/);
     colorMutex.unlock();
     //}
     tmpfile.seekp(0);
