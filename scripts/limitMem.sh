@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# The example script for building mantis on a limited memory of 4GBs assuming we are in the root of <mantis_dir> is:
+# bash script/limitMem.sh 4 build/src/mantis build -s 25 -i <input_squeakr_list_file> -o <mantis index>
+
+
 GB=$1
 
 case $GB in
