@@ -123,4 +123,9 @@ if [ $? ]; then
     echo "Warning: failed to cleanup/unmount $MOUNTDIR"
 fi
 
+rmdir $MOUNTDIR
+if [ $? ]; then
+    echo "Warning: failed to delete $MOUNTDIR"
+fi
+
 exit $result
