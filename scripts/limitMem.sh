@@ -52,19 +52,19 @@ if [ ! -n "$CGEXEC" ]; then
 fi
 
 GROUPNAME=`mktemp -u cgroupname.XXXXXX`
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Failed to generate ephemeral cgroup name"
     exit 1
 fi
 
 CONFIGFILE=`mktemp -t cgconfig.XXXXXX`
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Failed to create config file."
     exit 1
 fi
 
 MOUNTDIR=`mktemp -t -d cgroup.XXXXXX`
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Failed to create mount directory."
     exit 1
 fi
@@ -91,7 +91,7 @@ group $GROUPNAME {
 }
 EOF
 
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Failed to write config file"
     exit 1
 fi
@@ -100,8 +100,8 @@ fi
 # No error check here.
 
 sudo $CGCONFIGPARSER -l $CONFIGFILE
-if [ $? ]; then
-    echo "Failed to setup the $GROUPNAME cgroup"
+if [ $? -ne 0 ]; then
+    echo "Failed to setup the mantis cgroup"
     exit 1
 fi
 
@@ -119,12 +119,12 @@ echo 3 | sudo tee /proc/sys/vm/drop_caches
 result=$?
 
 sudo umount $MOUNTDIR
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Warning: failed to cleanup/unmount $MOUNTDIR"
 fi
 
 rmdir $MOUNTDIR
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Warning: failed to delete $MOUNTDIR"
 fi
 
