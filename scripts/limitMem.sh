@@ -51,11 +51,29 @@ if [ ! -n "$CGEXEC" ]; then
     exit 1
 fi
 
-cat <<EOF > cgconfig.conf
+GROUPNAME=`mktemp -u cgroupname.XXXXXX`
+if [ $? ]; then
+    echo "Failed to generate ephemeral cgroup name"
+    exit 1
+fi
+
+CONFIGFILE=`mktemp -t cgconfig.XXXXXX`
+if [ $? ]; then
+    echo "Failed to create config file."
+    exit 1
+fi
+
+MOUNTDIR=`mktemp -t -d cgroup.XXXXXX`
+if [ $? ]; then
+    echo "Failed to create mount directory."
+    exit 1
+fi
+
+cat <<EOF > $CONFIGFILE
 mount {
-  memory = /var/cgroups;
+  memory = $MOUNTDIR;
 }
-group mantis {
+group $GROUPNAME {
   perm {
     task {
       uid = `id -u`;
@@ -73,30 +91,36 @@ group mantis {
 }
 EOF
 
-sudo umount /var/cgroups
-# No error check here.
-
-sudo $CGCONFIGPARSER -l cgconfig.conf
 if [ $? ]; then
-    echo "Failed to setup the mantis cgroup"
+    echo "Failed to write config file"
     exit 1
 fi
 
-echo $MEM | sudo tee /var/cgroups/mantis/memory.limit_in_bytes
-MEMCHECK=`cat /var/cgroups/mantis/memory.limit_in_bytes`
+#sudo umount /var/cgroups
+# No error check here.
+
+sudo $CGCONFIGPARSER -l $CONFIGFILE
+if [ $? ]; then
+    echo "Failed to setup the $GROUPNAME cgroup"
+    exit 1
+fi
+
+echo $MEM | sudo tee $MOUNTDIR/$GROUPNAME/memory.limit_in_bytes
+MEMCHECK=`cat $MOUNTDIR/$GROUPNAME/memory.limit_in_bytes`
 if [ $MEM != $MEMCHECK ]; then
     echo "Failed to set memory limit."
+    sudo umount $MOUNTDIR
     exit 1
 fi
 
 echo 3 | sudo tee /proc/sys/vm/drop_caches
 
-/usr/bin/time $CGEXEC -g memory:mantis $*
+/usr/bin/time $CGEXEC -g memory:$GROUPNAME $*
 result=$?
 
-sudo umount /var/cgroups
+sudo umount $MOUNTDIR
 if [ $? ]; then
-    echo "Warning: failed to cleanup/unmount /var/cgroups"
+    echo "Warning: failed to cleanup/unmount $MOUNTDIR"
 fi
 
 exit $result
