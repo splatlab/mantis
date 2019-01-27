@@ -77,7 +77,7 @@ sudo umount /var/cgroups
 # No error check here.
 
 sudo $CGCONFIGPARSER -l cgconfig.conf
-if [ $? ]; then
+if [ $? -ne 0 ]; then
     echo "Failed to setup the mantis cgroup"
     exit 1
 fi
