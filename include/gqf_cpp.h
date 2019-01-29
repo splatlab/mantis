@@ -43,7 +43,30 @@ class CQF {
 		CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash, uint32_t
 				seed, std::string filename);
 		CQF(std::string& filename, enum readmode flag);
-		CQF(const CQF<key_obj>& copy_cqf);
+		CQF(const CQF<key_obj>& copy_cqf) = delete;
+
+		CQF(CQF<key_obj>&& other) {
+			memcpy(reinterpret_cast<void*>(&cqf),
+						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
+			is_filebased = other.is_filebased;
+			other.cqf.runtimedata = nullptr;
+			other.cqf.metadata = nullptr;
+			other.cqf.blocks = nullptr;
+			other.is_filebased = false;
+		}
+
+		CQF& operator=(CQF<key_obj>& other) {
+			memcpy(reinterpret_cast<void*>(&cqf),
+						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
+			is_filebased = other.is_filebased;
+			other.cqf.runtimedata = nullptr;
+			other.cqf.metadata = nullptr;
+			other.cqf.blocks = nullptr;
+			other.is_filebased = false;
+			return *this;
+		}
+
+		//~CQF();
 
 		int insert(const key_obj& k, uint8_t flags);
 
@@ -56,6 +79,7 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
+		void free() { std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() { qf_closefile(&cqf); }
 		void delete_file() { qf_deletefile(&cqf); }
 
@@ -104,6 +128,7 @@ class CQF {
 
 	private:
 		QF cqf;
+		bool is_filebased{false};
 		//std::unordered_set<uint64_t> set;
 };
 
@@ -150,6 +175,7 @@ CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
 		ERROR("Can't allocate the CQF");
 		exit(EXIT_FAILURE);
 	}
+	is_filebased = true;
 }
 
 template <class key_obj>
@@ -168,12 +194,14 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 		ERROR("Can't read/deserialize the CQF");
 		exit(EXIT_FAILURE);
 	}
+	is_filebased = true;
 }
 
-template <class key_obj> CQF<key_obj>::CQF(const CQF<key_obj>& copy_cqf) {
-	memcpy(reinterpret_cast<void*>(&cqf),
-				 reinterpret_cast<void*>(const_cast<QF*>(&copy_cqf.cqf)), sizeof(QF));
-}
+//template <class key_obj> CQF<key_obj>::~CQF() {
+	//if (is_filebased)
+		//close();
+	//free();
+//}
 
 template <class key_obj>
 int CQF<key_obj>::insert(const key_obj& k, uint8_t flags) {

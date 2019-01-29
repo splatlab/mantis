@@ -37,6 +37,7 @@ struct Edge {
     colorIdType n1;
     colorIdType n2;
 
+    Edge() : n1{static_cast<colorIdType>(-1)}, n2{static_cast<colorIdType>(-1)} {}
     Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {}
 
     bool operator==(const Edge &e) const {
