@@ -16,6 +16,12 @@ Mantis was presented at RECOMB 2018, and a full journal paper is published in [C
 
 A preprint of the paper is available [on bioRxiv](https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf).
 
+Notes
+--------
+
+Mantis should be used with the latest version of [squeakr](https://github.com/splatlab/squeakr/tree/master), and we _highly recommend_ running squeakr with the desired k-mer count threshold and the `--no-counts` argument.  Early versions of mantis used _unfiltered_ squeakr output to build the mantis data structure, which required considerable intermediate disk-space, as those files represented the original k-mers and their counts in each sample exactly.  When run with the `--no-counts` argument, each squeakr file encodes the threshold only once in its metadata, and includes only the k-mers that passed the abundance threshold; this can reduce the intermediate storage requirements by over an order of magnitude.
+
+
 API
 --------
 * `mantis build`: builds a mantis index from a collection of (squeakr) CQF files.
