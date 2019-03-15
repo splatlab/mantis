@@ -16,7 +16,9 @@ add_library(mantis_core STATIC
   		squeakrconfig.cc
   		gqf/gqf.c
   		gqf/gqf_file.c
-  		gqf/hashutil.c)
+  		gqf/hashutil.c
+		FastxParser.cpp
+		mantisSski.cc)
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
 set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")

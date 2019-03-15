@@ -190,6 +190,7 @@ int stats_main(StatsOpts &sopt) {
                 }
                 prev = c;
             }
+            mcc_file << "\n";
         }
         mcc_file.close();
     }

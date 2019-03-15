@@ -50,7 +50,7 @@ int mst_query_main(QueryOpts &opt);
 int query_main (QueryOpts& opt);
 int validate_mst_main(MSTValidateOpts &opt);
 int stats_main(StatsOpts& statsOpts);
-
+int build_sski_main(BuildOpts& opt);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -59,7 +59,7 @@ int stats_main(StatsOpts& statsOpts);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, stats, help};
+  enum class mode {build, build_mst, build_mph, validate_mst, query, validate, stats, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -95,12 +95,18 @@ int main ( int argc, char *argv[] ) {
 
   auto build_mode = (
                      command("build").set(selected, mode::build),
-                     option("-e", "--eqclass_dist").set(bopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
-										 required("-s","--log-slots") & value("log-slots",
-																											 bopt.qbits) % "log of number of slots in the output CQF",
-                     required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
+                     option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
+                     required("-i", "--input") & value(ensure_file_exists, "input", bopt.inlist) % "file containing list of input unitigs",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
+  auto build_mph_mode = (
+          command("build_mph").set(selected, mode::build_mph),
+                  option("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer (default:23).",
+                  option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
+                  required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
+                  required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
+  );
+
   auto build_mst_mode = (
           command("mst").set(selected, mode::build_mst),
                   required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "The directory where the index is stored.",
@@ -145,12 +151,13 @@ int main ( int argc, char *argv[] ) {
     );
 
   auto cli = (
-              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mph_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
 
   assert(build_mode.flags_are_prefix_free());
+  assert(build_mph_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
   assert(validate_mode.flags_are_prefix_free());
   assert(build_mst_mode.flags_are_prefix_free());
@@ -173,6 +180,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
     case mode::build: build_main(bopt);  break;
     case mode::build_mst: build_mst_main(qopt); break;
+    case mode::build_mph: build_sski_main(bopt);  break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
@@ -187,6 +195,8 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(build_mode, "mantis");
       } else if (b->arg() == "mst") {
         std::cout << make_man_page(build_mst_mode, "mantis");
+      } else if (b->arg() == "build_mph") {
+        std::cout << make_man_page(build_mph_mode, "mantis");
       } else if (b->arg() == "query") {
         std::cout << make_man_page(query_mode, "mantis");
       } else if (b->arg() == "validatemst") {
