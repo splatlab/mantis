@@ -31,11 +31,38 @@ class MantisSski {
 // MPHf
 public:
     MantisSski(uint32_t kin, std::string outd, spdlog::logger* c)
-    : k(kin), outdir(std::move(outd)), console(c) {}
+    : k(kin), outdir(std::move(outd)), console(c) {
+        CanonicalKmer::k(kin);
+    }
 
     void buildUnitigVec(uint32_t numThreads, std::string rfile);
     void buildPrefixArr();
     void buildMPHF(uint32_t numThreads);
+
+    void testBooPHF(uint32_t numThreads) {
+        console->info("building boo ...");
+        ContigKmerIterator kb(&contigSeq, &contigStartIdx, static_cast<uint8_t>(k), 0);
+        ContigKmerIterator ke(&contigSeq, &contigStartIdx, static_cast<uint8_t>(k), contigSeq.size() - k + 1);
+        std::vector<uint64_t> kmers;
+        kmers.reserve(nkeys);
+        uint64_t kmercnt{0};
+        while(kb != ke){
+            kmers.push_back(*kb);
+            ++kb;
+            ++kmercnt;
+        }
+        sort( kmers.begin(), kmers.end() );
+        kmers.erase( unique( kmers.begin(), kmers.end() ), kmers.end() );
+        console->info("done building kmers vector: {} = {}", nkeys, kmers.size());
+        auto keyIt = boomphf::range(kmers.begin(), kmers.end());
+        //std::cerr << " initialized the keyIt\n";
+        bphf =
+                new boophf_t(nkeys, keyIt, numThreads, 3.5); // keys.size(), keys, 16);
+        console->info("mphf size = {}", (bphf->totalBitSize() / 8) / std::pow(2, 20));
+    }
+
+
+
 private:
     uint64_t contigAccumLength{0};
     uint64_t contigCnt{0};

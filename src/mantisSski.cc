@@ -13,10 +13,13 @@
  * @param str the contig sequence
  */
 void MantisSski::encodeSeq(sdsl::int_vector<2> &seqVec, size_t offset, stx::string_view str) {
+//    std::cerr << offset << ", sv:" << str.to_string() << "\n";
     for (size_t i = 0; i < str.length(); ++i) {
         auto c = combinelib::kmers::codeForChar(str[i]);
+//        std::cerr << c;
         seqVec[offset + i] = c;
     }
+//    std::cerr << "\n";
 }
 
 /**
@@ -110,6 +113,7 @@ void MantisSski::buildPrefixArr() {
 
     uint64_t contigIdx{0};
     // For every valid k-mer (i.e. every contig)
+    uint32_t cntr{0}, prevPrcnt{0}, curPrcnt{0};
     while(kb != ke){
         auto contigLength = contigIdx+1!=contigCnt?
                 contigStartIdx[contigIdx+1]-contigStartIdx[contigIdx]:
@@ -123,7 +127,8 @@ void MantisSski::buildPrefixArr() {
         //We're at the beginning of the contig
         prefixArr[idx] = kb.isCanonical()? 1 : 0; // stop char
         kb++;
-        for (size_t j = 1; j < totalKmersIshouldSee; ++kb, ++j) {
+        cntr++;
+        for (size_t j = 1; j < totalKmersIshouldSee; ++kb, ++j, ++cntr) {
             idx = bphf->lookup(*kb);
             int c = contigSeq[kb.pos()-1];
             if (kb.isCanonical()) {
@@ -133,6 +138,11 @@ void MantisSski::buildPrefixArr() {
                 c = combinelib::kmers::complement(c);
                 prefixArr[idx] = c << 1 & 0x7; // prefix char + 1
             }
+        }
+        curPrcnt = (cntr*100)/nkeys;
+        if (curPrcnt > prevPrcnt) {
+            std::cerr << "\r" << curPrcnt << "%";
+            prevPrcnt = curPrcnt;
         }
     }
 
@@ -146,6 +156,7 @@ int build_sski_main ( BuildOpts& opt )
     MantisSski mantisSski(opt.k, opt.out, opt.console.get());
     // these three should be called in order
     mantisSski.buildUnitigVec(static_cast<uint32_t>(opt.numthreads), opt.inlist);
+//    mantisSski.testBooPHF(opt.numthreads);
     mantisSski.buildMPHF(static_cast<uint32_t>(opt.numthreads));
     mantisSski.buildPrefixArr();
     return 0;

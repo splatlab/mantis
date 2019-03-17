@@ -20,6 +20,7 @@ public:
     ContigKmerIterator(sdsl::int_vector<2>* storage, sdsl::int_vector<>* offset,
                        uint8_t k, uint64_t startAt)
             : storage_(storage), offset_(offset), k_(k), curr_(startAt) {
+        CanonicalKmer::k(k_);
 //        std::cerr << "In constructor: " << curr_ << "\n";
         if (curr_ + k_ <= storage_->size()) {
             //nextValidPosition_();
@@ -73,7 +74,7 @@ public:
 //        std::cerr << "* " << curr_ << "\n";
         // word_ = (mer_.word(0) < rcMer_.word(0)) ? mer_.word(0) : rcMer_.word(0);
         word_ = mer_.getCanonicalWord();
-        //std::cerr << mer_.to_str() << "\n";
+//        std::cerr << "*:" << mer_.getCanonicalWord() << " " << mer_.to_str() << "\n";
         return word_;
     }
 
