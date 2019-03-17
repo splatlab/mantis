@@ -95,7 +95,9 @@ int main ( int argc, char *argv[] ) {
 
   auto build_mode = (
                      command("build").set(selected, mode::build),
-                     option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
+                     option("-e", "--eqclass_dist").set(bopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
+                     required("-s","--log-slots") & value("log-slots",
+                                                          bopt.qbits) % "log of number of slots in the output CQF",
                      required("-i", "--input") & value(ensure_file_exists, "input", bopt.inlist) % "file containing list of input unitigs",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );

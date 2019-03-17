@@ -145,6 +145,7 @@ void MantisSski::buildPrefixArr() {
             prevPrcnt = curPrcnt;
         }
     }
+    std::cerr << "\n";
 
     // store prefixArr
     console->info("storing the prefixArray ...");
