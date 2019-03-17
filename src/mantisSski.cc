@@ -113,7 +113,7 @@ void MantisSski::buildPrefixArr() {
 
     uint64_t contigIdx{0};
     // For every valid k-mer (i.e. every contig)
-    uint32_t cntr{0}, prevPrcnt{0}, curPrcnt{0};
+    uint64_t cntr{0}, prevPrcnt{0}, curPrcnt{0};
     while(kb != ke){
         auto contigLength = contigIdx+1!=contigCnt?
                 contigStartIdx[contigIdx+1]-contigStartIdx[contigIdx]:
@@ -141,12 +141,13 @@ void MantisSski::buildPrefixArr() {
         }
         curPrcnt = (cntr*100)/nkeys;
         if (curPrcnt > prevPrcnt) {
-            std::cerr << "\r" << curPrcnt << "%";
+            std::cerr << "\r " << curPrcnt << "% completed ...";
             prevPrcnt = curPrcnt;
         }
     }
 
     // store prefixArr
+    console->info("storing the prefixArray ...");
     sdsl::store_to_file(prefixArr, outdir + "/prefix.bin");
     console->info("stored prefixArray.");
 }

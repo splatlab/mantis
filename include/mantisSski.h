@@ -45,11 +45,9 @@ public:
         ContigKmerIterator ke(&contigSeq, &contigStartIdx, static_cast<uint8_t>(k), contigSeq.size() - k + 1);
         std::vector<uint64_t> kmers;
         kmers.reserve(nkeys);
-        uint64_t kmercnt{0};
-        while(kb != ke){
+        while(kb != ke) {
             kmers.push_back(*kb);
             ++kb;
-            ++kmercnt;
         }
         sort( kmers.begin(), kmers.end() );
         kmers.erase( unique( kmers.begin(), kmers.end() ), kmers.end() );

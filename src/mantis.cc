@@ -104,7 +104,7 @@ int main ( int argc, char *argv[] ) {
                   option("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer (default:23).",
                   option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
                   required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
-                  required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
+                  required("-o", "--output") & value(ensure_dir_exists, "build_output", bopt.out) % "directory where results should be written"
   );
 
   auto build_mst_mode = (
