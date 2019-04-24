@@ -14,11 +14,12 @@
 #include "string_view.hpp"
 #include "BooPHF.h"
 
+
 typedef boomphf::SingleHashFunctor<uint64_t> hasher_t;
 typedef boomphf::mphf<uint64_t, hasher_t> boophf_t;
 
 /**
- * Assumes the contig input is sorted.
+ * Assumes the contig input is sorted lexicographically.
  * how I have sorted the output fasta file of bcalm in bash:
  * awk 'NR%2{printf "%s\t",$0;next;}1' unitig_fasta_file > tmp
  * sort --parallel=16 -t$'\t' -k2 tmp
@@ -33,16 +34,19 @@ public:
     MantisSski(uint32_t kin, std::string outd, spdlog::logger* c)
     : k(kin), outdir(std::move(outd)), console(c) {
         CanonicalKmer::k(kin);
+        sizes = Sizes();
     }
 
     void buildUnitigVec(uint32_t numThreads, std::string rfile);
     void buildPrefixArr();
     void buildMPHF(uint32_t numThreads);
 
+    bool queryKmer(CanonicalKmer kmer);
+
     void testBooPHF(uint32_t numThreads) {
         console->info("building boo ...");
-        ContigKmerIterator kb(&contigSeq, &contigStartIdx, static_cast<uint8_t>(k), 0);
-        ContigKmerIterator ke(&contigSeq, &contigStartIdx, static_cast<uint8_t>(k), contigSeq.size() - k + 1);
+        ContigKmerIterator kb(&contigSeq, sizes, static_cast<uint8_t>(k), 0);
+        ContigKmerIterator ke(&contigSeq, sizes, static_cast<uint8_t>(k), contigSeq.size() - k + 1);
         std::vector<uint64_t> kmers;
         kmers.reserve(nkeys);
         while(kb != ke) {
@@ -72,9 +76,33 @@ private:
     sdsl::int_vector<3> prefixArr;
     boophf_t* bphf;
     spdlog::logger* console;
+    Sizes sizes;
     void encodeSeq(sdsl::int_vector<2>& seqVec, size_t offset,
             stx::string_view str);
 
+    bool isPalyndrome(std::string& st) {
+        bool palyn = true;
+        uint64_t i{0}, j{st.size()-1};
+        while (palyn and i < j) {
+            char r;
+            switch (st[j]) {
+                case 'A':
+                    r = 'T';break;
+                case 'C':
+                    r = 'G';break;
+                case 'G':
+                    r = 'C';break;
+                default:
+                    r = 'A';
+            }
+            palyn = r == st[i];
+            i++;
+            j--;
+        }
+        return palyn;
+    }
 };
+
+
 
 #endif //MANTIS_MANTISSSKI_H
