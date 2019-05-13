@@ -102,10 +102,10 @@ public:
     }
 
     reference operator*() {
-        if (curr_-prev >= 100000000) {
+        /*if (curr_-prev >= 100000000) {
             std::cerr << curr_ << " ";
             prev = curr_;
-        }
+        }*/
 //         word_ = (mer_.word(0) < rcMer_.word(0)) ? mer_.word(0) : rcMer_.word(0);
         word_ = mer_.getCanonicalWord();
 //        std::cerr << curr_ << " seqsize: " << sliceSize << " " << mer_.to_str() << "\n";
@@ -145,6 +145,8 @@ public:
         return !isValid();
     }*/
 
+    bool isSliceStart() { return !currInSlice_; }
+    uint32_t getSliceSize() { return sliceSize; }
 private:
 
 /*
