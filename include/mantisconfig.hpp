@@ -16,6 +16,9 @@ namespace mantis{
     constexpr char PARENTBV_FILE[] = "parents.bv";
     constexpr char DELTABV_FILE[] = "deltas.bv";
     constexpr char BOUNDARYBV_FILE[] = "boundaries.bv";
+    constexpr char MPHF_FILE[] = "mphf.bin";
+    constexpr char SEQ_FILE[] = "seq.bin";
+    constexpr char PREFIX_FILE[] = "prefix.bin";
 
     constexpr const uint64_t NUM_BV_BUFFER{20000000};
     constexpr const uint64_t INITIAL_EQ_CLASSES{10000};

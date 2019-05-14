@@ -59,12 +59,13 @@ bool UnitigBuilder::exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, colorIdTy
 }
 
 void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
-    std::cerr << "cqf.range: " << cqf.numslots() << "\n";
+    std::cerr << "cqf.numslots: " << cqf.numslots() << "\n";
+    std::cerr << "cqf.dist_elts: " << cqf.dist_elts() << "\n";
     std::vector<bool> visited(cqf.numslots(), false);
     CQF<KeyObject>::Iterator it(cqf.begin());
     std::string filename(prefix + "/unitigs.fa");
     std::ofstream out(filename, std::ios::out);
-    uint64_t cntr = 1;
+    uint64_t cntr{1}, visitedCnt{0};
     while (!it.done()) {
         KeyObject keyobj = *it;
         KeyObject key(keyobj.key, 0, 0);
@@ -74,6 +75,7 @@ void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
             std::string seq = std::string(orig_node);
             dna::canonical_kmer curr_node = orig_node;
             visited[eqidx] = true;
+            visitedCnt++;
             auto neigbors = nextNeighbors(cqf, curr_node);
             while (neigbors.size() == 1) {
                 dna::base n = (*neigbors.begin());
@@ -85,6 +87,7 @@ void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
 //                std::cerr << "seqn:" << seq << " b:" << dna::base_to_char.at(n)
 //                << " " << std::string(curr_node) << " " << eqidx << "\n";
                 visited[eqidx] = true;
+                visitedCnt++;
 
                 neigbors = nextNeighbors(cqf, curr_node);
             }
@@ -101,6 +104,7 @@ void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
 //                std::cerr << "seqp:" << seq << " b:" << dna::base_to_char.at(n)
 //                        << " " << std::string(curr_node) << " " << eqidx << "\n";
                 visited[eqidx] = true;
+                visitedCnt++;
                 neigbors = prevNeighbors(cqf, curr_node);
             }
             out << ">u" << cntr << "\n";
@@ -109,6 +113,7 @@ void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
         }
         ++it;
     }
+    std::cerr << "total number of kmers (visited): " << visitedCnt << "\n";
 }
 
 int main(int argc, char* argv[]) {

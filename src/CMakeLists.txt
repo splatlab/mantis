@@ -55,6 +55,10 @@ add_executable(buildUnitigs unitigBuilder.cc)
 target_include_directories(buildUnitigs PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(buildUnitigs mantis_core)
 
+add_executable(sortUnitigs unitigSorter.cc)
+target_include_directories(sortUnitigs PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+target_link_libraries(sortUnitigs mantis_core)
+
 # TODO: look more into why this is necessary
 if (SDSL_INSTALL_PATH)
    set_property(TARGET mantis APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")

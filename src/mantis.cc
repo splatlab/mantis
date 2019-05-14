@@ -51,6 +51,7 @@ int query_main (QueryOpts& opt);
 int validate_mst_main(MSTValidateOpts &opt);
 int stats_main(StatsOpts& statsOpts);
 int build_sski_main(BuildOpts& opt);
+int sski_query_main(QueryOpts &opt);
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -59,7 +60,7 @@ int build_sski_main(BuildOpts& opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, build_mph, validate_mst, query, validate, stats, help};
+  enum class mode {build, build_mst, build_mph, validate_mst, query, validate, stats, query_mph, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -138,7 +139,15 @@ int main ( int argc, char *argv[] ) {
                      value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
                      );
 
-  auto validate_mode = (
+    auto mphf_query_mode = (
+            command("mphf_query").set(selected, mode::query_mph),
+                    required("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
+                    required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "Prefix of input files.",
+                    option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
+                    value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
+    );
+
+    auto validate_mode = (
                      command("validate").set(selected, mode::validate),
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", vopt.inlist) % "file containing list of input filters",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
@@ -153,7 +162,7 @@ int main ( int argc, char *argv[] ) {
     );
 
   auto cli = (
-              (build_mode | build_mph_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mph_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | mphf_query_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -185,6 +194,7 @@ int main ( int argc, char *argv[] ) {
     case mode::build_mph: build_sski_main(bopt);  break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
+    case mode::query_mph: sski_query_main(qopt); break;
     case mode::validate: validate_main(vopt);  break;
     case mode::stats: stats_main(sopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
