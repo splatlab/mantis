@@ -31,9 +31,9 @@ class UnitigBuilder {
 public:
     UnitigBuilder(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_t numThreads);
     std::set<workItem> neighbors(CQF<KeyObject> &cqf, workItem n);
-    std::set<dna::base> prevNeighbors(CQF<KeyObject> &cqf, dna::canonical_kmer& n);
-    std::set<dna::base> nextNeighbors(CQF<KeyObject> &cqf, dna::canonical_kmer& n);
-    bool exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, colorIdType &eqid);
+    std::set<dna::base> prevNeighbors(CQF<KeyObject> &cqf, dna::kmer& n);
+    std::set<dna::base> nextNeighbors(CQF<KeyObject> &cqf, dna::kmer& n);
+    bool exists(CQF<KeyObject> &cqf, dna::kmer e, colorIdType &eqid);
     void buildUnitigs(CQF<KeyObject> &cqf);
 private:
     uint32_t k;
