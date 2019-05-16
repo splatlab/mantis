@@ -40,47 +40,49 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
     parser1.start();
     auto rg = parser1.getReadGroup();
     // read the reference sequences and encode them into the refseq int_vector
-    uint64_t bucketSizeInInt{sizes.bucketSize/2}, slicePrefixSizeInInt{sizes.slicePrefixSize/2};
+    uint64_t bucketSizeInInt{sizes.bucketSize / 2}, slicePrefixSizeInInt{sizes.slicePrefixSize / 2};
     uint64_t contigAccumLength{bucketSizeInInt}, remaining{0}, quotient{0}, curBucketSize{0}, added2bits{0};
-    uint64_t cnt1{0}, cnt2{0}, cnt3{0};
+    uint64_t cnt1{0}, bucketCnt{0};
     while (parser1.refill(rg)) {
         for (auto &rp : rg) {
             cnt1++;
             std::string seq = rp.seq;
             // this is the ridiculous condition for taking care of a corner case in bcalm
-            if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size()-k, k)) {
-                seq = seq.substr(0, seq.size()-1);
+            if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size() - k, k)) {
+                seq = seq.substr(0, seq.size() - 1);
             }
             uint64_t curSize = seq.size();
 //            if (rp.seq.size() > k and isPalyndrome(rp.seq))
 //                std::cout << rp.seq << "\n";
             do {
-                cnt2++;
                 remaining = curSize % (sizes.unitigSliceSize + 1);
                 quotient = curSize / (sizes.unitigSliceSize + 1);
-                curSize = curSize - sizes.unitigSliceSize + k-1; // update curSize for next iteration
+                curSize = curSize - sizes.unitigSliceSize + k - 1; // update curSize for next iteration
                 if (quotient) {
                     added2bits = sizes.unitigSliceSize;
                 } else {
                     added2bits = remaining;
                 }
                 if (curBucketSize + added2bits + slicePrefixSizeInInt > bucketSizeInInt) {
-                    cnt3++;
+                    bucketCnt++;
                     contigAccumLength += bucketSizeInInt;
                     curBucketSize = 0;
                 }
-                curBucketSize += added2bits + slicePrefixSizeInInt; // for next round. If last round, then we don't need it
+                curBucketSize +=
+                        added2bits + slicePrefixSizeInInt; // for next round. If last round, then we don't need it
+                nkeys += added2bits - k + 1;
+                contigCnt++;
             } while (quotient);
 
-            nkeys += seq.size() - k + 1;
-            contigCnt++;
+
         }
     }
     parser1.stop();
-    console->info("# of contigs: {}", contigCnt);
+    console->info("# of contig 256bp-slices: {}", contigCnt);
     console->info("# of kmers: {}", nkeys);
     console->info("contigSeq Length: {}", contigAccumLength);
-    console->info("# of contigs: {}, # of 256B slices: {}, # of 1k buckets: {}", cnt1, cnt2, cnt3);
+    console->info("# of input unitigs: {}, "
+                  "# of 1kB buckets: {}", cnt1, bucketCnt);
     // second round over the file
     contigSeq = sdsl::int_vector<2>(contigAccumLength, 0);
     //contigStartIdx = sdsl::int_vector<>(contigCnt, 0, std::log2(contigAccumLength) + 1);
@@ -88,17 +90,18 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
     parser.start();
     rg = parser.getReadGroup();
     // read the reference sequences and encode them into the refseq int_vector
-    uint64_t prevBucketstotalSize{0}, bucketContigCntr{0}, contigCntr{0}, startIdx;
-    curBucketSize=0;remaining=0;quotient=0;
-    cnt1=0;cnt2=0;cnt3=0;
+    uint64_t prevBucketstotalSize{0}, bucketContigCntr{0}, contigCntr{0}, startIdx, cnt2(0);
+    curBucketSize = 0;
+    cnt1 = 0;
+    bucketCnt = 0;
     while (parser.refill(rg)) {
         for (auto &rp : rg) {
             cnt1++;
-            startIdx=0;
+            startIdx = 0;
             std::string seq = rp.seq;
 
-            if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size()-k, k)) {
-                seq = seq.substr(0, seq.size()-1);
+            if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size() - k, k)) {
+                seq = seq.substr(0, seq.size() - 1);
             }
             stx::string_view seqv(seq);
             uint64_t curSize = seq.size();
@@ -107,29 +110,29 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
                 cnt2++;
                 remaining = curSize % (sizes.unitigSliceSize + 1);
                 quotient = curSize / (sizes.unitigSliceSize + 1);
-                curSize = curSize - sizes.unitigSliceSize + k-1;
+                curSize = curSize - sizes.unitigSliceSize + k - 1;
                 if (quotient) {
                     added2bits = sizes.unitigSliceSize;
                 } else {
                     added2bits = remaining;
                 }
                 stx::string_view subsv = seqv.substr(startIdx, added2bits);
-                startIdx += (added2bits-k+1);
+                startIdx += (added2bits - k + 1);
                 if (curBucketSize + added2bits + slicePrefixSizeInInt > bucketSizeInInt) {
-                    cnt3++;
+                    bucketCnt++;
                     // # of bits remaining < slicePrefixSize
                     // or
                     // a slice of size zero are the two signatures for the end of the bucket
                     if (bucketSizeInInt - curBucketSize >= slicePrefixSizeInInt) {
-                        contigSeq.set_int((prevBucketstotalSize+curBucketSize)*2, 0, sizes.slicePrefixSize);
+                        contigSeq.set_int((prevBucketstotalSize + curBucketSize) * 2, 0, sizes.slicePrefixSize);
                     }
                     bucketContigCntr = 0;
                     prevBucketstotalSize += bucketSizeInInt;
                     curBucketSize = 0;
                 }
-                contigSeq.set_int((prevBucketstotalSize+curBucketSize)*2, subsv.size(), sizes.slicePrefixSize);
-                curBucketSize+=slicePrefixSizeInInt;
-                encodeSeq(contigSeq, prevBucketstotalSize+curBucketSize, subsv);
+                contigSeq.set_int((prevBucketstotalSize + curBucketSize) * 2, subsv.size(), sizes.slicePrefixSize);
+                curBucketSize += slicePrefixSizeInInt;
+                encodeSeq(contigSeq, prevBucketstotalSize + curBucketSize, subsv);
                 curBucketSize += added2bits;
             } while (quotient);
             contigCntr++;
@@ -137,11 +140,11 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
         }
     }
     if (bucketSizeInInt - curBucketSize >= slicePrefixSizeInInt) {
-        contigSeq.set_int((prevBucketstotalSize+curBucketSize)*2, 0, sizes.slicePrefixSize);
+        contigSeq.set_int((prevBucketstotalSize + curBucketSize) * 2, 0, sizes.slicePrefixSize);
     }
     parser.stop();
     console->info("filled contig sequence vector and start idx vector.");
-    console->info("cnts: {}, {}, {}", cnt1, cnt2, cnt3);
+    console->info("# of input unitigs: {}, # of 256bp slices: {}, # of 1kB buckets: {}", cnt1, cnt2, bucketCnt);
     // store the 2bit-encoded references
     sdsl::store_to_file(contigSeq, outdir + "/seq.bin");
 }
@@ -179,12 +182,10 @@ void MantisSski::buildPrefixArr() {
     ContigKmerIterator kb(&contigSeq, sizes, static_cast<uint8_t>(k), 0);
     ContigKmerIterator ke(&contigSeq, sizes, static_cast<uint8_t>(k), contigSeq.size() - k + 1);
 
-    uint64_t contigIdx{0};
     // For every valid k-mer (i.e. every contig)
     uint64_t cntr{0}, prevPrcnt{0}, curPrcnt{0};
-    while(kb != ke){
-        auto totalKmersIshouldSee = kb.getSliceSize()-k+1;
-        contigIdx++ ;
+    while (kb != ke) {
+        auto totalKmersIshouldSee = kb.getSliceSize() - k + 1;
 
         auto idx = bphf->lookup(*kb);
         // 0 : isCanonical, 1 otherwise
@@ -193,7 +194,7 @@ void MantisSski::buildPrefixArr() {
         if (totalKmersIshouldSee == 1) {
             prefixArr[idx] = 0;
         } else {
-            int c = contigSeq[kb.pos()+k];
+            int c = contigSeq[kb.pos() + k];
             c = combinelib::kmers::complement(c);
             // for the first kmer in the contig, the canonical bit should show the reverse
             // so that it creates the next kmer
@@ -203,7 +204,7 @@ void MantisSski::buildPrefixArr() {
         cntr++;
         for (size_t j = 1; j < totalKmersIshouldSee; ++kb, ++j, ++cntr) {
             idx = bphf->lookup(*kb);
-            int c = contigSeq[kb.pos()-1];
+            int c = contigSeq[kb.pos() - 1];
             prefixArr[idx] = c | (kb.isCanonical() << 2); // first 2 bits are for the nucleotide
             /*if (kb.isCanonical()) {
                 std::cerr << (uint16_t)kb.isCanonical() << " "
@@ -212,13 +213,13 @@ void MantisSski::buildPrefixArr() {
                 std::exit(3);
             }*/
         }
-        curPrcnt = (cntr*100)/nkeys;
+        curPrcnt = (cntr * 100) / nkeys;
         if (curPrcnt > prevPrcnt) {
             std::cerr << "\r " << curPrcnt << "% completed ...";
             prevPrcnt = curPrcnt;
         }
     }
-    std::cerr << "\n";
+    std::cerr << "\n" << cntr << "\n";
 
     // store prefixArr
     console->info("storing the prefixArray ...");
@@ -227,52 +228,43 @@ void MantisSski::buildPrefixArr() {
 }
 
 bool MantisSski::queryKmer(CanonicalKmer kmer) {
-    /*auto numBuckets = contigSeq.size()/(sizes.bucketSize/2);
-    for (auto mid=0; mid < numBuckets ; mid++) {
-        uint64_t midWrd = contigSeq.get_int(sizes.bucketSize * mid + sizes.slicePrefixSize, 2 * k);
-        CanonicalKmer k;
-        k.fromNum(midWrd);
-        std::cerr << "bucket " << mid << ": " << midWrd << " " << k.to_str() << "\n";
-    }
-    std::exit(3);*/
-    Cases cases = Cases::last2kmers;
-    // conflicted: while condition --> stop going through mphf as soon as you reach a conflict (which happens in multiple cases)
+
     // first: just a flag for the first round of MPHF+sequenceVecs
     bool first = true;
     // firstPrefix: prefix of the first k-mer --> interesting if 000 in case of conflict
-    int firstPrefix{1}, cntr{0};
+    int cntr{0};
     CanonicalKmer originalKmer{kmer}, prevPrevKmer, prevKmer;
     prevKmer.fromNum(0);
     prevPrevKmer.fromNum(0);
-    std::cerr << "prefix.size(): " << prefixArr.size() << "\n";
+//    std::cerr << "prefix.size(): " << prefixArr.size() << "\n";
     while (true) {
-        std::cerr << kmer.to_str() << "\n";
+//        std::cerr << kmer.to_str() << "\n";
         auto idx = bphf->lookup(kmer.getCanonicalWord());
-        std::cerr << "idx:" << idx << " ";
+//        std::cerr << "idx:" << idx << " ";
         // if the returning number by MPHF is out of range or we've exhausted the size of a slice
-        //todo check corner case : sliceSize - k or sliceSize - k + 1
-        if (idx > prefixArr.size() or cntr > sizes.slicePrefixSize - k) {
-            std::cerr << "got to a conflicting point. idx > prefixArr.size()? "
-            << (bool)(idx > prefixArr.size()) << "\n";
-            if (!firstPrefix) {
-                cases =  Cases::firstKmer;
-                break;
-            }
-            else {
-                cases = Cases::notFound;
-                break;
-            }
+        if (idx > prefixArr.size() or cntr > sizes.unitigSliceSize - k) {
+//            std::cerr << "got to a conflicting point. idx > prefixArr.size()? "
+//                      << (bool) (idx > prefixArr.size()) << "\n";
+                return false;
         }
-        // attach prefix
+        // fetch prefix
         uint8_t val = prefixArr[idx];
-        std::cerr << idx << " prefix val: " <<  (uint16_t)val << "\n";
+//        std::cerr << idx << " prefix: " << (uint16_t) val << " ";
         int prefix = val & 0x3;
-        if (first) {
-            firstPrefix = val;
+        // If it is the first kmer to search and the prefix value is 0, It can be a special case for uniq-kmer contigs
+        // Go search for such a contig
+        if (first and val == 0) {
+//            std::cerr << "firstkmer\n";
+            auto firstIdx = binarySearch(originalKmer);
+            if (searchBucket(originalKmer, firstIdx)) return true;
+            originalKmer.swap();
+            firstIdx = binarySearch(originalKmer);
+            if (searchBucket(originalKmer, firstIdx)) return true;
             first = false;
         }
         prevPrevKmer = prevKmer;
         prevKmer = kmer;
+//        std::cerr << "prev:" << prevKmer.to_str() << " prevprev:" << prevPrevKmer.to_str() << "\n";
         if (val & 0x4) { // go for canonical kmer in the seq vec
             if (kmer.isFwCanonical()) // if the kmer you're searching is also canonical
                 kmer.shiftBw(prefix);
@@ -285,106 +277,83 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
                 kmer.shiftBw(prefix);
         }
         if (kmer == prevPrevKmer) {
-            cases = Cases::last2kmers;
+//            std::cerr << " In this condition\n";
+//            std::cerr << "kmer:" << kmer.to_str() << " prevprev:" << prevPrevKmer.to_str() << "\n";
             break;
         }
         cntr++;
     }
-    if (cases == Cases::notFound) {
-        std::cerr << "notFound\n";
-        return false;
-    } else if (cases == Cases::last2kmers) {
-        std::cerr << "last2kmers\n";
-        auto idx = binarySearch(kmer);
-        if (searchBucket(kmer, idx)) return true;
-        kmer.swap();
-        idx = binarySearch(kmer);
-        if (searchBucket(kmer, idx)) return true;
 
-        idx = binarySearch(prevKmer);
-        if (searchBucket(prevKmer, idx)) return true;
-        prevKmer.swap();
-        idx = binarySearch(prevKmer);
-        if (searchBucket(prevKmer, idx)) return true;
-        return searchBucket(prevKmer, idx);
-    } else {
-        std::cerr << "firstkmer\n";
-        auto idx = binarySearch(originalKmer);
-        if (searchBucket(originalKmer, idx)) return true;
-        originalKmer.swap();
-        idx = binarySearch(originalKmer);
-        return searchBucket(originalKmer, idx);
-    }
-    /*switch (cases) {
-        case Cases::notFound:
-            return false;
-        case Cases::last2kmers:
-            uint64_t idx = binarySearch(kmer);
-            if (searchBucket(kmer, idx)) return true;
-            idx = binarySearch(prevKmer);
-            return searchBucket(prevKmer, idx);
-        case Cases::firstKmer:
-            uint64_t idx = binarySearch(originalKmer);
-            return searchBucket(originalKmer, idx);
-    }*/
+    // You reached to a case that the last two kmers point at each other
+    // Search for both of them
+//    std::cerr << "last2kmers\n";
+    auto idx = binarySearch(prevKmer); // prevKmer fw
+    if (searchBucket(prevKmer, idx)) return true;
+    prevKmer.swap();
+    idx = binarySearch(prevKmer); // prevKmer rc
+    if (searchBucket(prevKmer, idx)) return true;
+
+    idx = binarySearch(kmer); // kmer fw
+    if (searchBucket(kmer, idx)) return true;
+    kmer.swap();
+    idx = binarySearch(kmer); // kmer rc
+    return searchBucket(kmer, idx);
 }
 
 uint64_t MantisSski::binarySearch(CanonicalKmer kmer) {
-    std::cerr << "Binary Search\n";
-    std::cerr << "2bSearched: " << kmer.to_str() << "\n";
+//    std::cerr << "Binary Search\n";
+//    std::cerr << "2bSearched: " << kmer.to_str() << "\n";
     uint64_t wrd = kmer.fwWord();
-        auto numBuckets = contigSeq.size()/(sizes.bucketSize/2);
-        uint64_t low{0}, high{numBuckets - 1};
-        std::cerr << numBuckets << "\n";
-        // The algorithm is a little bit different
-        // we don't set high and low index to mid+1 and mid-1 respectively.
-        // Because we're not searching for the exact kmer but a range (The correct bucket)
-        while (1 < high - low) {
-            auto mid = (low + high) / 2;
-            // go to the "mid" bucket. fetch a word from after the sliceSize prefix
-            uint64_t midWrd = contigSeq.get_int(sizes.bucketSize*mid+sizes.slicePrefixSize, 2*k);
-            CanonicalKmer k;
-            k.fromNum(midWrd);
-            std::cerr << "bucket " << mid << ": " << k.to_str() << " ";
-            if (midWrd > wrd) {
-                std::cerr << "midWrd > wrd " << midWrd << ">" << wrd << "\n";
-                /*for (int i = 0; i < 47; i++) {
-                    std::cerr << ((midWrd >> i) & 0x01)?"1":"0";
-                }
-                std::cerr << "\n";*/
-                high = mid;
-            } else if (midWrd < wrd) {
-                std::cerr << "midWrd < wrd " << midWrd << "<" << wrd << "\n";
-                low = mid;
-            } else {
-                std::cerr << "midWrd==wrd\n";
-                return mid;
-            }
+    auto numBuckets = contigSeq.size() / (sizes.bucketSize / 2);
+    uint64_t low{0}, high{numBuckets - 1};
+//    std::cerr << numBuckets << "\n";
+    // The algorithm is a little bit different
+    // we don't set high and low index to mid+1 and mid-1 respectively.
+    // Because we're not searching for the exact kmer but a range (The correct bucket)
+    while (1 < high - low) {
+        auto mid = (low + high) / 2;
+        // go to the "mid" bucket. fetch a word from after the sliceSize prefix
+        uint64_t midWrd = contigSeq.get_int(sizes.bucketSize * mid + sizes.slicePrefixSize, 2 * k);
+        CanonicalKmer k;
+        k.fromNum(midWrd);
+//        std::cerr << "bucket " << mid << ": " << k.to_str() << " ";
+        if (midWrd > wrd) {
+//            std::cerr << "midWrd > wrd " << midWrd << ">" << wrd << "\n";
+            high = mid;
+        } else if (midWrd < wrd) {
+//            std::cerr << "midWrd < wrd " << midWrd << "<" << wrd << "\n";
+            low = mid;
+        } else {
+//            std::cerr << "midWrd==wrd\n";
+            return mid;
         }
-        return low;
+    }
+//    std::cerr << "chosen bucket: " << low << "\n";
+    return low;
 }
 
 bool MantisSski::searchBucket(CanonicalKmer kmer, uint64_t idx) {
-    uint64_t bstart{sizes.bucketSize*idx}, bend{(sizes.bucketSize+1)*idx};
-    std::cerr << "Bucket Search:\n";
-    std::cerr << "2bSearched: " << kmer.to_str() << "\n";
+    uint64_t bstart{sizes.bucketSize * idx}, bend{(sizes.bucketSize) * (idx + 1)};
+//    std::cerr << "Bucket Search:\n";
+//    std::cerr << "2bSearched: " << kmer.to_str() << "\n";
     uint64_t cntr = 0;
-    while (bend - bstart > sizes.slicePrefixSize) {
+    while (bend > bstart and bend - bstart > sizes.slicePrefixSize) {
         auto sliceLength = contigSeq.get_int(bstart, sizes.slicePrefixSize);
-        bstart+= sizes.slicePrefixSize;
+        bstart += sizes.slicePrefixSize;
+//        std::cerr << cntr++ << " " << sliceLength << " end-start: " << bend - bstart << " ";
         if (!sliceLength) break;
-        uint64_t wrd = contigSeq.get_int(bstart, 2*k);
+        uint64_t wrd = contigSeq.get_int(bstart, 2 * k);
         CanonicalKmer searched;
         searched.fromNum(wrd);
-        std::cerr << cntr++ << " " << sliceLength << " " << searched.to_str() <<  " " << searched.fwWord() <<"\n";
+//        std::cerr << searched.to_str() << " " << searched.fwWord() << "\n";
         if (searched.getCanonicalWord() == kmer.getCanonicalWord()) return true;
-        bstart+=(2*sliceLength);
+        bstart += (2 * sliceLength);
     }
+//    std::cerr << "\n";
     return false;
 }
 
-int build_sski_main ( BuildOpts& opt )
-{
+int build_sski_main(BuildOpts &opt) {
     MantisSski mantisSski(opt.k, opt.out, opt.console.get());
     // these three should be called in order
     mantisSski.buildUnitigVec(static_cast<uint32_t>(opt.numthreads), opt.inlist);
@@ -418,15 +387,20 @@ int sski_query_main(QueryOpts &opt) {
 
     //std::ofstream opfile(opt.output);
     std::ifstream ipfile(opt.query_file);
+    std::ofstream out(opt.output);
     std::string read;
     uint64_t numOfQueries{0};
     CanonicalKmer kmer;
     while (ipfile >> read) {
-        std::cerr << read << " ";
+//        std::cerr << read << " ";
         kmer.fromStr(read);
-        std::cerr << sski.queryKmer(kmer) << " -- > Found the kmer " << kmer.to_str() << "\n";
+        if (sski.queryKmer(kmer))
+            out << kmer.to_str() << " f\n";
+        else
+            out << kmer.to_str() << " nf\n";
         numOfQueries++;
     }
+    out.close();
     /*CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
     if (opt.process_in_bulk) {
         while (ipfile >> read) {

@@ -21,12 +21,6 @@
 typedef boomphf::SingleHashFunctor<uint64_t> hasher_t;
 typedef boomphf::mphf<uint64_t, hasher_t> boophf_t;
 
-enum Cases {
-    notFound,
-    last2kmers,
-    firstKmer
-};
-
 /**
  * Assumes the contig input is sorted lexicographically.
  * how I have sorted the output fasta file of bcalm in bash:

@@ -103,7 +103,7 @@ int main ( int argc, char *argv[] ) {
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
   auto build_mph_mode = (
-          command("build_mph").set(selected, mode::build_mph),
+          command("build_sski").set(selected, mode::build_mph),
                   option("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer (default:23).",
                   option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
                   required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
@@ -140,7 +140,7 @@ int main ( int argc, char *argv[] ) {
                      );
 
     auto mphf_query_mode = (
-            command("mphf_query").set(selected, mode::query_mph),
+            command("query_sski").set(selected, mode::query_mph),
                     required("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
                     required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "Prefix of input files.",
                     option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
@@ -207,7 +207,7 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(build_mode, "mantis");
       } else if (b->arg() == "mst") {
         std::cout << make_man_page(build_mst_mode, "mantis");
-      } else if (b->arg() == "build_mph") {
+      } else if (b->arg() == "build_sski") {
         std::cout << make_man_page(build_mph_mode, "mantis");
       } else if (b->arg() == "query") {
         std::cout << make_man_page(query_mode, "mantis");

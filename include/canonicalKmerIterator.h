@@ -16,6 +16,8 @@ struct Sizes {
                 static_cast<uint32_t>(ceil(log2(static_cast<double>(unitigSliceSize))));
     }
 
+    // don't change the 255 to 266.
+    // 266 doesn't fit in 8 bits unless you consider 0 in 8-bit prefix as 1, 1 as 2, etc.
     Sizes(uint32_t bucketSizeIn = 1024, uint32_t unitigSliceSizeIn = 255) {
         bucketSize = bucketSizeIn * 8;
         unitigSliceSize = unitigSliceSizeIn;
