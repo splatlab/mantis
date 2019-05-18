@@ -8,29 +8,17 @@
 #include <set>
 
 #include "mantisconfig.hpp"
+#include "kmer.h"
+#include "gqf/hashutil.h"
 #include "gqf_cpp.h"
 #include "spdlog/spdlog.h"
-
 #include "canonicalKmer.h"
 
 typedef uint32_t colorIdType;
 
-struct workItem {
-    dna::canonical_kmer node;
-    colorIdType colorId;
-
-    workItem(dna::canonical_kmer n, colorIdType c) : node(n), colorId(c) {}
-
-    // Required to be able to use it as a key in set
-    bool operator<(const workItem &item2) const {
-        return (*this).node < item2.node;
-    }
-};
-
 class UnitigBuilder {
 public:
     UnitigBuilder(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_t numThreads);
-    std::set<workItem> neighbors(CQF<KeyObject> &cqf, workItem n);
     std::set<dna::base> prevNeighbors(CQF<KeyObject> &cqf, dna::kmer& n);
     std::set<dna::base> nextNeighbors(CQF<KeyObject> &cqf, dna::kmer& n);
     bool exists(CQF<KeyObject> &cqf, dna::kmer e, colorIdType &eqid);

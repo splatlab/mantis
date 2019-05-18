@@ -2,8 +2,6 @@
 // Created by Fatemeh Almodaresi on 2019-05-10.
 //
 
-#include <kmer.h>
-#include <gqf/hashutil.h>
 #include "unitigBuilder.h"
 
 UnitigBuilder::UnitigBuilder(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_t numThreads) :
@@ -18,6 +16,12 @@ UnitigBuilder::UnitigBuilder(std::string prefixIn, std::shared_ptr<spdlog::logge
     buildUnitigs(cqf);
 }
 
+/**
+ * returns a set of prefix bases for the existing preceding kmers
+ * @param cqf
+ * @param node the kmer to search its previous neighbors (not canonicalized)
+ * @return set of bases to prepend to "node" to build the existing neighbors
+ */
 std::set<dna::base> UnitigBuilder::prevNeighbors(CQF<KeyObject> &cqf, dna::kmer& node) {
     std::set<dna::base> result;
     for (const auto b : dna::bases) {
@@ -29,6 +33,12 @@ std::set<dna::base> UnitigBuilder::prevNeighbors(CQF<KeyObject> &cqf, dna::kmer&
     return result;
 }
 
+/**
+* returns a set of prefix bases for the existing following kmers
+* @param cqf
+* @param node the kmer to search its succeeding neighbors (not canonicalized)
+* @return set of bases to append to "node" to build the existing neighbors
+*/
 std::set<dna::base> UnitigBuilder::nextNeighbors(CQF<KeyObject> &cqf, dna::kmer& node) {
     std::set<dna::base> result;
     for (const auto b : dna::bases) {
@@ -41,7 +51,7 @@ std::set<dna::base> UnitigBuilder::nextNeighbors(CQF<KeyObject> &cqf, dna::kmer&
 }
 
 /**
- * searches for a kmer in cqf and returns the correct colorId if found
+ * search for a kmer in cqf and return the correct colorId if found
  * which is cqf count value - 1
  * @param cqf
  * @param e : search canonical kmer
@@ -64,72 +74,48 @@ void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
     logger->info("cqf.dist_elts: {}", cqf.dist_elts() );
     std::vector<bool> visited(cqf.numslots(), false);
     CQF<KeyObject>::Iterator it(cqf.begin());
-    std::string filename(prefix + "/unitigs.fa");
+    std::string filename(prefix + "/" + mantis::UNITIG_FASTA_FILE);
     std::ofstream out(filename, std::ios::out);
     uint64_t cntr{1}, visitedCnt{0};
     while (!it.done()) {
         KeyObject keyobj = *it;
         KeyObject key(keyobj.key, 0, 0);
         int64_t eqidx = cqf.get_unique_index(key, 0);
-        if (!visited[eqidx]) {
+        if (!visited[eqidx]) { // for each unvisited kmer
             dna::kmer orig_node(static_cast<int>(k), keyobj.key);
-            std::string seq = std::string(orig_node);
+            std::string seq = std::string(orig_node); // the unitig sequence
             dna::kmer curr_node = orig_node;
             visited[eqidx] = true;
-//            std::cerr << "it kmer: " << std::string(orig_node) << " " << eqidx << " v" << visited[eqidx] << "\n";
             visitedCnt++;
+            // extend it to the right as long as it has 1 and only 1 neighbor which is not visited yet
             auto neigbors = nextNeighbors(cqf, curr_node);
-//            std::cerr << "next\n";
             while (neigbors.size() == 1) {
                 dna::base n = (*neigbors.begin());
-//                std::cerr << std::string(curr_node) << " ";
                 curr_node = curr_node << n;
-//                std::cerr << std::string(curr_node) << " ";
                 dna::canonical_kmer cval(curr_node);
                 eqidx = cqf.get_unique_index(KeyObject(cval.val, 0, 0), 0);
-//                std::cerr << eqidx << " v" << visited[eqidx] << "\n";
                 if (visited[eqidx]) break;
                 seq += dna::base_to_char.at(n);
-//                    auto kmerHash = hash_64(curr_node.val, BITMASK(cqf.keybits()));
-//                std::cerr << "seqn:" << seq << " b:" << dna::base_to_char.at(n)
-//                << " " << std::string(curr_node) << " " << eqidx << "\n";
                 visited[eqidx] = true;
                 visitedCnt++;
 
                 neigbors = nextNeighbors(cqf, curr_node);
             }
-/*
-            std::cerr << seq << " " << neigbors.size() << "\n";
-            for (auto n : neigbors)
-                std::cerr << dna::base_to_char.at(n) << " ";
-            std::cerr << "\n";
-            std::cerr << "prevs\n";
-*/
+            // extend it to the left with the same condition as right
             curr_node = orig_node;
             neigbors = prevNeighbors(cqf, curr_node);
             while (neigbors.size() == 1) {
                 dna::base n = (*neigbors.begin());
-
-//                    auto kmerHash = hash_64(curr_node.val, BITMASK(cqf.keybits()));
-
-//                std::cerr << std::string(curr_node) << " ";
                 curr_node = n >> curr_node;
-//                std::cerr << std::string(curr_node) << " ";
                 dna::canonical_kmer cval(curr_node);
                 eqidx = cqf.get_unique_index(KeyObject(cval.val, 0, 0), 0);
-//                std::cerr << eqidx << " v" << visited[eqidx] << "\n";
                 if (visited[eqidx]) break;
                 seq = dna::base_to_char.at(n) + seq;
-//                std::cerr << "seqp:" << seq << " b:" << dna::base_to_char.at(n)
-//                        << " " << std::string(curr_node) << " " << eqidx << "\n";
                 visited[eqidx] = true;
                 visitedCnt++;
                 neigbors = prevNeighbors(cqf, curr_node);
             }
-           /* std::cerr << seq << " " << neigbors.size() <<"\n";
-            for (auto n : neigbors)
-                std::cerr << dna::base_to_char.at(n) << " ";
-            std::cerr << "\n";*/
+            // write down the unitig with id u<cntr> and sequence <seq> in a fasta format
             out << ">u" << cntr << "\n";
             out << seq << "\n";
             cntr++;
@@ -141,5 +127,13 @@ void UnitigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
 
 int main(int argc, char* argv[]) {
     auto console = spdlog::stdout_color_mt("mantis_console");
-    UnitigBuilder unitigBuilder(argv[1], console, 16);
+    if (argc < 2) {
+        console->info("Usecase: buildUnitig <parent_dir of the cqf_file:{}> <num_of_threads (default:4)>", mantis::CQF_FILE);
+        std::exit(1);
+    }
+    uint32_t numThreads = 4;
+    if (argc == 3) {
+        numThreads = static_cast<uint32_t >(std::stoul(argv[2]));
+    }
+    UnitigBuilder unitigBuilder(argv[1], console, numThreads);
 }
