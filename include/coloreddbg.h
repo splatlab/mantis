@@ -187,9 +187,9 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	uint64_t keybits = dbg.keybits();
 	enum qf_hashmode hashmode = dbg.hash_mode();
 	uint64_t seed = dbg.seed();
-	dbg.delete_file();
+	//dbg.delete_file();
 	CQF<key_obj>cqf(qbits, keybits, hashmode, seed, prefix + mantis::CQF_FILE);
-	std::swap(dbg, cqf);
+	dbg = cqf;
 
 	reshuffle_bit_vectors(map);
 	// Check if the current bit vector buffer is full and needs to be serialized.
@@ -501,13 +501,13 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 	num_serializations(0), start_time_(std::time(nullptr)) {
 		if (flag == MANTIS_DBG_IN_MEMORY) {
 			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed);
-			std::swap(dbg, cqf);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		}
 		else if (flag == MANTIS_DBG_ON_DISK) {
 			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed, prefix +
 											mantis::CQF_FILE);
-			std::swap(dbg, cqf);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
 			ERROR("Wrong Mantis alloc mode.");
@@ -527,11 +527,11 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 
 		if (flag == MANTIS_DBG_IN_MEMORY) {
 			CQF<key_obj>cqf(cqf_file, CQF_FREAD);
-			std::swap(dbg, cqf);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		} else if (flag == MANTIS_DBG_ON_DISK) {
 			CQF<key_obj>cqf(cqf_file, CQF_MMAP);
-			std::swap(dbg, cqf);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
 			ERROR("Wrong Mantis alloc mode.");

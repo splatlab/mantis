@@ -1804,7 +1804,9 @@ bool qf_free(QF *qf)
 	assert(qf->metadata != NULL);
 	void *buffer = qf_destroy(qf);
 	if (buffer != NULL) {
-		free(buffer);
+		/*free(buffer);*/
+		free(qf->metadata);
+		free(qf->blocks);
 		return true;
 	}
 
