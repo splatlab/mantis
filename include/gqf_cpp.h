@@ -108,8 +108,8 @@ class CQF {
 
 		class Iterator {
 			public:
-				Iterator(QFi it);
-				Iterator(QFi it, __uint128_t endHash);
+				Iterator(QFi it, bool flag);
+				Iterator(QFi it, bool flag, __uint128_t endHash);
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
@@ -120,6 +120,7 @@ class CQF {
 				QFi iter;
 			private:
 				__uint128_t endHash;
+				bool is_filebased{false};
 		};
 
 		Iterator begin(void) const;
@@ -236,12 +237,18 @@ bool CQF<key_obj>::check_similarity(const CQF *other_cqf) const {
 }
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it)
-	: iter(it) {};
+CQF<key_obj>::Iterator::Iterator(QFi it, bool flag)
+	: iter(it), is_filebased(flag) {
+		if (is_filebased)
+			qfi_initial_madvise(&iter);
+	};
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, __uint128_t endHashIn)
-		: iter(it), endHash(endHashIn) {};
+CQF<key_obj>::Iterator::Iterator(QFi it, bool flag, __uint128_t endHashIn)
+		: iter(it), endHash(endHashIn), is_filebased(flag) {
+			if (is_filebased)
+				qfi_initial_madvise(&iter);
+		};
 
 template <class key_obj>
 key_obj CQF<key_obj>::Iterator::operator*(void) const {
@@ -259,7 +266,10 @@ key_obj CQF<key_obj>::Iterator::get_cur_hash(void) const {
 
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
-	qfi_next(&iter);
+	if (is_filebased)
+		qfi_next_madvise(&iter);
+	else
+		qfi_next(&iter);
 }
 
 /* Currently, the iterator only traverses forward. So, we only need to check
@@ -284,21 +294,21 @@ template<class key_obj>
 typename CQF<key_obj>::Iterator CQF<key_obj>::begin(void) const {
 	QFi qfi;
 	qf_iterator_from_position(&this->cqf, &qfi, 0);
-	return Iterator(qfi);
+	return Iterator(qfi, is_filebased);
 }
 
 template<class key_obj>
 typename CQF<key_obj>::Iterator CQF<key_obj>::end(void) const {
 	QFi qfi;
 	qf_iterator_from_position(&this->cqf, &qfi, 0xffffffffffffffff);
-	return Iterator(qfi, UINT64_MAX);
+	return Iterator(qfi, is_filebased, UINT64_MAX);
 }
 
 template<class key_obj>
 typename CQF<key_obj>::Iterator CQF<key_obj>::setIteratorLimits(__uint128_t start_hash, __uint128_t end_hash) const {
 	QFi qfi;
 	qf_iterator_from_key_value(&this->cqf, &qfi, start_hash, 0, QF_KEY_IS_HASH);
-	return Iterator(qfi, end_hash);
+	return Iterator(qfi, is_filebased, end_hash);
 }
 
 
