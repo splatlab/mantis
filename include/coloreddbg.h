@@ -463,9 +463,9 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		bool added_eq_class = add_kmer(last_key, eq_class);
 		++counter;
 
-    if (counter == 1) {
+    if (counter == 4096) {
       walk_behind_iterator = dbg.begin();
-    } else {
+    } else if (counter > 4096) {
       ++walk_behind_iterator;
     }
     
