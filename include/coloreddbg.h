@@ -388,13 +388,19 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		QFi qfi;
 		typename key_obj::kmer_t kmer;
 		uint32_t id;
-		Iterator(uint32_t id, const QF* cqf): id(id) {
+		bool do_madvice{false};
+		Iterator(uint32_t id, const QF* cqf, bool flag): id(id), do_madvice(flag)
+		{
 			if (qf_iterator_from_position(cqf, &qfi, 0) != QFI_INVALID)
 				get_key();
+			if (do_madvice)
+				qfi_initial_madvise(&qfi);
 		}
 		bool next() {
 			if (qfi_next(&qfi) == QFI_INVALID) return false;
 			get_key();
+			if (do_madvice)
+				qfi_next_madvise(&qfi);
 			return true;
 		}
 		bool end() const {
@@ -432,7 +438,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	Minheap_PQ minheap;
 
 	for (uint32_t i = 0; i < num_samples; i++) {
-		Iterator qfi(i, incqfs[i].obj->get_cqf());
+		Iterator qfi(i, incqfs[i].obj->get_cqf(), true);
 		if (qfi.end()) continue;
 		minheap.push(qfi);
 	}
