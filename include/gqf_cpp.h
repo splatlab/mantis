@@ -80,8 +80,8 @@ class CQF {
 		}
 
 		void free() { std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
-		void close() { qf_closefile(&cqf); }
-		void delete_file() { qf_deletefile(&cqf); }
+		void close() { if (is_filebased) qf_closefile(&cqf); }
+		void delete_file() { if (is_filebased) qf_deletefile(&cqf); }
 
 		void set_auto_resize(void) { qf_set_auto_resize(&cqf, true); }
 		int64_t get_unique_index(const key_obj& k, uint8_t flags) const {

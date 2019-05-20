@@ -187,7 +187,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	uint64_t keybits = dbg.keybits();
 	enum qf_hashmode hashmode = dbg.hash_mode();
 	uint64_t seed = dbg.seed();
-	//dbg.delete_file();
+	dbg.delete_file();
 	CQF<key_obj>cqf(qbits, keybits, hashmode, seed, prefix + mantis::CQF_FILE);
 	dbg = cqf;
 
