@@ -108,6 +108,7 @@ class CQF {
 
 		class Iterator {
 			public:
+        Iterator();
 				Iterator(QFi it, bool flag);
 				Iterator(QFi it, bool flag, __uint128_t endHash);
 				key_obj operator*(void) const;
@@ -235,6 +236,10 @@ bool CQF<key_obj>::check_similarity(const CQF *other_cqf) const {
 		return false;
 	return true;
 }
+
+template <class key_obj>
+CQF<key_obj>::Iterator::Iterator()
+{};
 
 template <class key_obj>
 CQF<key_obj>::Iterator::Iterator(QFi it, bool flag)

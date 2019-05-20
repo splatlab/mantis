@@ -420,6 +420,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		}
 	};
 
+  typename CQF<key_obj>::Iterator walk_behind_iterator;
+  
 	struct Minheap_PQ {
 		void push(const Iterator& obj) {
 			c.emplace_back(obj);
@@ -461,6 +463,12 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		bool added_eq_class = add_kmer(last_key, eq_class);
 		++counter;
 
+    if (counter == 1) {
+      walk_behind_iterator = dbg.begin();
+    } else {
+      ++walk_behind_iterator;
+    }
+    
 		// Progress tracker
 		static uint64_t last_size = 0;
 		if (dbg.dist_elts() % 10000000 == 0 &&
@@ -509,13 +517,13 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 	bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
 	num_serializations(0), start_time_(std::time(nullptr)) {
 		if (flag == MANTIS_DBG_IN_MEMORY) {
-			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed);
+			CQF<key_obj> cqf(qbits, key_bits, hashmode, seed);
 			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		}
 		else if (flag == MANTIS_DBG_ON_DISK) {
-			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed, prefix +
-											mantis::CQF_FILE);
+			CQF<key_obj> cqf(qbits, key_bits, hashmode, seed, prefix +
+                       mantis::CQF_FILE);
 			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
