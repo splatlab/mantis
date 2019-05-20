@@ -398,13 +398,11 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
       }
 		}
 		bool next() {
-      if (do_madvice) {
-        if (qfi_next_madvise(&qfi) == QFI_INVALID)
-          return false;
-      } else {
-        if (qfi_next(&qfi) == QFI_INVALID)
-          return false;
-      }
+			if (do_madvice) {
+				if (qfi_next_madvise(&qfi) == QFI_INVALID) return false;
+			} else {
+				if (qfi_next(&qfi) == QFI_INVALID) return false;
+			}
 			get_key();
 			return true;
 		}
