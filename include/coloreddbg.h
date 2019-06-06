@@ -189,7 +189,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	uint64_t seed = dbg.seed();
 	dbg.delete_file();
 	CQF<key_obj>cqf(qbits, keybits, hashmode, seed, prefix + mantis::CQF_FILE);
-	std::swap(dbg, cqf);
+	dbg = cqf;
 
 	reshuffle_bit_vectors(map);
 	// Check if the current bit vector buffer is full and needs to be serialized.
@@ -388,12 +388,21 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		QFi qfi;
 		typename key_obj::kmer_t kmer;
 		uint32_t id;
-		Iterator(uint32_t id, const QF* cqf): id(id) {
-			if (qf_iterator_from_position(cqf, &qfi, 0) != QFI_INVALID)
+		bool do_madvice{false};
+		Iterator(uint32_t id, const QF* cqf, bool flag): id(id), do_madvice(flag)
+		{
+			if (qf_iterator_from_position(cqf, &qfi, 0) != QFI_INVALID) {
 				get_key();
+        if (do_madvice)
+          qfi_initial_madvise(&qfi);
+      }
 		}
 		bool next() {
-			if (qfi_next(&qfi) == QFI_INVALID) return false;
+			if (do_madvice) {
+				if (qfi_next_madvise(&qfi) == QFI_INVALID) return false;
+			} else {
+				if (qfi_next(&qfi) == QFI_INVALID) return false;
+			}
 			get_key();
 			return true;
 		}
@@ -411,6 +420,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		}
 	};
 
+  typename CQF<key_obj>::Iterator walk_behind_iterator;
+  
 	struct Minheap_PQ {
 		void push(const Iterator& obj) {
 			c.emplace_back(obj);
@@ -432,7 +443,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	Minheap_PQ minheap;
 
 	for (uint32_t i = 0; i < num_samples; i++) {
-		Iterator qfi(i, incqfs[i].obj->get_cqf());
+		Iterator qfi(i, incqfs[i].obj->get_cqf(), true);
 		if (qfi.end()) continue;
 		minheap.push(qfi);
 	}
@@ -452,6 +463,12 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		bool added_eq_class = add_kmer(last_key, eq_class);
 		++counter;
 
+    if (counter == 4096) {
+      walk_behind_iterator = dbg.begin();
+    } else if (counter > 4096) {
+      ++walk_behind_iterator;
+    }
+    
 		// Progress tracker
 		static uint64_t last_size = 0;
 		if (dbg.dist_elts() % 10000000 == 0 &&
@@ -500,14 +517,14 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 	bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
 	num_serializations(0), start_time_(std::time(nullptr)) {
 		if (flag == MANTIS_DBG_IN_MEMORY) {
-			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed);
-			std::swap(dbg, cqf);
+			CQF<key_obj> cqf(qbits, key_bits, hashmode, seed);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		}
 		else if (flag == MANTIS_DBG_ON_DISK) {
-			CQF<key_obj>cqf(qbits, key_bits, hashmode, seed, prefix +
-											mantis::CQF_FILE);
-			std::swap(dbg, cqf);
+			CQF<key_obj> cqf(qbits, key_bits, hashmode, seed, prefix +
+                       mantis::CQF_FILE);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
 			ERROR("Wrong Mantis alloc mode.");
@@ -527,11 +544,11 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 
 		if (flag == MANTIS_DBG_IN_MEMORY) {
 			CQF<key_obj>cqf(cqf_file, CQF_FREAD);
-			std::swap(dbg, cqf);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
 		} else if (flag == MANTIS_DBG_ON_DISK) {
 			CQF<key_obj>cqf(cqf_file, CQF_MMAP);
-			std::swap(dbg, cqf);
+			dbg = cqf;
 			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
 		} else {
 			ERROR("Wrong Mantis alloc mode.");

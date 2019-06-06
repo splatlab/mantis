@@ -10,11 +10,41 @@ filters instead of Bloom filters, enabling rapid index builds and queries, small
 false positives or negatives. Furthermore, Mantis is also a colored de Bruijn graph representation, so it supports fast
 graph traversal and other topological analyses in addition to large-scale sequence-level searches.
 
-Mantis was presented at RECOMB 2018, and a full journal paper is published in [Cell Systems](https://www.cell.com/cell-systems/abstract/S2405-4712(18)30239-4).  If you use Mantis, please cite the paper:
+Mantis was presented at RECOMB 2018, and a full journal paper is published in [Cell Systems](https://www.cell.com/cell-systems/abstract/S2405-4712(18)30239-4).
+New version of Mantis that uses MST-based compression for equivalence class bit
+vectors was presented at RECOMB 2019.
+If you use Mantis, please cite these papers:
+>Prashant Pandey, Fatemeh Almodaresi, Michael A. Bender, Michael Ferdman, Rob Johnson, and Rob Patro. "Mantis: A Fast, Small, and Exact Large-Scale Sequence-Search Index." Cell Systems (2018).
+>Fatemeh Almodaresi, Prashant Pandey, Michael Ferdman, Rob Johnson, and Rob Patro. "An Efficient, Scalable and Exact Representation of High-Dimensional Color Information Enabled via de Bruijn Graph Search." RECOMB (2019).
 
->Pandey, Prashant, Fatemeh Almodaresi, Michael A. Bender, Michael Ferdman, Rob Johnson, and Rob Patro. "Mantis: A Fast, Small, and Exact Large-Scale Sequence-Search Index." Cell Systems (2018).
 
 A preprint of the paper is available [on bioRxiv](https://www.biorxiv.org/content/biorxiv/early/2017/11/10/217372.full.pdf).
+
+Notes
+--------
+
+Mantis uses `mmap` to read input Squeakr files and write to output counting
+quotient filter (CQF) file. During construction, input Squeakr files and output
+CQF file are accessed sequentially. Each page is accessed only once and can be
+removed from memory once it's used.  However, unless there is memory pressure
+used pages are not cleared from the process memory which causes `/usr/bin/time`
+tool to report very high max resident set size (RSS).
+
+In the current release, we use `madvise` system call to explicitly let the
+kernel know to remove used pages from process memory. This has negligible cost
+to the overall runtime of the construction process and keeps max RSS in check.
+
+Mantis should be used with the latest version of
+[squeakr](https://github.com/splatlab/squeakr/tree/master), and we _highly
+recommend_ running squeakr with the desired k-mer count threshold and the
+`--no-counts` argument.  Early versions of mantis used _unfiltered_ squeakr
+output to build the mantis data structure, which required considerable
+intermediate disk-space, as those files represented the original k-mers and
+their counts in each sample exactly.  When run with the `--no-counts` argument,
+each squeakr file encodes the threshold only once in its metadata, and includes
+only the k-mers that passed the abundance threshold; this can reduce the
+intermediate storage requirements by over an order of magnitude.
+
 
 API
 --------

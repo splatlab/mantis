@@ -11,6 +11,7 @@ add_library(mantis_core STATIC
   		coloreddbg.cc
 		canonicalKmer.cc
   		mst.cc
+		stat.cc
   		MantisFS.cc
   		squeakrconfig.cc
   		gqf/gqf.c
