@@ -206,12 +206,6 @@ void MantisSski::buildPrefixArr() {
             idx = bphf->lookup(*kb);
             int c = contigSeq[kb.pos() - 1];
             prefixArr[idx] = c | (kb.isCanonical() << 2); // first 2 bits are for the nucleotide
-            /*if (kb.isCanonical()) {
-                std::cerr << (uint16_t)kb.isCanonical() << " "
-                << (uint16_t)c << " "
-                << (uint16_t)(kb.isCanonical() << 2) << " " << (uint16_t)(c | (kb.isCanonical() << 2))<<"\n";
-                std::exit(3);
-            }*/
         }
         curPrcnt = (cntr * 100) / nkeys;
         if (curPrcnt > prevPrcnt) {
@@ -236,25 +230,18 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
     CanonicalKmer originalKmer{kmer}, prevPrevKmer, prevKmer;
     prevKmer.fromNum(0);
     prevPrevKmer.fromNum(0);
-//    std::cerr << "prefix.size(): " << prefixArr.size() << "\n";
     while (true) {
-//        std::cerr << kmer.to_str() << "\n";
         auto idx = bphf->lookup(kmer.getCanonicalWord());
-//        std::cerr << "idx:" << idx << " ";
         // if the returning number by MPHF is out of range or we've exhausted the size of a slice
         if (idx > prefixArr.size() or cntr > sizes.unitigSliceSize - k) {
-//            std::cerr << "got to a conflicting point. idx > prefixArr.size()? "
-//                      << (bool) (idx > prefixArr.size()) << "\n";
                 return false;
         }
         // fetch prefix
         uint8_t val = prefixArr[idx];
-//        std::cerr << idx << " prefix: " << (uint16_t) val << " ";
         int prefix = val & 0x3;
         // If it is the first kmer to search and the prefix value is 0, It can be a special case for uniq-kmer contigs
         // Go search for such a contig
         if (first and val == 0) {
-//            std::cerr << "firstkmer\n";
             auto firstIdx = binarySearch(originalKmer);
             if (searchBucket(originalKmer, firstIdx)) return true;
             originalKmer.swap();
@@ -264,7 +251,6 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
         }
         prevPrevKmer = prevKmer;
         prevKmer = kmer;
-//        std::cerr << "prev:" << prevKmer.to_str() << " prevprev:" << prevPrevKmer.to_str() << "\n";
         if (val & 0x4) { // go for canonical kmer in the seq vec
             if (kmer.isFwCanonical()) // if the kmer you're searching is also canonical
                 kmer.shiftBw(prefix);
@@ -277,8 +263,6 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
                 kmer.shiftBw(prefix);
         }
         if (kmer == prevPrevKmer) {
-//            std::cerr << " In this condition\n";
-//            std::cerr << "kmer:" << kmer.to_str() << " prevprev:" << prevPrevKmer.to_str() << "\n";
             break;
         }
         cntr++;
@@ -301,12 +285,9 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
 }
 
 uint64_t MantisSski::binarySearch(CanonicalKmer kmer) {
-//    std::cerr << "Binary Search\n";
-//    std::cerr << "2bSearched: " << kmer.to_str() << "\n";
     uint64_t wrd = kmer.fwWord();
     auto numBuckets = contigSeq.size() / (sizes.bucketSize / 2);
     uint64_t low{0}, high{numBuckets - 1};
-//    std::cerr << numBuckets << "\n";
     // The algorithm is a little bit different
     // we don't set high and low index to mid+1 and mid-1 respectively.
     // Because we're not searching for the exact kmer but a range (The correct bucket)
@@ -316,40 +297,30 @@ uint64_t MantisSski::binarySearch(CanonicalKmer kmer) {
         uint64_t midWrd = contigSeq.get_int(sizes.bucketSize * mid + sizes.slicePrefixSize, 2 * k);
         CanonicalKmer k;
         k.fromNum(midWrd);
-//        std::cerr << "bucket " << mid << ": " << k.to_str() << " ";
         if (midWrd > wrd) {
-//            std::cerr << "midWrd > wrd " << midWrd << ">" << wrd << "\n";
             high = mid;
         } else if (midWrd < wrd) {
-//            std::cerr << "midWrd < wrd " << midWrd << "<" << wrd << "\n";
             low = mid;
         } else {
-//            std::cerr << "midWrd==wrd\n";
             return mid;
         }
     }
-//    std::cerr << "chosen bucket: " << low << "\n";
     return low;
 }
 
 bool MantisSski::searchBucket(CanonicalKmer kmer, uint64_t idx) {
     uint64_t bstart{sizes.bucketSize * idx}, bend{(sizes.bucketSize) * (idx + 1)};
-//    std::cerr << "Bucket Search:\n";
-//    std::cerr << "2bSearched: " << kmer.to_str() << "\n";
     uint64_t cntr = 0;
     while (bend > bstart and bend - bstart > sizes.slicePrefixSize) {
         auto sliceLength = contigSeq.get_int(bstart, sizes.slicePrefixSize);
         bstart += sizes.slicePrefixSize;
-//        std::cerr << cntr++ << " " << sliceLength << " end-start: " << bend - bstart << " ";
         if (!sliceLength) break;
         uint64_t wrd = contigSeq.get_int(bstart, 2 * k);
         CanonicalKmer searched;
         searched.fromNum(wrd);
-//        std::cerr << searched.to_str() << " " << searched.fwWord() << "\n";
         if (searched.getCanonicalWord() == kmer.getCanonicalWord()) return true;
         bstart += (2 * sliceLength);
     }
-//    std::cerr << "\n";
     return false;
 }
 
@@ -357,7 +328,6 @@ int build_sski_main(BuildOpts &opt) {
     MantisSski mantisSski(opt.k, opt.out, opt.console.get());
     // these three should be called in order
     mantisSski.buildUnitigVec(static_cast<uint32_t>(opt.numthreads), opt.inlist);
-//    mantisSski.testBooPHF(opt.numthreads);
     mantisSski.buildMPHF(static_cast<uint32_t>(opt.numthreads));
     mantisSski.buildPrefixArr();
     return 0;
