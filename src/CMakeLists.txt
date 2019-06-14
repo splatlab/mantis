@@ -18,7 +18,9 @@ add_library(mantis_core STATIC
   		gqf/gqf_file.c
   		gqf/hashutil.c
 		FastxParser.cpp
-		mantisSski.cc)
+		mantisSski.cc
+		mHUtigBuilder.cc)
+
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
 set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")
@@ -54,6 +56,11 @@ target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
 add_executable(buildUnitigs unitigBuilder.cc)
 target_include_directories(buildUnitigs PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(buildUnitigs mantis_core)
+
+
+add_executable(buildMHUtigs mHUtigBuilder.cc)
+target_include_directories(buildMHUtigs PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
+target_link_libraries(buildMHUtigs mantis_core)
 
 add_executable(sortUnitigs unitigSorter.cc)
 target_include_directories(sortUnitigs PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
