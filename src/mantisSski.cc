@@ -270,7 +270,6 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
 
     // You reached to a case that the last two kmers point at each other
     // Search for both of them
-//    std::cerr << "last2kmers\n";
     auto idx = binarySearch(prevKmer); // prevKmer fw
     if (searchBucket(prevKmer, idx)) return true;
     prevKmer.swap();
@@ -308,9 +307,36 @@ uint64_t MantisSski::binarySearch(CanonicalKmer kmer) {
     return low;
 }
 
+bool MantisSski::collectStat() {
+    std::ofstream overlaps("overlaps.out", "w");
+    uint64_t cntr{0};
+    uint64_t bstart{sizes.bucketSize * idx}, bend{(sizes.bucketSize) * (idx + 1)};
+    auto sliceLength = contigSeq.get_int(bstart, sizes.slicePrefixSize);
+    bstart += sizes.slicePrefixSize;
+    uint64_t wrd = contigSeq.get_int(bstart, 2 * k);
+    CanonicalKmer first;
+    first.fromNum(wrd);
+    auto prevSliceLength = sliceLength;
+    uint16_t overlap{0};
+    while (bend > bstart and bend - bstart > sizes.slicePrefixSize) {
+        prevSliceLength = sliceLength;
+        auto sliceLength = contigSeq.get_int(bstart, sizes.slicePrefixSize);
+        if (!sliceLength) break;
+        bstart += sizes.slicePrefixSize + (2 * sliceLength);
+    }
+    if (sliceLength) sliceLength = prevSliceLength;
+
+    bstart -= sliceLength;
+    uint64_t wrd = contigSeq.get_int(bstart, 2 * k);
+    CanonicalKmer last;
+    last.fromNum(wrd);
+
+    ofstream << cntr << " " << overlap << "\n";
+    return false;
+}
+
 bool MantisSski::searchBucket(CanonicalKmer kmer, uint64_t idx) {
     uint64_t bstart{sizes.bucketSize * idx}, bend{(sizes.bucketSize) * (idx + 1)};
-    uint64_t cntr = 0;
     while (bend > bstart and bend - bstart > sizes.slicePrefixSize) {
         auto sliceLength = contigSeq.get_int(bstart, sizes.slicePrefixSize);
         bstart += sizes.slicePrefixSize;
