@@ -109,8 +109,12 @@ class CQF {
 		class Iterator {
 			public:
         Iterator();
-				Iterator(QFi it, bool flag);
-				Iterator(QFi it, bool flag, __uint128_t endHash);
+				Iterator(QFi it, bool flag, bool do_madvise = false);
+				Iterator(QFi it, bool flag, __uint128_t endHash, bool do_madvise =
+								 false);
+				Iterator(const CQF<key_obj>::Iterator& copy_iter);
+				const CQF<key_obj>::Iterator& operator=(const CQF<key_obj>::Iterator& copy_iter);
+
 				key_obj operator*(void) const;
 				void operator++(void);
 				bool done(void) const;
@@ -122,11 +126,13 @@ class CQF {
 			private:
 				__uint128_t endHash;
 				bool is_filebased{false};
+				bool do_madvise{false};
 		};
 
-		Iterator begin(void) const;
-		Iterator end(void) const;
-		Iterator setIteratorLimits(__uint128_t start_hash, __uint128_t end_hash) const;
+		Iterator begin(bool do_madvise = false) const;
+		Iterator end(bool do_madvise = false) const;
+		Iterator setIteratorLimits(__uint128_t start_hash, __uint128_t end_hash,
+															 bool do_madvise = false) const;
 
 	private:
 		QF cqf;
@@ -242,15 +248,17 @@ CQF<key_obj>::Iterator::Iterator()
 {};
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, bool flag)
-	: iter(it), is_filebased(flag) {
+CQF<key_obj>::Iterator::Iterator(QFi it, bool flag, bool do_madvise)
+	: iter(it), is_filebased(flag), do_madvise(do_madvise) {
 		if (is_filebased)
 			qfi_initial_madvise(&iter);
 	};
 
 template <class key_obj>
-CQF<key_obj>::Iterator::Iterator(QFi it, bool flag, __uint128_t endHashIn)
-		: iter(it), endHash(endHashIn), is_filebased(flag) {
+CQF<key_obj>::Iterator::Iterator(QFi it, bool flag, __uint128_t endHashIn,
+																 bool do_madvise)
+		: iter(it), endHash(endHashIn), is_filebased(flag), do_madvise(do_madvise)
+{
 			if (is_filebased)
 				qfi_initial_madvise(&iter);
 		};
@@ -271,7 +279,7 @@ key_obj CQF<key_obj>::Iterator::get_cur_hash(void) const {
 
 template<class key_obj>
 void CQF<key_obj>::Iterator::operator++(void) {
-	if (is_filebased)
+	if (do_madvise && is_filebased && !qfi_end(&iter))
 		qfi_next_madvise(&iter);
 	else
 		qfi_next(&iter);
@@ -296,25 +304,48 @@ bool CQF<key_obj>::Iterator::reachedHashLimit(void) const {
 }
 
 template<class key_obj>
-typename CQF<key_obj>::Iterator CQF<key_obj>::begin(void) const {
+typename CQF<key_obj>::Iterator CQF<key_obj>::begin(bool do_madvice) const {
 	QFi qfi;
 	qf_iterator_from_position(&this->cqf, &qfi, 0);
-	return Iterator(qfi, is_filebased);
+	return Iterator(qfi, is_filebased, do_madvice);
 }
 
 template<class key_obj>
-typename CQF<key_obj>::Iterator CQF<key_obj>::end(void) const {
+typename CQF<key_obj>::Iterator CQF<key_obj>::end(bool do_madvice) const {
 	QFi qfi;
 	qf_iterator_from_position(&this->cqf, &qfi, 0xffffffffffffffff);
-	return Iterator(qfi, is_filebased, UINT64_MAX);
+	return Iterator(qfi, is_filebased, UINT64_MAX, do_madvice);
 }
 
 template<class key_obj>
-typename CQF<key_obj>::Iterator CQF<key_obj>::setIteratorLimits(__uint128_t start_hash, __uint128_t end_hash) const {
+typename CQF<key_obj>::Iterator CQF<key_obj>::setIteratorLimits(__uint128_t
+																																start_hash,
+																																__uint128_t
+																																end_hash, bool
+																																do_madvice)
+const {
 	QFi qfi;
 	qf_iterator_from_key_value(&this->cqf, &qfi, start_hash, 0, QF_KEY_IS_HASH);
-	return Iterator(qfi, is_filebased, end_hash);
+	return Iterator(qfi, is_filebased, end_hash, do_madvice);
 }
 
+template<class key_obj>
+CQF<key_obj>::Iterator::Iterator(const CQF<key_obj>::Iterator& copy_iter) {
+	std::memcpy(&iter, &copy_iter.iter, sizeof(QFi));
+	endHash = copy_iter.endHash;
+	is_filebased = copy_iter.is_filebased;
+	do_madvise = copy_iter.do_madvise;
+}
+
+template<class key_obj>
+const typename CQF<key_obj>::Iterator& CQF<key_obj>::Iterator::operator=(const
+																																CQF<key_obj>::Iterator&
+																																copy_iter) {
+	std::memcpy(&iter, &copy_iter.iter, sizeof(QFi));
+	endHash = copy_iter.endHash;
+	is_filebased = copy_iter.is_filebased;
+	do_madvise = copy_iter.do_madvise;
+	return *this;
+}
 
 #endif
