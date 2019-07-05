@@ -91,6 +91,9 @@ class ColoredDbg {
 
 		// Mantis merge (Jamshed)
 
+		ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+					uint64_t qbits, std::string &prefix, int flag, std::string fileName = "");
+
 		// Returns the vector of names of all the equivalence / color class bitvector files.
 		std::vector<std::string> &get_eq_class_files();
 
@@ -658,6 +661,40 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 
 // Mantis merge: Jamshed
 
+template <class qf_obj, class key_obj>
+ColoredDbg<qf_obj, key_obj>::ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+										uint64_t qbits, std::string &prefix, int flag, std::string fileName):
+	bv_buffer(mantis::NUM_BV_BUFFER * (cdbg1.get_num_samples() + cdbg2.get_num_samples())),
+	prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
+	num_serializations(0), start_time_(std::time(nullptr))
+	{
+		if(flag == MANTIS_DBG_IN_MEMORY)
+		{
+			CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
+							cdbg1.get_cqf() -> seed());
+			dbg = cqf;
+			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		}
+		else if(flag == MANTIS_DBG_ON_DISK)
+		{
+			CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
+							cdbg1.get_cqf() -> seed(), prefix + fileName);
+			dbg = cqf;
+			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		}
+		else
+		{
+			ERROR("Wrong Mantis alloc mode.");
+			exit(EXIT_FAILURE);
+		}
+
+		dbg.set_auto_resize();
+	}
+
+
+
+
+
 template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
 	init_bit_vec_block_buckets(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
@@ -749,7 +786,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	}
 
 
-	printf("\n\nMSG: Distinct kmers found: %llu\n\n", (unsigned long long)kmerCount);
+	printf("\n\nMSG: Distinct kmers found at distinct pairs gathering phase: %llu\n\n", (unsigned long long)kmerCount);
 }
 
 
@@ -779,7 +816,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
-			// printf("\n\nAt bucket (%d, %d). Size = %d\n\n", (int)i, (int)j, (int)bucket[i][j].size());
+			printf("\n\nAt bucket (%d, %d). Size = %d\n\n", (int)i, (int)j, (int)bucket[i][j].size());
 			
 
 			// Required: data_2 = read_j'th Bit Vector block for dbg2
@@ -897,7 +934,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 	//printf("\n\nMSG: Number of kmers in the merged CQF: %llu\n\n", (unsigned long long)kmerCount);
-	//printf("\n\nMSG: Merged CQF size: %llu\n\n", (unsigned long long)dbg.dist_elts());
+	printf("\n\nMSG: Merged CQF size: %llu\n\n", (unsigned long long)dbg.dist_elts());
 }
 
 
@@ -916,7 +953,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	merge_CQFs(dbg1, dbg2);
 
-	printf("\n\nMSG: Size of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
+	// printf("\n\nMSG: Size of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
 
 	puts("\n\nMerge ending.\n\n");
 }

@@ -44,6 +44,10 @@
 #include "mantis_utils.hpp"
 #include "mantisconfig.hpp"
 
+// Mantis merge: Jamshed
+template <typename qf_obj, typename key_obj>
+void test_merge(ColoredDbg<qf_obj, key_obj> &sampleDBG, ColoredDbg<qf_obj, key_obj> &mergedDBG);
+// Mantis merge: Jamshed
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -212,6 +216,12 @@ build_main ( BuildOpts& opt )
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
+	// Mantis merge: Jamshed
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> dbgMerged(cdbg, cdbg, opt.qbits, prefix,
+																	MANTIS_DBG_ON_DISK, "merged_dbg_cqf.ser");
+
+	test_merge(cdbg, dbgMerged);
+	// Mantis merge: Jamshed
 	console->info("Serializing CQF and eq classes in {}", prefix);
 	cdbg.serialize();
 	console->info("Serialization done.");
@@ -229,3 +239,24 @@ build_main ( BuildOpts& opt )
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
+
+// Mantis merge: Jamshed
+
+
+
+template <typename qf_obj, typename key_obj>
+void test_merge(ColoredDbg<qf_obj, key_obj> &sampleDBG, ColoredDbg<qf_obj, key_obj> &mergedDBG)
+{
+	puts("\n\n========================================\nMSG: In test fucntion.\n\n");
+
+	
+	mergedDBG.construct(sampleDBG, sampleDBG);
+
+
+	puts(sampleDBG.get_cqf() -> dist_elts() == mergedDBG.get_cqf() -> dist_elts() ?
+			"\nCQF sizes match.\n" : "\nCQF sizes mismatch.\n");
+
+	
+	puts("\n\nMSG: Exiting test function.\n========================================\n\n");
+}
+// Mantis merge: Jamshed
