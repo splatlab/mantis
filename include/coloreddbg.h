@@ -92,9 +92,9 @@ class ColoredDbg {
 		// Mantis merge (Jamshed)
 
 		// Returns the vector of names of all the equivalence / color class bitvector files.
-		std :: vector<std :: string> &get_eq_class_files();
+		std::vector<std::string> &get_eq_class_files();
 
-		// Merges two Colored DBG objects dbg1 and dbg2 into this Colored DBG object
+		// Merges two Colored DBG objects dbg1 and dbg2 into this Colored DBG object.
 		void construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
 
@@ -139,26 +139,27 @@ class ColoredDbg {
 		// Mangtis merge: Jamshed
 
 		
-		// Equivalence / Color class bitvector files for this DBG.
-		std :: vector<std :: string> eqClsFiles;
+		// Equivalence / Color class bitvector file names for this DBG.
+		std::vector<std::string> eqClsFiles;
 
-		// Required for hashing pair objects for unordered_map
+		// Required for hashing pair objects for unordered_map.
+		// TODO: Consult Professor on this hashing, or for something better.
 		struct PairHash
 		{
 			template<typename T1, typename T2>
-			std :: size_t operator() (const std :: pair<T1, T2> &p) const
+			std::size_t operator() (const std::pair<T1, T2> &p) const
 			{
-				return std :: hash<T1>()(p.first) ^ std :: hash<T2>()(p.second);
+				return std::hash<T1>()(p.first) ^ std::hash<T2>()(p.second);
 			}
 		};
 
 		// 2-d grid of buckets, with bucket_(i, j) containing all equivalence class ID pairs that
 		// read bitvectors from the i'th and the j'th block of the two to-be-merged DBGs, respectively.
-		std :: vector<std :: vector<std :: vector<std :: pair<uint64_t, uint64_t>>>> bucket;
+		std::vector<std::vector<std::vector<std::pair<uint64_t, uint64_t>>>> bucket;
 
-		// Hash map for equivalence class pairs in the format: < (id1, id2) --> (newID, abundance) >
-		std :: unordered_map<std :: pair<uint64_t, uint64_t>,
-							std :: pair<uint64_t, uint64_t>, PairHash> eqClsMap;
+		// Hash map for equivalence class pairs in the format: < (id1, id2) --> (newID, abundance) >.
+		std::unordered_map<std::pair<uint64_t, uint64_t>,
+							std::pair<uint64_t, uint64_t>, PairHash> eqClsMap;
 
 		// Gathers all the distinct equivalence ID pairs and their abundance from the two DBGs into
 		// the hash map 'eqClsMap'. The new IDs are set to a default value of 0.
@@ -176,7 +177,7 @@ class ColoredDbg {
 		// Merge the CQFs from the DBGs into the CQF of this DBG.
 		void merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
-		// Add a kmer with equivalence class ID eqID into the CQF of this DBG.
+		// Add a kmer with equivalence class ID 'eqID' into the CQF of this DBG.
 		void add_kmer(uint64_t kmer, uint64_t eqID);
 };
 
@@ -661,13 +662,15 @@ template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
 	init_bit_vec_block_buckets(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	const uint64_t bucketsDim1 = (dbg1.get_num_eqclasses() / mantis :: NUM_BV_BUFFER) + 1,
-					bucketsDim2 = (dbg2.get_num_eqclasses() / mantis :: NUM_BV_BUFFER) + 1;
+	const uint64_t fileCount1 = (dbg1.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1,
+					fileCount2 = (dbg2.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1;
 	
-	bucket.resize(bucketsDim1);
-	for(uint64_t i = 0; i < bucketsDim1; ++i)
-		bucket[i].resize(bucketsDim2);
+	bucket.resize(fileCount1);
+	for(uint64_t i = 0; i < fileCount1; ++i)
+		bucket[i].resize(fileCount2);
 }
+
+
 
 
 
@@ -675,16 +678,16 @@ template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
 	add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2)
 {
-	auto eqPair = std :: make_pair(eqCls1, eqCls2);
+	auto eqPair = std::make_pair(eqCls1, eqCls2);
 	auto it = eqClsMap.find(eqPair);
 
-	const static auto newEntry = std :: make_pair((uint64_t)0, (uint64_t)1);
+	const static auto newEntry = std::make_pair((uint64_t)0, (uint64_t)1);
 
 	if(it == eqClsMap.end())
 	{
 		eqClsMap[eqPair] = newEntry;
 
-		bucket[eqCls1 / mantis :: NUM_BV_BUFFER][eqCls2 / mantis :: NUM_BV_BUFFER].push_back(eqPair);
+		bucket[eqCls1 / mantis::NUM_BV_BUFFER][eqCls2 / mantis::NUM_BV_BUFFER].push_back(eqPair);
 	}
 	else
 		it -> second.second++;
@@ -744,6 +747,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 		add_eq_class_pair(eqClass1, eqClass2);
 		kmerCount++;
 	}
+
+
+	printf("\n\nMSG: Distinct kmers found: %llu\n\n", (unsigned long long)kmerCount);
 }
 
 
@@ -754,24 +760,24 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	concat_bitvectors(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	const uint64_t bucketsDim1 = (dbg1.get_num_eqclasses() / mantis :: NUM_BV_BUFFER) + 1,
-					bucketsDim2 = (dbg2.get_num_eqclasses() / mantis :: NUM_BV_BUFFER) + 1;
+	const uint64_t fileCount1 = (dbg1.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1,
+					fileCount2 = (dbg2.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1;
 	uint64_t serialID = 0;
 
 
-	// No need. eqclass_files should come with the constructor of the dbgs
+	// No need for the following statement. eqclass_files should come with the constructor of the dbgs
 	// eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
 
 	// required sort of the file names (?)
 
 
-	for(uint64_t i = 0; i < bucketsDim1; ++i)
+	for(uint64_t i = 0; i < fileCount1; ++i)
 	{
 		// Required: data_1 = read_i'th Bit Vector block for dbg1
 		// BitVectorRRR bv1;
 		// sdsl::load_from_file(bv1, dbg1.get_eq_class_files[i]);
 
-		for(uint64_t j = 0; j < bucketsDim2; ++j)
+		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
 			// printf("\n\nAt bucket (%d, %d). Size = %d\n\n", (int)i, (int)j, (int)bucket[i][j].size());
 			
@@ -783,7 +789,8 @@ void ColoredDbg<qf_obj, key_obj> ::
 			for(auto eqClsPair : bucket[i][j])
 			{
 				uint64_t eq1 = eqClsPair.first, eq2 = eqClsPair.second;
-				eqClsMap[eqClsPair].first = ++serialID; // serialID++ doesn't work. Introduces bug in CQF
+				eqClsMap[eqClsPair].first = ++serialID; // serialID++ doesn't work. Introduces bug in CQF;
+														// Probable cause: CQF doesn't support 0-count ?
 
 				// Required: bit_vector = concat(data_1.query(eq1), data_2.query(eq2))
 				// Required: dbg.bitVectorBuffer[serialID] = bit_vector
@@ -801,14 +808,117 @@ template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
 	add_kmer(uint64_t kmer, uint64_t eqID)
 {
-	//uint64_t eqClsID = eqClsMap[std :: make_pair(eqCls1, eqCls2)].first;
-
 	if (dbg.insert(KeyObject(kmer, 0, eqID), QF_NO_LOCK | QF_KEY_IS_HASH) == QF_NO_SPACE)
 	{
 		// This means that auto_resize failed.
-		console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
+		console -> error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
 		exit(1);
 	}
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
+	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
+
+	uint64_t kmerCount = 0; // for debugging purpose(s)
+
+	
+	if(it1.done() || it2.done())
+		puts("\n\nMSG: One or more iterator already at end position before starting walk.\n\n");
+
+
+	while(!it1.done() || !it2.done())
+	{
+		uint64_t kmer1, kmer2, kmer, eqClass1, eqClass2;
+		key_obj cqfEntry1, cqfEntry2;
+
+		if(!it1.done())
+		{
+			cqfEntry1 = it1.get_cur_hash();
+			kmer1 = cqfEntry1.key;
+		}
+		
+		if(!it2.done())
+		{
+			cqfEntry2 = it2.get_cur_hash();
+			kmer2 = cqfEntry2.key;
+		}
+
+
+		if(it1.done())
+		{
+			kmer = kmer2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+
+			++it2;
+		}
+		else if(it2.done())
+		{
+			kmer = kmer1;
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+
+			++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			kmer = kmer1;
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+
+			++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			kmer = kmer2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+
+			++it2;
+		}
+		else
+		{
+			kmer = kmer1;
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+
+			++it1, ++it2;
+
+			//equalKmerCount++;
+		}
+
+
+		add_kmer(kmer, eqClsMap[std :: make_pair(eqClass1, eqClass2)].first);
+		kmerCount++;
+	}
+
+
+	//printf("\n\nMSG: Number of kmers in the merged CQF: %llu\n\n", (unsigned long long)kmerCount);
+	//printf("\n\nMSG: Merged CQF size: %llu\n\n", (unsigned long long)dbg.dist_elts());
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> :: 
+	construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	puts("\n\nMSG: Merge starting.\n\n");
+
+	gather_distinct_eq_class_pairs(dbg1, dbg2);
+
+	concat_bitvectors(dbg1, dbg2);
+
+	merge_CQFs(dbg1, dbg2);
+
+	printf("\n\nMSG: Size of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
+
+	puts("\n\nMerge ending.\n\n");
 }
 
 #endif
