@@ -46,7 +46,8 @@
 
 // Mantis merge: Jamshed
 template <typename qf_obj, typename key_obj>
-void test_merge(ColoredDbg<qf_obj, key_obj> &sampleDBG, ColoredDbg<qf_obj, key_obj> &mergedDBG);
+void test_merge(ColoredDbg<qf_obj, key_obj> &sampleDBG, ColoredDbg<qf_obj, key_obj> &mergedDBG,
+				BuildOpts& opt);
 // Mantis merge: Jamshed
 /*
  * ===  FUNCTION  =============================================================
@@ -217,10 +218,20 @@ build_main ( BuildOpts& opt )
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
 	// Mantis merge: Jamshed
+
+
+
+
+
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> dbgMerged(cdbg, cdbg, opt.qbits, prefix,
 																	MANTIS_DBG_ON_DISK, "merged_dbg_cqf.ser");
+	
+	test_merge(cdbg, dbgMerged, opt);
 
-	test_merge(cdbg, dbgMerged);
+
+
+
+
 	// Mantis merge: Jamshed
 	console->info("Serializing CQF and eq classes in {}", prefix);
 	cdbg.serialize();
@@ -245,12 +256,28 @@ build_main ( BuildOpts& opt )
 
 
 template <typename qf_obj, typename key_obj>
-void test_merge(ColoredDbg<qf_obj, key_obj> &sampleDBG, ColoredDbg<qf_obj, key_obj> &mergedDBG)
+void test_merge(ColoredDbg<qf_obj, key_obj> &sampleDBG, ColoredDbg<qf_obj, key_obj> &mergedDBG,
+				BuildOpts& opt)
 {
-	puts("\n\n========================================\nMSG: In test fucntion.\n\n");
+	puts("\n\n========================================\nMSG: In test function.\n\n");
+
+
+	std::string prefix(opt.out);
+	std::string dbg_file(prefix + mantis::CQF_FILE);
+	std::string sample_file(prefix + mantis::SAMPLEID_FILE);
+	std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
+                                                                   mantis::EQCLASS_FILE);
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> tempDBG(dbg_file, sample_file, eqclass_files,
+																	MANTIS_DBG_IN_MEMORY);
+
+
+	// ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> newDBG(tempDBG, tempDBG, opt.qbits, prefix,
+	// 																MANTIS_DBG_ON_DISK, "merged_dbg_cqf.ser");
 
 	
 	mergedDBG.construct(sampleDBG, sampleDBG);
+	//newDBG.construct(tempDBG, tempDBG);
 
 
 	puts(sampleDBG.get_cqf() -> dist_elts() == mergedDBG.get_cqf() -> dist_elts() ?

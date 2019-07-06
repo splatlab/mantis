@@ -94,6 +94,9 @@ class ColoredDbg {
 		ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 					uint64_t qbits, std::string &prefix, int flag, std::string fileName = "");
 
+		ColoredDbg(std::string &cqfFile, std::string &sampleListFile,
+					std::vector<std::string> &eqclassFiles, int flag);
+
 		// Returns the vector of names of all the equivalence / color class bitvector files.
 		std::vector<std::string> &get_eq_class_files();
 
@@ -690,6 +693,95 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, Colo
 
 		dbg.set_auto_resize();
 	}
+
+
+
+
+
+template <class qf_obj, class key_obj>
+ColoredDbg<qf_obj, key_obj> ::
+	ColoredDbg(std::string &cqfFile, std::string &sampleListFile, std::vector<std::string> &eqclassFiles,
+				int flag):
+	bv_buffer(), start_time_(std::time(nullptr))
+	{
+		num_samples = 0;
+		num_serializations = 0;
+
+
+		// Load the CQF
+		if(flag == MANTIS_DBG_IN_MEMORY)
+		{
+			CQF<key_obj> cqf(cqfFile, CQF_FREAD);
+			dbg = cqf;
+			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		}
+		else if(flag == MANTIS_DBG_ON_DISK)
+		{
+			CQF<key_obj> cqf(cqfFile, CQF_MMAP);
+			dbg = cqf;
+			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		}
+		else
+		{
+			ERROR("Wrong Mantis alloc mode.");
+			exit(EXIT_FAILURE);
+		}
+
+
+		printf("\n\nMSG: Loaded CQF size = %llu\n\n", (unsigned long long)dbg.dist_elts());
+
+
+		// Load the sample / experiment names.
+		std::ifstream sampleList(sampleListFile.c_str());
+		std::string sampleName;
+		uint32_t sampleID;
+
+		while (sampleList >> sampleID >> sampleName)
+		{
+			sampleid_map[sampleID] = sampleName;
+			num_samples++;
+		}
+
+		sampleList.close();
+
+
+		// Load the equivalence class bitvector file names only;
+		// not loading the bitvectors (color classes) all at once, like the other identical constructor.
+		std::map<int, std::string> sortedFiles;
+		for (std::string file : eqclassFiles)
+		{
+			int fileID = std::stoi(first_part(last_part(file, '/'), '_'));
+			sortedFiles[fileID] = file;
+		}
+		
+
+		eqClsFiles.reserve(eqclassFiles.size());
+		for(auto idFilePair : sortedFiles)
+			eqClsFiles.push_back(idFilePair.second);
+
+		num_serializations = eqClsFiles.size();
+
+
+		/*
+		eqclasses.reserve(sorted_files.size());
+		BitVectorRRR bv;
+		for (auto file : sorted_files) {
+			sdsl::load_from_file(bv, file.second);
+			eqclasses.push_back(bv);
+			num_serializations++;
+		}
+
+		std::ifstream sampleid(sample_file.c_str());
+		std::string sample;
+		uint32_t id;
+		while (sampleid >> id >> sample) {
+			std::pair<uint32_t, std::string> pair(id, sample);
+			sampleid_map.insert(pair);
+			num_samples++;
+		}
+		sampleid.close();
+		*/
+}
 
 
 
