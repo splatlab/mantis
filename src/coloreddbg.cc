@@ -45,8 +45,15 @@
 #include "mantisconfig.hpp"
 
 // Mantis merge: Jamshed
+
 void build(BuildOpts &opt);
-void test_merge(BuildOpts &opt);
+void test_merge_same_cdbg(BuildOpts &opt);
+void test_merge_different_cdbg(BuildOpts &opt);
+// For debugging purpose(s); has been required in finding a weird phenomenon: iterating over the
+// CQF loaded from file produces random garbage the second time (with possible seg-faults);
+// only the first iteration works.
+int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> &cdbg);
+
 // Mantis merge: Jamshed
 /*
  * ===  FUNCTION  =============================================================
@@ -59,7 +66,9 @@ build_main ( BuildOpts& opt )
 {
 	//build(opt);
 
-	test_merge(opt);
+	//test_merge_same_cdbg(opt);
+
+	test_merge_different_cdbg(opt);
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
@@ -265,14 +274,9 @@ void build(BuildOpts &opt)
 
 
 
-void test_merge(BuildOpts& opt)
+void test_merge_same_cdbg(BuildOpts& opt)
 {
 	puts("\n\n========================================\nMSG: In test function.\n\n");
-
-	// For debugging purpose(s); has been required in finding a weird phenomenon: iterating over the
-	// CQF loaded from file produces random garbage the second time (with possible seg-faults);
-	// only the first iteration works.
-	int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> &cdbg);
 
 
 	std::string prefix(opt.out);
@@ -311,6 +315,64 @@ void test_merge(BuildOpts& opt)
 	
 	puts("\n\nMSG: Exiting test function.\n========================================\n\n");
 }
+
+
+
+
+void test_merge_different_cdbg(BuildOpts& opt)
+{
+	puts("\n\n========================================\nMSG: In test function.\n\n");
+
+
+	std::string prefix(opt.out);
+
+	std::string dbgFile0(prefix + "dbg_cqf0.ser");
+	std::string sampleListFile0(prefix + "sampleid0.lst");
+	// Update later
+	std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
+
+	std::string dbgFile1(prefix + "dbg_cqf1.ser");
+	std::string sampleListFile1(prefix + "sampleid1.lst");
+	// Update later
+	//std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG0(dbgFile0, sampleListFile0, eqclassFiles,
+																	MANTIS_DBG_ON_DISK);
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG1(dbgFile1, sampleListFile1, eqclassFiles,
+																	MANTIS_DBG_ON_DISK);
+
+	// This inputCDBG malfunctions at the second and onward iterations of its CQF.
+	// ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG(dbgFile, sampleListFile, eqclassFiles,
+	// 																MANTIS_DBG_IN_MEMORY);
+
+
+	// ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> newDBG(tempDBG, tempDBG, opt.qbits, prefix,
+	// 																MANTIS_DBG_IN_MEMORY);
+
+	char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCDBG(inputCDBG0, inputCDBG1, opt.qbits, prefix,
+																	MANTIS_DBG_ON_DISK, OUTPUT_CQF_FILE);
+
+	
+	// For debugging purpose(s).
+	// printf("\nSize of loaded CQF: through scanning %d, through CQF size call %d\n\n",
+	// 	get_size_by_scanning(inputCDBG), (int)inputCDBG.get_cqf() -> dist_elts());
+	
+	//mergedCDBG.construct(sampleDBG, sampleDBG);
+	mergedCDBG.construct(inputCDBG0, inputCDBG1);
+
+	// For debugging purpose(s); size through iteration gets corrupted if MANTIS_DBG_IN_MEMORY is used in
+	// the constructor of an input CDBG.
+	// printf("\nSize of loaded CQF: through scanning %d, through CQF size call %d\n\n",
+	// 	get_size_by_scanning(inputCDBG), (int)inputCDBG.get_cqf() -> dist_elts());
+
+	
+	puts("\n\nMSG: Exiting test function.\n========================================\n\n");
+}
+
+
+
 
 
 int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> &cdbg)
