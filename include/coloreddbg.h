@@ -692,6 +692,9 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, Colo
 		}
 
 		dbg.set_auto_resize();
+
+		// printf("\n\nMSG: CDBG (output) constructed; initial size = %llu.\n\n",
+		// 		(unsigned long long)dbg.dist_elts());
 	}
 
 
@@ -728,7 +731,7 @@ ColoredDbg<qf_obj, key_obj> ::
 		}
 
 
-		printf("\n\nMSG: Loaded CQF size = %llu\n\n", (unsigned long long)dbg.dist_elts());
+		printf("\n\nLoaded CQF size = %llu\n\n", (unsigned long long)dbg.dist_elts());
 
 
 		// Load the sample / experiment names.
@@ -817,6 +820,8 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 		eqClsMap[eqPair] = newEntry;
 
 		bucket[eqCls1 / mantis::NUM_BV_BUFFER][eqCls2 / mantis::NUM_BV_BUFFER].push_back(eqPair);
+
+		printf("New equivalence pair: (%d, %d)\n", (int)eqPair.first, (int)eqPair.second);
 	}
 	else
 		it -> second.second++;
@@ -830,6 +835,8 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
+	puts("MSG: At distinct equivalence-class pair gathering phase.\n");
+
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
 
@@ -840,7 +847,11 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 	if(it1.done() || it2.done())
-		puts("\n\nMSG: One or more iterator already at end position before starting walk.\n\n");
+		puts("\n\nERR MSG: One or more iterator already at end position before starting walk.\n\n");
+
+	printf("\nDBG1 size = %d, DBG2 size = %d\n", (int)cqf1 -> dist_elts(), (int)cqf2 -> dist_elts());
+
+	uint64_t equalKmerCount = 0;
 
 
 	while(!it1.done() || !it2.done())
@@ -870,7 +881,8 @@ void ColoredDbg<qf_obj, key_obj> ::
 		else if(kmer2 < kmer1)
 			eqClass1 = 0, eqClass2 = cqfEntry2.count, ++it2;
 		else
-			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count, ++it1, ++it2;
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count, ++it1, ++it2,
+			equalKmerCount++;
 
 
 		add_eq_class_pair(eqClass1, eqClass2);
@@ -878,7 +890,8 @@ void ColoredDbg<qf_obj, key_obj> ::
 	}
 
 
-	printf("\n\nMSG: Distinct kmers found at distinct pairs gathering phase: %llu\n\n", (unsigned long long)kmerCount);
+	printf("\n\nMSG: Distinct kmers found %d, equal kmers found %d (at distinct pairs gathering phase).\n\n",
+			(int)kmerCount, (int32_t)equalKmerCount);
 }
 
 
@@ -889,6 +902,8 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	concat_bitvectors(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
+	puts("MSG: At bitvectors concatenation phase.\n");
+
 	const uint64_t fileCount1 = (dbg1.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1,
 					fileCount2 = (dbg2.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1;
 	uint64_t serialID = 0;
@@ -908,7 +923,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
-			printf("\n\nAt bucket (%d, %d). Size = %d\n\n", (int)i, (int)j, (int)bucket[i][j].size());
+			printf("\nAt bucket (%d, %d). Size = %d\n", (int)i, (int)j, (int)bucket[i][j].size());
 			
 
 			// Required: data_2 = read_j'th Bit Vector block for dbg2
@@ -953,6 +968,8 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
+	puts("MSG: At CQFs merging phase.\n");
+
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
 
@@ -1026,7 +1043,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 	//printf("\n\nMSG: Number of kmers in the merged CQF: %llu\n\n", (unsigned long long)kmerCount);
-	printf("\n\nMSG: Merged CQF size: %llu\n\n", (unsigned long long)dbg.dist_elts());
+	// printf("\n\nMSG: Merged CQF size: %llu\n\n", (unsigned long long)dbg.dist_elts());
 }
 
 
@@ -1045,7 +1062,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	merge_CQFs(dbg1, dbg2);
 
-	// printf("\n\nMSG: Size of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
+	printf("\n\nSize of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
 
 	puts("\n\nMerge ending.\n\n");
 }
