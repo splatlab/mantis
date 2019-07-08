@@ -49,6 +49,7 @@
 void build(BuildOpts &opt);
 void test_merge_same_cdbg(BuildOpts &opt);
 void test_merge_different_cdbg(BuildOpts &opt);
+void test_cqf(BuildOpts &opt);
 // For debugging purpose(s); has been required in finding a weird phenomenon: iterating over the
 // CQF loaded from file produces random garbage the second time (with possible seg-faults);
 // only the first iteration works.
@@ -68,7 +69,9 @@ build_main ( BuildOpts& opt )
 
 	//test_merge_same_cdbg(opt);
 
-	test_merge_different_cdbg(opt);
+	//test_merge_different_cdbg(opt);
+
+	test_cqf(opt);
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
@@ -328,19 +331,21 @@ void test_merge_different_cdbg(BuildOpts& opt)
 
 	std::string dbgFile0(prefix + "dbg_cqf0.ser");
 	std::string sampleListFile0(prefix + "sampleid0.lst");
-	// Update later
-	std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
+	std::vector<std::string> eqclassFiles0 = mantis::fs::GetFilesExt(prefix.c_str(), "eqclass_rrr0.cls");
 
 	std::string dbgFile1(prefix + "dbg_cqf1.ser");
 	std::string sampleListFile1(prefix + "sampleid1.lst");
-	// Update later
-	//std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
+	std::vector<std::string> eqclassFiles1 = mantis::fs::GetFilesExt(prefix.c_str(), "eqclass_rrr1.cls");
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG0(dbgFile0, sampleListFile0, eqclassFiles,
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG0(dbgFile0, sampleListFile0, eqclassFiles0,
 																	MANTIS_DBG_ON_DISK);
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG1(dbgFile1, sampleListFile1, eqclassFiles,
+	printf("\nLoaded CQF0 size = %llu\n", (unsigned long long)inputCDBG0.get_cqf() -> dist_elts());
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG1(dbgFile1, sampleListFile1, eqclassFiles1,
 																	MANTIS_DBG_ON_DISK);
+
+	printf("\nLoaded CQF1 size = %llu\n", (unsigned long long)inputCDBG1.get_cqf() -> dist_elts());
 
 	// This inputCDBG malfunctions at the second and onward iterations of its CQF.
 	// ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> inputCDBG(dbgFile, sampleListFile, eqclassFiles,
@@ -362,13 +367,70 @@ void test_merge_different_cdbg(BuildOpts& opt)
 	//mergedCDBG.construct(sampleDBG, sampleDBG);
 	mergedCDBG.construct(inputCDBG0, inputCDBG1);
 
+	mergedCDBG.serialize(inputCDBG0, inputCDBG1);
+
 	// For debugging purpose(s); size through iteration gets corrupted if MANTIS_DBG_IN_MEMORY is used in
 	// the constructor of an input CDBG.
 	// printf("\nSize of loaded CQF: through scanning %d, through CQF size call %d\n\n",
 	// 	get_size_by_scanning(inputCDBG), (int)inputCDBG.get_cqf() -> dist_elts());
 
+	// if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+	// 	dbg.serialize(prefix + mantis::CQF_FILE);
+	// else
+	// 	dbg.close();
+
 	
 	puts("\n\nMSG: Exiting test function.\n========================================\n\n");
+}
+
+
+
+
+
+void test_cqf(BuildOpts &opt)
+{
+	std::string prefix = opt.out;
+	std::string fileName = prefix + "merged_dbg_cqf.ser";
+	CQF<KeyObject> mergedCQF(fileName, CQF_MMAP);
+
+	printf("\nSize of loaded CDBG (merged) = %llu\n", (unsigned long long)mergedCQF.dist_elts());
+
+
+	int c = 0;
+	for(auto it = mergedCQF.begin(); !it.done(); ++it)
+		c++;
+
+	printf("\nSize of loaded CDBG (merged) through scanning = %d\n", c);
+
+
+	fileName = prefix + mantis::CQF_FILE;
+	CQF<KeyObject> correctCQF(fileName, CQF_MMAP);
+
+
+	auto it_m = mergedCQF.begin(), it_c = correctCQF.begin();
+	while(!it_m.done() && !it_c.done())
+	{
+		KeyObject mergedEntry = it_m.get_cur_hash(), correctEntry = it_c.get_cur_hash();
+
+		if(mergedEntry.key != correctEntry.key)
+		{
+			puts("\nMSG: Incorrect kmer entry found.\n\n");
+			break;
+		}
+		else
+			++it_m, ++it_c;
+	}
+
+	if(it_m.done() && it_c.done())
+		puts("\nMSG: All kmers match in the CQFs.\n");
+
+
+	// c = 0;
+	// for(auto it = cqf.begin(); !it.done(); ++it)
+	// 	c++;
+
+	// // Second time, to check if that weird phenomenon happens again.
+	// printf("\nSize of loaded CDBG (merged) through scanning = %d\n", c);
 }
 
 

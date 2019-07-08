@@ -103,6 +103,9 @@ class ColoredDbg {
 		// Merges two Colored DBG objects dbg1 and dbg2 into this Colored DBG object.
 		void construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
+		// Serialize the CQF and equivalence-class bitvectors.
+		void serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
 
 
 
@@ -185,6 +188,9 @@ class ColoredDbg {
 
 		// Add a kmer with equivalence class ID 'eqID' into the CQF of this DBG.
 		void add_kmer(uint64_t kmer, uint64_t eqID);
+
+		// Returns the sample-id mapping.
+		std::unordered_map<uint64_t, std::string> &get_sample_id_map();
 };
 
 template <class T>
@@ -731,7 +737,7 @@ ColoredDbg<qf_obj, key_obj> ::
 		}
 
 
-		printf("\n\nLoaded CQF size = %llu\n\n", (unsigned long long)dbg.dist_elts());
+		//printf("\n\nLoaded CQF size = %llu\n\n", (unsigned long long)dbg.dist_elts());
 
 
 		// Load the sample / experiment names.
@@ -835,12 +841,12 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("MSG: At distinct equivalence-class pair gathering phase.\n");
+	puts("\nMSG: At distinct equivalence-class pair gathering phase.\n");
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
 
-	uint64_t kmerCount = 0;	// for debugging purposes
+	uint64_t kmerCount = 0, equalKmerCount = 0;	// for debugging purposes
 
 	
 	init_bit_vec_block_buckets(dbg1, dbg2);
@@ -850,8 +856,6 @@ void ColoredDbg<qf_obj, key_obj> ::
 		puts("\n\nERR MSG: One or more iterator already at end position before starting walk.\n\n");
 
 	printf("\nDBG1 size = %d, DBG2 size = %d\n", (int)cqf1 -> dist_elts(), (int)cqf2 -> dist_elts());
-
-	uint64_t equalKmerCount = 0;
 
 
 	while(!it1.done() || !it2.done())
@@ -870,6 +874,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 			cqfEntry2 = it2.get_cur_hash();
 			kmer2 = cqfEntry2.key;
 		}
+
+
+		// eqClassX = 0 implies absence in CDBG X.
 
 
 		if(it1.done())
@@ -902,7 +909,7 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	concat_bitvectors(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("MSG: At bitvectors concatenation phase.\n");
+	puts("\nMSG: At bitvectors concatenation phase.\n");
 
 	const uint64_t fileCount1 = (dbg1.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1,
 					fileCount2 = (dbg2.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1;
@@ -968,12 +975,12 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("MSG: At CQFs merging phase.\n");
+	puts("\nMSG: At CQFs merging phase.\n");
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
 
-	uint64_t kmerCount = 0; // for debugging purpose(s)
+	uint64_t kmerCount = 0, equalKmerCount = 0; // for debugging purpose(s)
 
 	
 	if(it1.done() || it2.done())
@@ -1033,7 +1040,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 			++it1, ++it2;
 
-			//equalKmerCount++;
+			equalKmerCount++; // for debugging purpose(s)
 		}
 
 
@@ -1042,8 +1049,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 	}
 
 
-	//printf("\n\nMSG: Number of kmers in the merged CQF: %llu\n\n", (unsigned long long)kmerCount);
-	// printf("\n\nMSG: Merged CQF size: %llu\n\n", (unsigned long long)dbg.dist_elts());
+	printf("\nMSG: In the merged CQF: #kmers = %llu; #equal_kmers = %llu\n\n",
+			(unsigned long long)kmerCount, (unsigned long long)equalKmerCount);
+	printf("\nMSG: Merged CQF size: %llu\n", (unsigned long long)dbg.dist_elts());
 }
 
 
@@ -1065,6 +1073,64 @@ void ColoredDbg<qf_obj, key_obj> ::
 	printf("\n\nSize of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
 
 	puts("\n\nMerge ending.\n\n");
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+std::unordered_map<uint64_t, std::string> &ColoredDbg<qf_obj, key_obj>::get_sample_id_map()
+{
+	return sampleid_map;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	// Serialize the CQF
+	char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
+
+	if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+		//dbg.serialize(prefix + mantis::CQF_FILE);
+		dbg.serialize(prefix + OUTPUT_CQF_FILE);
+	else
+		dbg.close();
+
+
+	// Serialize the bv buffer last time if needed
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
+	// 	bv_buffer_serialize();
+
+
+	// Serialize the eq class id map
+	char OUTPUT_SAMPLE_ID_LIST[] = "merged_sampleid.lst";
+	//std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
+	std::ofstream outputFile(prefix + OUTPUT_SAMPLE_ID_LIST);
+
+	for(auto sampleID: dbg1.get_sample_id_map())
+		outputFile << sampleID.first << " " << sampleID.second << std::endl;
+
+	for(auto sampleID: dbg2.get_sample_id_map())
+		outputFile << dbg1.get_num_samples() + sampleID.first << " " << sampleID.second << std::endl;
+
+	outputFile.close();
+
+
+	// Dump the abundance distribution of the equivalence / color classes.
+	// if (flush_eqclass_dis) {
+	// 	// dump eq class abundance dist for further analysis.
+	// 	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
+	// 	for (auto sample : eqclass_map)
+	// 		tmpfile << sample.second.first << " " << sample.second.second <<
+	// 			std::endl;
+	// 	tmpfile.close();
+	// }
 }
 
 #endif
