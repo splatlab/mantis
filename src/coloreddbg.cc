@@ -423,6 +423,8 @@ void test_cqf(BuildOpts &opt)
 
 	if(it_m.done() && it_c.done())
 		puts("\nMSG: All kmers match in the CQFs.\n");
+	else
+		puts("\nMSG: Mismatching kmer entries exist in the CQFs.\n");
 
 
 	// c = 0;
