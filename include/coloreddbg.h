@@ -180,8 +180,13 @@ class ColoredDbg {
 		// Insert the equivalence class pair (eqCls1, eqCls2) into the hash map 'eqClsMap'.
 		void add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2);
 
+		// Concatenates the BitVector objects bv1[id1] and bv2[id2] into resultVec.
+		void concat(const BitVectorRRR& bv1, const uint64_t colCount1, const uint64_t eqID1,
+					const BitVectorRRR& bv2, const uint64_t colCount2, const uint64_t eqID2,
+					BitVector &resultVec);
+
 		// Concatenate required bit vectors from the DBGs into this merged DBG.
-		void concat_bitvectors(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+		void build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
 		// Merge the CQFs from the DBGs into the CQF of this DBG.
 		void merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
@@ -761,6 +766,8 @@ ColoredDbg<qf_obj, key_obj> ::
 		{
 			int fileID = std::stoi(first_part(last_part(file, '/'), '_'));
 			sortedFiles[fileID] = file;
+
+			printf("\nLoaded color-class file %s\n", file.c_str());
 		}
 		
 
@@ -790,6 +797,17 @@ ColoredDbg<qf_obj, key_obj> ::
 		}
 		sampleid.close();
 		*/
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+inline std::vector<std::string> &ColoredDbg<qf_obj, key_obj> ::
+	get_eq_class_files()
+{
+	return eqClsFiles;
 }
 
 
@@ -907,9 +925,79 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
-	concat_bitvectors(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+	concat(const BitVectorRRR& bv1, const uint64_t colCount1, const uint64_t eqID1,
+			const BitVectorRRR& bv2, const uint64_t colCount2, const uint64_t eqID2,
+			BitVector &resultVec)
 {
-	puts("\nMSG: At bitvectors concatenation phase.\n");
+	//BitVector mergedEqCls(num_samples);
+	const uint64_t wordLen = 64;
+
+
+	if(eqID1)
+	{
+		uint64_t offset1 = ((eqID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+
+		for(uint32_t wordCount = 0; wordCount <= colCount1 / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
+			uint64_t word = bv1.get_int(offset1, readLen);
+
+			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+				if((word >> bitIdx) & 0x01)
+					resultVec[sampleCounter] = 1;				
+
+			offset1 += readLen;
+		}
+	}
+
+
+	if(eqID2)
+	{
+		u_int64_t offset2 = ((eqID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+
+		for(uint32_t wordCount = 0; wordCount <= colCount2 / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, colCount2 - wordCount * wordLen);
+			uint64_t word = bv2.get_int(offset2, readLen);
+
+			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+				if((word >> bitIdx) & 0x01)
+					resultVec[colCount1 + sampleCounter] = 1;
+
+			offset2 += readLen;
+		}
+	}
+
+	
+	//std::vector<uint64_t> sample_map(num_samples, 0);
+	//for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
+		// auto eqclass_id = it->first;
+		// auto count = it->second;
+		// counter starts from 1.
+		// uint64_t start_idx = (eqclass_id - 1);
+		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		// for (uint32_t w = 0; w <= num_samples / 64; w++) {
+		// 	uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
+		// 	uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
+		// 	for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
+		// 		if ((wrd >> i) & 0x01)
+		// 			sample_map[sCntr] += count;
+		// 	bucket_offset += len;
+	//	}
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	puts("\nMSG: At color-class building (bitvectors concatenation) phase.\n");
 
 	const uint64_t fileCount1 = (dbg1.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1,
 					fileCount2 = (dbg2.get_num_eqclasses() / mantis::NUM_BV_BUFFER) + 1;
@@ -919,14 +1007,15 @@ void ColoredDbg<qf_obj, key_obj> ::
 	// No need for the following statement. eqclass_files should come with the constructor of the dbgs
 	// eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
 
+	// No need of sorting; done at new constructor.
 	// required sort of the file names (?)
 
 
 	for(uint64_t i = 0; i < fileCount1; ++i)
 	{
 		// Required: data_1 = read_i'th Bit Vector block for dbg1
-		// BitVectorRRR bv1;
-		// sdsl::load_from_file(bv1, dbg1.get_eq_class_files[i]);
+		BitVectorRRR bitVec1;
+		sdsl::load_from_file(bitVec1, dbg1.get_eq_class_files()[i]);
 
 		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
@@ -934,8 +1023,8 @@ void ColoredDbg<qf_obj, key_obj> ::
 			
 
 			// Required: data_2 = read_j'th Bit Vector block for dbg2
-			// BitVectorRRR bv2;
-			// sdsl::load_from_file(bv2, dbg2.get_eq_class_files[j]);
+			BitVectorRRR bitVec2;
+			sdsl::load_from_file(bitVec2, dbg2.get_eq_class_files()[j]);
 
 			for(auto eqClsPair : bucket[i][j])
 			{
@@ -946,9 +1035,20 @@ void ColoredDbg<qf_obj, key_obj> ::
 				// Required: bit_vector = concat(data_1.query(eq1), data_2.query(eq2))
 				// Required: dbg.bitVectorBuffer[serialID] = bit_vector
 				// Required: serialization and disk-write if required
+
+				BitVector mergedEqCls(num_samples);
+
+				// printf("\nGoing in for eq pair (%d, %d)\n", (int)eq1, (int)eq2);
+
+				concat(bitVec1, dbg1.get_num_samples(), eq1, bitVec2, dbg2.get_num_samples(), eq2, mergedEqCls);
+
+				// printf("\nComing out from eq pair (%d, %d)\n", (int)eq1, (int)eq2);
 			}
 		}
 	}
+
+	
+	// puts("\nMSG: Done building.\n");
 }
 
 
@@ -1066,7 +1166,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	gather_distinct_eq_class_pairs(dbg1, dbg2);
 
-	concat_bitvectors(dbg1, dbg2);
+	build_eq_classes(dbg1, dbg2);
 
 	merge_CQFs(dbg1, dbg2);
 

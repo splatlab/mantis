@@ -69,9 +69,9 @@ build_main ( BuildOpts& opt )
 
 	//test_merge_same_cdbg(opt);
 
-	//test_merge_different_cdbg(opt);
+	test_merge_different_cdbg(opt);
 
-	test_cqf(opt);
+	//test_cqf(opt);
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
