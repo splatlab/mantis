@@ -50,6 +50,7 @@ void build(BuildOpts &opt);
 void test_merge_same_cdbg(BuildOpts &opt);
 void test_merge_different_cdbg(BuildOpts &opt);
 void test_cqf(BuildOpts &opt);
+void test_merge(BuildOpts &opt);
 // For debugging purpose(s); has been required in finding a weird phenomenon: iterating over the
 // CQF loaded from file produces random garbage the second time (with possible seg-faults);
 // only the first iteration works.
@@ -65,13 +66,15 @@ int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObje
 	int
 build_main ( BuildOpts& opt )
 {
-	//build(opt);
+	// build(opt);
 
-	//test_merge_same_cdbg(opt);
+	// test_merge_same_cdbg(opt);
 
-	test_merge_different_cdbg(opt);
+	// test_merge_different_cdbg(opt);
 
-	//test_cqf(opt);
+	// test_cqf(opt);
+
+	test_merge(opt);
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
@@ -240,22 +243,7 @@ void build(BuildOpts &opt)
 	//cdbg.get_cqf()->dump_metadata();
 	//DEBUG_CDBG(cdbg.get_cqf()->set_size());
 
-	// Mantis merge: Jamshed
-
-
-
-
-
-	// ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> dbgMerged(cdbg, cdbg, opt.qbits, prefix,
-	// 																MANTIS_DBG_ON_DISK, "merged_dbg_cqf.ser");
 	
-	// test_merge(cdbg, dbgMerged, opt);
-
-
-
-
-
-	// Mantis merge: Jamshed
 	console->info("Serializing CQF and eq classes in {}", prefix);
 	cdbg.serialize();
 	console->info("Serialization done.");
@@ -447,5 +435,229 @@ int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObje
 		c++;
 
 	return c;
+}
+
+
+
+
+
+class MergeOpts
+{
+	public:
+		bool flush_eqclass_dist{false};
+		int qbits;
+		// std::string inlist;
+		std::string out;
+		// int numthreads{1};
+		std::shared_ptr<spdlog::logger> console{nullptr};
+		std::string dir1;
+		std::string dir2;
+
+//   nlohmann::json to_json() {
+//     nlohmann::json j;
+//     j["dump_eqclass_dist"] = flush_eqclass_dist;
+//     j["quotient_bits"] = qbits;
+//     j["input_list"] = inlist;
+//     j["output_dir"] = out;
+//     j["num_threads"] = numthreads;
+//     return j;
+//   }
+};
+
+
+
+
+
+bool data_exists(std::string &dir, spdlog::logger *console)
+{
+	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
+	{
+		console -> error("CQF file {} does not exist in input directory {}.", mantis::CQF_FILE, dir);
+		return false;
+	}
+
+	if(!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str()))
+	{
+		console -> error("Sample ID list file {} does not exist in input directory {}.",
+							mantis::SAMPLEID_FILE, dir);
+		return false;
+	}
+
+	if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
+	{
+		console -> error("No equivalence-class file with extension {} exists in input directory {}.",
+							mantis::EQCLASS_FILE, dir);
+		return false;
+	}
+
+
+	return true;
+}
+
+
+
+
+
+void merge(MergeOpts &opt)
+{
+	spdlog::logger* console = opt.console.get();
+
+
+	std::string dir1 = opt.dir1;
+	if(dir1.back() != '/')	// Make sure it is a full folder
+		dir1 += '/';
+
+	// Make sure if the first input directory exists.
+	if(!mantis::fs::DirExists(dir1.c_str()))
+	{
+		console -> error("Input directory {} does not exist.", dir1);
+		exit(1);
+	}
+
+
+	std::string dir2 = opt.dir2;
+	if(dir2.back() != '/')	// Make sure it is a full folder
+		dir2 += '/';
+
+	// Check to see if the second input directory exists.
+	if(!mantis::fs::DirExists(dir2.c_str()))
+	{
+		console -> error("Input directory {} does not exist.", dir2);
+		exit(1);
+	}
+
+	
+	std::string outDir = opt.out;
+	if(outDir.back() != '/')	// Make sure it is a full folder
+		outDir += '/';
+
+	// Make the output directory if it doesn't exist.
+	if(!mantis::fs::DirExists(outDir.c_str()))
+		mantis::fs::MakeDir(outDir.c_str());
+	
+	// Check to see if the output dir exists now.
+	if(!mantis::fs::DirExists(outDir.c_str()))
+	{
+		console->error("Output dir {} could not be successfully created.", outDir);
+		exit(1);
+	}
+
+
+	// Check if all the required data exist in the input directories.
+	if(!data_exists(dir1, console) || !data_exists(dir2, console))
+		exit(1);
+
+
+	// If we made it this far, record relevant meta information in the output directory
+//   nlohmann::json minfo;
+//   {
+//     std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+//     if (jfile.is_open()) {
+//       minfo = opt.to_json();
+//       minfo["start_time"] = mantis::get_current_time_as_string();
+//       minfo["mantis_version"] = mantis::version;
+//       minfo["index_version"] = mantis::index_version;
+//       jfile << minfo.dump(4);
+//     } else {
+//       console->error("Could not write to output directory {}", prefix);
+//       exit(1);
+//     }
+//     jfile.close();
+//   }
+
+	
+	console -> info("Reading the first input Colored dBG from disk.");
+
+	std::string dbgFile1(dir1 + mantis::CQF_FILE);
+	std::string sampleListFile1(dir1 + mantis::SAMPLEID_FILE);
+	std::vector<std::string> eqclassFiles1 = mantis::fs::GetFilesExt(dir1.c_str(), mantis::EQCLASS_FILE);
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg1(dbgFile1, sampleListFile1, eqclassFiles1,
+																	MANTIS_DBG_ON_DISK);
+
+	// printf("\nCQF size = %d\n\n", (int)cdbg1.get_cqf() -> dist_elts());
+	
+	console -> info("Read colored dBG with {} k-mers and {} color class files.",
+					cdbg1.get_cqf() -> dist_elts(), cdbg1.get_eq_class_files().size());
+
+
+	console -> info("Reading the second input Colored dBG from disk.");
+	std::string dbgFile2(dir2 + mantis::CQF_FILE);
+	std::string sampleListFile2(dir2 + mantis::SAMPLEID_FILE);
+	std::vector<std::string> eqclassFiles2 = mantis::fs::GetFilesExt(dir2.c_str(), mantis::EQCLASS_FILE);
+
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg2(dbgFile2, sampleListFile2, eqclassFiles2,
+																	MANTIS_DBG_ON_DISK);
+
+	console -> info("Read colored dBG with {} k-mers and {} color class files.",
+					cdbg2.get_cqf() -> dist_elts(), cdbg2.get_eq_class_files().size());
+
+
+
+	// char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCDBG(cdbg1, cdbg2, opt.qbits, outDir,
+																	MANTIS_DBG_ON_DISK, mantis::CQF_FILE);
+	
+	console -> info("Constructing the merged Colored dBG.");
+
+	mergedCDBG.construct(cdbg1, cdbg2);
+
+	console -> info("Merged colored dBG has {} k-mers and TODO equivalence classes",
+								mergedCDBG.get_cqf() -> dist_elts());
+
+	mergedCDBG.get_cqf() -> dump_metadata();
+
+
+	console -> info("Serializing the CQF and the eq classes in directory {}.", outDir);
+
+	mergedCDBG.serialize(cdbg1, cdbg2);
+
+	console -> info("Serialization done.");
+
+
+	//   {
+//     std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+//     if (jfile.is_open()) {
+//       minfo["end_time"] = mantis::get_current_time_as_string();
+//       jfile << minfo.dump(4);
+//     } else {
+//       console->error("Could not write to output directory {}", prefix);
+//     }
+//     jfile.close();
+//   }
+// }
+}
+
+
+//   {
+//     std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
+//     if (jfile.is_open()) {
+//       minfo["end_time"] = mantis::get_current_time_as_string();
+//       jfile << minfo.dump(4);
+//     } else {
+//       console->error("Could not write to output directory {}", prefix);
+//     }
+//     jfile.close();
+//   }
+// }
+
+
+
+
+
+void test_merge(BuildOpts &bOpt)
+{
+	MergeOpts opt;
+
+	opt.console = bOpt.console;
+
+	opt.qbits = bOpt.qbits;
+
+	opt.dir1 = "in1";
+	opt.dir2 = "in2";
+	opt.out = "out";
+
+	merge(opt);
 }
 // Mantis merge: Jamshed

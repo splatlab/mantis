@@ -791,6 +791,8 @@ ColoredDbg<qf_obj, key_obj> ::
 
 		num_serializations = eqClsFiles.size();
 
+		puts("MSG: Done loading colored dBG.\n");
+
 
 		/*
 		eqclasses.reserve(sorted_files.size());
