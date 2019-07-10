@@ -91,19 +91,26 @@ class ColoredDbg {
 
 		// Mantis merge (Jamshed)
 
+		// Required to instantitate the output CDBG.
 		ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 					uint64_t qbits, std::string &prefix, int flag, std::string fileName = "");
 
+		// Required to load the input CDBGs.
 		ColoredDbg(std::string &cqfFile, std::string &sampleListFile,
 					std::vector<std::string> &eqclassFiles, int flag);
 
-		// Returns the vector of names of all the equivalence / color class bitvector files.
+		// Returns the vector of names of all the color(equivalence)-class bitvector files.
 		std::vector<std::string> &get_eq_class_files();
 
 		// Merges two Colored DBG objects dbg1 and dbg2 into this Colored DBG object.
 		void construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
 		// Serialize the CQF and equivalence-class bitvectors.
+		// TODO: Move the list concatenation phase inside the serialization to the constructor,
+		// with introduction of a new field, just keep the disk-write part here; thus eliminating
+		// the parameters.
+		// TODO: After the earlier task, merge this overloaded method with the earlier one
+		// through default argument.
 		void serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
 
@@ -152,7 +159,7 @@ class ColoredDbg {
 		std::vector<std::string> eqClsFiles;
 
 		// Required for hashing pair objects for unordered_map.
-		// TODO: Consult Professor on this hashing, or for something better.
+		// TODO: Consult Professor on this hashing.
 		struct PairHash
 		{
 			template<typename T1, typename T2>
@@ -180,12 +187,15 @@ class ColoredDbg {
 		// Insert the equivalence class pair (eqCls1, eqCls2) into the hash map 'eqClsMap'.
 		void add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2);
 
-		// Concatenates the BitVector objects bv1[id1] and bv2[id2] into resultVec.
+		// Concatenates the BitVector objects bv1[id1] and bv2[id2] into resultVec;
+		// where bv1 and bv2 are partial color class tables, with sample counts colCount1 and colCount2
+		// respectively.
 		void concat(const BitVectorRRR& bv1, const uint64_t colCount1, const uint64_t eqID1,
 					const BitVectorRRR& bv2, const uint64_t colCount2, const uint64_t eqID2,
 					BitVector &resultVec);
 
-		// Concatenate required bit vectors from the DBGs into this merged DBG.
+		// Concatenate required bit vectors from the DBGs into this merged DBG, to build the
+		// merged color(equivalence)-class table.
 		void build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
 		// Merge the CQFs from the DBGs into the CQF of this DBG.
@@ -196,6 +206,10 @@ class ColoredDbg {
 
 		// Returns the sample-id mapping.
 		std::unordered_map<uint64_t, std::string> &get_sample_id_map();
+
+		// Serialize the bitvector buffer to disk, when the current class count is 'eqClsCount'.
+		// TODO: Merge this overloaded method with the earlier one through default argument.
+		void bv_buffer_serialize(uint64_t eqClsCount);
 };
 
 template <class T>
@@ -929,7 +943,6 @@ void ColoredDbg<qf_obj, key_obj> ::
 			const BitVectorRRR& bv2, const uint64_t colCount2, const uint64_t eqID2,
 			BitVector &resultVec)
 {
-	//BitVector mergedEqCls(num_samples);
 	const uint64_t wordLen = 64;
 
 
@@ -993,6 +1006,29 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 
+template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize(uint64_t eqClsCount)
+{
+	BitVector bv_temp(bv_buffer);
+	if (eqClsCount % mantis::NUM_BV_BUFFER > 0)
+		bv_temp.resize((eqClsCount % mantis::NUM_BV_BUFFER) * num_samples);
+
+	const char OUTPUT_EQCLASS_FILE[] = "merged_eqclass_rrr.cls";
+
+	BitVectorRRR final_com_bv(bv_temp);
+	//std::string bv_file(prefix + std::to_string(num_serializations) + "_" + mantis::EQCLASS_FILE);
+	std::string bv_file(prefix + std::to_string(num_serializations) + "_" + OUTPUT_EQCLASS_FILE);
+
+	sdsl::store_to_file(final_com_bv, bv_file);
+	bv_buffer = BitVector(bv_buffer.bit_size());
+
+	num_serializations++;
+}
+
+
+
+
+
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
@@ -1034,18 +1070,25 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 				// Required: bit_vector = concat(data_1.query(eq1), data_2.query(eq2))
 				// Required: dbg.bitVectorBuffer[serialID] = bit_vector
-				// Required: serialization and disk-write if required
+				
 
 				BitVector mergedEqCls(num_samples);
 
-				// printf("\nGoing in for eq pair (%d, %d)\n", (int)eq1, (int)eq2);
-
 				concat(bitVec1, dbg1.get_num_samples(), eq1, bitVec2, dbg2.get_num_samples(), eq2, mergedEqCls);
+				add_bitvector(mergedEqCls, serialID);
 
-				// printf("\nComing out from eq pair (%d, %d)\n", (int)eq1, (int)eq2);
+				
+				// Serialization and disk-write if required
+				if(serialID % mantis::NUM_BV_BUFFER == 0)
+					bv_buffer_serialize(serialID);
 			}
 		}
 	}
+
+
+	// Serialize the bv buffer last time if needed
+	if (serialID % mantis::NUM_BV_BUFFER > 0)
+		bv_buffer_serialize(serialID);
 
 	
 	// puts("\nMSG: Done building.\n");
@@ -1194,7 +1237,7 @@ void ColoredDbg<qf_obj, key_obj>::
 	serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
 	// Serialize the CQF
-	char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
+	const char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
 
 	if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
 		//dbg.serialize(prefix + mantis::CQF_FILE);
@@ -1203,10 +1246,12 @@ void ColoredDbg<qf_obj, key_obj>::
 		dbg.close();
 
 
-	// Serialize the bv buffer last time if needed
-	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
-	// 	bv_buffer_serialize();
+	// Serialize the bv buffer last time if needed.
+	// Done at the color(equivalence)-class building phase.
 
+
+	// TODO: Move the list concatenation phase to constructor, with introduction of a new field;
+	// just keep the disk-write part here.
 
 	// Serialize the eq class id map
 	char OUTPUT_SAMPLE_ID_LIST[] = "merged_sampleid.lst";
@@ -1223,14 +1268,16 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 	// Dump the abundance distribution of the equivalence / color classes.
-	// if (flush_eqclass_dis) {
-	// 	// dump eq class abundance dist for further analysis.
-	// 	std::ofstream tmpfile(prefix + "eqclass_dist.lst");
-	// 	for (auto sample : eqclass_map)
-	// 		tmpfile << sample.second.first << " " << sample.second.second <<
-	// 			std::endl;
-	// 	tmpfile.close();
-	// }
+	if (flush_eqclass_dis)
+	{
+		const char OUTPUT_ABUNDANCE_DIST_FILE[] = "merged_eqclass_dist.lst";
+		std::ofstream outputFile(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
+
+		for (auto idFreq : eqClsMap)
+			outputFile << idFreq.second.first << " " << idFreq.second.second << std::endl;
+		
+		outputFile.close();
+	}
 }
 
 #endif
