@@ -765,7 +765,38 @@ void test_color_classes(BuildOpts &bOpt, MergeOpts &mOpt)
 
 	console -> info("Correct CdBG color-class table has {} RRR bitvectors, merged CdBG's one has {}.",
 					eqclass_c.size(), eqclass_m.size());
+					
 
+
+	// debug
+	for(int i = 1; i <= 3; ++i)
+	{
+		const uint64_t wordLen = 64;
+	
+		uint64_t colCount1 = mergedCDBG.get_num_samples();
+		uint64_t bucketIdx1 = (i - 1) / mantis::NUM_BV_BUFFER;
+		uint64_t offset1 = ((i - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+
+		for(uint32_t wordCount = 0; wordCount <= colCount1 / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
+			uint64_t word = eqclass_m[bucketIdx1].get_int(offset1, readLen);
+
+			printf("bitvector for eq id %d is = ", (int)i);
+			// printf("eqId1 %d, read length = %d, word %d\n", (int)eqID_m, (int)readLen, (int)word);
+
+			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+				if((word >> bitIdx) & 0x01)
+					putchar('1');
+				else
+					putchar('0');
+			putchar('\n');
+
+			offset1 += readLen;
+		}
+	}
+	
 	
 	auto it_m = mergedCDBG.get_cqf() -> begin(), it_c = corrCDBG.get_cqf() -> begin();
 
@@ -802,7 +833,7 @@ void test_color_classes(BuildOpts &bOpt, MergeOpts &mOpt)
 			uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
 			uint64_t word = eqclass_m[bucketIdx1].get_int(offset1, readLen);
 
-			printf("eqId1 %d, read length = %d, word %d\n", (int)eqID_m, (int)readLen, (int)word);
+			// printf("eqId1 %d, read length = %d, word %d\n", (int)eqID_m, (int)readLen, (int)word);
 
 			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
 			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)

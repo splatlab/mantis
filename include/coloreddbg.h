@@ -1093,7 +1093,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 				
 				// for debugging purpose(s)
-				printf("bitvector = ");
+				printf("bitvector for eq id %d is = ", (int)serialID);
 				bool isEmpty = true;
 				for(int i = 0; i < num_samples; ++i)
 					if(mergedEqCls[i] == 1)
@@ -1103,7 +1103,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 				putchar('\n');
 
 				puts("Going to add a bitvector\n");
-				add_bitvector(mergedEqCls, serialID);
+				add_bitvector(mergedEqCls, serialID - 1);
 				puts("Bitvector added\n");
 
 
