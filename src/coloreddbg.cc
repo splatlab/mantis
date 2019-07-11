@@ -46,15 +46,50 @@
 
 // Mantis merge: Jamshed
 
+
+
+
+class MergeOpts
+{
+	public:
+		bool flush_eqclass_dist{false};
+		int qbits;
+		// std::string inlist;
+		std::string out;
+		// int numthreads{1};
+		std::shared_ptr<spdlog::logger> console{nullptr};
+		std::string dir1;
+		std::string dir2;
+
+//   nlohmann::json to_json() {
+//     nlohmann::json j;
+//     j["dump_eqclass_dist"] = flush_eqclass_dist;
+//     j["quotient_bits"] = qbits;
+//     j["input_list"] = inlist;
+//     j["output_dir"] = out;
+//     j["num_threads"] = numthreads;
+//     return j;
+//   }
+};
+
+
+
+
+
 void build(BuildOpts &opt);
 void test_merge_same_cdbg(BuildOpts &opt);
 void test_merge_different_cdbg(BuildOpts &opt);
-void test_cqf(BuildOpts &opt);
+void test_cqf(BuildOpts &bOpt, MergeOpts &mOpt);
 void test_merge(BuildOpts &opt);
+void test_color_classes(BuildOpts &bOpt, MergeOpts &mOpt);
 // For debugging purpose(s); has been required in finding a weird phenomenon: iterating over the
 // CQF loaded from file produces random garbage the second time (with possible seg-faults);
 // only the first iteration works.
 int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> &cdbg);
+
+
+
+
 
 // Mantis merge: Jamshed
 /*
@@ -72,9 +107,11 @@ build_main ( BuildOpts& opt )
 
 	// test_merge_different_cdbg(opt);
 
+	test_merge(opt);
+
 	// test_cqf(opt);
 
-	test_merge(opt);
+	// test_color_classes(opt);
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
@@ -288,7 +325,7 @@ void test_merge_same_cdbg(BuildOpts& opt)
 
 	char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCDBG(inputCDBG, inputCDBG, opt.qbits, prefix,
-																	MANTIS_DBG_ON_DISK, OUTPUT_CQF_FILE);
+																	MANTIS_DBG_ON_DISK);
 
 	
 	// For debugging purpose(s).
@@ -345,7 +382,7 @@ void test_merge_different_cdbg(BuildOpts& opt)
 
 	char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCDBG(inputCDBG0, inputCDBG1, opt.qbits, prefix,
-																	MANTIS_DBG_ON_DISK, OUTPUT_CQF_FILE);
+																	MANTIS_DBG_ON_DISK);
 
 	
 	// For debugging purpose(s).
@@ -441,33 +478,6 @@ int get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObje
 
 
 
-class MergeOpts
-{
-	public:
-		bool flush_eqclass_dist{false};
-		int qbits;
-		// std::string inlist;
-		std::string out;
-		// int numthreads{1};
-		std::shared_ptr<spdlog::logger> console{nullptr};
-		std::string dir1;
-		std::string dir2;
-
-//   nlohmann::json to_json() {
-//     nlohmann::json j;
-//     j["dump_eqclass_dist"] = flush_eqclass_dist;
-//     j["quotient_bits"] = qbits;
-//     j["input_list"] = inlist;
-//     j["output_dir"] = out;
-//     j["num_threads"] = numthreads;
-//     return j;
-//   }
-};
-
-
-
-
-
 bool data_exists(std::string &dir, spdlog::logger *console)
 {
 	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
@@ -504,7 +514,7 @@ void merge(MergeOpts &opt)
 
 
 	std::string dir1 = opt.dir1;
-	if(dir1.back() != '/')	// Make sure it is a full folder
+	if(dir1.back() != '/')	// Make sure it is a full directory
 		dir1 += '/';
 
 	// Make sure if the first input directory exists.
@@ -516,7 +526,7 @@ void merge(MergeOpts &opt)
 
 
 	std::string dir2 = opt.dir2;
-	if(dir2.back() != '/')	// Make sure it is a full folder
+	if(dir2.back() != '/')	// Make sure it is a full directory
 		dir2 += '/';
 
 	// Check to see if the second input directory exists.
@@ -528,7 +538,7 @@ void merge(MergeOpts &opt)
 
 	
 	std::string outDir = opt.out;
-	if(outDir.back() != '/')	// Make sure it is a full folder
+	if(outDir.back() != '/')	// Make sure it is a full directory
 		outDir += '/';
 
 	// Make the output directory if it doesn't exist.
@@ -595,16 +605,15 @@ void merge(MergeOpts &opt)
 
 
 
-	// char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCDBG(cdbg1, cdbg2, opt.qbits, outDir,
-																	MANTIS_DBG_ON_DISK, mantis::CQF_FILE);
+																	MANTIS_DBG_ON_DISK);
 	
 	console -> info("Constructing the merged Colored dBG.");
 
 	mergedCDBG.construct(cdbg1, cdbg2);
 
-	console -> info("Merged colored dBG has {} k-mers and TODO equivalence classes",
-								mergedCDBG.get_cqf() -> dist_elts());
+	console -> info("Merged colored dBG has {} k-mers and {} equivalence classes",
+								mergedCDBG.get_cqf() -> dist_elts(), mergedCDBG.get_eqclass_count());
 
 	mergedCDBG.get_cqf() -> dump_metadata();
 
@@ -630,17 +639,273 @@ void merge(MergeOpts &opt)
 }
 
 
-//   {
-//     std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
-//     if (jfile.is_open()) {
-//       minfo["end_time"] = mantis::get_current_time_as_string();
-//       jfile << minfo.dump(4);
-//     } else {
-//       console->error("Could not write to output directory {}", prefix);
-//     }
-//     jfile.close();
-//   }
-// }
+
+
+
+void test_cqf(BuildOpts &bOpt, MergeOpts &mOpt)
+{
+	spdlog::logger* console = mOpt.console.get();
+
+	console -> info("Checking correctness of the merged CQF.");
+
+	
+	std::string bOptPrefix(bOpt.out);
+	if (bOptPrefix.back() != '/')
+		bOptPrefix += '/';
+
+	
+	std::string mOptPrefix(mOpt.out);
+	if (mOptPrefix.back() != '/')
+		mOptPrefix += '/';
+
+
+
+	std::string correctFile = bOptPrefix + mantis::CQF_FILE;
+	std::string mergedFile = mOptPrefix + mantis::CQF_FILE;
+
+
+	CQF<KeyObject> correctCQF(correctFile, CQF_MMAP);
+	CQF<KeyObject> mergedCQF(mergedFile, CQF_MMAP);
+
+
+	console -> info("Correct CdBG has {} and merged CdBG has {} elements.",
+					correctCQF.dist_elts(), mergedCQF.dist_elts());
+
+	if(correctCQF.dist_elts() != mergedCQF.dist_elts())
+	{
+		console -> error("Element counts of the CdBGs mismatch.");
+		exit(1);
+	}
+
+
+	auto it_m = mergedCQF.begin(), it_c = correctCQF.begin();
+	while(!it_m.done() && !it_c.done())
+	{
+		KeyObject mergedEntry = it_m.get_cur_hash(), correctEntry = it_c.get_cur_hash();
+
+		if(mergedEntry.key != correctEntry.key)
+		{
+			console -> error("Incorrect k-mer entry found.");
+			exit(1);
+		}
+		else
+			++it_m, ++it_c;
+	}
+
+	
+	// This correctness-check if-elif block is not required;
+	// thr previous elements equality check and the iteration check suffice.
+	if(!it_m.done())
+	{
+		console -> error("Merged CQF has more entries.");
+		exit(1);
+	}
+	else if(!it_c.done())
+	{
+		console -> error("Merged CQF has less entries.");
+	}
+	else
+		console -> info("Merged CQF has the exact same set of k-mers in the exact same order.");
+}
+
+
+
+
+
+void test_color_classes(BuildOpts &bOpt, MergeOpts &mOpt)
+{
+	spdlog::logger* console = mOpt.console.get();
+
+	console -> info("Checking correctness of the color class table.");
+
+	
+	std::string bOptPrefix(bOpt.out);
+	if (bOptPrefix.back() != '/')
+		bOptPrefix += '/';
+
+	
+	std::string mOptPrefix(mOpt.out);
+	if (mOptPrefix.back() != '/')
+		mOptPrefix += '/';
+
+	std::string corrCQFfile(bOptPrefix + mantis::CQF_FILE);
+	std::vector<std::string> corrEqClassFiles = mantis::fs::GetFilesExt(bOptPrefix.c_str(),
+																		mantis::EQCLASS_FILE);
+	std::string corrSampleList(bOptPrefix + mantis::SAMPLEID_FILE);
+	
+	// puts("Going in constructor.");
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> corrCDBG(corrCQFfile, corrEqClassFiles,
+																	corrSampleList, MANTIS_DBG_IN_MEMORY);
+	// puts("Came out of constructor.");
+
+
+
+	std::string mergedCQFfile = mOptPrefix + mantis::CQF_FILE;
+	std::vector<std::string> mergedEqClassFiles = mantis::fs::GetFilesExt(mOptPrefix.c_str(),
+																			mantis::EQCLASS_FILE);
+
+	printf("\nMSG: eq class file count for merged CdBG = %d\n", (int)mergedEqClassFiles.size());
+	  
+	std::string mergedSampleList = mOptPrefix + mantis::SAMPLEID_FILE;
+	
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCDBG(mergedCQFfile, mergedEqClassFiles,
+																	mergedSampleList, MANTIS_DBG_IN_MEMORY);
+
+																	
+	console -> info("Correct CdBG has {} kmers and {} bitvectors.", corrCDBG.get_cqf() -> dist_elts(),
+																	corrCDBG.get_num_bitvectors());
+	
+
+	console -> info("Merged CdBG has {} kmers and {} bitvectors.", mergedCDBG.get_cqf() -> dist_elts(),
+																	mergedCDBG.get_num_bitvectors());
+
+
+	auto eqclass_m = mergedCDBG.get_eqclasses(),
+				eqclass_c = corrCDBG.get_eqclasses();
+
+	console -> info("Correct CdBG color-class table has {} RRR bitvectors, merged CdBG's one has {}.",
+					eqclass_c.size(), eqclass_m.size());
+
+	
+	auto it_m = mergedCDBG.get_cqf() -> begin(), it_c = corrCDBG.get_cqf() -> begin();
+
+	int c = 0, absent = 0;
+	int emptyBitVec_m = 0, emptyBitVec_c = 0;
+
+	while(!it_m.done() && !it_c.done())
+	{
+		KeyObject entry_m = it_m.get_cur_hash(), entry_c = it_c.get_cur_hash();
+
+		if(entry_m.key != entry_c.key)
+		{
+			console -> error("Mismatching k-mer found.");
+			exit(1);
+		}
+
+		std::unordered_set<uint64_t> sampleSet_m, sampleSet_c;
+		
+		
+		uint64_t eqID_m = entry_m.count, eqID_c = entry_c.count;
+
+		if(!eqID_m || !eqID_c)
+			absent++;
+
+		
+		const uint64_t wordLen = 64;
+	
+		uint64_t colCount1 = mergedCDBG.get_num_samples();
+		uint64_t bucketIdx1 = (eqID_m - 1) / mantis::NUM_BV_BUFFER;
+		uint64_t offset1 = ((eqID_m - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+
+		for(uint32_t wordCount = 0; wordCount <= colCount1 / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
+			uint64_t word = eqclass_m[bucketIdx1].get_int(offset1, readLen);
+
+			printf("eqId1 %d, read length = %d, word %d\n", (int)eqID_m, (int)readLen, (int)word);
+
+			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+				if((word >> bitIdx) & 0x01)
+					sampleSet_m.insert(sampleCounter);
+
+			offset1 += readLen;
+		}
+
+
+
+		uint64_t colCount2 = corrCDBG.get_num_samples();
+		uint64_t bucketIdx2 = (eqID_c - 1) / mantis::NUM_BV_BUFFER;
+		uint64_t offset2 = ((eqID_c - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+
+		for(uint32_t wordCount = 0; wordCount <= colCount2 / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, colCount2 - wordCount * wordLen);
+			uint64_t word = eqclass_c[bucketIdx2].get_int(offset2, readLen);
+
+			// printf("eqId2 %d, read length = %d, word %d\n", (int)eqID_c, (int)readLen, (int)word);
+
+			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+				if((word >> bitIdx) & 0x01)
+					sampleSet_c.insert(sampleCounter);
+
+			offset2 += readLen;
+		}
+
+
+		// uint64_t num_samples = mergedCDBG.get_num_samples();
+		// uint64_t start_idx = (eqID_m - 1);
+		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+
+		// for (uint32_t w = 0; w <= num_samples / 64; w++)
+		// {
+		// 	uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
+		// 	uint64_t wrd = eqclass_m[bucket_idx].get_int(bucket_offset, len);
+		// 	for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
+		// 		if ((wrd >> i) & 0x01)
+		// 			sampleSet_m.insert(sCntr);
+
+		// 	bucket_offset += len;
+		// }
+
+
+		// num_samples = corrCDBG.get_num_samples();
+		// start_idx = (eqID_c - 1);
+		// bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		// bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+
+		// for (uint32_t w = 0; w <= num_samples / 64; w++)
+		// {
+		// 	uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
+		// 	uint64_t wrd = eqclass_c[bucket_idx].get_int(bucket_offset, len);
+		// 	for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
+		// 		if ((wrd >> i) & 0x01)
+		// 			sampleSet_c.insert(sCntr);
+
+		// 	bucket_offset += len;
+		// }
+		// }
+		
+		// const uint64_t wordLen = 64;
+		
+		// uint64_t offset1 = ((eqID_m - 1) % mantis::NUM_BV_BUFFER) * mergedCDBG.get_num_samples();
+		// uint64_t bucket_idx1 = (eqID_m - 1) / mantis::NUM_BV_BUFFER;
+
+		// for(uint32_t wordCount = 0; wordCount <= mergedCDBG.get_num_samples() / wordLen; ++wordCount)
+		// {
+		// 	uint64_t readLen = std::min(wordLen, mergedCDBG.get_num_samples() - wordCount * wordLen);
+		// 	uint64_t word = eqclass_m[bucket_idx1].get_int(offset1, readLen);
+
+		// 	// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+		// 	for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+		// 		if((word >> bitIdx) & 0x01)
+		// 			sampleSet_m.insert(sampleCounter);
+
+		// 	offset1 += readLen;
+		
+		// }
+
+		
+		if(sampleSet_m.empty())
+			emptyBitVec_m++;
+
+		if(sampleSet_c.empty())
+			emptyBitVec_c++;
+
+
+		++it_m, ++it_c, c++;
+	}
+
+	console -> info("CQF iteration count = {}, 0-count kmers found = {}.", c, absent);
+
+	console -> info("Empty bitvectors in merged color table = {}, in correct color table = {}",
+						emptyBitVec_m, emptyBitVec_c);
+
+
+	console -> info("Merged CdBG has correct color classes.");
+}
 
 
 
@@ -658,6 +923,10 @@ void test_merge(BuildOpts &bOpt)
 	opt.dir2 = "in2";
 	opt.out = "out";
 
-	merge(opt);
+	// merge(opt);
+
+	// test_cqf(bOpt, opt);
+
+	test_color_classes(bOpt, opt);
 }
 // Mantis merge: Jamshed
