@@ -6,6 +6,7 @@
 #include "mantisSski.h"
 #include "FastxParser.hpp"
 #include <unordered_set>
+#include <canonicalKmer.h>
 
 /**
  *
@@ -36,7 +37,7 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
     console->info("Reading the contig file ...");
     std::vector<std::string> ref_files = {cfile};
     //FIXME how to use one parser to parse the file twice
-    fastx_parser::FastxParser<fastx_parser::ReadSeq> parser1(ref_files, numThreads, 1);
+    fastx_parser::FastxParser<fastx_parser::ReadSeq> parser1(ref_files, 1, 1);
     parser1.start();
     auto rg = parser1.getReadGroup();
     // read the reference sequences and encode them into the refseq int_vector
@@ -49,9 +50,18 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
             std::string seq = rp.seq;
             // this is the ridiculous condition for taking care of a corner case in bcalm
             if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size() - k, k)) {
+                std::cerr << "should've been taken care of ";
+                std::exit(3);
                 seq = seq.substr(0, seq.size() - 1);
             }
             uint64_t curSize = seq.size();
+            if (curSize > sizes.unitigSliceSize) {
+                console->error("Should not happen. Found a contig with length greater than "
+                               "maximum allowed contig length {}.", sizes.unitigSliceSize);
+                console->error("contig id: {}, contig length: {}" , rp.name, curSize);
+                console->error("Make sure you have run sortUnitigs before this step.");
+                std::exit(3);
+            }
 //            if (rp.seq.size() > k and isPalyndrome(rp.seq))
 //                std::cout << rp.seq << "\n";
             do {
@@ -73,8 +83,6 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
                 nkeys += added2bits - k + 1;
                 contigCnt++;
             } while (quotient);
-
-
         }
     }
     parser1.stop();
@@ -86,7 +94,7 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
     // second round over the file
     contigSeq = sdsl::int_vector<2>(contigAccumLength, 0);
     //contigStartIdx = sdsl::int_vector<>(contigCnt, 0, std::log2(contigAccumLength) + 1);
-    fastx_parser::FastxParser<fastx_parser::ReadSeq> parser(ref_files, numThreads, 1);
+    fastx_parser::FastxParser<fastx_parser::ReadSeq> parser(ref_files, 1, 1);
     parser.start();
     rg = parser.getReadGroup();
     // read the reference sequences and encode them into the refseq int_vector
@@ -99,13 +107,25 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
             cnt1++;
             startIdx = 0;
             std::string seq = rp.seq;
-
+            if (cnt1 >= 38923060 and cnt1 < 38923070) {
+                std::cerr << contigCntr << ":" << bucketCnt << " "
+                << curBucketSize << " " << prevBucketstotalSize + curBucketSize << "\n";
+                std::cerr << seq << "\n";
+            }
             if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size() - k, k)) {
+                std::cerr << "2 should've been taken care of";
+                std::exit(3);
                 seq = seq.substr(0, seq.size() - 1);
             }
             stx::string_view seqv(seq);
             uint64_t curSize = seq.size();
-
+            if (curSize > sizes.unitigSliceSize) {
+                console->error("Should not happen. Found a contig with length greater than "
+                               "maximum allowed contig length {}.", sizes.unitigSliceSize);
+                console->error("contig id: {}, contig length: {}" , rp.name, curSize);
+                console->error("Make sure you have run sortUnitigs before this step.");
+                std::exit(3);
+            }
             do {
                 cnt2++;
                 remaining = curSize % (sizes.unitigSliceSize + 1);
@@ -130,6 +150,7 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
                     prevBucketstotalSize += bucketSizeInInt;
                     curBucketSize = 0;
                 }
+
                 contigSeq.set_int((prevBucketstotalSize + curBucketSize) * 2, subsv.size(), sizes.slicePrefixSize);
                 curBucketSize += slicePrefixSizeInInt;
                 encodeSeq(contigSeq, prevBucketstotalSize + curBucketSize, subsv);
@@ -144,7 +165,7 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
     }
     parser.stop();
     console->info("filled contig sequence vector and start idx vector.");
-    console->info("# of input unitigs: {}, # of 256bp slices: {}, # of 1kB buckets: {}", cnt1, cnt2, bucketCnt);
+    console->info("# of input unitigs: {}, # of 256bp slices: {}, # of 1kB buckets: {}", cnt1, cnt2, bucketCnt+1);
     // store the 2bit-encoded references
     sdsl::store_to_file(contigSeq, outdir + "/seq.bin");
 }
@@ -234,7 +255,8 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
         auto idx = bphf->lookup(kmer.getCanonicalWord());
         // if the returning number by MPHF is out of range or we've exhausted the size of a slice
         if (idx > prefixArr.size() or cntr > sizes.unitigSliceSize - k) {
-                return false;
+            std::cerr << "mphf couldn't find it\n";
+            return false;
         }
         // fetch prefix
         uint8_t val = prefixArr[idx];
@@ -247,8 +269,8 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
             originalKmer.swap();
             firstIdx = binarySearch(originalKmer);
             if (searchBucket(originalKmer, firstIdx)) return true;
-            first = false;
         }
+        first = false;
         prevPrevKmer = prevKmer;
         prevKmer = kmer;
         if (val & 0x4) { // go for canonical kmer in the seq vec
@@ -265,6 +287,7 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
         if (kmer == prevPrevKmer) {
             break;
         }
+//        std::cerr << prevPrevKmer.to_str() << " " << prevKmer.to_str() << " " << kmer.to_str() << "\n";
         cntr++;
     }
 
@@ -280,13 +303,14 @@ bool MantisSski::queryKmer(CanonicalKmer kmer) {
     if (searchBucket(kmer, idx)) return true;
     kmer.swap();
     idx = binarySearch(kmer); // kmer rc
-    return searchBucket(kmer, idx);
+    if (searchBucket(kmer, idx)) return true;
 }
 
 uint64_t MantisSski::binarySearch(CanonicalKmer kmer) {
     uint64_t wrd = kmer.fwWord();
     auto numBuckets = contigSeq.size() / (sizes.bucketSize / 2);
-    uint64_t low{0}, high{numBuckets - 1};
+    uint64_t low{0}, high{numBuckets};
+//    std::cerr << "binary search " << kmer.to_str() << "\n";
     // The algorithm is a little bit different
     // we don't set high and low index to mid+1 and mid-1 respectively.
     // Because we're not searching for the exact kmer but a range (The correct bucket)
@@ -296,17 +320,21 @@ uint64_t MantisSski::binarySearch(CanonicalKmer kmer) {
         uint64_t midWrd = contigSeq.get_int(sizes.bucketSize * mid + sizes.slicePrefixSize, 2 * k);
         CanonicalKmer k;
         k.fromNum(midWrd);
+//        std::cerr << mid << " " << k.to_str() << "\n";
         if (midWrd > wrd) {
             high = mid;
         } else if (midWrd < wrd) {
             low = mid;
         } else {
+//            std::cerr << "return mid: " << mid << "\n";
             return mid;
         }
     }
+//    std::cerr << "return low: " << low << "\n";
     return low;
 }
 
+/*
 bool MantisSski::collectStat() {
     std::ofstream overlaps("overlaps.out", "w");
     uint64_t cntr{0};
@@ -334,20 +362,25 @@ bool MantisSski::collectStat() {
     ofstream << cntr << " " << overlap << "\n";
     return false;
 }
+*/
 
-bool MantisSski::searchBucket(CanonicalKmer kmer, uint64_t idx) {
+uint64_t MantisSski::searchBucket(CanonicalKmer kmer, uint64_t idx) {
     uint64_t bstart{sizes.bucketSize * idx}, bend{(sizes.bucketSize) * (idx + 1)};
+//    std::cerr << "search bucket\n";
     while (bend > bstart and bend - bstart > sizes.slicePrefixSize) {
         auto sliceLength = contigSeq.get_int(bstart, sizes.slicePrefixSize);
+//        std::cerr << bstart << " " << sliceLength << " ";
         bstart += sizes.slicePrefixSize;
         if (!sliceLength) break;
         uint64_t wrd = contigSeq.get_int(bstart, 2 * k);
         CanonicalKmer searched;
         searched.fromNum(wrd);
-        if (searched.getCanonicalWord() == kmer.getCanonicalWord()) return true;
+//        std::cerr << searched.to_str() << "\n";
+        // bstart will never be 0 because we return the index after the prefix ends
+        if (searched.getCanonicalWord() == kmer.getCanonicalWord()) return bstart;
         bstart += (2 * sliceLength);
     }
-    return false;
+    return 0; // 0 means not found
 }
 
 int build_sski_main(BuildOpts &opt) {
@@ -365,6 +398,10 @@ int build_sski_main(BuildOpts &opt) {
  *  Description:
  * ============================================================================
  */
+
+#include "gqf/hashutil.h"
+#include "gqf_cpp.h"
+
 int sski_query_main(QueryOpts &opt) {
     uint32_t queryK = opt.k;
 //    QueryStats queryStats;
@@ -382,21 +419,40 @@ int sski_query_main(QueryOpts &opt) {
     logger->info("Done loading sski.");
 
     //std::ofstream opfile(opt.output);
-    std::ifstream ipfile(opt.query_file);
-    std::ofstream out(opt.output);
+//    std::ifstream ipfile(opt.query_file);
+//    std::ofstream out(opt.output);
     std::string read;
     uint64_t numOfQueries{0};
-    CanonicalKmer kmer;
-    while (ipfile >> read) {
-//        std::cerr << read << " ";
-        kmer.fromStr(read);
-        if (sski.queryKmer(kmer))
+    //CanonicalKmer kmer;
+
+    std::string cqf_file(opt.query_file);
+    CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
+    logger->info("Done loading the cqf file.");
+    auto k = cqf.keybits() / 2;
+    auto it = cqf.begin();
+//    while (ipfile >> read) {
+    while (!it.done()) {
+        KeyObject keyobj = *it;
+        dna::canonical_kmer kmertmp(k, keyobj.key);
+        CanonicalKmer kmer;
+        kmer.fromStr(std::string(kmertmp));
+//        kmer.fromStr(read);
+        if (!sski.queryKmer(kmer)) {
+            std::cerr << "\n" << numOfQueries << " " << kmer.to_str() << "\n";
+//            std::exit(3);
+        }
+        /*if (sski.queryKmer(kmer))
             out << kmer.to_str() << " f\n";
         else
-            out << kmer.to_str() << " nf\n";
+            out << kmer.to_str() << " nf\n";*/
         numOfQueries++;
+        ++it;
+        if (numOfQueries % 1000000 == 0)
+            std::cerr << "\r" << numOfQueries;
     }
-    out.close();
+    std::cerr << "\nNum of queries: " << numOfQueries << "\n";
+//    out.close();
+
     /*CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
     if (opt.process_in_bulk) {
         while (ipfile >> read) {

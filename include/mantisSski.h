@@ -116,7 +116,7 @@ private:
     }
 
     uint64_t  binarySearch(CanonicalKmer kmer);
-    bool searchBucket(CanonicalKmer kmer, uint64_t idx);
+    uint64_t searchBucket(CanonicalKmer kmer, uint64_t idx);
     uint64_t contigCnt{0};
     uint64_t nkeys{0};
     std::string outdir;
