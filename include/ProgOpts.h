@@ -72,11 +72,9 @@ class MergeOpts
 	public:
 		bool flush_eqclass_dist{false};
 		int qbits;
-		// std::string inlist;
     std::string dir1;
 		std::string dir2;
 		std::string out;
-		// int numthreads{1};
 		std::shared_ptr<spdlog::logger> console{nullptr};
 
 //   nlohmann::json to_json() {
@@ -88,5 +86,13 @@ class MergeOpts
 //     j["num_threads"] = numthreads;
 //     return j;
 //   }
+};
+
+class ValidateMergeOpts
+{
+	public:
+    std::string correctRes;
+		std::string mergeRes;
+		std::shared_ptr<spdlog::logger> console{nullptr};
 };
 #endif //__MANTIS_PROG_OPTS__
