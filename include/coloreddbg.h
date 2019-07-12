@@ -373,9 +373,7 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector,
 	if (num_samples%64)
 		bv_buffer.set_int(start_idx+num_samples/64*64,
 											vector.get_int(num_samples/64*64, num_samples%64),
-											num_samples%64),
-											printf("\nAdded %d to bv_bff\n", (int)
-													vector.get_int(num_samples/64*64, num_samples%64));
+											num_samples%64);
 }
 
 template <class qf_obj, class key_obj>
@@ -732,9 +730,6 @@ ColoredDbg<qf_obj, key_obj>::
 		}
 
 		dbg.set_auto_resize();
-
-		// printf("\n\nMSG: CDBG (output) constructed; initial size = %llu.\n\n",
-		// 		(unsigned long long)dbg.dist_elts());
 	}
 
 
@@ -844,7 +839,7 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 
 		bucket[eqCls1 / mantis::NUM_BV_BUFFER][eqCls2 / mantis::NUM_BV_BUFFER].push_back(eqPair);
 
-		printf("New equivalence pair: (%d, %d)\n", (int)eqPair.first, (int)eqPair.second);
+		// printf("New equivalence pair: (%d, %d)\n", (int)eqPair.first, (int)eqPair.second);
 	}
 	else
 		it -> second.second++;
@@ -872,7 +867,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	if(it1.done() || it2.done())
 		puts("\n\nERR MSG: One or more iterator already at end position before starting walk.\n\n");
 
-	printf("\nDBG1 size = %d, DBG2 size = %d\n", (int)cqf1 -> dist_elts(), (int)cqf2 -> dist_elts());
+	// printf("\nDBG1 size = %d, DBG2 size = %d\n", (int)cqf1 -> dist_elts(), (int)cqf2 -> dist_elts());
 
 
 	while(!it1.done() || !it2.done())
@@ -942,7 +937,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 			uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
 			uint64_t word = bv1.get_int(offset1, readLen);
 
-			printf("eqId1 %d, read length = %d, word %d\n", (int)eqID1, (int)readLen, (int)word);
+			// printf("eqId1 %d, read length = %d, word %d\n", (int)eqID1, (int)readLen, (int)word);
 
 			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
 			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
@@ -950,11 +945,6 @@ void ColoredDbg<qf_obj, key_obj> ::
 					resultVec[sampleID] = 1, isEmpty = false;				
 
 			offset1 += readLen;
-		}
-
-		if(isEmpty)
-		{
-			printf("\n\nNot a single sample marked with bit 1 for eqID1 = %d\n", (int)eqID1);
 		}
 	}
 
@@ -968,7 +958,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 			uint64_t readLen = std::min(wordLen, colCount2 - wordCount * wordLen);
 			uint64_t word = bv2.get_int(offset2, readLen);
 
-			printf("eqId2 %d, read length = %d, word %d\n", (int)eqID2, (int)readLen, (int)word);
+			// printf("eqId2 %d, read length = %d, word %d\n", (int)eqID2, (int)readLen, (int)word);
 
 			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
 			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
@@ -1015,13 +1005,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
 					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
 	uint64_t serialID = 0;
-
-
-	// No need for the following statement. eqclass_files should come with the constructor of the dbgs
-	// eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
-
-	// No need of sorting; done at new constructor.
-	// required sort of the file names (?)
+	
 
 
 	for(uint64_t i = 0; i < fileCount1; ++i)
@@ -1030,7 +1014,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 		BitVectorRRR bitVec1;
 		sdsl::load_from_file(bitVec1, dbg1.get_eq_class_files()[i]);
 
-		printf("\nLoading bitvectorRRR from file %s.\n", dbg1.get_eq_class_files()[i].c_str());
+		// printf("\nLoading bitvectorRRR from file %s.\n", dbg1.get_eq_class_files()[i].c_str());
 
 		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
@@ -1041,7 +1025,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 			BitVectorRRR bitVec2;
 			sdsl::load_from_file(bitVec2, dbg2.get_eq_class_files()[j]);
 
-			printf("\nLoading bitvectorRRR from file %s\n", dbg2.get_eq_class_files()[j].c_str());
+			// printf("\nLoading bitvectorRRR from file %s\n", dbg2.get_eq_class_files()[j].c_str());
 
 			for(auto eqClsPair : bucket[i][j])
 			{
@@ -1087,7 +1071,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	// Serialize the bv buffer last time if needed
 	if (serialID % mantis::NUM_BV_BUFFER > 0)
-		bv_buffer_serialize(serialID), puts("\nGoing to bv_buffer write.\n");
+		bv_buffer_serialize(serialID);
 
 	
 	// puts("\nMSG: Done building.\n");
@@ -1191,7 +1175,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	}
 
 
-	printf("\nMSG: In the merged CQF: #kmers = %llu; #equal_kmers = %llu\n\n",
+	printf("\nMSG: In the merged CQF: #kmers = %llu; #shared_kmers = %llu\n\n",
 			(unsigned long long)kmerCount, (unsigned long long)equalKmerCount);
 	printf("\nMSG: Merged CQF size: %llu\n", (unsigned long long)dbg.dist_elts());
 }
@@ -1204,7 +1188,7 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> :: 
 	construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("\n\nMSG: Merge starting.\n\n");
+	puts("\nMSG: Merge starting.\n");
 
 	gather_distinct_eq_class_pairs(dbg1, dbg2);
 
@@ -1212,9 +1196,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	merge_CQFs(dbg1, dbg2);
 
-	printf("\n\nSize of merged CQF = %llu\n\n", (unsigned long long)dbg.dist_elts());
-
-	puts("\n\nMerge ending.\n\n");
+	puts("\nMerge ending.\n");
 }
 
 
@@ -1236,11 +1218,8 @@ void ColoredDbg<qf_obj, key_obj>::
 	serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
 	// Serialize the CQF
-	// const char OUTPUT_CQF_FILE[] = "merged_dbg_cqf.ser";
-
 	if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
 		dbg.serialize(prefix + mantis::CQF_FILE);
-		// dbg.serialize(prefix + OUTPUT_CQF_FILE);
 	else
 		dbg.close();
 
@@ -1252,7 +1231,7 @@ void ColoredDbg<qf_obj, key_obj>::
 	// TODO: Move the list concatenation phase to constructor, with introduction of a new field;
 	// just keep the disk-write part here.
 
-	// Serialize the eq class id map
+	// Serialize the sample id map
 	std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
 
 	for(auto sampleID: dbg1.get_sample_id_map())

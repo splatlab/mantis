@@ -607,6 +607,11 @@ void merge(MergeOpts &opt)
 
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCdBG(cdbg1, cdbg2, opt.qbits, outDir,
 																	MANTIS_DBG_ON_DISK);
+
+	
+	if(opt.flush_eqclass_dist)
+		mergedCdBG.set_flush_eqclass_dist();
+
 	
 	console -> info("Constructing the merged Colored dBG.");
 
@@ -847,8 +852,8 @@ void test_merge(BuildOpts &bOpt)
 	MergeOpts opt;
 
 	opt.console = bOpt.console;
-
 	opt.qbits = bOpt.qbits;
+	opt.flush_eqclass_dist = bOpt.flush_eqclass_dist;
 
 	opt.dir1 = "in1";
 	opt.dir2 = "in2";
