@@ -54,6 +54,9 @@ private:
     Sizes sizes;
     std::unordered_map<uint64_t, uint64_t> kmer2cidMap;
 
+    uint64_t stepsFw;
+    CanonicalKmer queriedKmer;
+
     uint64_t  binarySearch(CanonicalKmer kmer);
     uint64_t searchBucket(CanonicalKmer kmer, uint64_t idx);
 

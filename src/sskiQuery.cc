@@ -4,6 +4,7 @@
 
 #include "sskiQuery.h"
 #include <ProgOpts.h>
+#include <CLI/Timer.hpp>
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
@@ -14,14 +15,17 @@ bool SskiQuery::queryKmer(CanonicalKmer kmer) {
     bool first = true;
     // firstPrefix: prefix of the first k-mer --> interesting if 000 in case of conflict
     int cntr{0};
+    queriedKmer = kmer;
     CanonicalKmer originalKmer{kmer}, prevPrevKmer, prevKmer;
     prevKmer.fromNum(0);
     prevPrevKmer.fromNum(0);
+
+    stepsFw = 0;
     while (true) {
         auto idx = bphf->lookup(kmer.getCanonicalWord());
         // if the returning number by MPHF is out of range or we've exhausted the size of a slice
         if (idx > prefixArr.size() or cntr > sizes.unitigSliceSize - k) {
-            std::cerr << "mphf couldn't find it\n";
+//            std::cerr << "mphf couldn't find it\n";
             return false;
         }
         // fetch prefix
@@ -56,6 +60,7 @@ bool SskiQuery::queryKmer(CanonicalKmer kmer) {
 //        std::cerr << prevPrevKmer.to_str() << " " << prevKmer.to_str() << " " << kmer.to_str() << "\n";
         cntr++;
     }
+    stepsFw= static_cast<uint64_t>(cntr);
 
     // You reached to a case that the last two kmers point at each other
     // Search for both of them
@@ -113,7 +118,28 @@ uint64_t SskiQuery::searchBucket(CanonicalKmer kmer, uint64_t idx) {
         searched.fromNum(wrd);
 //        std::cerr << searched.to_str() << "\n";
         // bstart will never be 0 because we return the index after the prefix ends
-        if (searched.getCanonicalWord() == kmer.getCanonicalWord()) return bstart;
+        if (searched.getCanonicalWord() == kmer.getCanonicalWord()) {
+//            std::cerr << "steps: " << stepsFw << "\n";
+            if (stepsFw+k-1<=sliceLength) {
+                auto origWrd = contigSeq.get_int(bstart + (stepsFw - 1) * 2, 2 * k);
+                CanonicalKmer kk;
+                kk.fromNum(origWrd);
+//                std::cerr << "origWrd: " << kk.to_str() << "\n";
+                if (origWrd == queriedKmer.fwWord() or origWrd == queriedKmer.rcWord())
+                    return bstart + (stepsFw - 1) * 2;
+            }
+            if (stepsFw+k<=sliceLength) {
+                auto origWrd = contigSeq.get_int(bstart + stepsFw * 2, 2 * k);
+                CanonicalKmer kk;
+                kk.fromNum(origWrd);
+//                std::cerr << "origWrd: " << kk.to_str() << "\n";
+                if (origWrd == queriedKmer.fwWord() or origWrd == queriedKmer.rcWord())
+                    return bstart + stepsFw * 2;
+            }
+            // it was a fp
+            return 0;
+            return bstart;
+        }
         bstart += (2 * sliceLength);
     }
     return 0; // 0 means not found
@@ -253,6 +279,7 @@ int sski_query_main(QueryOpts &opt) {
 //    logger->info("Done loading the cqf file.");
 //    auto k = cqf.keybits() / 2;
 //    auto it = cqf.begin();
+    CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
     while (ipfile >> read) {
 //    while (!it.done()) {
 //        KeyObject keyobj = *it;
@@ -260,11 +287,12 @@ int sski_query_main(QueryOpts &opt) {
         CanonicalKmer kmer;
 //        kmer.fromStr(std::string(kmertmp));
         kmer.fromStr(read);
-        if (!sski.queryKmer(kmer)) {
+        /*if (!sski.queryKmer(kmer)) {
             std::cerr << "\n" << numOfQueries << " " << kmer.to_str() << "\n";
 //            std::exit(3);
-        }
-        if (sski.queryKmer(kmer))
+        }*/
+        auto res = sski.queryKmer(kmer);
+        if (res)
             out << kmer.to_str() << " f\n";
         else
             out << kmer.to_str() << " nf\n";
@@ -274,15 +302,16 @@ int sski_query_main(QueryOpts &opt) {
             std::cerr << "\r" << numOfQueries;
     }
     std::cerr << "\nNum of queries: " << numOfQueries << "\n";
-//    out.close();
+    out.close();
+/*
 
-    /*CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
+    CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
     if (opt.process_in_bulk) {
         while (ipfile >> read) {
-            mstQuery.parseKmers(read, indexK);
+            sski.parseKmers(read, k);
             numOfQueries++;
         }
-        mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
+        sski.findSamples(cqf, cache_lru, &rs, queryStats);
         ipfile.clear();
         ipfile.seekg(0, ios::beg);
         if (opt.use_json) {
@@ -328,6 +357,7 @@ int sski_query_main(QueryOpts &opt) {
 
     for (auto &kv : queryStats.numOcc) {
         std::cout << kv.first << '\t' << kv.second << '\n';
-    }*/
+    }
+*/
     return EXIT_SUCCESS;
 }
