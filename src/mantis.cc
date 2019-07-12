@@ -51,6 +51,11 @@ int query_main (QueryOpts& opt);
 int validate_mst_main(MSTValidateOpts &opt);
 int stats_main(StatsOpts& statsOpts);
 
+// Mantis merge: Jamshed
+int merge_main(MergeOpts &opt);
+
+
+
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  main
@@ -59,7 +64,7 @@ int stats_main(StatsOpts& statsOpts);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, stats, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -69,11 +74,13 @@ int main ( int argc, char *argv[] ) {
   ValidateOpts vopt;
   MSTValidateOpts mvopt;
   StatsOpts sopt;
+  MergeOpts mopt; // Mantis merge: Jamshed
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
   mvopt.console = console;
   sopt.console = console;
+  mopt.console = console;
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -144,8 +151,19 @@ int main ( int argc, char *argv[] ) {
                     option("-j", "--jmer-length") & value("size-of-jmer", sopt.j) % "value of j for constituent jmers of a kmer (default: 23)."
     );
 
+  // Mantis merge: Jamshed
+  auto merge_mode = (
+                    command("merge").set(selected, mode::merge),
+                    option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
+										required("-s","--log-slots") & value("log-slots",
+																											 mopt.qbits) % "log of number of slots in the output CQF",
+                    required("-d1", "--input-dir-1") & value("input_dir_1", mopt.dir1) % "directory containing the first CdBG",
+                    required("-d2", "--input-dir-2") & value("input_dir_2", mopt.dir2) % "directory containing the second CdBG",
+                    required("-o", "--output") & value("build_output", mopt.out) % "directory where results should be written"
+                    );
+
   auto cli = (
-              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | command("help").set(selected,mode::help) |
+              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode | merge_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -156,6 +174,7 @@ int main ( int argc, char *argv[] ) {
   assert(build_mst_mode.flags_are_prefix_free());
   assert(validate_mst_mode.flags_are_prefix_free());
   assert(stats_mode.flags_are_prefix_free());
+  assert(merge_mode.flags_are_prefix_free()); // Mantis merge: Jamshed
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -177,6 +196,7 @@ int main ( int argc, char *argv[] ) {
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
     case mode::validate: validate_main(vopt);  break;
     case mode::stats: stats_main(sopt);  break;
+    case mode::merge: merge_main(mopt);  break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -195,6 +215,9 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(validate_mode, "mantis");
       } else if (b->arg() == "stats") {
         std::cout << make_man_page(stats_mode, "mantis");
+      }
+        else if (b->arg() == "merge") {
+        std::cout << make_man_page(merge_mode, "mantis");
       } else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';

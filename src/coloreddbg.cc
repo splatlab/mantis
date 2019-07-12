@@ -49,28 +49,28 @@
 
 
 
-class MergeOpts
-{
-	public:
-		bool flush_eqclass_dist{false};
-		int qbits;
-		// std::string inlist;
-		std::string out;
-		// int numthreads{1};
-		std::shared_ptr<spdlog::logger> console{nullptr};
-		std::string dir1;
-		std::string dir2;
+// class MergeOpts
+// {
+// 	public:
+// 		bool flush_eqclass_dist{false};
+// 		int qbits;
+// 		// std::string inlist;
+// 		std::string out;
+// 		// int numthreads{1};
+// 		std::shared_ptr<spdlog::logger> console{nullptr};
+// 		std::string dir1;
+// 		std::string dir2;
 
-//   nlohmann::json to_json() {
-//     nlohmann::json j;
-//     j["dump_eqclass_dist"] = flush_eqclass_dist;
-//     j["quotient_bits"] = qbits;
-//     j["input_list"] = inlist;
-//     j["output_dir"] = out;
-//     j["num_threads"] = numthreads;
-//     return j;
-//   }
-};
+// //   nlohmann::json to_json() {
+// //     nlohmann::json j;
+// //     j["dump_eqclass_dist"] = flush_eqclass_dist;
+// //     j["quotient_bits"] = qbits;
+// //     j["input_list"] = inlist;
+// //     j["output_dir"] = out;
+// //     j["num_threads"] = numthreads;
+// //     return j;
+// //   }
+// };
 
 
 
@@ -862,5 +862,16 @@ void test_merge(BuildOpts &bOpt)
 	merge(opt);
 
 	validate_merge_result(bOpt, opt);
+}
+
+
+
+
+
+int merge_main(MergeOpts &opt)
+{
+	merge(opt);
+
+	return EXIT_SUCCESS;
 }
 // Mantis merge: Jamshed
