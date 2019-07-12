@@ -12,6 +12,7 @@ add_library(mantis_core STATIC
 		canonicalKmer.cc
   		mst.cc
 		stat.cc
+		merge.cc
   		MantisFS.cc
   		squeakrconfig.cc
   		gqf/gqf.c
