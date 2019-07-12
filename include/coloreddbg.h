@@ -122,6 +122,7 @@ class ColoredDbg {
 		// Returns the set of samples containing the provided kmer.
 		std::unordered_set<uint64_t> get_containing_samples(uint64_t kmer);
 
+		// Returns the collection of BitvectorRRR's (compressed color-classes) of this CdBG.
 		std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
 
 
@@ -795,7 +796,7 @@ ColoredDbg<qf_obj, key_obj> ::
 			int fileID = std::stoi(first_part(last_part(file, '/'), '_'));
 			sortedFiles[fileID] = file;
 
-			printf("\nLoaded color-class file %s\n", file.c_str());
+			// printf("\nLoaded color-class file %s\n", file.c_str());
 		}
 		
 
@@ -805,7 +806,7 @@ ColoredDbg<qf_obj, key_obj> ::
 
 		num_serializations = eqClsFiles.size();
 
-		puts("MSG: Done loading colored dBG.\n");
+		// puts("MSG: Done loading colored dBG.\n");
 }
 
 
@@ -927,22 +928,6 @@ void ColoredDbg<qf_obj, key_obj> ::
 			const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t eqID2,
 			BitVector &resultVec)
 {
-	// uint64_t start_idx = (eqclass - 1);
-	// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-	// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
-
-	// for (uint32_t w = 0; w <= num_samples / 64; w++)
-	// {
-	// 	uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
-	// 	uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
-	// 	for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
-	// 		if ((wrd >> i) & 0x01)
-	// 			sampleSet.insert(sCntr);
-
-	// 	bucket_offset += len;
-	// 	// }
-	// }
-
 	const uint64_t wordLen = 64;
 
 
@@ -960,9 +945,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 			printf("eqId1 %d, read length = %d, word %d\n", (int)eqID1, (int)readLen, (int)word);
 
 			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
-			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
 				if((word >> bitIdx) & 0x01)
-					resultVec[sampleCounter] = 1, isEmpty = false;				
+					resultVec[sampleID] = 1, isEmpty = false;				
 
 			offset1 += readLen;
 		}
@@ -986,31 +971,13 @@ void ColoredDbg<qf_obj, key_obj> ::
 			printf("eqId2 %d, read length = %d, word %d\n", (int)eqID2, (int)readLen, (int)word);
 
 			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
-			for(uint32_t bitIdx = 0, sampleCounter = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleCounter)
+			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
 				if((word >> bitIdx) & 0x01)
-					resultVec[colCount1 + sampleCounter] = 1;
+					resultVec[colCount1 + sampleID] = 1;
 
 			offset2 += readLen;
 		}
 	}
-
-	
-	//std::vector<uint64_t> sample_map(num_samples, 0);
-	//for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
-		// auto eqclass_id = it->first;
-		// auto count = it->second;
-		// counter starts from 1.
-		// uint64_t start_idx = (eqclass_id - 1);
-		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
-		// for (uint32_t w = 0; w <= num_samples / 64; w++) {
-		// 	uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
-		// 	uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
-		// 	for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
-		// 		if ((wrd >> i) & 0x01)
-		// 			sample_map[sCntr] += count;
-		// 	bucket_offset += len;
-	//	}
 }
 
 
@@ -1087,30 +1054,27 @@ void ColoredDbg<qf_obj, key_obj> ::
 				
 
 				BitVector mergedEqCls(num_samples);
-				printf("New bitvector initialized of size = %d\n", (int)num_samples);
-
 				concat(bitVec1, dbg1.get_num_samples(), eq1, bitVec2, dbg2.get_num_samples(), eq2, mergedEqCls);
 
 				
 				// for debugging purpose(s)
-				printf("bitvector for eq id %d is = ", (int)serialID);
-				bool isEmpty = true;
-				for(int i = 0; i < num_samples; ++i)
-					if(mergedEqCls[i] == 1)
-						putchar('1'), isEmpty = false;
-					else
-						putchar('0');
-				putchar('\n');
+				// printf("bitvector for eq id %d is = ", (int)serialID);
+				// bool isEmpty = true;
+				// for(int i = 0; i < num_samples; ++i)
+				// 	if(mergedEqCls[i] == 1)
+				// 		putchar('1'), isEmpty = false;
+				// 	else
+				// 		putchar('0');
+				// putchar('\n');
 
-				puts("Going to add a bitvector\n");
+				// puts("Going to add a bitvector\n");
 				add_bitvector(mergedEqCls, serialID - 1);
-				puts("Bitvector added\n");
+				// puts("Bitvector added\n");
 
-
-				if(isEmpty)
-					puts("\n\n\n\nEmpty bitvector constructed\n\n\n\n");
-				else
-					puts("Nonempty color class.");
+				// if(isEmpty)
+				// 	puts("\nEmpty bitvector constructed\n");
+				// else
+				// 	puts("Nonempty color class.");
 
 				
 				// Serialization and disk-write if required
