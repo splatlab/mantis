@@ -107,11 +107,6 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
             cnt1++;
             startIdx = 0;
             std::string seq = rp.seq;
-            if (cnt1 >= 38923060 and cnt1 < 38923070) {
-                std::cerr << contigCntr << ":" << bucketCnt << " "
-                << curBucketSize << " " << prevBucketstotalSize + curBucketSize << "\n";
-                std::cerr << seq << "\n";
-            }
             if (seq.size() > k and seq.substr(0, k) == seq.substr(seq.size() - k, k)) {
                 std::cerr << "2 should've been taken care of";
                 std::exit(3);
