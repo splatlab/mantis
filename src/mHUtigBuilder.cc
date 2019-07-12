@@ -89,7 +89,6 @@ void MHUtigBuilder::buildUnitigs(CQF<KeyObject> &cqf) {
             dna::kmer curr_node = orig_node;
             visited[keyidx] = true;
             visitedCnt++;
-            // extend it to the right as long as it has 1 and only 1 neighbor which is not visited yet
 
             while (true) {
                 auto neigbors = nextNeighbors(cqf, curr_node);
