@@ -119,9 +119,6 @@ class ColoredDbg {
 		// through default argument.
 		void serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
-		// Returns the set of samples containing the provided kmer.
-		std::unordered_set<uint64_t> get_containing_samples(uint64_t kmer);
-
 		// Returns the collection of BitvectorRRR's (compressed color-classes) of this CdBG.
 		std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
 
@@ -217,7 +214,7 @@ class ColoredDbg {
 		void add_kmer(uint64_t kmer, uint64_t eqID);
 
 		// Returns the sample-id mapping.
-		std::unordered_map<uint64_t, std::string> &get_sample_id_map();
+		inline std::unordered_map<uint64_t, std::string> &get_sample_id_map() { return sampleid_map; }
 
 		// Serialize the bitvector buffer to disk, when the current class count is 'eqClsCount'.
 		// TODO: Merge this overloaded method with the earlier one through default argument.
@@ -928,45 +925,76 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	if(eqID1)
 	{
-		bool isEmpty = true; // for debugging purpose(s)
+		// Optimized bitvector read and write
 
-		uint64_t offset1 = ((eqID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+		uint64_t offset = ((eqID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
 
-		for(uint32_t wordCount = 0; wordCount <= colCount1 / wordLen; ++wordCount)
-		{
-			uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
-			uint64_t word = bv1.get_int(offset1, readLen);
+		for(uint32_t blockStart = 0; blockStart < (colCount1 / wordLen) * wordLen; blockStart += wordLen)
+				resultVec.set_int(blockStart, bv1.get_int(offset + blockStart, wordLen), wordLen);
 
-			// printf("eqId1 %d, read length = %d, word %d\n", (int)eqID1, (int)readLen, (int)word);
+		if(colCount1 % wordLen)
+			resultVec.set_int((colCount1 / wordLen) * wordLen,
+								bv1.get_int(offset + ((colCount1 / wordLen) * wordLen), colCount1 % wordLen),
+								colCount1 % wordLen);
 
-			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
-			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
-				if((word >> bitIdx) & 0x01)
-					resultVec[sampleID] = 1, isEmpty = false;				
 
-			offset1 += readLen;
-		}
+
+		// Slower version (should be, uses [] operator)
+
+		// bool isEmpty = true; // for debugging purpose(s)
+
+		// uint64_t offset = ((eqID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+
+		// for(uint32_t wordCount = 0; wordCount <= colCount1 / wordLen; ++wordCount)
+		// {
+		// 	uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
+		// 	uint64_t word = bv1.get_int(offset, readLen);
+
+		// 	// printf("eqId1 %d, read length = %d, word %d\n", (int)eqID1, (int)readLen, (int)word);
+
+		// 	// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+		// 	for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
+		// 		if((word >> bitIdx) & 0x01)
+		// 			resultVec[sampleID] = 1, isEmpty = false;			
+
+		// 	offset += readLen;
+		// }
 	}
 
 
 	if(eqID2)
 	{
-		u_int64_t offset2 = ((eqID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+		// Optimized bitvector read and write
 
-		for(uint32_t wordCount = 0; wordCount <= colCount2 / wordLen; ++wordCount)
-		{
-			uint64_t readLen = std::min(wordLen, colCount2 - wordCount * wordLen);
-			uint64_t word = bv2.get_int(offset2, readLen);
+		uint64_t offset = ((eqID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
 
-			// printf("eqId2 %d, read length = %d, word %d\n", (int)eqID2, (int)readLen, (int)word);
+		for(uint32_t blockStart = 0; blockStart < (colCount2 / wordLen) * wordLen; blockStart += wordLen)
+				resultVec.set_int(colCount1 + blockStart, bv2.get_int(offset + blockStart, wordLen), wordLen);
 
-			// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
-			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
-				if((word >> bitIdx) & 0x01)
-					resultVec[colCount1 + sampleID] = 1;
+		if(colCount2 % wordLen)
+			resultVec.set_int(colCount1 + (colCount2 / wordLen) * wordLen,
+								bv2.get_int(offset + ((colCount2 / wordLen) * wordLen), colCount2 % wordLen),
+								colCount2 % wordLen);
 
-			offset2 += readLen;
-		}
+
+		// Slower version (should be, uses [] operator)
+
+		// u_int64_t offset2 = ((eqID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+
+		// for(uint32_t wordCount = 0; wordCount <= colCount2 / wordLen; ++wordCount)
+		// {
+		// 	uint64_t readLen = std::min(wordLen, colCount2 - wordCount * wordLen);
+		// 	uint64_t word = bv2.get_int(offset2, readLen);
+
+		// 	// printf("eqId2 %d, read length = %d, word %d\n", (int)eqID2, (int)readLen, (int)word);
+
+		// 	// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+		// 	for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
+		// 		if((word >> bitIdx) & 0x01)
+		// 			resultVec[colCount1 + sampleID] = 1;
+
+		// 	offset2 += readLen;
+		// }
 	}
 }
 
@@ -1204,16 +1232,6 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 template <typename qf_obj, typename key_obj>
-std::unordered_map<uint64_t, std::string> &ColoredDbg<qf_obj, key_obj>::get_sample_id_map()
-{
-	return sampleid_map;
-}
-
-
-
-
-
-template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::
 	serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
@@ -1260,35 +1278,5 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 
-template <typename qf_obj, typename key_obj>
-std::unordered_set<uint64_t> ColoredDbg<qf_obj, key_obj>::
-	get_containing_samples(uint64_t kmer)
-{
-	std::unordered_set<uint64_t> sampleSet;
-
-	key_obj key(kmer, 0, 0);
-	uint64_t eqclass = dbg.query(key, 0);
-	if (!eqclass)
-		return sampleSet;
-
-
-	uint64_t start_idx = (eqclass - 1);
-	uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-	uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
-
-	for (uint32_t w = 0; w <= num_samples / 64; w++)
-	{
-		uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
-		uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
-		for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
-			if ((wrd >> i) & 0x01)
-				sampleSet.insert(sCntr);
-
-		bucket_offset += len;
-		// }
-	}
-
-	return sampleSet;
-}
 
 #endif
