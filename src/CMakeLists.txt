@@ -19,7 +19,8 @@ add_library(mantis_core STATIC
   		gqf/hashutil.c
 		FastxParser.cpp
 		mantisSski.cc
-		mHUtigBuilder.cc)
+		mHUtigBuilder.cc
+		sskiQuery.cc)
 
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")

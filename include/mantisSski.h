@@ -40,32 +40,9 @@ public:
         sizes = Sizes();
     }
 
-    MantisSski(uint32_t kin, std::string prefix, spdlog::logger* c, bool tmpFlag)
-            : k(kin), console(c) {
-        CanonicalKmer::k(kin);
-        sizes = Sizes();
-        console->info("Loading sequence vector...");
-        sdsl::load_from_file(contigSeq, prefix + "/" + mantis::SEQ_FILE);
-
-        {
-//            CLI::AutoTimer timer{"Loading mphf table", CLI::Timer::Big};
-            console->info("Loading mphf table...");
-            std::string hfile = prefix + "/" + mantis::MPHF_FILE;
-            std::ifstream hstream(hfile);
-            bphfPtr.reset(new boophf_t);
-            bphfPtr->load(hstream);
-            hstream.close();
-            bphf = bphfPtr.get();
-        }
-        console->info("Loading prefix array...");
-        sdsl::load_from_file(prefixArr, prefix + "/" + mantis::PREFIX_FILE);
-    }
-
     void buildUnitigVec(uint32_t numThreads, std::string rfile);
     void buildPrefixArr();
     void buildMPHF(uint32_t numThreads);
-
-    bool queryKmer(CanonicalKmer kmer);
 
     void testBooPHF(uint32_t numThreads) {
         console->info("building boo ...");
@@ -115,8 +92,6 @@ private:
         return palyn;
     }
 
-    uint64_t  binarySearch(CanonicalKmer kmer);
-    uint64_t searchBucket(CanonicalKmer kmer, uint64_t idx);
     uint64_t contigCnt{0};
     uint64_t nkeys{0};
     std::string outdir;
