@@ -906,7 +906,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Observed number of distinct k-mers  {}, shared k-mers {}, color-class count {}. Time {}",
+			console -> info("Observed count of distinct k-mers {}, shared k-mers {}, color-class {}. Time {}",
 							kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
 	}
 

@@ -837,7 +837,7 @@ int validate_merge_main(ValidateMergeOpts &opt)
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> corrCdBG(corrCQFfile, corrEqClassFiles,
 																	corrSampleList, MANTIS_DBG_IN_MEMORY);
 	
-	console -> info("Loaded the correct CdBG; it has {} k-mers, {} color-class files, and {} color-classes (bitvectors).",
+	console -> info("Loaded the correct CdBG; it has {} k-mers, {} color-class files, and {} color-classes.",
 					corrCdBG.get_cqf() -> dist_elts(), corrEqClassFiles.size(),
 					corrCdBG.get_num_bitvectors());
 
@@ -852,9 +852,20 @@ int validate_merge_main(ValidateMergeOpts &opt)
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCdBG(mergedCQFfile, mergedEqClassFiles,
 																	mergedSampleList, MANTIS_DBG_IN_MEMORY);
 
-	console -> info("Loaded the merged CdBG; it has {} k-mers, {} color-class files, and {} color-classes(bitvectors).",
+	console -> info("Loaded the merged CdBG; it has {} k-mers, {} color-class files, and {} color-classes.",
 					mergedCdBG.get_cqf() -> dist_elts(), mergedEqClassFiles.size(),
 					mergedCdBG.get_num_bitvectors());
+
+
+	if(corrCdBG.get_cqf() -> dist_elts() != mergedCdBG.get_cqf() -> dist_elts() ||
+		corrEqClassFiles.size() != mergedEqClassFiles.size() ||
+		corrCdBG.get_num_bitvectors() != mergedCdBG.get_num_bitvectors())
+	{
+		console -> error("Mismatching meta-info.");
+		exit(1);
+	}
+	else
+		console -> info("Meta information matches.");
 
 																	
 
@@ -894,10 +905,12 @@ int validate_merge_main(ValidateMergeOpts &opt)
 	// Linear scan over the CQFs
 
 	auto it_m = mergedCdBG.get_cqf() -> begin(), it_c = corrCdBG.get_cqf() -> begin();
+	uint64_t kmerCount = 0;
+	const uint64_t PROGRESS_STEP = 10000000;
 
 
 	// For debugging purpose(s)
-	uint64_t c = 0, absent = 0, emptyBitVec_m = 0, emptyBitVec_c = 0;//, two = 0;
+	uint64_t absent = 0, emptyBitVec_m = 0, emptyBitVec_c = 0;//, two = 0;
 
 
 	while(!it_m.done() && !it_c.done())
@@ -991,20 +1004,23 @@ int validate_merge_main(ValidateMergeOpts &opt)
 			}
 
 
-		++it_m, ++it_c, c++;
+		++it_m, ++it_c, kmerCount++;
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("{} k-mers matched.", kmerCount);
 	}
 
 	// For debugging purpose(s)
 	// console -> info("Kmers found to be present in both samples = {}", two);
 
 
-	console -> info("CQF iteration count = {}, 0-count kmers found = {}.", c, absent);
+	console -> info("CQF sizes = {}, matching k-mers found {}.", corrCdBG.get_cqf() -> dist_elts(), kmerCount);
 
-	console -> info("Empty bitvectors in merged color table = {}, in correct color table = {}",
-						emptyBitVec_m, emptyBitVec_c);
+	// console -> info("Empty bitvectors in merged color table = {}, in correct color table = {}",
+	// 					emptyBitVec_m, emptyBitVec_c);
 
 
-	console -> info("Merged CdBG has correct CQF, and correct color classes for all k-mers.");
+	console -> info("Merged CdBG has correct CQF, and correct color-classes for all k-mers.");
 
 	return EXIT_SUCCESS;
 }
