@@ -632,6 +632,38 @@ void test_merge(BuildOpts &bOpt)
 */
 
 
+unsigned long long get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> &cdbg)
+{
+	uint64_t c = 0;
+
+	for(auto it = cdbg.get_cqf() -> begin(); !it.done(); ++it)
+		c++;
+
+	return c;
+}
+
+
+void bug(std::string prefix)
+{
+	std::string dbgFile(prefix + "dbg_cqf.ser");
+	std::string sampleListFile(prefix + "sampleid.lst");
+	std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), "eqclass_rrr0.cls");
+
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbgFile, sampleListFile, eqclassFiles,
+																MANTIS_DBG_IN_MEMORY);
+
+	printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
+    printf("\nSize through scanning = %llu\n", get_size_by_scanning(cdbg));
+
+    printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
+    printf("\nSize through scanning = %llu\n", get_size_by_scanning(cdbg));
+
+    printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
+    printf("\nSize through scanning = %llu\n", get_size_by_scanning(cdbg));
+}
+
+
 
 
 
@@ -738,6 +770,8 @@ int merge_main(MergeOpts &opt)
 	
 	if(opt.flush_eqclass_dist)
 		mergedCdBG.set_flush_eqclass_dist();
+
+	mergedCdBG.set_console(console);
 
 	
 	console -> info("Constructing the merged Colored dBG.");

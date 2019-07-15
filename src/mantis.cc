@@ -54,6 +54,7 @@ int stats_main(StatsOpts& statsOpts);
 // Mantis merge: Jamshed
 int merge_main(MergeOpts &opt);
 int validate_merge_main(ValidateMergeOpts &opt);
+void bug(std::string prefix);
 
 
 
@@ -206,6 +207,7 @@ int main ( int argc, char *argv[] ) {
     case mode::validate: validate_main(vopt);  break;
     case mode::stats: stats_main(sopt);  break;
     case mode::merge: merge_main(mopt);  break;
+    // case mode::merge: bug("raw/");  break;
     case mode::validate_merge: validate_merge_main(vmopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }

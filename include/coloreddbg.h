@@ -163,6 +163,8 @@ class ColoredDbg {
 
 		// Mangtis merge: Jamshed
 
+		const static uint64_t PROGRESS_STEP = 10000000;
+
 		
 		// Equivalence / Color class bitvector file names for this DBG.
 		std::vector<std::string> eqClsFiles;
@@ -581,7 +583,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
     
 		// Progress tracker
 		static uint64_t last_size = 0;
-		if (dbg.dist_elts() % 10000000 == 0 &&
+		if (dbg.dist_elts() % PROGRESS_STEP == 0 &&
 				dbg.dist_elts() != last_size) {
 			last_size = dbg.dist_elts();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
@@ -850,7 +852,7 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("\nMSG: At distinct equivalence-class pair gathering phase.\n");
+	console -> info("At distinct equivalence-class pair gathering phase. Time = {}", time(nullptr) - start_time_);
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
@@ -862,9 +864,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 	if(it1.done() || it2.done())
-		puts("\n\nERR MSG: One or more iterator already at end position before starting walk.\n\n");
-
-	// printf("\nDBG1 size = %d, DBG2 size = %d\n", (int)cqf1 -> dist_elts(), (int)cqf2 -> dist_elts());
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
 
 
 	while(!it1.done() || !it2.done())
@@ -903,11 +903,16 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 		add_eq_class_pair(eqClass1, eqClass2);
 		kmerCount++;
+
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Observed number of distinct k-mers  {}, shared k-mers {}, color-class count {}. Time {}",
+							kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
 	}
 
 
-	printf("\n\nMSG: Distinct kmers found %d, equal kmers found %d (at distinct pairs gathering phase).\n\n",
-			(int)kmerCount, (int32_t)equalKmerCount);
+	console -> info("Distinct kmers found {}, shared kmers found {}, color-class count {}. Time = {}",
+					kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
 }
 
 
@@ -1028,7 +1033,7 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("\nMSG: At color-class building (bitvectors concatenation) phase.\n");
+	console -> info("\nAt color-class building (bitvectors concatenation) phase.\n");
 
 	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
 					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
@@ -1046,7 +1051,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
-			printf("\nAt bucket (%d, %d). Size = %d\n", (int)i, (int)j, (int)bucket[i][j].size());
+			console -> info("At bucket ({}, {}). Size = {}", i, j, bucket[i][j].size());
 			
 
 			// Required: data_2 = read_j'th Bit Vector block for dbg2
@@ -1091,7 +1096,10 @@ void ColoredDbg<qf_obj, key_obj> ::
 				
 				// Serialization and disk-write if required
 				if(serialID % mantis::NUM_BV_BUFFER == 0)
+				{
+					console -> info("Serializing bitvector buffer with {} color-classes.", serialID);
 					bv_buffer_serialize(serialID);
+				}
 			}
 		}
 	}
@@ -1129,7 +1137,7 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("\nMSG: At CQFs merging phase.\n");
+	console -> info("\nAt CQFs merging phase.\n");
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
@@ -1138,7 +1146,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	
 	if(it1.done() || it2.done())
-		puts("\n\nMSG: One or more iterator already at end position before starting walk.\n\n");
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
 
 
 	while(!it1.done() || !it2.done())
@@ -1200,6 +1208,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 		add_kmer(kmer, eqClsMap[std :: make_pair(eqClass1, eqClass2)].first);
 		kmerCount++;
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Kmers merged: {},  Total time: {}", kmerCount, time(nullptr) - start_time_);
 	}
 
 
@@ -1216,7 +1227,7 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> :: 
 	construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	puts("\nMSG: Merge starting.\n");
+	console -> info ("\nMerge starting.\n");
 
 	gather_distinct_eq_class_pairs(dbg1, dbg2);
 
@@ -1224,7 +1235,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	merge_CQFs(dbg1, dbg2);
 
-	puts("\nMerge ending.\n");
+	console -> info ("\nMerge ending.\n");
 }
 
 
