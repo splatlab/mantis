@@ -101,7 +101,7 @@ bool MST::buildEdgeSets() {
     for (auto &t : threads) { t.join(); }
     cqf.free();
     logger->info("Total number of kmers observed: {}", numOfKmers);
-    logger->info("Total number of edges observed: {}", num_edges);
+//    logger->info("Total number of edges observed: {}", num_edges);
 
 
     // count total number of color classes:
@@ -271,7 +271,7 @@ bool MST::calculateWeights() {
         delete bvp2;
     }*/
     edgeBucketList.clear();
-    logger->info("Calculated the weight for {} edges", numEdges);
+    logger->info("Calculated the weight for the edges");
     return true;
 }
 
@@ -283,8 +283,12 @@ void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList) {
     uint64_t s = 0, e = edgeList.size();
     // If the list contains less than a hundred edges, don't bother with multi-threading and
     // just run the first thread
-    if (edgeList.size() < 100 and i > 0) {
-        e = 0;
+   if (edgeList.size() < 100) {
+        if (i == 0) {
+            e = edgeList.size();
+        } else {
+            e = 0;
+        }
     } else {
         s = edgeList.size() * i / nThreads;
         e = edgeList.size() * (i + 1) / nThreads;
