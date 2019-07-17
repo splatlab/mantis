@@ -906,8 +906,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Observed count of distinct k-mers {}, shared k-mers {}, color-class {}. Time {}",
-							kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
+			console -> info("Observed count of -- distinct k-mers: {}M, shared k-mers: {}M, color-class: {}. Time {}",
+							kmerCount * 10 / PROGRESS_STEP, equalKmerCount * 10.0 / PROGRESS_STEP,
+							eqClsMap.size(), time(nullptr) - start_time_);
 	}
 
 
@@ -1068,8 +1069,6 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 				// Required: bit_vector = concat(data_1.query(eq1), data_2.query(eq2))
 				// Required: dbg.bitVectorBuffer[serialID] = bit_vector
-				
-
 				BitVector mergedEqCls(num_samples);
 				concat(bitVec1, dbg1.get_num_samples(), eq1, bitVec2, dbg2.get_num_samples(), eq2, mergedEqCls);
 
@@ -1210,13 +1209,17 @@ void ColoredDbg<qf_obj, key_obj> ::
 		kmerCount++;
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Kmers merged: {},  Total time: {}", kmerCount, time(nullptr) - start_time_);
+			console -> info("Kmers merged: {}M, time: {}", kmerCount  * 10 / PROGRESS_STEP,
+							time(nullptr) - start_time_);
 	}
 
 
-	printf("\nMSG: In the merged CQF: #kmers = %llu; #shared_kmers = %llu\n\n",
-			(unsigned long long)kmerCount, (unsigned long long)equalKmerCount);
-	printf("\nMSG: Merged CQF size: %llu\n", (unsigned long long)dbg.dist_elts());
+	console -> info("Total kmers merged: {}, time: {}", kmerCount, time(nullptr) - start_time_);
+
+
+	// printf("\nMSG: In the merged CQF: #kmers = %llu; #shared_kmers = %llu\n\n",
+	// 		(unsigned long long)kmerCount, (unsigned long long)equalKmerCount);
+	// printf("\nMSG: Merged CQF size: %llu\n", (unsigned long long)dbg.dist_elts());
 }
 
 

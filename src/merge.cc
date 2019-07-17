@@ -650,7 +650,7 @@ void bug(std::string prefix)
 	std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), "eqclass_rrr0.cls");
 
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbgFile, sampleListFile, eqclassFiles,
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbgFile, eqclassFiles, sampleListFile,
 																MANTIS_DBG_IN_MEMORY);
 
 	printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
@@ -744,7 +744,6 @@ int merge_main(MergeOpts &opt)
 	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg1(dbgFile1, sampleListFile1, eqclassFiles1,
 																	MANTIS_DBG_ON_DISK);
 
-	// printf("\nCQF size = %d\n\n", (int)cdbg1.get_cqf() -> dist_elts());
 	
 	console -> info("Read colored dBG with {} k-mers and {} color-class files.",
 					cdbg1.get_cqf() -> dist_elts(), cdbg1.get_eq_class_files().size());
@@ -1007,7 +1006,7 @@ int validate_merge_main(ValidateMergeOpts &opt)
 		++it_m, ++it_c, kmerCount++;
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("{} k-mers matched.", kmerCount);
+			console -> info("{}M k-mers matched.", kmerCount * 10 / PROGRESS_STEP);
 	}
 
 	// For debugging purpose(s)

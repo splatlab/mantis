@@ -2194,7 +2194,7 @@ int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position)
 	}
 	assert(position < qf->metadata->nslots);
 	if (!is_occupied(qf, position)) {
-		uint64_t block_index = position;
+		uint64_t block_index = position / QF_SLOTS_PER_BLOCK;
 		uint64_t idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
 		if (idx == 64) {
 			while(idx == 64 && block_index < qf->metadata->nblocks) {
@@ -2614,4 +2614,3 @@ uint64_t qf_magnitude(const QF *qf)
 {
 	return sqrt(qf_inner_product(qf, qf));
 }
-
