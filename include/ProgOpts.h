@@ -71,7 +71,7 @@ class MergeOpts
 {
 	public:
 		bool flush_eqclass_dist{false};
-		int qbits;
+		// int qbits;
     std::string dir1;
 		std::string dir2;
 		std::string out;

@@ -159,7 +159,7 @@ int main ( int argc, char *argv[] ) {
   auto merge_mode = (
                     command("merge").set(selected, mode::merge),
                     option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
-										required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
+										// required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
                     required("-d1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-d2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
                     required("-o", "--output") & value("merge-output", mopt.out) % "directory where results should be written"
@@ -207,7 +207,6 @@ int main ( int argc, char *argv[] ) {
     case mode::validate: validate_main(vopt);  break;
     case mode::stats: stats_main(sopt);  break;
     case mode::merge: merge_main(mopt);  break;
-    // case mode::merge: bug("raw/");  break;
     case mode::validate_merge: validate_merge_main(vmopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }

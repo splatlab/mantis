@@ -632,38 +632,6 @@ void test_merge(BuildOpts &bOpt)
 */
 
 
-unsigned long long get_size_by_scanning(const ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> &cdbg)
-{
-	uint64_t c = 0;
-
-	for(auto it = cdbg.get_cqf() -> begin(); !it.done(); ++it)
-		c++;
-
-	return c;
-}
-
-
-void bug(std::string prefix)
-{
-	std::string dbgFile(prefix + "dbg_cqf.ser");
-	std::string sampleListFile(prefix + "sampleid.lst");
-	std::vector<std::string> eqclassFiles = mantis::fs::GetFilesExt(prefix.c_str(), "eqclass_rrr0.cls");
-
-
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dbgFile, eqclassFiles, sampleListFile,
-																MANTIS_DBG_IN_MEMORY);
-
-	printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
-    printf("\nSize through scanning = %llu\n", get_size_by_scanning(cdbg));
-
-    printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
-    printf("\nSize through scanning = %llu\n", get_size_by_scanning(cdbg));
-
-    printf("\nLoaded CQF size = %llu\n", (unsigned long long)cdbg.get_cqf() -> dist_elts());
-    printf("\nSize through scanning = %llu\n", get_size_by_scanning(cdbg));
-}
-
-
 
 
 
@@ -762,8 +730,15 @@ int merge_main(MergeOpts &opt)
 					cdbg2.get_cqf() -> dist_elts(), cdbg2.get_eq_class_files().size());
 
 
+	if(!cdbg1.get_cqf() -> check_similarity(cdbg2.get_cqf()))
+	{
+		console -> error("The CQF files of the colored dBGs are not similar.");
+		exit(1);
+	}
 
-	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCdBG(cdbg1, cdbg2, opt.qbits, outDir,
+
+
+	ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir,
 																	MANTIS_DBG_ON_DISK);
 
 	

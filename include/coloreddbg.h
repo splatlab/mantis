@@ -93,7 +93,7 @@ class ColoredDbg {
 
 		// Required to instantitate the output CDBG.
 		ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-					uint64_t qbits, std::string &prefix, int flag);
+					std::string &prefix, int flag);
 
 		// Required to load the input CDBGs.
 		ColoredDbg(std::string &cqfFile, std::string &sampleListFile,
@@ -190,7 +190,7 @@ class ColoredDbg {
 
 		// Gathers all the distinct equivalence ID pairs and their abundance from the two DBGs into
 		// the hash map 'eqClsMap'. The new IDs are set to a default value of 0.
-		void gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+		uint64_t gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
 		// Allocates space for the buckets.
 		void init_bit_vec_block_buckets(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
@@ -204,6 +204,9 @@ class ColoredDbg {
 		void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t eqID1,
 					const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t eqID2,
 					BitVector &resultVec);
+
+		// Initializes the CQF that will contain 'finalSize' number of k-mers after mantii merge.
+		void initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t finalSize);
 
 		// Concatenate required bit vectors from the DBGs into this merged DBG, to build the
 		// merged color(equivalence)-class table.
@@ -703,32 +706,32 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::
 	ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-				uint64_t qbits, std::string &prefix, int flag):
+				std::string &prefix, int flag):
 	bv_buffer(mantis::NUM_BV_BUFFER * (cdbg1.get_num_samples() + cdbg2.get_num_samples())),
 	prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
-	num_serializations(0), start_time_(std::time(nullptr))
+	num_serializations(0), dbg_alloc_flag(flag), start_time_(std::time(nullptr))
 	{
-		if(flag == MANTIS_DBG_IN_MEMORY)
-		{
-			CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
-							cdbg1.get_cqf() -> seed());
-			dbg = cqf;
-			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
-		}
-		else if(flag == MANTIS_DBG_ON_DISK)
-		{
-			CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
-							cdbg1.get_cqf() -> seed(), prefix + mantis::CQF_FILE);
-			dbg = cqf;
-			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
-		}
-		else
-		{
-			ERROR("Wrong Mantis alloc mode.");
-			exit(EXIT_FAILURE);
-		}
+		// if(flag == MANTIS_DBG_IN_MEMORY)
+		// {
+		// 	CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
+		// 					cdbg1.get_cqf() -> seed());
+		// 	dbg = cqf;
+		// 	// dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		// }
+		// else if(flag == MANTIS_DBG_ON_DISK)
+		// {
+		// 	CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
+		// 					cdbg1.get_cqf() -> seed(), prefix + mantis::CQF_FILE);
+		// 	dbg = cqf;
+		// 	// dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		// }
+		// else
+		// {
+		// 	ERROR("Wrong Mantis alloc mode.");
+		// 	exit(EXIT_FAILURE);
+		// }
 
-		dbg.set_auto_resize();
+		// dbg.set_auto_resize();
 	}
 
 
@@ -849,7 +852,7 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 
 
 template <typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj> ::
+uint64_t ColoredDbg<qf_obj, key_obj> ::
 	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
 	console -> info("At distinct equivalence-class pair gathering phase. Time = {}", time(nullptr) - start_time_);
@@ -857,7 +860,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
 
-	uint64_t kmerCount = 0, equalKmerCount = 0;	// for debugging purpose(s)
+	uint64_t kmerCount = 0, equalKmerCount = 0;
 
 	
 	init_bit_vec_block_buckets(dbg1, dbg2);
@@ -914,6 +917,44 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	console -> info("Distinct kmers found {}, shared kmers found {}, color-class count {}. Time = {}",
 					kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
+
+	return kmerCount;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t finalSize)
+{
+	// Get floor(log2(finalSize))
+	uint32_t qbits;
+	for(qbits = 0; (finalSize >> qbits) != (uint64_t)1; qbits++);
+
+	// Get ceil(log2(finalSize))
+	if(finalSize & (finalSize - 1))	// if finalSize is not a power of 2
+		qbits++;
+
+	
+	if(dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+	{
+		CQF<key_obj> cqf(qbits, keybits, hashMode, seed);
+		dbg = cqf;
+	}
+	else if(dbg_alloc_flag == MANTIS_DBG_ON_DISK)
+	{
+		CQF<key_obj> cqf(qbits, keybits, hashMode, seed, prefix + mantis::CQF_FILE);
+		dbg = cqf;
+	}
+	else
+	{
+		ERROR("Wrong Mantis alloc mode.");
+		exit(EXIT_FAILURE);
+	}
+
+	dbg.set_auto_resize();
 }
 
 
@@ -1232,10 +1273,12 @@ void ColoredDbg<qf_obj, key_obj> ::
 {
 	console -> info ("\nMerge starting.\n");
 
-	gather_distinct_eq_class_pairs(dbg1, dbg2);
+	uint64_t kmerCount = gather_distinct_eq_class_pairs(dbg1, dbg2);
 
 	build_eq_classes(dbg1, dbg2);
 
+	initialize_CQF(dbg1.get_cqf() -> keybits(), dbg1.get_cqf() -> hash_mode(), dbg1.get_cqf() -> seed(),
+					kmerCount);
 	merge_CQFs(dbg1, dbg2);
 
 	console -> info ("\nMerge ending.\n");

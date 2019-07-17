@@ -219,18 +219,16 @@ Merge Two Mantii
 `mantis merge` merges two mantis indices into once mantis index.
 
 ``` bash
- $ ./bin/mantis merge -s 20 -d1 raw/in1 -d2 raw/in2 -o raw/out
+ $ ./bin/mantis merge -d1 raw/in1 -d2 raw/in2 -o raw/out
 ```
 
 ```
 SYNOPSIS
-        mantis merge [-e] -s <log-slots> -d1 <input_dir_1> -d2 <input_dir_2> -o <merge_output>
+        mantis merge [-e] -d1 <input_dir_1> -d2 <input_dir_2> -o <merge_output>
 
 OPTIONS
         -e, --eqclass_dist
                     write the eqclass abundance distribution
-
-        <log-slots> log of number of slots in the output CQF
 
         <input_dir_1>
                     directory containing the first mantis index
@@ -242,15 +240,7 @@ OPTIONS
                     directory where results should be written
 ```
 
-'log-slots': The initial value for log of the number of slots in the CQF (i.e. the number of quotient bits).
- Mantis will automatically resize when the CQF reaches its capacity during the merge process.
- Starting with a reasonable value is recommended so that the merge process does not have to perform a bunch of resizes. Each resize operation will halt the merge process and in-turn increase the overall merge time.
-
-Suggested starting values based on the size of the underlying CQFs:
-* 28 for a small set of genomes like a bacterial genomes.
-* 30 for a large set of medium size read files.
-* 33 for a large set of big read files.
-Notice that these are just suggestions. You can start with a other smaller values as well.
+**Note** Each directory passed with the `-d1` and `-d2` arguments must contain the CQF file (`.ser`), all the color-class files (`.cls`), and the sample-list file (`.lst`) of its corresponding mantis index.
 
 Contributing
 ------------
