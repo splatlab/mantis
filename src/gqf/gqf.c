@@ -2614,4 +2614,3 @@ uint64_t qf_magnitude(const QF *qf)
 {
 	return sqrt(qf_inner_product(qf, qf));
 }
-

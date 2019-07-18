@@ -32,6 +32,8 @@
 coloreddbg
 query
 validatemantis
+.vscode/
+*.squeakr
 
 # QFs dump
 *.ser

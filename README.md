@@ -51,6 +51,7 @@ API
 * `mantis build`: builds a mantis index from a collection of (squeakr) CQF files.
 * `mantis mst`: builds a new encoding based on Minimum Spanning Trees for the color information.
 * `mantis query`: query k-mers in the mantis index.
+* `mantis merge`: merges two mantii into a single mantis index.
 
 Build
 -------
@@ -212,6 +213,34 @@ OPTIONS
  provide the `--json,-j` flag to the `query` comamnd.
  
 The output file contains the list of experiments (i.e., hits) corresponding to each queried transcript.
+
+Merge Two Mantii
+-------
+`mantis merge` merges two mantis indices into once mantis index.
+
+``` bash
+ $ ./bin/mantis merge -d1 raw/in1 -d2 raw/in2 -o raw/out
+```
+
+```
+SYNOPSIS
+        mantis merge [-e] -d1 <input_dir_1> -d2 <input_dir_2> -o <merge_output>
+
+OPTIONS
+        -e, --eqclass_dist
+                    write the eqclass abundance distribution
+
+        <input_dir_1>
+                    directory containing the first mantis index
+
+        <input_dir_2>
+                    directory containing the second mantis index
+
+        <merge_output>
+                    directory where results should be written
+```
+
+**Note** Each directory passed with the `-d1` and `-d2` arguments must contain the CQF file (`.ser`), all the color-class files (`.cls`), and the sample-list file (`.lst`) of its corresponding mantis index.
 
 Contributing
 ------------

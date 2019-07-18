@@ -83,6 +83,51 @@ class ColoredDbg {
 		void reinit(default_cdbg_bv_map_t& map);
 		void set_flush_eqclass_dist(void) { flush_eqclass_dis = true; }
 
+
+
+
+
+
+
+		// Mantis merge (Jamshed)
+
+		// Required to instantitate the output CDBG.
+		ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+					std::string &prefix, int flag);
+
+		// Required to load the input CDBGs.
+		ColoredDbg(std::string &cqfFile, std::string &sampleListFile,
+					std::vector<std::string> &eqclassFiles, int flag);
+
+		// Returns the vector of names of all the color(equivalence)-class bitvector files.
+		inline std::vector<std::string> &get_eq_class_files() { return eqClsFiles; }
+
+		// Returns the number of color(equivalence)-class bitvector files.
+		inline uint64_t get_eq_class_file_count() { return eqClsFiles.size(); }
+
+		// Returns the number of equivalence / color classes in the merged CdBG.
+		uint64_t get_eqclass_count()	{ return eqClsMap.size(); }
+
+		// Merges two Colored DBG objects dbg1 and dbg2 into this Colored DBG object.
+		void construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
+		// Serialize the CQF and equivalence-class bitvectors.
+		// TODO: Move the list concatenation phase inside the serialization to the constructor,
+		// with introduction of a new field, just keep the disk-write part here; thus eliminating
+		// the parameters.
+		// TODO: After the earlier task, merge this overloaded method with the earlier one
+		// through default argument.
+		void serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
+		// Returns the collection of BitvectorRRR's (compressed color-classes) of this CdBG.
+		std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
+
+
+
+
+
+
+		
 	private:
 		// returns true if adding this k-mer increased the number of equivalence
 		// classes
@@ -109,6 +154,76 @@ class ColoredDbg {
 		bool flush_eqclass_dis{false};
 		std::time_t start_time_;
 		spdlog::logger* console;
+
+
+
+
+
+
+
+		// Mangtis merge: Jamshed
+
+		const static uint64_t PROGRESS_STEP = 10000000;
+
+		
+		// Equivalence / Color class bitvector file names for this DBG.
+		std::vector<std::string> eqClsFiles;
+
+		// Required for hashing pair objects for unordered_map.
+		// TODO: Consult Professor on this hashing.
+		struct PairHash
+		{
+			template<typename T1, typename T2>
+			std::size_t operator() (const std::pair<T1, T2> &p) const
+			{
+				return std::hash<T1>()(p.first) ^ std::hash<T2>()(p.second);
+			}
+		};
+
+		// 2-d grid of buckets, with bucket_(i, j) containing all equivalence class ID pairs that
+		// read bitvectors from the i'th and the j'th block of the two to-be-merged DBGs, respectively.
+		std::vector<std::vector<std::vector<std::pair<uint64_t, uint64_t>>>> bucket;
+
+		// Hash map for equivalence class pairs in the format: < (id1, id2) --> (newID, abundance) >.
+		std::unordered_map<std::pair<uint64_t, uint64_t>,
+							std::pair<uint64_t, uint64_t>, PairHash> eqClsMap;
+
+		// Gathers all the distinct equivalence ID pairs and their abundance from the two DBGs into
+		// the hash map 'eqClsMap'. The new IDs are set to a default value of 0.
+		uint64_t gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
+		// Allocates space for the buckets.
+		void init_bit_vec_block_buckets(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
+		// Insert the equivalence class pair (eqCls1, eqCls2) into the hash map 'eqClsMap'.
+		void add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2);
+
+		// Concatenates the BitVector objects bv1[id1] and bv2[id2] into resultVec;
+		// where bv1 and bv2 are partial color class tables, with sample counts colCount1 and colCount2
+		// respectively.
+		void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t eqID1,
+					const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t eqID2,
+					BitVector &resultVec);
+
+		// Initializes the CQF that will contain 'finalSize' number of k-mers after mantii merge.
+		void initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t finalSize);
+
+		// Concatenate required bit vectors from the DBGs into this merged DBG, to build the
+		// merged color(equivalence)-class table.
+		void build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
+		// Merge the CQFs from the DBGs into the CQF of this DBG.
+		void merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
+
+		// Add a kmer with equivalence class ID 'eqID' into the CQF of this DBG.
+		void add_kmer(uint64_t kmer, uint64_t eqID);
+
+		// Returns the sample-id mapping.
+		inline std::unordered_map<uint64_t, std::string> &get_sample_id_map() { return sampleid_map; }
+
+		// Serialize the bitvector buffer to disk, when the current class count is 'eqClsCount'.
+		// TODO: Merge this overloaded method with the earlier one through default argument.
+		void bv_buffer_serialize(uint64_t eqClsCount);
 };
 
 template <class T>
@@ -471,7 +586,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
     
 		// Progress tracker
 		static uint64_t last_size = 0;
-		if (dbg.dist_elts() % 10000000 == 0 &&
+		if (dbg.dist_elts() % PROGRESS_STEP == 0 &&
 				dbg.dist_elts() != last_size) {
 			last_size = dbg.dist_elts();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
@@ -579,5 +694,646 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 		}
 		sampleid.close();
 }
+
+
+
+
+
+
+
+// Mantis merge: Jamshed
+
+template <class qf_obj, class key_obj>
+ColoredDbg<qf_obj, key_obj>::
+	ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+				std::string &prefix, int flag):
+	bv_buffer(mantis::NUM_BV_BUFFER * (cdbg1.get_num_samples() + cdbg2.get_num_samples())),
+	prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
+	num_serializations(0), dbg_alloc_flag(flag), start_time_(std::time(nullptr))
+	{
+		// if(flag == MANTIS_DBG_IN_MEMORY)
+		// {
+		// 	CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
+		// 					cdbg1.get_cqf() -> seed());
+		// 	dbg = cqf;
+		// 	// dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		// }
+		// else if(flag == MANTIS_DBG_ON_DISK)
+		// {
+		// 	CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
+		// 					cdbg1.get_cqf() -> seed(), prefix + mantis::CQF_FILE);
+		// 	dbg = cqf;
+		// 	// dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		// }
+		// else
+		// {
+		// 	ERROR("Wrong Mantis alloc mode.");
+		// 	exit(EXIT_FAILURE);
+		// }
+
+		// dbg.set_auto_resize();
+	}
+
+
+
+
+
+template <class qf_obj, class key_obj>
+ColoredDbg<qf_obj, key_obj> ::
+	ColoredDbg(std::string &cqfFile, std::string &sampleListFile, std::vector<std::string> &eqclassFiles,
+				int flag):
+	bv_buffer(), start_time_(std::time(nullptr))
+	{
+		num_samples = 0;
+		num_serializations = 0;
+
+
+		// Load the CQF
+		if(flag == MANTIS_DBG_IN_MEMORY)
+		{
+			CQF<key_obj> cqf(cqfFile, CQF_FREAD);
+			dbg = cqf;
+			dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
+		}
+		else if(flag == MANTIS_DBG_ON_DISK)
+		{
+			CQF<key_obj> cqf(cqfFile, CQF_MMAP);
+			dbg = cqf;
+			dbg_alloc_flag = MANTIS_DBG_ON_DISK;
+		}
+		else
+		{
+			ERROR("Wrong Mantis alloc mode.");
+			exit(EXIT_FAILURE);
+		}
+
+
+		//printf("\n\nLoaded CQF size = %llu\n\n", (unsigned long long)dbg.dist_elts());
+
+
+		// Load the sample / experiment names.
+		std::ifstream sampleList(sampleListFile.c_str());
+		std::string sampleName;
+		uint32_t sampleID;
+
+		while (sampleList >> sampleID >> sampleName)
+		{
+			sampleid_map[sampleID] = sampleName;
+			num_samples++;
+		}
+
+		sampleList.close();
+
+
+		// Load the equivalence class bitvector file names only;
+		// not loading the bitvectors (color classes) all at once, like the other identical constructor.
+		std::map<int, std::string> sortedFiles;
+		for (std::string file : eqclassFiles)
+		{
+			int fileID = std::stoi(first_part(last_part(file, '/'), '_'));
+			sortedFiles[fileID] = file;
+
+			// printf("\nLoaded color-class file %s\n", file.c_str());
+		}
+		
+
+		eqClsFiles.reserve(eqclassFiles.size());
+		for(auto idFilePair : sortedFiles)
+			eqClsFiles.push_back(idFilePair.second);
+
+		num_serializations = eqClsFiles.size();
+
+		// puts("MSG: Done loading colored dBG.\n");
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+inline void ColoredDbg<qf_obj, key_obj> ::
+	init_bit_vec_block_buckets(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
+					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
+	
+	bucket.resize(fileCount1);
+	for(uint64_t i = 0; i < fileCount1; ++i)
+		bucket[i].resize(fileCount2);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+inline void ColoredDbg<qf_obj, key_obj> ::
+	add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2)
+{
+	auto eqPair = std::make_pair(eqCls1, eqCls2);
+	auto it = eqClsMap.find(eqPair);
+
+	const static auto newEntry = std::make_pair((uint64_t)0, (uint64_t)1);
+
+	if(it == eqClsMap.end())
+	{
+		eqClsMap[eqPair] = newEntry;
+
+		bucket[eqCls1 / mantis::NUM_BV_BUFFER][eqCls2 / mantis::NUM_BV_BUFFER].push_back(eqPair);
+
+		// printf("New equivalence pair: (%d, %d)\n", (int)eqPair.first, (int)eqPair.second);
+	}
+	else
+		it -> second.second++;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj> ::
+	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	console -> info("At distinct equivalence-class pair gathering phase. Time = {}", time(nullptr) - start_time_);
+
+	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
+	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
+
+	uint64_t kmerCount = 0, equalKmerCount = 0;
+
+	
+	init_bit_vec_block_buckets(dbg1, dbg2);
+
+
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+	while(!it1.done() || !it2.done())
+	{
+		uint64_t kmer1, kmer2, eqClass1, eqClass2;
+		key_obj cqfEntry1, cqfEntry2;
+
+		if(!it1.done())
+		{
+			cqfEntry1 = it1.get_cur_hash();
+			kmer1 = cqfEntry1.key;
+		}
+		
+		if(!it2.done())
+		{
+			cqfEntry2 = it2.get_cur_hash();
+			kmer2 = cqfEntry2.key;
+		}
+
+
+		// eqClassX = 0 implies absence in CDBG X.
+
+
+		if(it1.done())
+			eqClass1 = 0, eqClass2 = cqfEntry2.count, ++it2;
+		else if(it2.done())
+			eqClass1 = cqfEntry1.count, eqClass2 = 0, ++it1;
+		else if(kmer1 < kmer2)
+			eqClass1 = cqfEntry1.count, eqClass2 = 0, ++it1;
+		else if(kmer2 < kmer1)
+			eqClass1 = 0, eqClass2 = cqfEntry2.count, ++it2;
+		else
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count, ++it1, ++it2,
+			equalKmerCount++;
+
+
+		add_eq_class_pair(eqClass1, eqClass2);
+		kmerCount++;
+
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Observed count of -- distinct k-mers: {}M, shared k-mers: {}M, color-class: {}. Time {}",
+							kmerCount * 10 / PROGRESS_STEP, equalKmerCount * 10.0 / PROGRESS_STEP,
+							eqClsMap.size(), time(nullptr) - start_time_);
+	}
+
+
+	console -> info("Distinct kmers found {}, shared kmers found {}, color-class count {}. Time = {}",
+					kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
+
+	return kmerCount;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t finalSize)
+{
+	// Get floor(log2(finalSize))
+	uint32_t qbits;
+	for(qbits = 0; (finalSize >> qbits) != (uint64_t)1; qbits++);
+
+	// Get ceil(log2(finalSize))
+	if(finalSize & (finalSize - 1))	// if finalSize is not a power of 2
+		qbits++;
+
+	
+	if(dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+	{
+		CQF<key_obj> cqf(qbits, keybits, hashMode, seed);
+		dbg = cqf;
+	}
+	else if(dbg_alloc_flag == MANTIS_DBG_ON_DISK)
+	{
+		CQF<key_obj> cqf(qbits, keybits, hashMode, seed, prefix + mantis::CQF_FILE);
+		dbg = cqf;
+	}
+	else
+	{
+		ERROR("Wrong Mantis alloc mode.");
+		exit(EXIT_FAILURE);
+	}
+
+	dbg.set_auto_resize();
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t eqID1,
+			const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t eqID2,
+			BitVector &resultVec)
+{
+	const uint64_t wordLen = 64;
+
+
+	if(eqID1)
+	{
+		// Optimized bitvector read and write
+
+		uint64_t offset = ((eqID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+
+		for(uint32_t blockStart = 0; blockStart < (colCount1 / wordLen) * wordLen; blockStart += wordLen)
+				resultVec.set_int(blockStart, bv1.get_int(offset + blockStart, wordLen), wordLen);
+
+		if(colCount1 % wordLen)
+			resultVec.set_int((colCount1 / wordLen) * wordLen,
+								bv1.get_int(offset + ((colCount1 / wordLen) * wordLen), colCount1 % wordLen),
+								colCount1 % wordLen);
+
+
+
+		// Slower version (should be, uses [] operator)
+
+		// bool isEmpty = true; // for debugging purpose(s)
+
+		// uint64_t offset = ((eqID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+
+		// for(uint32_t wordCount = 0; wordCount <= colCount1 / wordLen; ++wordCount)
+		// {
+		// 	uint64_t readLen = std::min(wordLen, colCount1 - wordCount * wordLen);
+		// 	uint64_t word = bv1.get_int(offset, readLen);
+
+		// 	// printf("eqId1 %d, read length = %d, word %d\n", (int)eqID1, (int)readLen, (int)word);
+
+		// 	// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+		// 	for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
+		// 		if((word >> bitIdx) & 0x01)
+		// 			resultVec[sampleID] = 1, isEmpty = false;			
+
+		// 	offset += readLen;
+		// }
+	}
+
+
+	if(eqID2)
+	{
+		// Optimized bitvector read and write
+
+		uint64_t offset = ((eqID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+
+		for(uint32_t blockStart = 0; blockStart < (colCount2 / wordLen) * wordLen; blockStart += wordLen)
+				resultVec.set_int(colCount1 + blockStart, bv2.get_int(offset + blockStart, wordLen), wordLen);
+
+		if(colCount2 % wordLen)
+			resultVec.set_int(colCount1 + (colCount2 / wordLen) * wordLen,
+								bv2.get_int(offset + ((colCount2 / wordLen) * wordLen), colCount2 % wordLen),
+								colCount2 % wordLen);
+
+
+		// Slower version (should be, uses [] operator)
+
+		// u_int64_t offset2 = ((eqID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+
+		// for(uint32_t wordCount = 0; wordCount <= colCount2 / wordLen; ++wordCount)
+		// {
+		// 	uint64_t readLen = std::min(wordLen, colCount2 - wordCount * wordLen);
+		// 	uint64_t word = bv2.get_int(offset2, readLen);
+
+		// 	// printf("eqId2 %d, read length = %d, word %d\n", (int)eqID2, (int)readLen, (int)word);
+
+		// 	// Optimize here; preferrably eliminate the loop with one statement (some sort of set_int() ?).
+		// 	for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
+		// 		if((word >> bitIdx) & 0x01)
+		// 			resultVec[colCount1 + sampleID] = 1;
+
+		// 	offset2 += readLen;
+		// }
+	}
+}
+
+
+
+
+
+template <class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize(uint64_t eqClsCount)
+{
+	BitVector bv_temp(bv_buffer);
+	if (eqClsCount % mantis::NUM_BV_BUFFER > 0)
+		bv_temp.resize((eqClsCount % mantis::NUM_BV_BUFFER) * num_samples);
+
+	
+	BitVectorRRR final_com_bv(bv_temp);
+	std::string bv_file(prefix + std::to_string(num_serializations) + "_" + mantis::EQCLASS_FILE);
+	
+
+	sdsl::store_to_file(final_com_bv, bv_file);
+	bv_buffer = BitVector(bv_buffer.bit_size());
+
+	num_serializations++;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	console -> info("\nAt color-class building (bitvectors concatenation) phase.\n");
+
+	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
+					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
+	uint64_t serialID = 0;
+	
+
+
+	for(uint64_t i = 0; i < fileCount1; ++i)
+	{
+		// Required: data_1 = read_i'th Bit Vector block for dbg1
+		BitVectorRRR bitVec1;
+		sdsl::load_from_file(bitVec1, dbg1.get_eq_class_files()[i]);
+
+		// printf("\nLoading bitvectorRRR from file %s.\n", dbg1.get_eq_class_files()[i].c_str());
+
+		for(uint64_t j = 0; j < fileCount2; ++j)
+		{
+			console -> info("At bucket ({}, {}). Size = {}", i, j, bucket[i][j].size());
+			
+
+			// Required: data_2 = read_j'th Bit Vector block for dbg2
+			BitVectorRRR bitVec2;
+			sdsl::load_from_file(bitVec2, dbg2.get_eq_class_files()[j]);
+
+			// printf("\nLoading bitvectorRRR from file %s\n", dbg2.get_eq_class_files()[j].c_str());
+
+			for(auto eqClsPair : bucket[i][j])
+			{
+				uint64_t eq1 = eqClsPair.first, eq2 = eqClsPair.second;
+				eqClsMap[eqClsPair].first = ++serialID; // serialID++ doesn't work. Introduces bug in CQF;
+														// Probable cause: CQF doesn't support 0-count ?
+
+				// Required: bit_vector = concat(data_1.query(eq1), data_2.query(eq2))
+				// Required: dbg.bitVectorBuffer[serialID] = bit_vector
+				BitVector mergedEqCls(num_samples);
+				concat(bitVec1, dbg1.get_num_samples(), eq1, bitVec2, dbg2.get_num_samples(), eq2, mergedEqCls);
+
+				
+				// for debugging purpose(s)
+				// printf("bitvector for eq id %d is = ", (int)serialID);
+				// bool isEmpty = true;
+				// for(int i = 0; i < num_samples; ++i)
+				// 	if(mergedEqCls[i] == 1)
+				// 		putchar('1'), isEmpty = false;
+				// 	else
+				// 		putchar('0');
+				// putchar('\n');
+
+				// puts("Going to add a bitvector\n");
+				add_bitvector(mergedEqCls, serialID - 1);
+				// puts("Bitvector added\n");
+
+				// if(isEmpty)
+				// 	puts("\nEmpty bitvector constructed\n");
+				// else
+				// 	puts("Nonempty color class.");
+
+				
+				// Serialization and disk-write if required
+				if(serialID % mantis::NUM_BV_BUFFER == 0)
+				{
+					console -> info("Serializing bitvector buffer with {} color-classes.", serialID);
+					bv_buffer_serialize(serialID);
+				}
+			}
+		}
+	}
+
+
+	// Serialize the bv buffer last time if needed
+	if (serialID % mantis::NUM_BV_BUFFER > 0)
+		bv_buffer_serialize(serialID);
+
+	
+	// puts("\nMSG: Done building.\n");
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+inline void ColoredDbg<qf_obj, key_obj> ::
+	add_kmer(uint64_t kmer, uint64_t eqID)
+{
+	if (dbg.insert(KeyObject(kmer, 0, eqID), QF_NO_LOCK | QF_KEY_IS_HASH) == QF_NO_SPACE)
+	{
+		// This means that auto_resize failed.
+		console -> error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
+		exit(1);
+	}
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> ::
+	merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	console -> info("\nAt CQFs merging phase.\n");
+
+	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
+	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
+
+	uint64_t kmerCount = 0, equalKmerCount = 0; // for debugging purpose(s)
+
+	
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+	while(!it1.done() || !it2.done())
+	{
+		uint64_t kmer1, kmer2, kmer, eqClass1, eqClass2;
+		key_obj cqfEntry1, cqfEntry2;
+
+		if(!it1.done())
+		{
+			cqfEntry1 = it1.get_cur_hash();
+			kmer1 = cqfEntry1.key;
+		}
+		
+		if(!it2.done())
+		{
+			cqfEntry2 = it2.get_cur_hash();
+			kmer2 = cqfEntry2.key;
+		}
+
+
+		if(it1.done())
+		{
+			kmer = kmer2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+
+			++it2;
+		}
+		else if(it2.done())
+		{
+			kmer = kmer1;
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+
+			++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			kmer = kmer1;
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+
+			++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			kmer = kmer2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+
+			++it2;
+		}
+		else
+		{
+			kmer = kmer1;
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+
+			++it1, ++it2;
+
+			equalKmerCount++; // for debugging purpose(s)
+		}
+
+
+		add_kmer(kmer, eqClsMap[std :: make_pair(eqClass1, eqClass2)].first);
+		kmerCount++;
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Kmers merged: {}M, time: {}", kmerCount  * 10 / PROGRESS_STEP,
+							time(nullptr) - start_time_);
+	}
+
+
+	console -> info("Total kmers merged: {}, time: {}", kmerCount, time(nullptr) - start_time_);
+
+
+	// printf("\nMSG: In the merged CQF: #kmers = %llu; #shared_kmers = %llu\n\n",
+	// 		(unsigned long long)kmerCount, (unsigned long long)equalKmerCount);
+	// printf("\nMSG: Merged CQF size: %llu\n", (unsigned long long)dbg.dist_elts());
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj> :: 
+	construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	console -> info ("\nMerge starting.\n");
+
+	uint64_t kmerCount = gather_distinct_eq_class_pairs(dbg1, dbg2);
+
+	build_eq_classes(dbg1, dbg2);
+
+	initialize_CQF(dbg1.get_cqf() -> keybits(), dbg1.get_cqf() -> hash_mode(), dbg1.get_cqf() -> seed(),
+					kmerCount);
+	merge_CQFs(dbg1, dbg2);
+
+	console -> info ("\nMerge ending.\n");
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	serialize(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
+{
+	// Serialize the CQF
+	if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+		dbg.serialize(prefix + mantis::CQF_FILE);
+	else
+		dbg.close();
+
+
+	// Serialize the bv buffer last time if needed.
+	// Done at the color(equivalence)-class building phase.
+
+
+	// TODO: Move the list concatenation phase to constructor, with introduction of a new field;
+	// just keep the disk-write part here.
+
+	// Serialize the sample id map
+	std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
+
+	for(auto sampleID: dbg1.get_sample_id_map())
+		outputFile << sampleID.first << " " << sampleID.second << std::endl;
+
+	for(auto sampleID: dbg2.get_sample_id_map())
+		outputFile << dbg1.get_num_samples() + sampleID.first << " " << sampleID.second << std::endl;
+
+	outputFile.close();
+
+
+	// Dump the abundance distribution of the equivalence / color classes.
+	if (flush_eqclass_dis)
+	{
+		const char OUTPUT_ABUNDANCE_DIST_FILE[] = "eqclass_dist.lst";
+		std::ofstream outputFile(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
+
+		for (auto idFreq : eqClsMap)
+			outputFile << idFreq.second.first << " " << idFreq.second.second << std::endl;
+		
+		outputFile.close();
+	}
+}
+
+
+
+
+
 
 #endif
