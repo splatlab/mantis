@@ -3,6 +3,7 @@
  *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *                  Mike Ferdman (), mferdman@cs.stonybrook.edu
+ * 					Jamshed Khan (), mdkhan@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
  * ============================================================================
@@ -171,12 +172,16 @@ class ColoredDbg {
 
 		// Required for hashing pair objects for unordered_map.
 		// TODO: Consult Professor on this hashing.
+		// Done. Resorted to boost::hash_combine from plain XOR hashing.
+		// For more explanation, consult https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
 		struct PairHash
 		{
 			template<typename T1, typename T2>
 			std::size_t operator() (const std::pair<T1, T2> &p) const
 			{
-				return std::hash<T1>()(p.first) ^ std::hash<T2>()(p.second);
+				size_t seed = std::hash<T1>()(p.first) + 0x9e3779b9;
+				seed ^= std::hash<T1>()(p.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+				return seed;
 			}
 		};
 
