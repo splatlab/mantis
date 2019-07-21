@@ -860,7 +860,10 @@ template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj> ::
 	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	console -> info("At distinct equivalence-class pair gathering phase. Time = {}", time(nullptr) - start_time_);
+	auto t_start = time(nullptr);
+
+
+	console -> info("At distinct equivalence-class pairs gathering phase. Time = {}", time(nullptr) - start_time_);
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
@@ -922,6 +925,10 @@ uint64_t ColoredDbg<qf_obj, key_obj> ::
 
 	console -> info("Distinct kmers found {}, shared kmers found {}, color-class count {}. Time = {}",
 					kmerCount, equalKmerCount, eqClsMap.size(), time(nullptr) - start_time_);
+
+	
+	auto t_end = time(nullptr);
+	console -> info("Phase 1 took time {} seconds.", t_end - t_start);
 
 	return kmerCount;
 }
@@ -1080,7 +1087,11 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	build_eq_classes(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	console -> info("\nAt color-class building (bitvectors concatenation) phase.\n");
+	auto t_start = time(nullptr);
+
+
+	console -> info("At color-class building (bitvectors concatenation) phase. Time = {}\n",
+					time(nullptr) - start_time_);
 
 	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
 					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
@@ -1152,10 +1163,14 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	// Serialize the bv buffer last time if needed
 	if (serialID % mantis::NUM_BV_BUFFER > 0)
+	{
+		console -> info("Serializing bitvector buffer with {} color-classes.", serialID);
 		bv_buffer_serialize(serialID);
+	}
 
 	
-	// puts("\nMSG: Done building.\n");
+	auto t_end = time(nullptr);
+	console -> info("Phase 2 took time {} seconds.", t_end - t_start);
 }
 
 
@@ -1182,7 +1197,10 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
 	merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	console -> info("\nAt CQFs merging phase.\n");
+	auto t_start = time(nullptr);
+
+
+	console -> info("At CQFs merging phase. Time = {}\n", time(nullptr) - start_time_);
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
@@ -1260,12 +1278,11 @@ void ColoredDbg<qf_obj, key_obj> ::
 	}
 
 
-	console -> info("Total kmers merged: {}, time: {}", kmerCount, time(nullptr) - start_time_);
+	console -> info("Total kmers merged: {}. Time: {}", kmerCount, time(nullptr) - start_time_);
 
 
-	// printf("\nMSG: In the merged CQF: #kmers = %llu; #shared_kmers = %llu\n\n",
-	// 		(unsigned long long)kmerCount, (unsigned long long)equalKmerCount);
-	// printf("\nMSG: Merged CQF size: %llu\n", (unsigned long long)dbg.dist_elts());
+	auto t_end = time(nullptr);
+	console -> info("Phase 3 took time {} seconds.", t_end - t_start);
 }
 
 
@@ -1276,7 +1293,8 @@ template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> :: 
 	construct(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	console -> info ("\nMerge starting.\n");
+	console -> info ("Merge starting. Time = {}\n", time(nullptr) - start_time_);
+	
 
 	uint64_t kmerCount = gather_distinct_eq_class_pairs(dbg1, dbg2);
 
@@ -1285,8 +1303,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 	initialize_CQF(dbg1.get_cqf() -> keybits(), dbg1.get_cqf() -> hash_mode(), dbg1.get_cqf() -> seed(),
 					kmerCount);
 	merge_CQFs(dbg1, dbg2);
+	
 
-	console -> info ("\nMerge ending.\n");
+	console -> info ("Merge ending. Time = {}\n", time(nullptr) - start_time_);
 }
 
 
