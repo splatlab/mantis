@@ -165,6 +165,7 @@ class ColoredDbg {
 		// Mangtis merge: Jamshed
 
 		const static uint64_t PROGRESS_STEP = 10000000;
+		const static uint64_t ITERATOR_WINDOW_SIZE = 4096;
 
 		
 		// Equivalence / Color class bitvector file names for this DBG.
@@ -192,6 +193,10 @@ class ColoredDbg {
 		// Hash map for equivalence class pairs in the format: < (id1, id2) --> (newID, abundance) >.
 		std::unordered_map<std::pair<uint64_t, uint64_t>,
 							std::pair<uint64_t, uint64_t>, PairHash> eqClsMap;
+
+		static void advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &position,
+													typename CQF<key_obj>::Iterator &walkBehindIterator,
+													const CQF<key_obj> *cqf);
 
 		// Gathers all the distinct equivalence ID pairs and their abundance from the two DBGs into
 		// the hash map 'eqClsMap'. The new IDs are set to a default value of 0.
@@ -857,6 +862,23 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 
 
 template <typename qf_obj, typename key_obj>
+inline void ColoredDbg<qf_obj, key_obj> ::
+	advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &position,
+							typename CQF<key_obj>::Iterator &walkBehindIterator, const CQF<key_obj> *cqf)
+{
+	++it, ++position;
+
+	if(position == ITERATOR_WINDOW_SIZE)
+		walkBehindIterator = cqf -> begin(true);
+	else if(position > ITERATOR_WINDOW_SIZE)
+		++walkBehindIterator;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj> ::
 	gather_distinct_eq_class_pairs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
@@ -866,9 +888,12 @@ uint64_t ColoredDbg<qf_obj, key_obj> ::
 	console -> info("At distinct equivalence-class pairs gathering phase. Time = {}", time(nullptr) - start_time_);
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
-	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
 
 	uint64_t kmerCount = 0, equalKmerCount = 0;
+
 
 	
 	init_bit_vec_block_buckets(dbg1, dbg2);
@@ -900,15 +925,21 @@ uint64_t ColoredDbg<qf_obj, key_obj> ::
 
 
 		if(it1.done())
-			eqClass1 = 0, eqClass2 = cqfEntry2.count, ++it2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count,
+			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
 		else if(it2.done())
-			eqClass1 = cqfEntry1.count, eqClass2 = 0, ++it1;
+			eqClass1 = cqfEntry1.count, eqClass2 = 0,
+			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
 		else if(kmer1 < kmer2)
-			eqClass1 = cqfEntry1.count, eqClass2 = 0, ++it1;
+			eqClass1 = cqfEntry1.count, eqClass2 = 0,
+			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
 		else if(kmer2 < kmer1)
-			eqClass1 = 0, eqClass2 = cqfEntry2.count, ++it2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count,
+			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
 		else
-			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count, ++it1, ++it2,
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count,
+			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2),// ++it2;
 			equalKmerCount++;
 
 
@@ -1161,6 +1192,11 @@ void ColoredDbg<qf_obj, key_obj> ::
 					bv_buffer_serialize(serialID);
 				}
 			}
+
+
+			// Clear memory for this bucket.
+			bucket[i][j].clear();
+			bucket[i][j].shrink_to_fit();
 		}
 	}
 
@@ -1207,7 +1243,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 	console -> info("At CQFs merging phase. Time = {}\n", time(nullptr) - start_time_);
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
-	CQF<KeyObject> :: Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
 
 	uint64_t kmerCount = 0, equalKmerCount = 0; // for debugging purpose(s)
 
@@ -1239,35 +1277,36 @@ void ColoredDbg<qf_obj, key_obj> ::
 			kmer = kmer2;
 			eqClass1 = 0, eqClass2 = cqfEntry2.count;
 
-			++it2;
+			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
 		}
 		else if(it2.done())
 		{
 			kmer = kmer1;
 			eqClass1 = cqfEntry1.count, eqClass2 = 0;
 
-			++it1;
+			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
 		}
 		else if(kmer1 < kmer2)
 		{
 			kmer = kmer1;
 			eqClass1 = cqfEntry1.count, eqClass2 = 0;
 
-			++it1;
+			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
 		}
 		else if(kmer2 < kmer1)
 		{
 			kmer = kmer2;
 			eqClass1 = 0, eqClass2 = cqfEntry2.count;
 
-			++it2;
+			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
 		}
 		else
 		{
 			kmer = kmer1;
 			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
 
-			++it1, ++it2;
+			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
 
 			equalKmerCount++; // for debugging purpose(s)
 		}
