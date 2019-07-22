@@ -194,9 +194,12 @@ class ColoredDbg {
 		std::unordered_map<std::pair<uint64_t, uint64_t>,
 							std::pair<uint64_t, uint64_t>, PairHash> eqClsMap;
 
-		static void advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &position,
-													typename CQF<key_obj>::Iterator &walkBehindIterator,
-													const CQF<key_obj> *cqf);
+		// Advances the CQF iterator 'it', with keeping track of the 'step' count; and fetches the next
+		// CQF-entry into 'cqfEntry' if the iterator 'it' is advanced into a non-end position. Also, advances
+		// or initializes the iterator 'walkBehindIterator' that trails 'it' by ITERATOR_WINDOW_SIZE.
+		static void advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &step, key_obj &cqfEntry,
+											typename CQF<key_obj>::Iterator &walkBehindIterator,
+											const CQF<key_obj> *cqf);
 
 		// Gathers all the distinct equivalence ID pairs and their abundance from the two DBGs into
 		// the hash map 'eqClsMap'. The new IDs are set to a default value of 0.
@@ -208,7 +211,7 @@ class ColoredDbg {
 		// Insert the equivalence class pair (eqCls1, eqCls2) into the hash map 'eqClsMap'.
 		void add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2);
 
-		// Concatenates the BitVector objects bv1[id1] and bv2[id2] into resultVec;
+		// Concatenates the BitVector objects bv1[id1 mod MAX_BUF_SZ] and bv2[id2 mod MAX_BUF_SZ] into resultVec;
 		// where bv1 and bv2 are partial color class tables, with sample counts colCount1 and colCount2
 		// respectively.
 		void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t eqID1,
@@ -225,8 +228,9 @@ class ColoredDbg {
 		// Merge the CQFs from the DBGs into the CQF of this DBG.
 		void merge_CQFs(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2);
 
-		// Add a kmer with equivalence class ID 'eqID' into the CQF of this DBG.
-		void add_kmer(uint64_t kmer, uint64_t eqID);
+		// Add a 'kmer' with equivalence class ID 'eqID' into the CQF of this DBG.
+		void add_kmer(uint64_t kmer, uint64_t eqID, uint64_t &step,
+						typename CQF<key_obj>::Iterator &walkBehindIterator);
 
 		// Returns the sample-id mapping.
 		inline std::unordered_map<uint64_t, std::string> &get_sample_id_map() { return sampleid_map; }
@@ -863,14 +867,16 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 
 template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
-	advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &position,
+	advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &step, key_obj &cqfEntry,
 							typename CQF<key_obj>::Iterator &walkBehindIterator, const CQF<key_obj> *cqf)
 {
-	++it, ++position;
+	++it, ++step;
+	if(!it.done())
+		cqfEntry = it.get_cur_hash();
 
-	if(position == ITERATOR_WINDOW_SIZE)
+	if(step == ITERATOR_WINDOW_SIZE)
 		walkBehindIterator = cqf -> begin(true);
-	else if(position > ITERATOR_WINDOW_SIZE)
+	else if(step > ITERATOR_WINDOW_SIZE)
 		++walkBehindIterator;
 }
 
@@ -893,7 +899,8 @@ uint64_t ColoredDbg<qf_obj, key_obj> ::
 	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
 
 	uint64_t kmerCount = 0, equalKmerCount = 0;
-
+	uint64_t kmer1, kmer2, eqClass1, eqClass2;
+	key_obj cqfEntry1, cqfEntry2;
 
 	
 	init_bit_vec_block_buckets(dbg1, dbg2);
@@ -903,44 +910,50 @@ uint64_t ColoredDbg<qf_obj, key_obj> ::
 		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
 
 
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
+
 	while(!it1.done() || !it2.done())
 	{
-		uint64_t kmer1, kmer2, eqClass1, eqClass2;
-		key_obj cqfEntry1, cqfEntry2;
-
 		if(!it1.done())
-		{
-			cqfEntry1 = it1.get_cur_hash();
 			kmer1 = cqfEntry1.key;
-		}
 		
 		if(!it2.done())
-		{
-			cqfEntry2 = it2.get_cur_hash();
 			kmer2 = cqfEntry2.key;
-		}
 
 
-		// eqClassX = 0 implies absence in CDBG X.
-
-
+		// eqClassX = 0 implies absence in CdBG X.
 		if(it1.done())
-			eqClass1 = 0, eqClass2 = cqfEntry2.count,
-			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
+		{
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
 		else if(it2.done())
-			eqClass1 = cqfEntry1.count, eqClass2 = 0,
-			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
 		else if(kmer1 < kmer2)
-			eqClass1 = cqfEntry1.count, eqClass2 = 0,
-			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
 		else if(kmer2 < kmer1)
-			eqClass1 = 0, eqClass2 = cqfEntry2.count,
-			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
+		{
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
 		else
-			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count,
-			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1),// ++it1;
-			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2),// ++it2;
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2),// ++it2;
 			equalKmerCount++;
+		}
 
 
 		add_eq_class_pair(eqClass1, eqClass2);
@@ -1219,14 +1232,21 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
-	add_kmer(uint64_t kmer, uint64_t eqID)
+	add_kmer(uint64_t kmer, uint64_t eqID, uint64_t &step, typename CQF<key_obj>::Iterator &walkBehindIterator)
 {
-	if (dbg.insert(KeyObject(kmer, 0, eqID), QF_NO_LOCK | QF_KEY_IS_HASH) == QF_NO_SPACE)
+	if(dbg.insert(KeyObject(kmer, 0, eqID), QF_NO_LOCK | QF_KEY_IS_HASH) == QF_NO_SPACE)
 	{
 		// This means that auto_resize failed.
 		console -> error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
 		exit(1);
 	}
+
+	
+	step++;
+	if(step == ITERATOR_WINDOW_SIZE)
+		walkBehindIterator = dbg.begin(true);
+	else if(step > ITERATOR_WINDOW_SIZE)
+		++walkBehindIterator;
 }
 
 
@@ -1244,75 +1264,76 @@ void ColoredDbg<qf_obj, key_obj> ::
 
 	const CQF<key_obj> *cqf1 = dbg1.get_cqf(), *cqf2 = dbg2.get_cqf();
 	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
-									walkBehindIterator1, walkBehindIterator2;
-	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
+									walkBehindIterator1, walkBehindIterator2, walkBehindIteratorOut;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0, cqfOutPosition = 0;
 
-	uint64_t kmerCount = 0, equalKmerCount = 0; // for debugging purpose(s)
+	uint64_t kmerCount = 0, equalKmerCount = 0;
+	uint64_t kmer1, kmer2, kmer, eqClass1, eqClass2;
+	key_obj cqfEntry1, cqfEntry2;
 
 	
 	if(it1.done() || it2.done())
 		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
 
+	
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
 
 	while(!it1.done() || !it2.done())
 	{
-		uint64_t kmer1, kmer2, kmer, eqClass1, eqClass2;
-		key_obj cqfEntry1, cqfEntry2;
-
 		if(!it1.done())
-		{
-			cqfEntry1 = it1.get_cur_hash();
 			kmer1 = cqfEntry1.key;
-		}
 		
 		if(!it2.done())
-		{
-			cqfEntry2 = it2.get_cur_hash();
 			kmer2 = cqfEntry2.key;
-		}
 
 
 		if(it1.done())
 		{
 			kmer = kmer2;
-			eqClass1 = 0, eqClass2 = cqfEntry2.count;
 
-			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
 		}
 		else if(it2.done())
 		{
 			kmer = kmer1;
+			
 			eqClass1 = cqfEntry1.count, eqClass2 = 0;
-
-			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
 		}
 		else if(kmer1 < kmer2)
 		{
 			kmer = kmer1;
+			
 			eqClass1 = cqfEntry1.count, eqClass2 = 0;
-
-			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1);// ++it1;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
 		}
 		else if(kmer2 < kmer1)
 		{
 			kmer = kmer2;
-			eqClass1 = 0, eqClass2 = cqfEntry2.count;
 
-			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
 		}
 		else
 		{
 			kmer = kmer1;
-			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
 
-			advance_iterator_window(it1, cqfPosition1, walkBehindIterator1, cqf1),// ++it1;
-			advance_iterator_window(it2, cqfPosition2, walkBehindIterator2, cqf2);// ++it2;
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
 
 			equalKmerCount++; // for debugging purpose(s)
 		}
 
 
-		add_kmer(kmer, eqClsMap[std :: make_pair(eqClass1, eqClass2)].first);
+		add_kmer(kmer, eqClsMap[std :: make_pair(eqClass1, eqClass2)].first,
+					cqfOutPosition, walkBehindIteratorOut);
 		kmerCount++;
 
 		if(kmerCount % PROGRESS_STEP == 0)
