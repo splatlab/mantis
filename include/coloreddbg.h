@@ -819,8 +819,7 @@ template <typename qf_obj, typename key_obj>
 inline void ColoredDbg<qf_obj, key_obj> ::
 	init_bit_vec_block_buckets(ColoredDbg<qf_obj, key_obj> &dbg1, ColoredDbg<qf_obj, key_obj> &dbg2)
 {
-	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
-					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
+	const uint64_t fileCount1 = dbg1.get_eq_class_file_count(), fileCount2 = dbg2.get_eq_class_file_count();
 	
 	bucket.resize(fileCount1);
 	for(uint64_t i = 0; i < fileCount1; ++i)
@@ -844,9 +843,10 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 	{
 		eqClsMap[eqPair] = newEntry;
 
-		bucket[eqCls1 / mantis::NUM_BV_BUFFER][eqCls2 / mantis::NUM_BV_BUFFER].push_back(eqPair);
+		uint64_t file1 = (eqCls1 ? (eqCls1 - 1) / mantis::NUM_BV_BUFFER : 0),
+					file2 = (eqCls2 ? (eqCls2 - 1) / mantis::NUM_BV_BUFFER : 0);
 
-		// printf("New equivalence pair: (%d, %d)\n", (int)eqPair.first, (int)eqPair.second);
+		bucket[file1][file2].push_back(eqPair);
 	}
 	else
 		it -> second.second++;
@@ -1093,14 +1093,16 @@ void ColoredDbg<qf_obj, key_obj> ::
 	console -> info("At color-class building (bitvectors concatenation) phase. Time = {}\n",
 					time(nullptr) - start_time_);
 
-	const uint64_t fileCount1 = (dbg1.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1,
-					fileCount2 = (dbg2.get_eq_class_file_count() / mantis::NUM_BV_BUFFER) + 1;
+	const uint64_t fileCount1 = dbg1.get_eq_class_file_count(),
+					fileCount2 = dbg2.get_eq_class_file_count();
 	uint64_t serialID = 0;
 	
 
 
 	for(uint64_t i = 0; i < fileCount1; ++i)
 	{
+		console -> info("Mantis 1: loading one bitvectorRRR from file {}.", dbg1.get_eq_class_files()[i]);
+
 		// Required: data_1 = read_i'th Bit Vector block for dbg1
 		BitVectorRRR bitVec1;
 		sdsl::load_from_file(bitVec1, dbg1.get_eq_class_files()[i]);
@@ -1110,6 +1112,8 @@ void ColoredDbg<qf_obj, key_obj> ::
 		for(uint64_t j = 0; j < fileCount2; ++j)
 		{
 			console -> info("At bucket ({}, {}). Size = {}", i, j, bucket[i][j].size());
+
+			console -> info("Mantis 2: loading one bitvectorRRR from file {}.", dbg2.get_eq_class_files()[j]);
 			
 
 			// Required: data_2 = read_j'th Bit Vector block for dbg2
