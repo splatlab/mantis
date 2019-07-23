@@ -127,6 +127,14 @@ class ColoredDbg {
 
 
 
+		// Merge approach 2
+
+		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+
+
+
+
 
 		
 	private:
@@ -238,6 +246,24 @@ class ColoredDbg {
 		// Serialize the bitvector buffer to disk, when the current class count is 'eqClsCount'.
 		// TODO: Merge this overloaded method with the earlier one through default argument.
 		void bv_buffer_serialize(uint64_t eqClsCount);
+
+
+
+
+
+		// Merge approach 2
+
+		const std::string TEMP_DIR = std::string("temp/");
+		const std::string EQ_ID_PAIRS_FILE = std::string("eq-id-pairs");
+		const std::string ID_PAIR_COUNT_FILE = std::string("id-pairs-count");
+
+		std::vector<std::pair<uint64_t, uint64_t>> eqIdPair;
+
+		void gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2);
+
+		void gather_unique_eq_id_pairs();
+
+		void block_sort();
 };
 
 template <class T>
@@ -790,7 +816,7 @@ ColoredDbg<qf_obj, key_obj> ::
 		std::string sampleName;
 		uint32_t sampleID;
 
-		while (sampleList >> sampleID >> sampleName)
+		while(sampleList >> sampleID >> sampleName)
 		{
 			sampleid_map[sampleID] = sampleName;
 			num_samples++;
@@ -1398,10 +1424,10 @@ void ColoredDbg<qf_obj, key_obj>::
 	std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
 
 	for(auto sampleID: dbg1.get_sample_id_map())
-		outputFile << sampleID.first << " " << sampleID.second << std::endl;
+		outputFile << sampleID.first << " " << sampleID.second << "\n";
 
 	for(auto sampleID: dbg2.get_sample_id_map())
-		outputFile << dbg1.get_num_samples() + sampleID.first << " " << sampleID.second << std::endl;
+		outputFile << dbg1.get_num_samples() + sampleID.first << " " << sampleID.second << "\n";
 
 	outputFile.close();
 
@@ -1413,7 +1439,7 @@ void ColoredDbg<qf_obj, key_obj>::
 		std::ofstream outputFile(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
 
 		for (auto idFreq : eqClsMap)
-			outputFile << idFreq.second.first << " " << idFreq.second.second << std::endl;
+			outputFile << idFreq.second.first << " " << idFreq.second.second << "\n";
 		
 		outputFile.close();
 	}
@@ -1423,5 +1449,228 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2)
+{
+	auto t_start = time(nullptr);
+
+
+	console -> info("Writing all the eq-id pairs to file {}. Time-stamp = {}", TEMP_DIR + EQ_ID_PAIRS_FILE,
+					time(nullptr) - start_time_);
+
+	std::ofstream output(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
+
+	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
+
+	uint64_t kmerCount = 0, equalKmerCount = 0;
+	uint64_t kmer1, kmer2, eqClass1, eqClass2;
+	key_obj cqfEntry1, cqfEntry2;
+
+
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
+
+	while(!it1.done() || !it2.done())
+	{
+		if(!it1.done())
+			kmer1 = cqfEntry1.key;
+		
+		if(!it2.done())
+			kmer2 = cqfEntry2.key;
+
+
+		// eqClassX = 0 implies absence in CdBG X.
+		if(it1.done())
+		{
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else if(it2.done())
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2),// ++it2;
+			equalKmerCount++;
+		}
+
+
+		// add_eq_class_pair(eqClass1, eqClass2);
+		output << eqClass1 << " " << eqClass2 << "\n";
+		kmerCount++;
+
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Observed count of -- distinct k-mers: {}M, shared k-mers: {}M. Time-stamp = {}",
+							kmerCount * 10 / PROGRESS_STEP, equalKmerCount * 10.0 / PROGRESS_STEP,
+							time(nullptr) - start_time_);
+	}
+
+
+	console -> info("Distinct kmers found {}, shared kmers found {}. Time-stamp = {}",
+					kmerCount, equalKmerCount, time(nullptr) - start_time_);
+
+	output.flush();
+	output.close();
+
+	
+	auto t_end = time(nullptr);
+	console -> info("Gathering all equivalence-id pairs took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
+{
+	auto t_start = time(nullptr);
+
+
+	console -> info("Filtering out the unique eq-id pairs from file {}. Time-stamp = {}",
+					TEMP_DIR + EQ_ID_PAIRS_FILE, time(nullptr) - start_time_);
+
+
+	std::string file = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
+	std::string sysCommand = "sort -u -o " + file + " " + file;
+
+	// TODO: Consult Professor on parallelization details.
+	// int sortThreadCount = 8;
+	// int memoryBuffSize = 8;
+	// std::string sysCommand = "sort --parallel " + sortThreadCount + " -S " + memoryBuffSize + "G"
+	// 							" -u -o " + file + " " + file
+
+	system(sysCommand.c_str());
+
+	console -> info("Filtered all the unique eq-id pairs into file {}. Time-stamp = {}",
+					TEMP_DIR + EQ_ID_PAIRS_FILE, time(nullptr) - start_time_);
+
+
+	std::string opFile = prefix + TEMP_DIR + ID_PAIR_COUNT_FILE;
+	sysCommand = "wc -l " + file + " | egrep -o \"[0-9]+ \" >> " + opFile;
+
+	system(sysCommand.c_str());
+
+	std::ifstream colClsCount(opFile);
+	uint64_t colorClassCount;
+
+	colClsCount >> colorClassCount;
+	colClsCount.close();
+
+	console -> info("Count of unique pairs = {}. Time-stamp = {}",
+					colorClassCount, time(nullptr) - start_time_);
+
+
+
+	std::ifstream ipFile(file);
+	std::pair<uint64_t, uint64_t> idPair;
+
+	console -> info("Reading the unique id pairs into memory.");
+
+	eqIdPair.reserve(colorClassCount);
+	while(ipFile >> idPair.first >> idPair.second)
+		eqIdPair.push_back(idPair);
+
+	console -> info("Reading into memory complete.");
+
+
+
+	auto t_end = time(nullptr);
+	console -> info("Gathering all unique equivalence-id pairs took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+inline void ColoredDbg<qf_obj, key_obj>:: block_sort()
+{
+	auto t_start = time(nullptr);
+
+
+	console -> info("Sorting {} unique eq-id pairs based on their color-class blocks. Time-stamp = {}",
+					eqIdPair.size(), time(nullptr) - start_time_);
+
+	sort(eqIdPair.begin(), eqIdPair.end(),
+		[](const std::pair<uint64_t, uint64_t> &lhs, const std::pair<uint64_t, uint64_t> &rhs)
+		{
+			uint64_t bucket1 = (lhs.first ? (lhs.first - 1) / mantis::NUM_BV_BUFFER : 0),
+						bucket2 = (rhs.first ? (rhs.first - 1) / mantis::NUM_BV_BUFFER : 0);
+
+			if(bucket1 != bucket2)
+				return bucket1 < bucket2;
+
+			bucket1 = (lhs.second ? (lhs.second - 1) / mantis::NUM_BV_BUFFER : 0),
+			bucket2 = (rhs.second ? (rhs.second - 1) / mantis::NUM_BV_BUFFER : 0);
+
+			return bucket1 < bucket2;
+		});
+
+	console -> info("Sorting complete. Time-stamp = {}", time(nullptr) - start_time_);
+
+
+	auto t_end = time(nullptr);
+	console -> info("Block-sorting the unique equivalence-id pairs took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	// Make the temporary directory if it doesn't exist.
+	std::string tempDir = prefix + TEMP_DIR;
+
+	if(!mantis::fs::DirExists(tempDir.c_str()))
+		mantis::fs::MakeDir(tempDir.c_str());
+	
+	// Check to see if the temporary directory exists now.
+	if(!mantis::fs::DirExists(tempDir.c_str()))
+	{
+		console->error("Temporary directory {} could not be successfully created.", tempDir);
+		exit(1);
+	}
+
+	gather_eq_id_pairs(cdbg1, cdbg2);
+
+	if(system(NULL))
+		console -> info("Command processor exists.");
+	else
+		console -> error("Command processor does not exist.");
+
+	gather_unique_eq_id_pairs();
+
+	block_sort();
+}
 
 #endif
