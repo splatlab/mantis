@@ -159,6 +159,7 @@ int main ( int argc, char *argv[] ) {
   auto merge_mode = (
                     command("merge").set(selected, mode::merge),
                     option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
+                    option("-t", "--eqclass_dist") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate phases",
 										// required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
                     required("-d1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-d2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
@@ -174,7 +175,8 @@ int main ( int argc, char *argv[] ) {
   auto test_mode = (
                     command("test").set(selected, mode::test),
                     option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
-										// required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
+										option("-t", "--eqclass_dist") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate phases",
+                    // required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
                     required("-d1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-d2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
                     required("-o", "--output") & value("merge-output", mopt.out) % "directory where results should be written"

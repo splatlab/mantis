@@ -1113,6 +1113,9 @@ int test_merge_main(MergeOpts &opt)
 	if(opt.flush_eqclass_dist)
 		mergedCdBG.set_flush_eqclass_dist();
 
+	if(opt.threadCount > 1)
+		mergedCdBG.set_thread_count(opt.threadCount);
+
 	mergedCdBG.set_console(console);
 
 	

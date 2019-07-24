@@ -71,21 +71,11 @@ class MergeOpts
 {
 	public:
 		bool flush_eqclass_dist{false};
-		// int qbits;
+		uint threadCount{1};
     std::string dir1;
 		std::string dir2;
 		std::string out;
 		std::shared_ptr<spdlog::logger> console{nullptr};
-
-//   nlohmann::json to_json() {
-//     nlohmann::json j;
-//     j["dump_eqclass_dist"] = flush_eqclass_dist;
-//     j["quotient_bits"] = qbits;
-//     j["input_list"] = inlist;
-//     j["output_dir"] = out;
-//     j["num_threads"] = numthreads;
-//     return j;
-//   }
 };
 
 class ValidateMergeOpts
