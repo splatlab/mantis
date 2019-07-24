@@ -29,6 +29,8 @@
 #include "common_types.h"
 #include "mantisconfig.hpp"
 
+#include "BooPHF.h"
+
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
 
@@ -131,7 +133,7 @@ class ColoredDbg {
 
 		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
-
+		void set_thread_count(uint threadNum) { threadCount = threadNum; }
 
 
 
@@ -253,17 +255,40 @@ class ColoredDbg {
 
 		// Merge approach 2
 
+		uint threadCount = 1;
 		const std::string TEMP_DIR = std::string("temp/");
 		const std::string EQ_ID_PAIRS_FILE = std::string("eq-id-pairs");
 		const std::string ID_PAIR_COUNT_FILE = std::string("id-pairs-count");
 
 		std::vector<std::pair<uint64_t, uint64_t>> eqIdPair;
 
+		class Custom_Pair_Hasher
+		{
+		public:
+			// the class should have operator () with this signature :
+			uint64_t operator ()(const std::pair<uint64_t, uint64_t> &key, uint64_t seed = 0) const
+			{
+				// uint64_t hash  =  std::hash<uint64_t>{}(key);
+				// hash ^= seed;
+
+				seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2); 
+				seed ^= std::hash<uint64_t>{}(key.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2); 
+				
+				return seed;
+			}
+		};
+
+		typedef boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> boophf_t;
+
+		boophf_t *bphf;
+
 		void gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2);
 
 		void gather_unique_eq_id_pairs();
 
 		void block_sort();
+
+		void build_mph_table();
 };
 
 template <class T>
@@ -749,7 +774,7 @@ ColoredDbg<qf_obj, key_obj>::
 				std::string &prefix, int flag):
 	bv_buffer(mantis::NUM_BV_BUFFER * (cdbg1.get_num_samples() + cdbg2.get_num_samples())),
 	prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
-	num_serializations(0), dbg_alloc_flag(flag), start_time_(std::time(nullptr))
+	num_serializations(0), threadCount(1), dbg_alloc_flag(flag), start_time_(std::time(nullptr))
 	{
 		// if(flag == MANTIS_DBG_IN_MEMORY)
 		// {
@@ -1459,6 +1484,8 @@ void ColoredDbg<qf_obj, key_obj>::
 	console -> info("Writing all the eq-id pairs to file {}. Time-stamp = {}", TEMP_DIR + EQ_ID_PAIRS_FILE,
 					time(nullptr) - start_time_);
 
+	
+	// TODO: Add faster file-write mechanism.
 	std::ofstream output(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
 
 	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
@@ -1554,18 +1581,25 @@ void ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 	auto t_start = time(nullptr);
 
 
-	console -> info("Filtering out the unique eq-id pairs from file {}. Time-stamp = {}",
-					TEMP_DIR + EQ_ID_PAIRS_FILE, time(nullptr) - start_time_);
+	console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
+					TEMP_DIR + EQ_ID_PAIRS_FILE, threadCount, time(nullptr) - start_time_);
 
 
 	std::string file = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
-	std::string sysCommand = "sort -u -o " + file + " " + file;
+	std::string sysCommand = "sort -u";
+
+	sysCommand += " --parallel=" + std::to_string(threadCount);
+
+	// int memoryBuffSize = 8;
+	// sysCommand += " -S " + std::to_string(memoryBuffSize);
+
+	sysCommand += " -o " + file + " " + file;
 
 	// TODO: Consult Professor on parallelization details.
-	// int sortThreadCount = 8;
-	// int memoryBuffSize = 8;
-	// std::string sysCommand = "sort --parallel " + sortThreadCount + " -S " + memoryBuffSize + "G"
+	// std::string sysCommand = "sort --parallel=" + threadCount + " -S " + memoryBuffSize + "G"
 	// 							" -u -o " + file + " " + file
+
+	console -> info("System command used:\n{}", sysCommand);
 
 	system(sysCommand.c_str());
 
@@ -1574,7 +1608,7 @@ void ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 
 
 	std::string opFile = prefix + TEMP_DIR + ID_PAIR_COUNT_FILE;
-	sysCommand = "wc -l " + file + " | egrep -o \"[0-9]+ \" >> " + opFile;
+	sysCommand = "wc -l " + file + " | egrep -o \"[0-9]+ \" > " + opFile;
 
 	system(sysCommand.c_str());
 
@@ -1584,8 +1618,7 @@ void ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 	colClsCount >> colorClassCount;
 	colClsCount.close();
 
-	console -> info("Count of unique pairs = {}. Time-stamp = {}",
-					colorClassCount, time(nullptr) - start_time_);
+	console -> info("Count of unique pairs = {}. Time-stamp = {}", colorClassCount, time(nullptr) - start_time_);
 
 
 
@@ -1598,7 +1631,8 @@ void ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 	while(ipFile >> idPair.first >> idPair.second)
 		eqIdPair.push_back(idPair);
 
-	console -> info("Reading into memory complete.");
+	console -> info("Read {} id pairs into memory. Time-stamp = {}", eqIdPair.size(),
+					time(nullptr) - start_time_);
 
 
 
@@ -1616,7 +1650,7 @@ inline void ColoredDbg<qf_obj, key_obj>:: block_sort()
 	auto t_start = time(nullptr);
 
 
-	console -> info("Sorting {} unique eq-id pairs based on their color-class blocks. Time-stamp = {}",
+	console -> info("Sorting {} unique eq-id pairs based on their corresponding color-class blocks. Time-stamp = {}",
 					eqIdPair.size(), time(nullptr) - start_time_);
 
 	sort(eqIdPair.begin(), eqIdPair.end(),
@@ -1646,6 +1680,51 @@ inline void ColoredDbg<qf_obj, key_obj>:: block_sort()
 
 
 template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>:: build_mph_table()
+{
+	auto t_start = time(nullptr);
+
+	console -> info("Building the minimal perfect hashing table. Time-stamp = {}", time(nullptr) - start_time_);
+	
+
+	uint64_t nelem = eqIdPair.size();
+	uint nthreads = threadCount;
+	
+	bphf = NULL;
+	console -> info("Constructing a BooPHF with {} elements using {} threads.", nelem, nthreads);
+	
+	
+	// lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
+	double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
+
+	//build the mphf
+	bphf = new boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher>(nelem, eqIdPair,
+																				nthreads, gammaFactor);
+	
+	
+	console -> info("BooPHF constructed perfect hash for {} keys; boophf  bits/elem : {}\n", nelem,
+					(double)(bphf -> totalBitSize()) / nelem);
+	
+	//query mphf like this
+	// for (u_int64_t i = 0; i < nelem; i++){
+	// 	uint64_t  idx = bphf->lookup(eqIdPair[i]);
+	// 	console -> info("({}, {}) maps to {}", eqIdPair[i].first, eqIdPair[i].second, idx);
+	// }
+	
+	// TODO: add delete bphf at the terminating function (if required)
+	// free(data);
+	// delete bphf;	
+
+
+	auto t_end = time(nullptr);
+	console -> info("Building the MPH table took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
 	// Make the temporary directory if it doesn't exist.
@@ -1663,14 +1742,17 @@ void ColoredDbg<qf_obj, key_obj>::merge(ColoredDbg<qf_obj, key_obj> &cdbg1, Colo
 
 	gather_eq_id_pairs(cdbg1, cdbg2);
 
-	if(system(NULL))
-		console -> info("Command processor exists.");
-	else
+	if(!system(NULL))
+	{
 		console -> error("Command processor does not exist.");
+		exit(1);
+	}
 
 	gather_unique_eq_id_pairs();
 
 	block_sort();
+
+	build_mph_table();
 }
 
 #endif
