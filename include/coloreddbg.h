@@ -296,7 +296,12 @@ class ColoredDbg {
 
 		std::vector<uint64_t> abundance;
 
-		uint64_t gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2);
+		void sample_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
+								uint64_t sampleKmerCount, uint64_t samplePairCount,
+								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
+
+		uint64_t gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
+									std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
 		uint64_t gather_unique_eq_id_pairs();
 
@@ -1495,8 +1500,131 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	sample_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
+	uint64_t sampleKmerCount, uint64_t samplePairCount,
+	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
+{
+	auto t_start = time(nullptr);
+
+	console -> info("Sampling {} most-abundant eq-id pairs from first {} kmers. Time-stamp = {}",
+					samplePairCount, sampleKmerCount, time(nullptr) - start_time_);
+
+	
+	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
+
+	uint64_t kmerCount = 0;
+	uint64_t kmer1, kmer2, eqClass1, eqClass2;
+	key_obj cqfEntry1, cqfEntry2;
+
+	std::unordered_map<std::pair<uint64_t, uint64_t>, uint64_t, Custom_Pair_Hasher> pairCount;
+
+
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
+
+	while(kmerCount < sampleKmerCount && (!it1.done() || !it2.done()))
+	{
+		if(!it1.done())
+			kmer1 = cqfEntry1.key;
+		
+		if(!it2.done())
+			kmer2 = cqfEntry2.key;
+
+
+		// eqClassX = 0 implies absence in CdBG X.
+		if(it1.done())
+		{
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else if(it2.done())
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else
+		{
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+
+
+		pairCount[std::make_pair(eqClass1, eqClass2)]++;
+		kmerCount++;
+
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Sampled {}M k-mers, color-classes found: {}. Time-stamp = {}",
+							kmerCount * 10 / PROGRESS_STEP, pairCount.size(),
+							time(nullptr) - start_time_);
+	}
+
+	
+	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}",
+					kmerCount, pairCount.size(), time(nullptr) - start_time_);
+
+
+
+	typedef std::pair<uint64_t, std::pair<uint64_t, uint64_t>> CountAndIdPair;
+	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<CountAndIdPair>> minPQ;
+
+	for(auto p = pairCount.begin(); p != pairCount.end(); ++p)
+		if(minPQ.size() < samplePairCount)
+			minPQ.push(std::make_pair(p -> second, p -> first));
+		else if(minPQ.top().first < p -> second)
+		{
+			minPQ.pop();
+			minPQ.push(std::make_pair(p -> second, p -> first));
+		}
+
+
+	
+	while(!minPQ.empty())
+	{
+		sampledPairs.insert(minPQ.top().second);
+		minPQ.pop();
+	}
+
+
+	console -> info("Sampled {} eq-id pairs. Time-stamp = {}", sampledPairs.size(), time(nullptr) - start_time_);
+
+
+	auto t_end = time(nullptr);
+	console -> info("Sampling abundant equivalence-id pairs took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::
-	gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2)
+	gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
+						std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
 {
 	auto t_start = time(nullptr);
 
@@ -1504,16 +1632,31 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	console -> info("Writing all the eq-id pairs to file {}. Time-stamp = {}", TEMP_DIR + EQ_ID_PAIRS_FILE,
 					time(nullptr) - start_time_);
 
+
 	
 	// TODO: Add faster file-write mechanism.
-	std::ofstream output(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
+	std::string fileName = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
+	std::ofstream output(fileName);
+
+
+	uint64_t writtenPairsCount;
+
+	for(auto p = sampledPairs.begin(); p != sampledPairs.end(); ++p)
+		output << p -> first << " " << p -> second << "\n";
+
+	writtenPairsCount = sampledPairs.size();
+
+	console -> info("Wrote {} sampled pairs. Time-stamp = {}", writtenPairsCount, time(nullptr) - start_time_);
+
+
+	console -> info("Now iterating over the CQFs for the rest of the id pairs.");
 
 	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
 	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
 									walkBehindIterator1, walkBehindIterator2;
 	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
 
-	uint64_t kmerCount = 0, equalKmerCount = 0;
+	uint64_t kmerCount = 0;
 	uint64_t kmer1, kmer2, eqClass1, eqClass2;
 	key_obj cqfEntry1, cqfEntry2;
 
@@ -1563,32 +1706,34 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 		{
 			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
 			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
-			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2),// ++it2;
-			equalKmerCount++;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
 		}
 
 
-		// add_eq_class_pair(eqClass1, eqClass2);
-		output << eqClass1 << " " << eqClass2 << "\n";
 		kmerCount++;
+
+		if(sampledPairs.find(std::make_pair(eqClass1, eqClass2)) == sampledPairs.end())
+		{
+			output << eqClass1 << " " << eqClass2 << "\n";
+			writtenPairsCount++;
+		}
 
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Observed count of -- distinct k-mers: {}M, shared k-mers: {}M. Time-stamp = {}",
-							kmerCount * 10 / PROGRESS_STEP, equalKmerCount * 10.0 / PROGRESS_STEP,
-							time(nullptr) - start_time_);
+			console -> info("Observed count of distinct k-mers: {}M, written id-pairs: {}. Time-stamp = {}",
+							kmerCount * 10 / PROGRESS_STEP, writtenPairsCount, time(nullptr) - start_time_);
 	}
 
 
-	console -> info("Distinct kmers found {}, shared kmers found {}. Time-stamp = {}",
-					kmerCount, equalKmerCount, time(nullptr) - start_time_);
+	console -> info("Distinct kmers found {}, id pairs written {}. Time-stamp = {}",
+					kmerCount, writtenPairsCount, time(nullptr) - start_time_);
 
 	output.flush();
 	output.close();
 
 	
 	auto t_end = time(nullptr);
-	console -> info("Gathering all equivalence-id pairs took time {} seconds.", t_end - t_start);
+	console -> info("Gathering equivalence-id pairs took time {} seconds.", t_end - t_start);
 
 
 	return kmerCount;
@@ -1970,9 +2115,17 @@ void ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, Col
 		exit(1);
 	}
 
-	uint64_t kmerCount = gather_eq_id_pairs(cdbg1, cdbg2);
+
+	const uint64_t samplePairCount = 1000000;
+
+
+	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
+	
+	sample_eq_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
+	uint64_t kmerCount = gather_eq_id_pairs(cdbg1, cdbg2, sampledPairs);
 	uint64_t colorClassCount = gather_unique_eq_id_pairs();
 
+	sampledPairs.clear();
 	eqIdPair.reserve(colorClassCount);
 
 	load_unique_id_pairs();
