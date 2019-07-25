@@ -1123,17 +1123,18 @@ int test_merge_main(MergeOpts &opt)
 
 	mergedCdBG.merge(cdbg1, cdbg2);
 
-	// console -> info("Merged colored dBG has {} k-mers and {} equivalence classes",
-	// 							mergedCdBG.get_cqf() -> dist_elts(), mergedCdBG.get_eqclass_count());
+	console -> info("Merged colored dBG has {} k-mers and {} equivalence classes",
+								mergedCdBG.get_cqf() -> dist_elts(), mergedCdBG.get_color_class_count());
 
-	// mergedCdBG.get_cqf() -> dump_metadata();
+	mergedCdBG.get_cqf() -> dump_metadata();
 
 
-	// console -> info("Serializing the CQF and the eq classes in directory {}.", outDir);
+	console -> info("Serializing the CQF in directory {}.", outDir);
 
 	// mergedCdBG.serialize(cdbg1, cdbg2);
+	mergedCdBG.serialize_cqf_and_abundance_dist(cdbg1, cdbg2);
 
-	// console -> info("Serialization done.");
+	console -> info("Serialization done.");
 
 
 	//   {

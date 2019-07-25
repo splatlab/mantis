@@ -129,11 +129,15 @@ class ColoredDbg {
 
 
 
-		// Merge approach 2
+		// Merge approach 2 (Jamshed)
 
 		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
 		void set_thread_count(uint threadNum) { threadCount = threadNum; }
+
+		inline uint64_t get_color_class_count() { return abundance.size() - 1; }
+
+		void serialize_cqf_and_abundance_dist(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cbg2);
 
 
 
@@ -221,9 +225,10 @@ class ColoredDbg {
 		// Insert the equivalence class pair (eqCls1, eqCls2) into the hash map 'eqClsMap'.
 		void add_eq_class_pair(uint64_t eqCls1, uint64_t eqCls2);
 
-		// Concatenates the BitVector objects bv1[id1 mod MAX_BUF_SZ] and bv2[id2 mod MAX_BUF_SZ] into resultVec;
-		// where bv1 and bv2 are partial color class tables, with sample counts colCount1 and colCount2
-		// respectively.
+		// Concatenates the color-classes (BitVector objects) corresponding to the color-IDs 'eqID1' and 'eqID2'
+		// respectively, from two CdBGs of sample sizes 'colCount1' and 'colCount2' each. The partial
+		// BitVectorRRR objects containing the BitVectors for the two color-IDs are 'bv1' and 'bv2' respectively.
+		// The concatenated result BitVector is stored in 'resultVec'.
 		void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t eqID1,
 					const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t eqID2,
 					BitVector &resultVec);
@@ -253,7 +258,7 @@ class ColoredDbg {
 
 
 
-		// Merge approach 2
+		// Merge approach 2 (Jamshed)
 
 		uint threadCount = 1;
 		const std::string TEMP_DIR = std::string("temp/");
@@ -280,15 +285,25 @@ class ColoredDbg {
 
 		typedef boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> boophf_t;
 
-		boophf_t *bphf;
+		boophf_t *mph;
 
-		void gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2);
+		std::vector<uint64_t> mphRedirect;
 
-		void gather_unique_eq_id_pairs();
+		std::vector<uint64_t> abundance;
+
+		uint64_t gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2);
+
+		uint64_t gather_unique_eq_id_pairs();
+
+		void load_unique_id_pairs();
 
 		void block_sort();
 
 		void build_mph_table();
+
+		void build_color_classes_and_redirection_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+		void build_cqf(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -1077,7 +1092,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	const uint64_t wordLen = 64;
 
 
-	if(eqID1)
+	if(eqID1)	// Eq ID = 0 implies an absent equivalence-id.
 	{
 		// Optimized bitvector read and write
 
@@ -1116,7 +1131,7 @@ void ColoredDbg<qf_obj, key_obj> ::
 	}
 
 
-	if(eqID2)
+	if(eqID2)	// Eq ID = 0 implies an absent equivalence id.
 	{
 		// Optimized bitvector read and write
 
@@ -1475,7 +1490,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>::
+uint64_t ColoredDbg<qf_obj, key_obj>::
 	gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2)
 {
 	auto t_start = time(nullptr);
@@ -1569,6 +1584,9 @@ void ColoredDbg<qf_obj, key_obj>::
 	
 	auto t_end = time(nullptr);
 	console -> info("Gathering all equivalence-id pairs took time {} seconds.", t_end - t_start);
+
+
+	return kmerCount;
 }
 
 
@@ -1576,68 +1594,91 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
+uint64_t ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 {
-	auto t_start = time(nullptr);
+	if(!system(NULL))
+	{
+		console -> error("Command processor does not exist.");
+		exit(1);
+	}
 
+
+	auto t_start = time(nullptr);
 
 	console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
 					TEMP_DIR + EQ_ID_PAIRS_FILE, threadCount, time(nullptr) - start_time_);
 
 
-	std::string file = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
+	std::string pairsFile = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
 	std::string sysCommand = "sort -u";
 
 	sysCommand += " --parallel=" + std::to_string(threadCount);
 
-	// int memoryBuffSize = 8;
-	// sysCommand += " -S " + std::to_string(memoryBuffSize);
+	int memoryBuffSize = 8;
+	sysCommand += " -S " + std::to_string(memoryBuffSize) + "G";
 
-	sysCommand += " -o " + file + " " + file;
+	sysCommand += " -o " + pairsFile + " " + pairsFile;
 
 	// TODO: Consult Professor on parallelization details.
 	// std::string sysCommand = "sort --parallel=" + threadCount + " -S " + memoryBuffSize + "G"
-	// 							" -u -o " + file + " " + file
+	// 							" -u -o " + pairsFile + " " + pairsFile
 
 	console -> info("System command used:\n{}", sysCommand);
 
 	system(sysCommand.c_str());
 
 	console -> info("Filtered all the unique eq-id pairs into file {}. Time-stamp = {}",
-					TEMP_DIR + EQ_ID_PAIRS_FILE, time(nullptr) - start_time_);
+					pairsFile, time(nullptr) - start_time_);
 
 
-	std::string opFile = prefix + TEMP_DIR + ID_PAIR_COUNT_FILE;
-	sysCommand = "wc -l " + file + " | egrep -o \"[0-9]+ \" > " + opFile;
+
+	std::string countFile = prefix + TEMP_DIR + ID_PAIR_COUNT_FILE;
+	sysCommand = "wc -l " + pairsFile + " | egrep -o \"[0-9]+ \" > " + countFile;
 
 	system(sysCommand.c_str());
 
-	std::ifstream colClsCount(opFile);
+	std::ifstream input(countFile);
 	uint64_t colorClassCount;
 
-	colClsCount >> colorClassCount;
-	colClsCount.close();
+	input >> colorClassCount;
+	input.close();
 
 	console -> info("Count of unique pairs = {}. Time-stamp = {}", colorClassCount, time(nullptr) - start_time_);
 
+	
+	auto t_end = time(nullptr);
+	console -> info("Filtering the unique id pairs took time {} seconds.", t_end - t_start);
+
+	return colorClassCount;
+}
 
 
-	std::ifstream ipFile(file);
-	std::pair<uint64_t, uint64_t> idPair;
 
-	console -> info("Reading the unique id pairs into memory.");
 
-	eqIdPair.reserve(colorClassCount);
-	while(ipFile >> idPair.first >> idPair.second)
-		eqIdPair.push_back(idPair);
+
+template <typename qf_obj, typename key_obj>
+inline void ColoredDbg<qf_obj, key_obj>:: load_unique_id_pairs()
+{
+	auto t_start = time(nullptr);
+
+	console -> info("Loading the unique id pairs into memory.");
+
+
+	std::string pairsFile = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
+	std::ifstream input(pairsFile);
+	uint64_t id1, id2;;
+
+	while(input >> id1 >> id2)
+		eqIdPair.emplace_back(id1, id2);
+
+	input.close();
 
 	console -> info("Read {} id pairs into memory. Time-stamp = {}", eqIdPair.size(),
 					time(nullptr) - start_time_);
 
 
-
 	auto t_end = time(nullptr);
-	console -> info("Gathering all unique equivalence-id pairs took time {} seconds.", t_end - t_start);
+	console -> info("Loading the id pairs into memory took time {} seconds.", t_end - t_start);
 }
 
 
@@ -1690,7 +1731,7 @@ void ColoredDbg<qf_obj, key_obj>:: build_mph_table()
 	uint64_t nelem = eqIdPair.size();
 	uint nthreads = threadCount;
 	
-	bphf = NULL;
+	mph = NULL;
 	console -> info("Constructing a BooPHF with {} elements using {} threads.", nelem, nthreads);
 	
 	
@@ -1698,22 +1739,22 @@ void ColoredDbg<qf_obj, key_obj>:: build_mph_table()
 	double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
 
 	//build the mphf
-	bphf = new boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher>(nelem, eqIdPair,
+	mph = new boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher>(nelem, eqIdPair,
 																				nthreads, gammaFactor);
 	
 	
-	console -> info("BooPHF constructed perfect hash for {} keys; boophf  bits/elem : {}\n", nelem,
-					(double)(bphf -> totalBitSize()) / nelem);
+	console -> info("BooPHF constructed perfect hash for {} keys; total memory = {}, bits/elem : {}\n",
+					nelem, (mph -> totalBitSize() / 8) / (1024 * 1024), (double)(mph -> totalBitSize()) / nelem);
 	
 	//query mphf like this
 	// for (u_int64_t i = 0; i < nelem; i++){
-	// 	uint64_t  idx = bphf->lookup(eqIdPair[i]);
+	// 	uint64_t  idx = mph->lookup(eqIdPair[i]);
 	// 	console -> info("({}, {}) maps to {}", eqIdPair[i].first, eqIdPair[i].second, idx);
 	// }
 	
-	// TODO: add delete bphf at the terminating function (if required)
+	// TODO: add delete mph at the terminating function (if required)
 	// free(data);
-	// delete bphf;	
+	// delete mph;	
 
 
 	auto t_end = time(nullptr);
@@ -1725,8 +1766,191 @@ void ColoredDbg<qf_obj, key_obj>:: build_mph_table()
 
 
 template <typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>::merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+void ColoredDbg<qf_obj, key_obj>::
+	build_color_classes_and_redirection_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
+	auto t_start = time(nullptr);
+
+	console -> info("At color-class building (bitvectors concatenation) phase. Time = {}\n",
+					time(nullptr) - start_time_);
+	
+
+	// Current buckets are required to be initialized with invalid values,
+	// for the loading of the first BitVectorRRR file from each CdBG.
+	uint64_t serialId = 0, currBucket1 = cdbg1.get_eq_class_file_count() + 1,
+				currBucket2 = cdbg2.get_eq_class_file_count() + 1;
+	
+	BitVectorRRR bitVec1, bitVec2;
+
+
+	for(auto p = eqIdPair.begin(); p != eqIdPair.end(); ++p)
+	{
+		uint64_t reqBucket1 = (p -> first ? (p -> first - 1) / mantis::NUM_BV_BUFFER : 0),
+					reqBucket2 = (p -> second ? (p -> second - 1) / mantis::NUM_BV_BUFFER : 0);
+
+		if(reqBucket1 != currBucket1)
+		{
+			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1]);
+			currBucket1 = reqBucket1;
+
+			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time = {}.",
+							cdbg1.get_eq_class_files()[currBucket1], time(nullptr) - start_time_);
+		}
+
+		if(reqBucket2 != currBucket2)
+		{
+			sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2]);
+			currBucket2 = reqBucket2;
+
+			console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time = {}.",
+							cdbg2.get_eq_class_files()[currBucket2], time(nullptr) - start_time_);
+		}
+
+
+		mphRedirect[mph -> lookup(*p)] = ++serialId;
+
+		BitVector mergedColorClass(num_samples);
+		concat(bitVec1, cdbg1.get_num_samples(), p -> first, bitVec2, cdbg2.get_num_samples(), p -> second,
+				mergedColorClass);
+
+		add_bitvector(mergedColorClass, serialId - 1);
+
+		// Serialization and disk-write if required
+		if(serialId % mantis::NUM_BV_BUFFER == 0)
+		{
+			console -> info("Serializing bitvector buffer with {} color-classes.", serialId);
+			bv_buffer_serialize(serialId);
+		}
+	}
+
+
+	// Serialize the bv buffer last time if needed
+	if (serialId % mantis::NUM_BV_BUFFER > 0)
+	{
+		console -> info("Serializing bitvector buffer with {} color-classes.", serialId);
+		bv_buffer_serialize(serialId);
+	}
+
+
+
+	auto t_end = time(nullptr);
+	console -> info("Color-class building phase took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	build_cqf(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	auto t_start = time(nullptr);
+
+	console -> info("At CQFs merging phase. Time = {}\n", time(nullptr) - start_time_);
+
+
+	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2, walkBehindIteratorOut;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0, cqfOutPosition = 0;
+
+	uint64_t kmerCount = 0, equalKmerCount = 0;
+	uint64_t kmer1, kmer2, kmer, eqClass1, eqClass2;
+	key_obj cqfEntry1, cqfEntry2;
+
+	
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+
+	
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
+
+	while(!it1.done() || !it2.done())
+	{
+		if(!it1.done())
+			kmer1 = cqfEntry1.key;
+		
+		if(!it2.done())
+			kmer2 = cqfEntry2.key;
+
+
+		if(it1.done())
+		{
+			kmer = kmer2;
+
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else if(it2.done())
+		{
+			kmer = kmer1;
+			
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			kmer = kmer1;
+			
+			eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			kmer = kmer2;
+
+			eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else
+		{
+			kmer = kmer1;
+
+			eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+
+			equalKmerCount++; // for debugging purpose(s)
+		}
+
+
+		uint64_t colorId = mphRedirect[mph -> lookup(std::make_pair(eqClass1, eqClass2))];
+		add_kmer(kmer, colorId, cqfOutPosition, walkBehindIteratorOut);
+		abundance[colorId]++;
+		kmerCount++;
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Kmers merged: {}M, time: {}", kmerCount * 10 / PROGRESS_STEP,
+							time(nullptr) - start_time_);
+	}
+
+
+	console -> info("Total kmers merged: {}. Time: {}", kmerCount, time(nullptr) - start_time_);
+
+
+	auto t_end = time(nullptr);
+	console -> info("Merging the CQFs took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	auto t_start = time(nullptr);
+	console -> info ("Merge starting. Time = {}\n", time(nullptr) - start_time_);
+
+
 	// Make the temporary directory if it doesn't exist.
 	std::string tempDir = prefix + TEMP_DIR;
 
@@ -1740,19 +1964,86 @@ void ColoredDbg<qf_obj, key_obj>::merge(ColoredDbg<qf_obj, key_obj> &cdbg1, Colo
 		exit(1);
 	}
 
-	gather_eq_id_pairs(cdbg1, cdbg2);
+	uint64_t kmerCount = gather_eq_id_pairs(cdbg1, cdbg2);
+	uint64_t colorClassCount = gather_unique_eq_id_pairs();
 
-	if(!system(NULL))
-	{
-		console -> error("Command processor does not exist.");
-		exit(1);
-	}
+	eqIdPair.reserve(colorClassCount);
 
-	gather_unique_eq_id_pairs();
-
+	load_unique_id_pairs();
 	block_sort();
-
 	build_mph_table();
+
+	mphRedirect.resize(colorClassCount);
+
+	build_color_classes_and_redirection_table(cdbg1, cdbg2);
+
+	eqIdPair.clear();
+	eqIdPair.shrink_to_fit();
+
+	abundance.resize(colorClassCount + 1, 0);
+
+	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
+					kmerCount);
+	build_cqf(cdbg1, cdbg2);
+
+	delete mph;
+	mphRedirect.clear();
+	mphRedirect.shrink_to_fit();
+
+
+	auto t_end = time(nullptr);
+	console -> info("Merge completed. Total time taken is {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	serialize_cqf_and_abundance_dist(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	// Serialize the CQF
+	if(dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+		dbg.serialize(prefix + mantis::CQF_FILE);
+	else
+		dbg.close();
+
+
+	// Serialize the bv buffer last time if needed.
+	// Done at the color-class building phase.
+
+
+	// TODO: Move the list concatenation phase to constructor, with introduction of a new field;
+	// just keep the disk-write part here.
+
+	// Serialize the sample id map
+	std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
+
+	for(auto sampleID: cdbg1.get_sample_id_map())
+		outputFile << sampleID.first << " " << sampleID.second << "\n";
+
+	for(auto sampleID: cdbg2.get_sample_id_map())
+		outputFile << cdbg1.get_num_samples() + sampleID.first << " " << sampleID.second << "\n";
+
+	outputFile.close();
+
+
+	// Dump the abundance distribution of the equivalence / color classes.
+	if (flush_eqclass_dis)
+	{
+		const char OUTPUT_ABUNDANCE_DIST_FILE[] = "eqclass_dist.lst";
+		std::ofstream output(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
+
+		for(uint64_t i = 1; i < abundance.size(); ++i)
+			output << i << " " << abundance[i] << "\n";
+		
+		output.flush();
+		output.close();
+
+		abundance.clear();
+		abundance.shrink_to_fit();
+	}
 }
 
 #endif
