@@ -72,6 +72,7 @@ class MergeOpts
 	public:
 		bool flush_eqclass_dist{false};
 		uint threadCount{1};
+    uint maxMemory{1};
     std::string dir1;
 		std::string dir2;
 		std::string out;

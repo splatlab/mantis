@@ -133,7 +133,9 @@ class ColoredDbg {
 
 		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
-		void set_thread_count(uint threadNum) { threadCount = threadNum; }
+		inline void set_thread_count(uint threadNum) { threadCount = threadNum; }
+
+		inline void set_max_memory_for_sort(uint maxMemory) { maxMemoryForSort = maxMemory; }
 
 		inline uint64_t get_color_class_count() { return abundance.size() - 1; }
 
@@ -260,10 +262,13 @@ class ColoredDbg {
 
 		// Merge approach 2 (Jamshed)
 
-		uint threadCount = 1;
 		const std::string TEMP_DIR = std::string("temp/");
 		const std::string EQ_ID_PAIRS_FILE = std::string("eq-id-pairs");
 		const std::string ID_PAIR_COUNT_FILE = std::string("id-pairs-count");
+		
+		uint threadCount = 1;
+
+		uint maxMemoryForSort = 1;
 
 		std::vector<std::pair<uint64_t, uint64_t>> eqIdPair;
 
@@ -1614,8 +1619,9 @@ uint64_t ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 
 	sysCommand += " --parallel=" + std::to_string(threadCount);
 
-	int memoryBuffSize = 8;
-	sysCommand += " -S " + std::to_string(memoryBuffSize) + "G";
+	// int memoryBuffSize = 8;
+	sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
+	// sysCommand += std::string(" -S ") + "2.5G";
 
 	sysCommand += " -o " + pairsFile + " " + pairsFile;
 

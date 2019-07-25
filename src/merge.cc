@@ -1116,6 +1116,9 @@ int test_merge_main(MergeOpts &opt)
 	if(opt.threadCount > 1)
 		mergedCdBG.set_thread_count(opt.threadCount);
 
+	if(opt.maxMemory > 1)
+		mergedCdBG.set_max_memory_for_sort(opt.maxMemory);
+
 	mergedCdBG.set_console(console);
 
 	
