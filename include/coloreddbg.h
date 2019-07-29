@@ -131,14 +131,18 @@ class ColoredDbg {
 
 		// Merge approach 2 (Jamshed)
 
-		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+		// Merges two Colored dBG objects 'cdbg1' and 'cdbg2' into this Colored dBG;
+		// returns the number of distinct color-classes at the merged CdBG.
+		uint64_t merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
+		// Sets the number of processor-threads to be used at the intermediate steps of 
+		// unique id-pairs filtering and MPH building.
 		inline void set_thread_count(uint threadNum) { threadCount = threadNum; }
 
+		// Sets the maximum memory usage limit for the intermediate step of unique id-pairs filtering.
 		inline void set_max_memory_for_sort(uint maxMemory) { maxMemoryForSort = maxMemory; }
 
-		inline uint64_t get_color_class_count() { return abundance.size() - 1; }
-
+		// Serializes the output CQF, sample-id mapping, and abundance distribution (optional).
 		void serialize_cqf_and_abundance_dist(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cbg2);
 
 
@@ -262,25 +266,35 @@ class ColoredDbg {
 
 		// Merge approach 2 (Jamshed)
 
+		// Name of the temporary working directory at disk; will be present temporarily inside the
+		// output directory provided with the command-line arguments.
 		const std::string TEMP_DIR = std::string("temp/");
+
+		// Name of the temporary list of color-id pairs.
 		const std::string EQ_ID_PAIRS_FILE = std::string("eq-id-pairs");
+
+		// Name of the temporary file to contain count of distinct color-id pairs.
 		const std::string ID_PAIR_COUNT_FILE = std::string("id-pairs-count");
 		
+		// Number of processor-threads to be used at the intermediate steps of 
+		// unique id-pairs filtering and MPH building.
 		uint threadCount = 1;
 
+		// Maximum memory usage limit for the intermediate step of unique id-pairs filtering.
 		uint maxMemoryForSort = 1;
 
+		// Collection of distinct color-id pairs.
 		std::vector<std::pair<uint64_t, uint64_t>> eqIdPair;
 
+		// Required to hash pair objects.
+		// TODO: Consult Professor on this hashing.
+		// Done. Resorted to boost::hash_combine instead of plain XOR hashing.
+		// For more explanation, consult https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
 		class Custom_Pair_Hasher
 		{
 		public:
-			// the class should have operator () with this signature :
 			uint64_t operator ()(const std::pair<uint64_t, uint64_t> &key, uint64_t seed = 0) const
 			{
-				// uint64_t hash  =  std::hash<uint64_t>{}(key);
-				// hash ^= seed;
-
 				seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2); 
 				seed ^= std::hash<uint64_t>{}(key.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2); 
 				
@@ -288,31 +302,52 @@ class ColoredDbg {
 			}
 		};
 
+		// Bloom-filter based minimal perfect hash function type.
 		typedef boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> boophf_t;
 
+		// Minimal perfect hash function table for distinct color-id pairs.
 		boophf_t *mph;
 
+		// Redirection table for MPH(color-id-pair); required as MPH provides an arbitrary value within
+		// [0, colorCount - 1] for a color-class key, whereas we need to serialize the color-ids during the
+		// color-class building step, in order to reduce memory-usage by having just one output
+		// bit-vector buffer for the color-class bit-vectors.
 		std::vector<uint64_t> mphRedirect;
 
 		std::vector<uint64_t> abundance;
 
+		// Samples 'samplePairCount' number of most abundant color-id pairs from the first 'sampleKmerCount'
+		// distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2', into the set 'sampledPairs'.
 		void sample_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
 								uint64_t sampleKmerCount, uint64_t samplePairCount,
 								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
+		// Gathers all the color-id pairs for all the distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
+		// and write to a disk file; avoids repeated write of pairs present at the set 'sampledPairs'.
 		uint64_t gather_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
 									std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
+		// Filters all the unique color-id pairs from the pairs gathered by the method 'gather_eq_id_pairs';
+		// reads and writes the id-pairs into disk.
 		uint64_t gather_unique_eq_id_pairs();
 
+		// Loads the unique id-pairs produced by the method 'gather_unique_id_pairs' into the vector 'eqIdPair'.
 		void load_unique_id_pairs();
 
+		// Sorts the vector 'eqIdPair' of unique color-id pairs based on the file-pairs they need to read from
+		// in order to build the concatenated output bit-vectors.
 		void block_sort();
 
+		// Builds an MPH table 'mph' for the distinct color-id pairs present at the vector 'eqIdPair'.
 		void build_mph_table();
 
+		// Builds the output color-class bitvectors and a redirection table for the color-id pairs;
+		// redirection is required as the MPH generates an arbitrary mapping of the id-pairs into the set
+		// [0, colorClassCount - 1]; whereas the color-class bit-vectors are to be generated into another
+		// order (the block-sorted order).
 		void build_color_classes_and_redirection_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
+		// Builds the output merged CQF.
 		void build_cqf(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
@@ -797,31 +832,10 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::
 	ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 				std::string &prefix, int flag):
-	bv_buffer(mantis::NUM_BV_BUFFER * (cdbg1.get_num_samples() + cdbg2.get_num_samples())),
-	prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
-	num_serializations(0), threadCount(1), dbg_alloc_flag(flag), start_time_(std::time(nullptr))
+	bv_buffer(), prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
+	num_serializations(0), threadCount(1), dbg_alloc_flag(flag),
+	start_time_(std::time(nullptr))
 	{
-		// if(flag == MANTIS_DBG_IN_MEMORY)
-		// {
-		// 	CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
-		// 					cdbg1.get_cqf() -> seed());
-		// 	dbg = cqf;
-		// 	// dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
-		// }
-		// else if(flag == MANTIS_DBG_ON_DISK)
-		// {
-		// 	CQF<key_obj> cqf(qbits, cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(),
-		// 					cdbg1.get_cqf() -> seed(), prefix + mantis::CQF_FILE);
-		// 	dbg = cqf;
-		// 	// dbg_alloc_flag = MANTIS_DBG_ON_DISK;
-		// }
-		// else
-		// {
-		// 	ERROR("Wrong Mantis alloc mode.");
-		// 	exit(EXIT_FAILURE);
-		// }
-
-		// dbg.set_auto_resize();
 	}
 
 
@@ -1184,17 +1198,17 @@ void ColoredDbg<qf_obj, key_obj> ::
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize(uint64_t eqClsCount)
 {
-	BitVector bv_temp(bv_buffer);
+	// BitVector bv_temp(bv_buffer);
 	if (eqClsCount % mantis::NUM_BV_BUFFER > 0)
-		bv_temp.resize((eqClsCount % mantis::NUM_BV_BUFFER) * num_samples);
+		bv_buffer.resize((eqClsCount % mantis::NUM_BV_BUFFER) * num_samples);
 
 	
-	BitVectorRRR final_com_bv(bv_temp);
+	BitVectorRRR final_com_bv(bv_buffer);
 	std::string bv_file(prefix + std::to_string(num_serializations) + "_" + mantis::EQCLASS_FILE);
 	
 
 	sdsl::store_to_file(final_com_bv, bv_file);
-	bv_buffer = BitVector(bv_buffer.bit_size());
+	// bv_buffer = BitVector(bv_buffer.bit_size());	// why is it required?
 
 	num_serializations++;
 }
@@ -1762,17 +1776,10 @@ uint64_t ColoredDbg<qf_obj, key_obj>:: gather_unique_eq_id_pairs()
 	std::string pairsFile = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
 	std::string sysCommand = "sort -u";
 
+	// TODO: Consult professor on parallelization and memory-usage details.
 	sysCommand += " --parallel=" + std::to_string(threadCount);
-
-	// int memoryBuffSize = 8;
 	sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
-	// sysCommand += std::string(" -S ") + "2.5G";
-
 	sysCommand += " -o " + pairsFile + " " + pairsFile;
-
-	// TODO: Consult Professor on parallelization details.
-	// std::string sysCommand = "sort --parallel=" + threadCount + " -S " + memoryBuffSize + "G"
-	// 							" -u -o " + pairsFile + " " + pairsFile
 
 	console -> info("System command used:\n{}", sysCommand);
 
@@ -1889,23 +1896,13 @@ void ColoredDbg<qf_obj, key_obj>:: build_mph_table()
 	// lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
 	double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
 
-	//build the mphf
+	// build the mphf
 	mph = new boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher>(nelem, eqIdPair,
 																				nthreads, gammaFactor);
 	
 	
-	console -> info("BooPHF constructed perfect hash for {} keys; total memory = {}, bits/elem : {}\n",
+	console -> info("BooPHF constructed perfect hash for {} keys; total memory = {} MB, bits/elem : {}\n",
 					nelem, (mph -> totalBitSize() / 8) / (1024 * 1024), (double)(mph -> totalBitSize()) / nelem);
-	
-	//query mphf like this
-	// for (u_int64_t i = 0; i < nelem; i++){
-	// 	uint64_t  idx = mph->lookup(eqIdPair[i]);
-	// 	console -> info("({}, {}) maps to {}", eqIdPair[i].first, eqIdPair[i].second, idx);
-	// }
-	
-	// TODO: add delete mph at the terminating function (if required)
-	// free(data);
-	// delete mph;	
 
 
 	auto t_end = time(nullptr);
@@ -1924,7 +1921,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	console -> info("At color-class building (bitvectors concatenation) phase. Time = {}\n",
 					time(nullptr) - start_time_);
-	
+
 
 	// Current buckets are required to be initialized with invalid values,
 	// for the loading of the first BitVectorRRR file from each CdBG.
@@ -1934,10 +1931,10 @@ void ColoredDbg<qf_obj, key_obj>::
 	BitVectorRRR bitVec1, bitVec2;
 
 
-	for(auto p = eqIdPair.begin(); p != eqIdPair.end(); ++p)
+	for(auto idPair = eqIdPair.begin(); idPair != eqIdPair.end(); ++idPair)
 	{
-		uint64_t reqBucket1 = (p -> first ? (p -> first - 1) / mantis::NUM_BV_BUFFER : 0),
-					reqBucket2 = (p -> second ? (p -> second - 1) / mantis::NUM_BV_BUFFER : 0);
+		uint64_t reqBucket1 = (idPair -> first ? (idPair -> first - 1) / mantis::NUM_BV_BUFFER : 0),
+					reqBucket2 = (idPair -> second ? (idPair -> second - 1) / mantis::NUM_BV_BUFFER : 0);
 
 		if(reqBucket1 != currBucket1)
 		{
@@ -1958,11 +1955,11 @@ void ColoredDbg<qf_obj, key_obj>::
 		}
 
 
-		mphRedirect[mph -> lookup(*p)] = ++serialId;
+		mphRedirect[mph -> lookup(*idPair)] = ++serialId;
 
 		BitVector mergedColorClass(num_samples);
-		concat(bitVec1, cdbg1.get_num_samples(), p -> first, bitVec2, cdbg2.get_num_samples(), p -> second,
-				mergedColorClass);
+		concat(bitVec1, cdbg1.get_num_samples(), idPair -> first,
+				bitVec2, cdbg2.get_num_samples(), idPair -> second, mergedColorClass);
 
 		add_bitvector(mergedColorClass, serialId - 1);
 
@@ -1970,6 +1967,7 @@ void ColoredDbg<qf_obj, key_obj>::
 		if(serialId % mantis::NUM_BV_BUFFER == 0)
 		{
 			console -> info("Serializing bitvector buffer with {} color-classes.", serialId);
+
 			bv_buffer_serialize(serialId);
 		}
 	}
@@ -1981,7 +1979,6 @@ void ColoredDbg<qf_obj, key_obj>::
 		console -> info("Serializing bitvector buffer with {} color-classes.", serialId);
 		bv_buffer_serialize(serialId);
 	}
-
 
 
 	auto t_end = time(nullptr);
@@ -2075,7 +2072,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 		uint64_t colorId = mphRedirect[mph -> lookup(std::make_pair(eqClass1, eqClass2))];
 		add_kmer(kmer, colorId, cqfOutPosition, walkBehindIteratorOut);
-		abundance[colorId]++;
+		// abundance[colorId]++;
 		kmerCount++;
 
 		if(kmerCount % PROGRESS_STEP == 0)
@@ -2096,7 +2093,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+uint64_t ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
 	auto t_start = time(nullptr);
 	console -> info ("Merge starting. Time = {}\n", time(nullptr) - start_time_);
@@ -2117,15 +2114,15 @@ void ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, Col
 
 
 	const uint64_t samplePairCount = 1000000;
-
-
 	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
 	
 	sample_eq_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
 	uint64_t kmerCount = gather_eq_id_pairs(cdbg1, cdbg2, sampledPairs);
+	
+	sampledPairs.clear();
+
 	uint64_t colorClassCount = gather_unique_eq_id_pairs();
 
-	sampledPairs.clear();
 	eqIdPair.reserve(colorClassCount);
 
 	load_unique_id_pairs();
@@ -2133,13 +2130,15 @@ void ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, Col
 	build_mph_table();
 
 	mphRedirect.resize(colorClassCount);
+	bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
 
 	build_color_classes_and_redirection_table(cdbg1, cdbg2);
 
 	eqIdPair.clear();
 	eqIdPair.shrink_to_fit();
+	bv_buffer = BitVector(0);
 
-	abundance.resize(colorClassCount + 1, 0);
+	// abundance.resize(colorClassCount + 1, 0);
 
 	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
 					kmerCount);
@@ -2150,8 +2149,15 @@ void ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, Col
 	mphRedirect.shrink_to_fit();
 
 
+	// Remove the temporary directory
+	std::string sysCommand = "rm -rf " + tempDir;
+	system(sysCommand.c_str());
+
+
 	auto t_end = time(nullptr);
 	console -> info("Merge completed. Total time taken is {} seconds.", t_end - t_start);
+
+	return colorClassCount;
 }
 
 
