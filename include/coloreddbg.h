@@ -371,6 +371,15 @@ class ColoredDbg {
 		// MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
 		std::vector<std::vector<boophf_t *>> MPH;
 
+		// The (i, j)'th entry contains the total count of color-id pairs upto bucket (i, j), exclusive,
+		// in row-major order.
+		std::vector<std::vector<uint64_t>> cumulativeBucketSize;
+
+		// Initializes the disk-buckets, i.e. initializes the disk-files, MPH tables, bucket sizes,
+		// cumulative size counts etc.
+		inline void init_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+									std::vector<std::vector<std::ofstream>> &diskBucket);
+
 		// Gathers all the color-id pairs for all the distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2'
 		// into disk-files (or referred to as buckets hereafter), where an id-pair goes to bucket_(i, j)
 		// if it reads color-class bitvectors from bitvector_file_(i-1) of cdbg1 and bitvector_file_(j-1)
@@ -382,11 +391,7 @@ class ColoredDbg {
 		uint64_t fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
-		// Initialize disk-files for the buckets.
-		inline void init_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-									std::vector<std::vector<std::ofstream>> &diskBucket);
-
-		// Add the color-class ID pair (colorID1, colorID2) to the appropriate disk bucket;
+		// Adds the color-class ID pair (colorID1, colorID2) to the appropriate disk bucket;
 		// i.e. write the pair into the file diskBucket[i][j] iff colorID1 has its color-class (bitvector)
 		// at bitvector_file_i and colorID2 has its color-class at bitvector_file_j.
 		inline void add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
@@ -398,6 +403,9 @@ class ColoredDbg {
 
 		// Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
 		void build_MPH_tables(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+		// Builds the output color-class bitvectors for the color-id pairs.
+		void build_color_class_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -2276,18 +2284,21 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	diskBucket.resize(fileCount1 + 1),
 	bucketSize.resize(fileCount1 + 1),
+	cumulativeBucketSize.resize(fileCount1 + 1),
 	MPH.resize(fileCount1 + 1);
 
 	for(uint64_t i = 0; i <= fileCount1; ++i)
 	{
 		diskBucket[i].resize(fileCount2 + 1),
 		bucketSize[i].resize(fileCount2 + 1),
+		cumulativeBucketSize[i].resize(fileCount2 + 1),
 		MPH[i].resize(fileCount2 + 1);
 		
 		for(uint64_t j = 0; j <= fileCount2; ++j)
 			diskBucket[i][j] = std::ofstream(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE + "_" +
 											std::to_string(i) + "_" + std::to_string(j)),
 			bucketSize[i][j] = 0,
+			cumulativeBucketSize[i][j] = 0,
 			MPH[i][j] = NULL;
 	}
 
@@ -2554,7 +2565,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 				std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
 									"_" + std::to_string(i) + "_" + std::to_string(j));
-				uint64_t id1, id2;;
+				uint64_t id1, id2;
 
 				while(input >> id1 >> id2)
 					colorIdPair.emplace_back(id1, id2);
@@ -2576,13 +2587,16 @@ void ColoredDbg<qf_obj, key_obj>::
 																								colorIdPair,
 																								threadCount,
 																								gammaFactor);
+				mphMemory += MPH[i][j] -> totalBitSize();
 
-
-				mphMemory += MPH[i][j] -> totalBitSize();				
 				
 				console -> info("For bucket ({}, {}) BooPHF constructed perfect hash for {} keys; total memory = {} MB, bits/elem : {}. Time-stamp = {}\n",
 								i, j, colorIdPair.size(), (MPH[i][j] -> totalBitSize() / 8) / (1024 * 1024),
 								(double)(MPH[i][j] -> totalBitSize()) / colorIdPair.size(), time(nullptr) - start_time_);
+
+				
+				colorIdPair.clear();
+				colorIdPair.shrink_to_fit();
 			}
 
 	console -> info("Total memory consumed by all the MPH tables = {} MB.", (mphMemory / 8) / (1024 * 1024));
@@ -2590,6 +2604,134 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	auto t_end = time(nullptr);
 	console -> info("Building the MPH tables took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	build_color_class_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	auto t_start = time(nullptr);
+
+	console -> info("At color-class building (bitvectors concatenation) phase. Time = {}\n",
+					time(nullptr) - start_time_);
+
+
+					
+	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(), fileCount2 = cdbg2.get_eq_class_file_count();
+
+	uint64_t writtenPairsCount = 0;
+	BitVectorRRR bitVec1, bitVec2;
+
+
+	for(uint64_t i = 0; i <= fileCount1; ++i)
+	{
+		if(i > 0)
+		{
+			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
+			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time = {}.",
+							cdbg1.get_eq_class_files()[i - 1], time(nullptr) - start_time_);
+		}
+
+		for(uint64_t j = 0; j <= fileCount2; ++j)
+		{
+			if(j > 0)
+			{
+				sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
+				console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time = {}.",
+								cdbg2.get_eq_class_files()[j - 1], time(nullptr) - start_time_);
+			}
+
+			console -> info("At bucket ({}, {}), size = {}. Time-stamp = {}", i, j, bucketSize[i][j],
+							time(nullptr) - start_time_);
+
+
+			cumulativeBucketSize[i][j] = writtenPairsCount;
+
+
+			if(bucketSize[i][j])
+			{
+				uint64_t queueCount = ((cumulativeBucketSize[i][j] + bucketSize[i][j] - 1) / mantis::NUM_BV_BUFFER)
+										- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER) + 1;
+
+				// std::vector<std::deque<std::pair<uint64_t, uint64_t>>> writeQueue;
+				std::vector<std::vector<std::pair<uint64_t, uint64_t>>> writeQueue;
+
+				writeQueue.resize(queueCount);
+
+				uint64_t remPairsCount = bucketSize[i][j];
+				for(uint64_t k = 0; k < queueCount; ++k)
+				{
+					uint64_t queueLen = std::min(remPairsCount, mantis::NUM_BV_BUFFER -
+							(cumulativeBucketSize[i][j] + (bucketSize[i][j] - remPairsCount)) % mantis::NUM_BV_BUFFER);
+					writeQueue[k].reserve(queueLen);
+
+					remPairsCount -= queueLen;
+				}
+
+
+
+				std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+									"_" + std::to_string(i) + "_" + std::to_string(j));
+				std::pair<uint64_t, uint64_t> idPair;
+
+				while(input >> idPair.first >> idPair.second)
+				{
+					uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(idPair)) / mantis::NUM_BV_BUFFER)
+										- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER);
+					writeQueue[queueIdx].push_back(idPair);
+				}
+
+				input.close();
+
+
+
+				for(uint64_t k = 0; k < queueCount; ++k)
+				{
+					for(auto it = writeQueue[k].begin(); it != writeQueue[k].end(); ++it)
+					{
+						uint64_t colorID = cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(*it) + 1;
+
+						BitVector colorClass(num_samples);
+						concat(bitVec1, cdbg1.get_num_samples(), it -> first,
+								bitVec2, cdbg2.get_num_samples(), it -> second, colorClass);
+
+						add_bitvector(colorClass, colorID - 1), writtenPairsCount++;
+
+						if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
+						{
+							console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
+
+							bv_buffer_serialize(writtenPairsCount);
+						}
+					}
+
+					
+					writeQueue[k].clear();
+					writeQueue[k].shrink_to_fit();
+				}
+
+
+				writeQueue.clear();
+				writeQueue.shrink_to_fit();
+			}
+		}
+	}
+
+
+	// Serialize the bv buffer last time if needed
+	if (writtenPairsCount % mantis::NUM_BV_BUFFER > 0)
+	{
+		console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
+		bv_buffer_serialize(writtenPairsCount);
+	}
+
+
+	auto t_end = time(nullptr);
+	console -> info("Color-class building phase took time {} seconds.", t_end - t_start);
 }
 
 
@@ -2629,6 +2771,10 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
 
 	build_MPH_tables(cdbg1, cdbg2);
+
+	bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
+	build_color_class_table(cdbg1, cdbg2);
+	bv_buffer = BitVector(0);
 
 	// eqIdPair.reserve(colorClassCount);
 
