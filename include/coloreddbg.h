@@ -366,6 +366,11 @@ class ColoredDbg {
 
 		// Merge approach 3 (Jamshed)
 
+		std::vector<std::vector<uint64_t>> bucketSize;
+
+		// MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
+		std::vector<std::vector<boophf_t *>> MPH;
+
 		// Gathers all the color-id pairs for all the distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2'
 		// into disk-files (or referred to as buckets hereafter), where an id-pair goes to bucket_(i, j)
 		// if it reads color-class bitvectors from bitvector_file_(i-1) of cdbg1 and bitvector_file_(j-1)
@@ -390,6 +395,9 @@ class ColoredDbg {
 		// Filters all the disk-buckets filled up by the method 'fill_disk_buckets', to contain only unique
 		// color-id pairs. Returns the count of unique color-id pairs.
 		uint64_t filter_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+		// Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
+		void build_MPH_tables(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -2261,23 +2269,29 @@ void ColoredDbg<qf_obj, key_obj>::
 	init_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 					std::vector<std::vector<std::ofstream>> &diskBucket)
 {
-	const uint64_t dim1 = cdbg1.get_eq_class_file_count() + 1,
-					dim2 = cdbg2.get_eq_class_file_count() + 1;
+	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
+					fileCount2 = cdbg2.get_eq_class_file_count();
 
-	console -> info("Initializing {} x {} disk-buckets.", dim1, dim2);
+	console -> info("Initializing {} x {} disk-buckets.", fileCount1, fileCount2);
 
-	diskBucket.resize(dim1);
+	diskBucket.resize(fileCount1 + 1),
+	bucketSize.resize(fileCount1 + 1),
+	MPH.resize(fileCount1 + 1);
 
-	for(uint64_t i = 0; i < dim1; ++i)
+	for(uint64_t i = 0; i <= fileCount1; ++i)
 	{
-		diskBucket[i].resize(dim2);
+		diskBucket[i].resize(fileCount2 + 1),
+		bucketSize[i].resize(fileCount2 + 1),
+		MPH[i].resize(fileCount2 + 1);
 		
-		for(uint64_t j = 0; j < dim2; ++j)
+		for(uint64_t j = 0; j <= fileCount2; ++j)
 			diskBucket[i][j] = std::ofstream(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE + "_" +
-											std::to_string(i) + "_" + std::to_string(j));
+											std::to_string(i) + "_" + std::to_string(j)),
+			bucketSize[i][j] = 0,
+			MPH[i][j] = NULL;
 	}
 
-	console -> info("{} x {} disk-buckets initialized.", dim1, dim2);
+	console -> info("{} x {} disk-buckets initialized.", fileCount1, fileCount2);
 }
 
 
@@ -2482,16 +2496,15 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 			system(sysCommand.c_str());
 
 			std::ifstream lineCount(lineCountFile);
-			uint64_t bucketSize;
 
-			lineCount >> bucketSize;
+			lineCount >> bucketSize[i][j];
 			lineCount.close();
 
 
-			colorClassCount += bucketSize;
+			colorClassCount += bucketSize[i][j];
 
 			console -> info("Filtered {} unique color-id pairs of disk-bucket {}. Time-stamp = {}",
-							bucketSize, diskBucket, time(nullptr) - start_time_);
+							bucketSize[i][j], diskBucket, time(nullptr) - start_time_);
 		}
 
 
@@ -2504,6 +2517,79 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	console -> info("Filtering the unique color-id pairs took time {} seconds.", t_end - t_start);
 
 	return colorClassCount;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	build_MPH_tables(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{	
+	auto t_start = time(nullptr);
+
+	console -> info("Building an MPH (Minimal Perfect Hash) table per disk-bucket. Time-stamp = {}",
+					time(nullptr) - start_time_);
+
+
+	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
+					fileCount2 = cdbg2.get_eq_class_file_count();
+
+	uint64_t mphMemory = 0;
+
+	
+	for(uint64_t i = 0; i <= fileCount1; ++i)
+		for(uint64_t j = 0; j <= fileCount2; ++j)
+			if(!bucketSize[i][j])
+				console -> info("Bucket ({}, {}) is empty. No MPH table is built.", i, j);
+			else
+			{
+				std::vector<std::pair<uint64_t, uint64_t>> colorIdPair;
+				colorIdPair.reserve(bucketSize[i][j]);
+
+
+				console -> info("Loading the unique color-id pairs from bucket ({}, {}) into memory. Time-stamp = {}",
+								i, j, time(nullptr) - start_time_);
+
+				std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+									"_" + std::to_string(i) + "_" + std::to_string(j));
+				uint64_t id1, id2;;
+
+				while(input >> id1 >> id2)
+					colorIdPair.emplace_back(id1, id2);
+
+				input.close();
+
+				console -> info("Loaded {} color-id pairs into memory. Time-stamp = {}", colorIdPair.size(),
+								time(nullptr) - start_time_);
+
+				
+				console -> info("Constructing a BooPHF with {} elements using {} threads. Time-stamp = {}",
+								colorIdPair.size(), threadCount, time(nullptr) - start_time_);
+
+				// lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
+				double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
+
+				// build the mphf
+				MPH[i][j] = new boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher>(colorIdPair.size(),
+																								colorIdPair,
+																								threadCount,
+																								gammaFactor);
+
+
+				mphMemory += MPH[i][j] -> totalBitSize();				
+				
+				console -> info("For bucket ({}, {}) BooPHF constructed perfect hash for {} keys; total memory = {} MB, bits/elem : {}. Time-stamp = {}\n",
+								i, j, colorIdPair.size(), (MPH[i][j] -> totalBitSize() / 8) / (1024 * 1024),
+								(double)(MPH[i][j] -> totalBitSize()) / colorIdPair.size(), time(nullptr) - start_time_);
+			}
+
+	console -> info("Total memory consumed by all the MPH tables = {} MB.", (mphMemory / 8) / (1024 * 1024));
+	
+
+	auto t_end = time(nullptr);
+	console -> info("Building the MPH tables took time {} seconds.", t_end - t_start);
 }
 
 
@@ -2541,6 +2627,8 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	sampledPairs.clear();
 
 	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
+
+	build_MPH_tables(cdbg1, cdbg2);
 
 	// eqIdPair.reserve(colorClassCount);
 
