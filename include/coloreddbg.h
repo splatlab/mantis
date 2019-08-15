@@ -148,6 +148,16 @@ class ColoredDbg {
 
 
 
+
+		// Merge approach 3 (Jamshed)
+
+		// Merges two Colored dBG objects 'cdbg1' and 'cdbg2' into this Colored dBG;
+		// returns the number of distinct color-classes at the merged CdBG.
+		uint64_t merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+
+
+
 		
 	private:
 		// returns true if adding this k-mer increased the number of equivalence
@@ -349,6 +359,37 @@ class ColoredDbg {
 
 		// Builds the output merged CQF.
 		void build_cqf(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+
+
+
+
+		// Merge approach 3 (Jamshed)
+
+		// Gathers all the color-id pairs for all the distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2'
+		// into disk-files (or referred to as buckets hereafter), where an id-pair goes to bucket_(i, j)
+		// if it reads color-class bitvectors from bitvector_file_(i-1) of cdbg1 and bitvector_file_(j-1)
+		// of cdbg2; with avoiding repeated writes of pairs from the set 'sampledPairs', sampled on abundance.
+		// A bucket of the form (0, X) with X > 0 implies that, the id-pairs present at this bucket are only
+		// of k-mers that are absent at cdbg1, present at cdbg2, and read from the bitvector_file_(X - 1)
+		// of cdbg2. Buckets of the form (X, 0) imply vice versa.
+		// Returns the number of distinct k-mers present at the CdBGs cdg1 and cdbg2.
+		uint64_t fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
+
+		// Initialize disk-files for the buckets.
+		inline void init_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+									std::vector<std::vector<std::ofstream>> &diskBucket);
+
+		// Add the color-class ID pair (colorID1, colorID2) to the appropriate disk bucket;
+		// i.e. write the pair into the file diskBucket[i][j] iff colorID1 has its color-class (bitvector)
+		// at bitvector_file_i and colorID2 has its color-class at bitvector_file_j.
+		inline void add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
+										std::vector<std::vector<std::ofstream>> &diskBucket);
+
+		// Filters all the disk-buckets filled up by the method 'fill_disk_buckets', to contain only unique
+		// color-id pairs. Returns the count of unique color-id pairs.
+		uint64_t filter_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -2209,6 +2250,333 @@ void ColoredDbg<qf_obj, key_obj>::
 		abundance.clear();
 		abundance.shrink_to_fit();
 	}
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	init_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+					std::vector<std::vector<std::ofstream>> &diskBucket)
+{
+	const uint64_t dim1 = cdbg1.get_eq_class_file_count() + 1,
+					dim2 = cdbg2.get_eq_class_file_count() + 1;
+
+	console -> info("Initializing {} x {} disk-buckets.", dim1, dim2);
+
+	diskBucket.resize(dim1);
+
+	for(uint64_t i = 0; i < dim1; ++i)
+	{
+		diskBucket[i].resize(dim2);
+		
+		for(uint64_t j = 0; j < dim2; ++j)
+			diskBucket[i][j] = std::ofstream(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE + "_" +
+											std::to_string(i) + "_" + std::to_string(j));
+	}
+
+	console -> info("{} x {} disk-buckets initialized.", dim1, dim2);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
+						std::vector<std::vector<std::ofstream>> &diskBucket)
+{
+	// TODO: Add faster file-write mechanism.
+
+	const uint64_t row = (colorID1 ? (colorID1 - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+					col = (colorID2 ? (colorID2 - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+
+	diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>::
+	fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+							std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
+{
+	auto t_start = time(nullptr);
+
+	console -> info("Writing all the color-id pairs to disk-files ({}). Time-stamp = {}",
+					TEMP_DIR + EQ_ID_PAIRS_FILE + std::string("_X_Y"), time(nullptr) - start_time_);
+
+	
+	std::vector<std::vector<std::ofstream>> diskBucket;
+
+	init_disk_buckets(cdbg1, cdbg2, diskBucket);
+
+
+	uint64_t writtenPairsCount = 0;
+
+	for(auto p = sampledPairs.begin(); p != sampledPairs.end(); ++p)
+		add_color_id_pair(p -> first, p -> second, diskBucket);
+
+	writtenPairsCount = sampledPairs.size();
+
+	console -> info("Wrote the {} sampled pairs to disk. Time-stamp = {}", writtenPairsCount,
+					time(nullptr) - start_time_);
+
+
+
+	console -> info("Now iterating over the CQFs for the rest of the id-pairs.");
+
+	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
+
+	uint64_t kmerCount = 0;
+	uint64_t kmer1, kmer2;// eqClass1, eqClass2;
+	std::pair<uint64_t, uint64_t> idPair;
+	key_obj cqfEntry1, cqfEntry2;
+
+
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
+
+	while(!it1.done() || !it2.done())
+	{
+		if(!it1.done())
+			kmer1 = cqfEntry1.key;
+		
+		if(!it2.done())
+			kmer2 = cqfEntry2.key;
+
+
+		// eqClassX = 0 implies absence in CdBG X.
+		if(it1.done())
+		{
+			// eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			idPair.first = 0, idPair.second = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else if(it2.done())
+		{
+			// eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			idPair.first = cqfEntry1.count, idPair.second = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			// eqClass1 = cqfEntry1.count, eqClass2 = 0;
+			idPair.first = cqfEntry1.count, idPair.second = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			// eqClass1 = 0, eqClass2 = cqfEntry2.count;
+			idPair.first = 0, idPair.second = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else
+		{
+			// eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
+			idPair.first = cqfEntry1.count, idPair.second = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+
+
+		kmerCount++;
+
+		if(sampledPairs.find(idPair) == sampledPairs.end())
+		{
+			// output << eqClass1 << " " << eqClass2 << "\n";
+			add_color_id_pair(idPair.first, idPair.second, diskBucket);
+			writtenPairsCount++;
+		}
+
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Observed count of distinct k-mers: {}M, written id-pairs to disk: {}. Time-stamp = {}",
+							kmerCount * 10 / PROGRESS_STEP, writtenPairsCount, time(nullptr) - start_time_);
+	}
+
+
+	console -> info("Distinct kmers found {}, id pairs written to disk {}. Time-stamp = {}",
+					kmerCount, writtenPairsCount, time(nullptr) - start_time_);
+
+	// output.flush();
+	// output.close();
+
+	// Flush and close the disk-bucket files.
+	for(int i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
+		for(int j = 0; j <= cdbg1.get_eq_class_file_count(); ++j)
+		{
+			diskBucket[i][j].flush();
+			diskBucket[i][j].close();
+		}
+
+	
+	auto t_end = time(nullptr);
+	console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
+
+
+	return kmerCount;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>::
+	filter_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	if(!system(NULL))
+	{
+		console -> error("Command processor does not exist.");
+		exit(1);
+	}
+
+
+	auto t_start = time(nullptr);
+
+	console -> info("Filtering out the unique eq-id pairs from files {} with {} threads. Time-stamp = {}",
+					TEMP_DIR + EQ_ID_PAIRS_FILE + "_X_Y", threadCount, time(nullptr) - start_time_);
+
+
+	uint64_t colorClassCount = 0;
+	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
+					fileCount2 = cdbg2.get_eq_class_file_count();
+
+	
+	for(int i = 0; i <= fileCount1; ++i)
+		for(int j = 0; j <= fileCount2; ++j)
+		{
+			std::string diskBucket = prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+									"_" + std::to_string(i) + "_" + std::to_string(j);
+
+			std::string sysCommand = "sort -u";
+			// TODO: Consult professor on parallelization and memory-usage details.
+			sysCommand += " --parallel=" + std::to_string(threadCount);
+			sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
+			sysCommand += " -o " + diskBucket + " " + diskBucket;
+
+			console -> info("System command used:\n{}", sysCommand);
+
+			system(sysCommand.c_str());
+
+			
+			std::string lineCountFile = prefix + TEMP_DIR + ID_PAIR_COUNT_FILE;
+			sysCommand = "wc -l " + diskBucket + " | egrep -o \"[0-9]+ \" > " + lineCountFile;
+			system(sysCommand.c_str());
+
+			std::ifstream lineCount(lineCountFile);
+			uint64_t bucketSize;
+
+			lineCount >> bucketSize;
+			lineCount.close();
+
+
+			colorClassCount += bucketSize;
+
+			console -> info("Filtered {} unique color-id pairs of disk-bucket {}. Time-stamp = {}",
+							bucketSize, diskBucket, time(nullptr) - start_time_);
+		}
+
+
+	console -> info("Count of unique color-id pairs = {}. Time-stamp = {}",
+					colorClassCount, time(nullptr) - start_time_);
+
+	
+
+	auto t_end = time(nullptr);
+	console -> info("Filtering the unique color-id pairs took time {} seconds.", t_end - t_start);
+
+	return colorClassCount;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>::
+	merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	auto t_start = time(nullptr);
+	console -> info ("Merge starting. Time = {}\n", time(nullptr) - start_time_);
+
+
+	// Make the temporary directory if it doesn't exist.
+	std::string tempDir = prefix + TEMP_DIR;
+
+	if(!mantis::fs::DirExists(tempDir.c_str()))
+		mantis::fs::MakeDir(tempDir.c_str());
+	
+	// Check to see if the temporary directory exists now.
+	if(!mantis::fs::DirExists(tempDir.c_str()))
+	{
+		console->error("Temporary directory {} could not be successfully created.", tempDir);
+		exit(1);
+	}
+
+
+	const uint64_t samplePairCount = 1000000;
+	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
+	
+	sample_eq_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
+	uint64_t kmerCount = fill_disk_buckets(cdbg1, cdbg2, sampledPairs);
+	
+	sampledPairs.clear();
+
+	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
+
+	// eqIdPair.reserve(colorClassCount);
+
+	// load_unique_id_pairs();
+	// block_sort();
+	// build_mph_table();
+
+	// mphRedirect.resize(colorClassCount);
+	// bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
+
+	// build_color_classes_and_redirection_table(cdbg1, cdbg2);
+
+	// eqIdPair.clear();
+	// eqIdPair.shrink_to_fit();
+	// bv_buffer = BitVector(0);
+
+	// // abundance.resize(colorClassCount + 1, 0);
+
+	// initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
+	// 				kmerCount);
+	// build_cqf(cdbg1, cdbg2);
+
+	// delete mph;
+	// mphRedirect.clear();
+	// mphRedirect.shrink_to_fit();
+
+
+	// Remove the temporary directory
+	// std::string sysCommand = "rm -rf " + tempDir;
+	// system(sysCommand.c_str());
+
+
+	auto t_end = time(nullptr);
+	console -> info("Merge completed. Total time taken is {} seconds.", t_end - t_start);
+
+	return 0;
 }
 
 #endif

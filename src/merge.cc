@@ -1124,7 +1124,8 @@ int test_merge_main(MergeOpts &opt)
 	
 	console -> info("Constructing the merged Colored dBG.");
 
-	uint64_t colorClassCount = mergedCdBG.merge(cdbg1, cdbg2);
+	// uint64_t colorClassCount = mergedCdBG.merge(cdbg1, cdbg2);
+	uint64_t colorClassCount = mergedCdBG.merge_2(cdbg1, cdbg2);
 
 	console -> info("Merged colored dBG has {} k-mers and {} equivalence classes",
 					mergedCdBG.get_cqf() -> dist_elts(), colorClassCount);
