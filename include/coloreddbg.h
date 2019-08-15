@@ -406,6 +406,13 @@ class ColoredDbg {
 
 		// Builds the output color-class bitvectors for the color-id pairs.
 		void build_color_class_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+		// Given a color-id pair 'idPair', returns the newly assigned color-id of this pair,
+		// at the merged CdBG.
+		inline uint64_t get_color_id(const std::pair<uint64_t, uint64_t> &idPair);
+
+		// Builds the output merged CQF.
+		void build_CQF(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -1139,6 +1146,9 @@ void ColoredDbg<qf_obj, key_obj> ::
 	// Get ceil(log2(finalSize))
 	if(finalSize & (finalSize - 1))	// if finalSize is not a power of 2
 		qbits++;
+
+	
+	qbits += 3;	// to avoid the initial rapid resizes at minuscule load factors
 
 	
 	if(dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
@@ -2739,6 +2749,124 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, uint64_t> &idPair)
+{
+	const uint64_t row = (idPair.first ? (idPair.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+					col = (idPair.second ? (idPair.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+
+
+	return cumulativeBucketSize[row][col] + MPH[row][col] -> lookup(idPair) + 1;
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	build_CQF(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	auto t_start = time(nullptr);
+
+	console -> info("At CQFs merging phase. Time = {}\n", time(nullptr) - start_time_);
+
+
+	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
+	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
+									walkBehindIterator1, walkBehindIterator2, walkBehindIteratorOut;
+	uint64_t cqfPosition1 = 0, cqfPosition2 = 0, cqfOutPosition = 0;
+
+	uint64_t kmerCount = 0, equalKmerCount = 0;
+	uint64_t kmer1, kmer2, kmer;//, eqClass1, eqClass2;
+	std::pair<uint64_t, uint64_t> idPair;
+	key_obj cqfEntry1, cqfEntry2;
+
+	
+	if(it1.done() || it2.done())
+		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+
+
+
+	
+	if(!it1.done())
+		cqfEntry1 = it1.get_cur_hash(), cqfPosition1++;
+	
+	if(!it2.done())
+		cqfEntry2 = it2.get_cur_hash(), cqfPosition2++;
+
+
+	while(!it1.done() || !it2.done())
+	{
+		if(!it1.done())
+			kmer1 = cqfEntry1.key;
+		
+		if(!it2.done())
+			kmer2 = cqfEntry2.key;
+
+
+		if(it1.done())
+		{
+			kmer = kmer2;
+
+			idPair.first = 0, idPair.second = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else if(it2.done())
+		{
+			kmer = kmer1;
+			
+			idPair.first = cqfEntry1.count, idPair.second = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer1 < kmer2)
+		{
+			kmer = kmer1;
+			
+			idPair.first = cqfEntry1.count, idPair.second = 0;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
+		}
+		else if(kmer2 < kmer1)
+		{
+			kmer = kmer2;
+
+			idPair.first = 0, idPair.second = cqfEntry2.count;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+		}
+		else
+		{
+			kmer = kmer1;
+
+			idPair.first = cqfEntry1.count, idPair.second = cqfEntry2.count;
+			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
+			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
+
+			equalKmerCount++; // for debugging purpose(s)
+		}
+
+
+		// uint64_t colorId = mphRedirect[mph -> lookup(std::make_pair(eqClass1, eqClass2))]; 
+		add_kmer(kmer, get_color_id(idPair), cqfOutPosition, walkBehindIteratorOut);
+		// abundance[colorId]++;
+		kmerCount++;
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("Kmers merged: {}M, time: {}", kmerCount * 10 / PROGRESS_STEP,
+							time(nullptr) - start_time_);
+	}
+
+
+	console -> info("Total kmers merged: {}. Time: {}", kmerCount, time(nullptr) - start_time_);
+
+
+	auto t_end = time(nullptr);
+	console -> info("Merging the CQFs took time {} seconds.", t_end - t_start);
+}
+
+
+
+
+
+template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::
 	merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
@@ -2776,6 +2904,11 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	build_color_class_table(cdbg1, cdbg2);
 	bv_buffer = BitVector(0);
 
+	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
+					kmerCount);
+	build_CQF(cdbg1, cdbg2);
+
+
 	// eqIdPair.reserve(colorClassCount);
 
 	// load_unique_id_pairs();
@@ -2810,7 +2943,7 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	auto t_end = time(nullptr);
 	console -> info("Merge completed. Total time taken is {} seconds.", t_end - t_start);
 
-	return 0;
+	return colorClassCount;
 }
 
 #endif
