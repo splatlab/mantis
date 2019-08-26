@@ -142,8 +142,8 @@ class ColoredDbg {
 		// Sets the maximum memory usage limit for the intermediate step of unique id-pairs filtering.
 		inline void set_max_memory_for_sort(uint maxMemory) { maxMemoryForSort = maxMemory; }
 
-		// Serializes the output CQF, sample-id mapping, and abundance distribution (optional).
-		void serialize_cqf_and_abundance_dist(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cbg2);
+		// Serializes the output CQF and sample-id mapping.
+		void serialize_cqf_and_sampleid_list();
 
 
 
@@ -151,9 +151,8 @@ class ColoredDbg {
 
 		// Merge approach 3 (Jamshed)
 
-		// Merges two Colored dBG objects 'cdbg1' and 'cdbg2' into this Colored dBG;
-		// returns the number of distinct color-classes at the merged CdBG.
-		uint64_t merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+		// Merges two Colored dBG objects 'cdbg1' and 'cdbg2' into this Colored dBG.
+		void merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
 
 
@@ -896,10 +895,21 @@ template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::
 	ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 				std::string &prefix, int flag):
-	bv_buffer(), prefix(prefix), num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
-	num_serializations(0), threadCount(1), dbg_alloc_flag(flag),
+	bv_buffer(),
+	prefix(prefix),
+	num_samples(cdbg1.get_num_samples() + cdbg2.get_num_samples()),
+	num_serializations(0),
+	threadCount(1),
+	dbg_alloc_flag(flag),
 	start_time_(std::time(nullptr))
 	{
+		// Construct the sample-id list.
+		
+		for(auto idSample : cdbg1.get_sample_id_map())
+			sampleid_map[idSample.first] = idSample.second;
+
+		for(auto idSample : cdbg2.get_sample_id_map())
+			sampleid_map[cdbg1.get_num_samples() + idSample.first] = idSample.second;
 	}
 
 
@@ -2166,8 +2176,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>::
-	serialize_cqf_and_abundance_dist(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+void ColoredDbg<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
 {
 	// Serialize the CQF
 	if(dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
@@ -2182,15 +2191,13 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	// TODO: Move the list concatenation phase to constructor, with introduction of a new field;
 	// just keep the disk-write part here.
+	// Done. No new field added, as there is already a field from the earlier code-base (sampleid_map).
 
-	// Serialize the sample id map
+	// Serialize the sample-id map
 	std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
 
-	for(auto sampleID: cdbg1.get_sample_id_map())
-		outputFile << sampleID.first << " " << sampleID.second << "\n";
-
-	for(auto sampleID: cdbg2.get_sample_id_map())
-		outputFile << cdbg1.get_num_samples() + sampleID.first << " " << sampleID.second << "\n";
+	for(auto idSample : sampleid_map)
+		outputFile << idSample.first << " " << idSample.second << "\n";
 
 	outputFile.close();
 
@@ -2801,7 +2808,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template <typename qf_obj, typename key_obj>
-uint64_t ColoredDbg<qf_obj, key_obj>::
+void ColoredDbg<qf_obj, key_obj>::
 	merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
 	auto t_start = time(nullptr);
@@ -2827,7 +2834,6 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	
 	sample_eq_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
 	uint64_t kmerCount = fill_disk_buckets(cdbg1, cdbg2, sampledPairs);
-	
 	sampledPairs.clear();
 
 	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
@@ -2843,41 +2849,22 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	build_CQF(cdbg1, cdbg2);
 
 
-	// eqIdPair.reserve(colorClassCount);
-
-	// load_unique_id_pairs();
-	// block_sort();
-	// build_mph_table();
-
-	// mphRedirect.resize(colorClassCount);
-	// bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
-
-	// build_color_classes_and_redirection_table(cdbg1, cdbg2);
-
-	// eqIdPair.clear();
-	// eqIdPair.shrink_to_fit();
-	// bv_buffer = BitVector(0);
-
-	// // abundance.resize(colorClassCount + 1, 0);
-
-	// initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
-	// 				kmerCount);
-	// build_cqf(cdbg1, cdbg2);
-
-	// delete mph;
-	// mphRedirect.clear();
-	// mphRedirect.shrink_to_fit();
-
-
 	// Remove the temporary directory
-	// std::string sysCommand = "rm -rf " + tempDir;
-	// system(sysCommand.c_str());
+	std::string sysCommand = "rm -rf " + tempDir;
+	console -> info("Deleting the temporary directory. System command used:\n{}", sysCommand);
+
+	system(sysCommand.c_str());
 
 
 	auto t_end = time(nullptr);
-	console -> info("Merge completed. Total time taken is {} seconds.", t_end - t_start);
 
-	return colorClassCount;
+	console -> info("Merge completed. Merged colored dBG has {} k-mers and {} color-classes. Total time taken is {} seconds.",
+					dbg.dist_elts(), colorClassCount, t_end - t_start);
+
+
+	console -> info("Merged CQF metadata:");
+	dbg.dump_metadata();
+	serialize_cqf_and_sampleid_list();
 }
 
 #endif

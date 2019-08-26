@@ -166,22 +166,7 @@ int merge_main(MergeOpts &opt)
 
 	mergedCdBG.set_console(console);
 
-	
-	console -> info("Constructing the merged colored dBG.");
-
-	uint64_t colorClassCount = mergedCdBG.merge_2(cdbg1, cdbg2);
-
-	console -> info("Merged colored dBG has {} k-mers and {} color-classes.",
-					mergedCdBG.get_cqf() -> dist_elts(), colorClassCount);
-
-
-	mergedCdBG.get_cqf() -> dump_metadata();
-
-	console -> info("Serializing the CQF.");
-
-	mergedCdBG.serialize_cqf_and_abundance_dist(cdbg1, cdbg2);
-
-	console -> info("Serialization done.");
+	mergedCdBG.merge_2(cdbg1, cdbg2);
 
 	return EXIT_SUCCESS;
 }
