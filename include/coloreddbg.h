@@ -3,7 +3,7 @@
  *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *                  Mike Ferdman (), mferdman@cs.stonybrook.edu
- * 					Jamshed Khan (), mdkhan@cs.stonybrook.edu
+ * 					Jamshed Khan (), jamshed@cs.umd.edu
  *   Organization:  Stony Brook University
  *
  * ============================================================================
@@ -2159,73 +2159,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 
-template <typename qf_obj, typename key_obj>
-uint64_t ColoredDbg<qf_obj, key_obj>:: merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
-{
-	auto t_start = time(nullptr);
-	console -> info ("Merge starting. Time = {}\n", time(nullptr) - start_time_);
 
-
-	// Make the temporary directory if it doesn't exist.
-	std::string tempDir = prefix + TEMP_DIR;
-
-	if(!mantis::fs::DirExists(tempDir.c_str()))
-		mantis::fs::MakeDir(tempDir.c_str());
-	
-	// Check to see if the temporary directory exists now.
-	if(!mantis::fs::DirExists(tempDir.c_str()))
-	{
-		console->error("Temporary directory {} could not be successfully created.", tempDir);
-		exit(1);
-	}
-
-
-	const uint64_t samplePairCount = 1000000;
-	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
-	
-	sample_eq_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
-	uint64_t kmerCount = gather_eq_id_pairs(cdbg1, cdbg2, sampledPairs);
-	
-	sampledPairs.clear();
-
-	uint64_t colorClassCount = gather_unique_eq_id_pairs();
-
-	eqIdPair.reserve(colorClassCount);
-
-	load_unique_id_pairs();
-	block_sort();
-	build_mph_table();
-
-	mphRedirect.resize(colorClassCount);
-	bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
-
-	build_color_classes_and_redirection_table(cdbg1, cdbg2);
-
-	eqIdPair.clear();
-	eqIdPair.shrink_to_fit();
-	bv_buffer = BitVector(0);
-
-	// abundance.resize(colorClassCount + 1, 0);
-
-	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
-					kmerCount);
-	build_cqf(cdbg1, cdbg2);
-
-	delete mph;
-	mphRedirect.clear();
-	mphRedirect.shrink_to_fit();
-
-
-	// Remove the temporary directory
-	std::string sysCommand = "rm -rf " + tempDir;
-	system(sysCommand.c_str());
-
-
-	auto t_end = time(nullptr);
-	console -> info("Merge completed. Total time taken is {} seconds.", t_end - t_start);
-
-	return colorClassCount;
-}
 
 
 
@@ -2262,20 +2196,20 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 	// Dump the abundance distribution of the equivalence / color classes.
-	if (flush_eqclass_dis)
-	{
-		const char OUTPUT_ABUNDANCE_DIST_FILE[] = "eqclass_dist.lst";
-		std::ofstream output(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
+	// if (flush_eqclass_dis)
+	// {
+	// 	const char OUTPUT_ABUNDANCE_DIST_FILE[] = "eqclass_dist.lst";
+	// 	std::ofstream output(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
 
-		for(uint64_t i = 1; i < abundance.size(); ++i)
-			output << i << " " << abundance[i] << "\n";
+	// 	for(uint64_t i = 1; i < abundance.size(); ++i)
+	// 		output << i << " " << abundance[i] << "\n";
 		
-		output.flush();
-		output.close();
+	// 	output.flush();
+	// 	output.close();
 
-		abundance.clear();
-		abundance.shrink_to_fit();
-	}
+	// 	abundance.clear();
+	// 	abundance.shrink_to_fit();
+	// }
 }
 
 

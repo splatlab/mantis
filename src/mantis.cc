@@ -51,10 +51,8 @@ int query_main (QueryOpts& opt);
 int validate_mst_main(MSTValidateOpts &opt);
 int stats_main(StatsOpts& statsOpts);
 
-// Mantis merge: Jamshed
 int merge_main(MergeOpts &opt);
 int validate_merge_main(ValidateMergeOpts &opt);
-int test_merge_main(MergeOpts &opt);
 
 
 
@@ -66,7 +64,7 @@ int test_merge_main(MergeOpts &opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge, test, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -155,15 +153,15 @@ int main ( int argc, char *argv[] ) {
                     option("-j", "--jmer-length") & value("size-of-jmer", sopt.j) % "value of j for constituent jmers of a kmer (default: 23)."
     );
 
-  // Mantis merge: Jamshed
+  
   auto merge_mode = (
                     command("merge").set(selected, mode::merge),
-                    option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
-                    option("-t", "--thread-count") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate phases",
-										// required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
-                    required("-d1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
-                    required("-d2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
-                    required("-o", "--output") & value("merge-output", mopt.out) % "directory where results should be written"
+                    // option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
+										option("-t", "--thread-count") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate unique color-id filtering phase",
+                    option("-m", "--max-memory") & value("max-memory", mopt.maxMemory) % "maximum memory (in GB) to use in intermediate unique color-id filtering phase",
+                    required("-i1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
+                    required("-i2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
+                    required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written"
                     );
 
   auto validate_merge_mode = (
@@ -172,20 +170,10 @@ int main ( int argc, char *argv[] ) {
                               required("-m", "--merged-cdbg") & value("merged-cdbg", vmopt.mergeRes) % "directory containing the merged CdBG"
                             );
 
-  auto test_mode = (
-                    command("test").set(selected, mode::test),
-                    option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
-										option("-t", "--thread-count") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate phases",
-                    option("-m", "--max-memory") & value("max-memory", mopt.maxMemory) % "maximum memory (in GB) to use in intermediate phases",
-                    // required("-s","--log-slots") & value("log-slots", mopt.qbits) % "log of number of slots in the output CQF",
-                    required("-d1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
-                    required("-d2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
-                    required("-o", "--output") & value("merge-output", mopt.out) % "directory where results should be written"
-                    );
 
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
-              merge_mode | validate_merge_mode | test_mode | command("help").set(selected,mode::help) |
+              merge_mode | validate_merge_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -198,7 +186,6 @@ int main ( int argc, char *argv[] ) {
   assert(stats_mode.flags_are_prefix_free());
   assert(merge_mode.flags_are_prefix_free());
   assert(validate_merge_mode.flags_are_prefix_free());
-  assert(test_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -222,7 +209,6 @@ int main ( int argc, char *argv[] ) {
     case mode::stats: stats_main(sopt);  break;
     case mode::merge: merge_main(mopt);  break;
     case mode::validate_merge: validate_merge_main(vmopt); break;
-    case mode::test: test_merge_main(mopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -246,8 +232,6 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(merge_mode, "mantis");
       } else if (b->arg() == "validate_merge") {
         std::cout << make_man_page(validate_merge_mode, "mantis");
-      }else if (b->arg() == "test") {
-        std::cout << make_man_page(test_mode, "mantis");
       }else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';
