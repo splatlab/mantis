@@ -216,31 +216,36 @@ The output file contains the list of experiments (i.e., hits) corresponding to e
 
 Merge Two Mantii
 -------
-`mantis merge` merges two mantis indices into once mantis index.
+`mantis merge` merges two mantis indices into one mantis index.
 
 ``` bash
- $ ./bin/mantis merge -d1 raw/in1 -d2 raw/in2 -o raw/out
+ $ ./bin/mantis merge -i1 raw/in1 -i2 raw/in2 -t 4 -m 1 -o raw/out
 ```
 
-```
+```bash
 SYNOPSIS
-        mantis merge [-e] -d1 <input_dir_1> -d2 <input_dir_2> -o <merge_output>
+        mantis merge -i1 <input_dir_1> -i2 <input_dir_2> [-t <num_threads>] [-m <max_filtering_memory>] -o <merge_output>
 
 OPTIONS
-        -e, --eqclass_dist
-                    write the eqclass abundance distribution
-
         <input_dir_1>
                     directory containing the first mantis index
 
         <input_dir_2>
                     directory containing the second mantis index
 
+        <num_threads>
+                    number of threads to be used in intermediate color-id pairs filtering and MPH building phases
+
+        <max_filtering_memory>
+                    maximum memory (in GB) to be used in intermediate color-id pairs filtering phase
+
         <merge_output>
-                    directory where results should be written
+                    directory where the results should be written
 ```
 
-**Note** Each directory passed with the `-d1` and `-d2` arguments must contain the CQF file (`.ser`), all the color-class files (`.cls`), and the sample-list file (`.lst`) of its corresponding mantis index.
+`max_filtering_memory`: A very good choice for this argument is &lfloor;(2 x 20M x NUM_SAMPLES_IN_OUTPUT) / (8 x 1024<sup>3</sup>)&rfloor;. This ensures that the intermediate filtering phase does not dominate the peak memory usage of the merging process. Of course, any larger value can be used, trading off between peak memory-usage and total time consumed. This value needs to be an integer.
+
+**Note** Each directory passed with the `-i1` and `-i2` arguments must contain the CQF file (`.ser`), all the color-class files (`.cls`), and the sample-list file (`.lst`) of its corresponding mantis index.
 
 Contributing
 ------------
