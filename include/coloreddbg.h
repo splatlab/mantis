@@ -149,7 +149,7 @@ class ColoredDbg {
 
 
 
-		// Mangtis merge
+		// Mantis merge
 
 		// k-mer count in progress display
 		const static uint64_t PROGRESS_STEP = 10000000;
