@@ -165,7 +165,7 @@ int merge_main(MergeOpts &opt)
 		mergedCdBG.set_max_memory_for_sort(opt.maxMemory);
 
 	mergedCdBG.set_console(console);
-	mergedCdBG.merge_2(cdbg1, cdbg2);
+	mergedCdBG.merge(cdbg1, cdbg2);
 
 	return EXIT_SUCCESS;
 }

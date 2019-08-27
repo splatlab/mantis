@@ -4,7 +4,7 @@
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *                  Mike Ferdman (), mferdman@cs.stonybrook.edu
  * 					Jamshed Khan (), jamshed@cs.umd.edu
- *   Organization:  Stony Brook University
+ *   Organization:  Stony Brook University, University of Maryland
  *
  * ============================================================================
  */
@@ -133,7 +133,7 @@ class ColoredDbg {
 
 		// Merges two Colored dBG objects 'cdbg1' and 'cdbg2' into this Colored dBG;
 		// returns the number of distinct color-classes at the merged CdBG.
-		uint64_t merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+		// uint64_t merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
 		// Sets the number of processor-threads to be used at the intermediate steps of 
 		// unique id-pairs filtering and MPH building.
@@ -151,8 +151,8 @@ class ColoredDbg {
 
 		// Merge approach 3 (Jamshed)
 
-		// Merges two Colored dBG objects 'cdbg1' and 'cdbg2' into this Colored dBG.
-		void merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into this Colored dBG.
+		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
 
 
@@ -195,6 +195,7 @@ class ColoredDbg {
 
 		const static uint64_t PROGRESS_STEP = 10000000;
 		const static uint64_t ITERATOR_WINDOW_SIZE = 4096;
+		const static uint64_t samplePairCount = 1000000;
 
 		
 		// Equivalence / Color class bitvector file names for this DBG.
@@ -223,9 +224,10 @@ class ColoredDbg {
 		std::unordered_map<std::pair<uint64_t, uint64_t>,
 							std::pair<uint64_t, uint64_t>, PairHash> eqClsMap;
 
-		// Advances the CQF iterator 'it', with keeping track of the 'step' count; and fetches the next
-		// CQF-entry into 'cqfEntry' if the iterator 'it' is advanced into a non-end position. Also, advances
-		// or initializes the iterator 'walkBehindIterator' that trails 'it' by ITERATOR_WINDOW_SIZE.
+		// Advances the CQF iterator 'it', with keeping track of the 'step' count; and
+		// fetches the next CQF-entry into 'cqfEntry' if the iterator 'it' is advanced
+		// into a non-end position. Also, advances or initializes the iterator
+		// 'walkBehindIterator' that trails 'it' by ITERATOR_WINDOW_SIZE.
 		static void advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &step, key_obj &cqfEntry,
 											typename CQF<key_obj>::Iterator &walkBehindIterator,
 											const CQF<key_obj> *cqf);
@@ -248,8 +250,8 @@ class ColoredDbg {
 					const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t eqID2,
 					BitVector &resultVec);
 
-		// Initializes the CQF that will contain 'finalSize' number of k-mers after mantii merge.
-		void initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t finalSize);
+		// Initializes the CQF that will contain 'kmerCount' number of k-mers after mantii merge.
+		void initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t kmerCount);
 
 		// Concatenate required bit vectors from the DBGs into this merged DBG, to build the
 		// merged color(equivalence)-class table.
@@ -295,9 +297,7 @@ class ColoredDbg {
 		// Collection of distinct color-id pairs.
 		std::vector<std::pair<uint64_t, uint64_t>> eqIdPair;
 
-		// Required to hash pair objects.
-		// TODO: Consult Professor on this hashing.
-		// Done. Resorted to boost::hash_combine instead of plain XOR hashing.
+		// Required to hash pair objects. Resorted to boost::hash_combine instead of plain XOR hashing.
 		// For more explanation, consult https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
 		class Custom_Pair_Hasher
 		{
@@ -325,9 +325,10 @@ class ColoredDbg {
 
 		std::vector<uint64_t> abundance;
 
-		// Samples 'samplePairCount' number of most abundant color-id pairs from the first 'sampleKmerCount'
-		// distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2', into the set 'sampledPairs'.
-		void sample_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
+		// Samples 'samplePairCount' number of most abundant color-id pairs from the
+		// first 'sampleKmerCount' distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
+		// into the set 'sampledPairs'.
+		void sample_color_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
 								uint64_t sampleKmerCount, uint64_t samplePairCount,
 								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
@@ -365,19 +366,20 @@ class ColoredDbg {
 
 		// Merge approach 3 (Jamshed)
 
+		// Stores the size (number of color-id pairs) at each disk-bucket.
 		std::vector<std::vector<uint64_t>> bucketSize;
-
-		// MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
-		std::vector<std::vector<boophf_t *>> MPH;
 
 		// The (i, j)'th entry contains the total count of color-id pairs upto bucket (i, j), exclusive,
 		// in row-major order.
 		std::vector<std::vector<uint64_t>> cumulativeBucketSize;
 
+		// MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
+		std::vector<std::vector<boophf_t *>> MPH;
+
 		// Initializes the disk-buckets, i.e. initializes the disk-files, MPH tables, bucket sizes,
 		// cumulative size counts etc.
 		inline void init_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-									std::vector<std::vector<std::ofstream>> &diskBucket);
+										std::vector<std::vector<std::ofstream>> &diskBucket);
 
 		// Gathers all the color-id pairs for all the distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2'
 		// into disk-files (or referred to as buckets hereafter), where an id-pair goes to bucket_(i, j)
@@ -388,16 +390,17 @@ class ColoredDbg {
 		// of cdbg2. Buckets of the form (X, 0) imply vice versa.
 		// Returns the number of distinct k-mers present at the CdBGs cdg1 and cdbg2.
 		uint64_t fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
+									std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
 		// Adds the color-class ID pair (colorID1, colorID2) to the appropriate disk bucket;
-		// i.e. write the pair into the file diskBucket[i][j] iff colorID1 has its color-class (bitvector)
-		// at bitvector_file_i and colorID2 has its color-class at bitvector_file_j.
+		// i.e. writes the pair into the file diskBucket[i][j] iff colorID1 has its color-class (bitvector)
+		// at bitvector_file_(i - 1) and colorID2 has its color-class at bitvector_file_(j - 1).
 		inline void add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
 										std::vector<std::vector<std::ofstream>> &diskBucket);
 
-		// Filters all the disk-buckets filled up by the method 'fill_disk_buckets', to contain only unique
-		// color-id pairs. Returns the count of unique color-id pairs.
+		// Filters the disk-buckets filled up by the method 'fill_disk_buckets', to contain only unique
+		// color-id pairs.
+		// Returns the count of unique color-id pairs.
 		uint64_t filter_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 
 		// Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
@@ -1147,16 +1150,15 @@ uint64_t ColoredDbg<qf_obj, key_obj> ::
 
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj> ::
-	initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t finalSize)
+	initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t kmerCount)
 {
-	// Get floor(log2(finalSize))
+	// Get floor(log2(kmerCount))
 	uint32_t qbits;
-	for(qbits = 0; (finalSize >> qbits) != (uint64_t)1; qbits++);
+	for(qbits = 0; (kmerCount >> qbits) != (uint64_t)1; qbits++);
 
-	// Get ceil(log2(finalSize))
-	if(finalSize & (finalSize - 1))	// if finalSize is not a power of 2
+	// Get ceil(log2(kmerCount))
+	if(kmerCount & (kmerCount - 1))	// if kmerCount is not a power of 2
 		qbits++;
-
 	
 	qbits += 3;	// to avoid the initial rapid resizes at minuscule load factors
 
@@ -1592,13 +1594,13 @@ void ColoredDbg<qf_obj, key_obj>::
 
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::
-	sample_eq_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
+	sample_color_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
 	uint64_t sampleKmerCount, uint64_t samplePairCount,
 	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
 {
 	auto t_start = time(nullptr);
 
-	console -> info("Sampling {} most-abundant eq-id pairs from first {} kmers. Time-stamp = {}",
+	console -> info("Sampling {} most-abundant color-id pairs from the first {} kmers. Time-stamp = {}.",
 					samplePairCount, sampleKmerCount, time(nullptr) - start_time_);
 
 	
@@ -1615,7 +1617,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 	if(it1.done() || it2.done())
-		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+		console -> error("One or more CQF iterator(s) already at the end position before starting walk.");
 
 
 	if(!it1.done())
@@ -1634,7 +1636,7 @@ void ColoredDbg<qf_obj, key_obj>::
 			kmer2 = cqfEntry2.key;
 
 
-		// eqClassX = 0 implies absence in CdBG X.
+		// eqClassX = 0 implies the absence in CdBG X of the k-mer in consideration.
 		if(it1.done())
 		{
 			eqClass1 = 0, eqClass2 = cqfEntry2.count;
@@ -1666,15 +1668,13 @@ void ColoredDbg<qf_obj, key_obj>::
 		pairCount[std::make_pair(eqClass1, eqClass2)]++;
 		kmerCount++;
 
-
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Sampled {}M k-mers, color-classes found: {}. Time-stamp = {}",
+			console -> info("Sampled {}M k-mers, color-classes found: {}. Time-stamp = {}.",
 							kmerCount * 10 / PROGRESS_STEP, pairCount.size(),
 							time(nullptr) - start_time_);
 	}
 
-	
-	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}",
+	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}.",
 					kmerCount, pairCount.size(), time(nullptr) - start_time_);
 
 
@@ -1690,8 +1690,6 @@ void ColoredDbg<qf_obj, key_obj>::
 			minPQ.pop();
 			minPQ.push(std::make_pair(p -> second, p -> first));
 		}
-
-
 	
 	while(!minPQ.empty())
 	{
@@ -1699,12 +1697,12 @@ void ColoredDbg<qf_obj, key_obj>::
 		minPQ.pop();
 	}
 
-
-	console -> info("Sampled {} eq-id pairs. Time-stamp = {}", sampledPairs.size(), time(nullptr) - start_time_);
+	console -> info("Sampled {} color-id pairs. Time-stamp = {}.", sampledPairs.size(),
+					time(nullptr) - start_time_);
 
 
 	auto t_end = time(nullptr);
-	console -> info("Sampling abundant equivalence-id pairs took time {} seconds.", t_end - t_start);
+	console -> info("Sampling abundant color-id pairs took time {} seconds.", t_end - t_start);
 }
 
 
@@ -2185,14 +2183,6 @@ void ColoredDbg<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
 		dbg.close();
 
 
-	// Serialize the bv buffer last time if needed.
-	// Done at the color-class building phase.
-
-
-	// TODO: Move the list concatenation phase to constructor, with introduction of a new field;
-	// just keep the disk-write part here.
-	// Done. No new field added, as there is already a field from the earlier code-base (sampleid_map).
-
 	// Serialize the sample-id map
 	std::ofstream outputFile(prefix + mantis::SAMPLEID_FILE);
 
@@ -2200,23 +2190,6 @@ void ColoredDbg<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
 		outputFile << idSample.first << " " << idSample.second << "\n";
 
 	outputFile.close();
-
-
-	// Dump the abundance distribution of the equivalence / color classes.
-	// if (flush_eqclass_dis)
-	// {
-	// 	const char OUTPUT_ABUNDANCE_DIST_FILE[] = "eqclass_dist.lst";
-	// 	std::ofstream output(prefix + OUTPUT_ABUNDANCE_DIST_FILE);
-
-	// 	for(uint64_t i = 1; i < abundance.size(); ++i)
-	// 		output << i << " " << abundance[i] << "\n";
-		
-	// 	output.flush();
-	// 	output.close();
-
-	// 	abundance.clear();
-	// 	abundance.shrink_to_fit();
-	// }
 }
 
 
@@ -2253,7 +2226,7 @@ void ColoredDbg<qf_obj, key_obj>::
 			MPH[i][j] = NULL;
 	}
 
-	console -> info("{} x {} disk-buckets initialized.", fileCount1, fileCount2);
+	console -> info("{} x {} disk-buckets  and associated data structures initialized.", fileCount1, fileCount2);
 }
 
 
@@ -2280,11 +2253,11 @@ void ColoredDbg<qf_obj, key_obj>::
 template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::
 	fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-							std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
+						std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
 {
 	auto t_start = time(nullptr);
 
-	console -> info("Writing all the color-id pairs to disk-files ({}). Time-stamp = {}",
+	console -> info("Writing all the color-id pairs to disk-files ({}). Time-stamp = {}.",
 					TEMP_DIR + EQ_ID_PAIRS_FILE + std::string("_X_Y"), time(nullptr) - start_time_);
 
 	
@@ -2300,12 +2273,11 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 
 	writtenPairsCount = sampledPairs.size();
 
-	console -> info("Wrote the {} sampled pairs to disk. Time-stamp = {}", writtenPairsCount,
+	console -> info("Wrote the {} sampled color-id pairs to disk. Time-stamp = {}.", writtenPairsCount,
 					time(nullptr) - start_time_);
 
 
-
-	console -> info("Now iterating over the CQFs for the rest of the id-pairs.");
+	console -> info("Now iterating over the CQFs for the rest of the color-id pairs.");
 
 	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
 	typename CQF<key_obj>::Iterator it1 = cqf1 -> begin(), it2 = cqf2 -> begin(),
@@ -2313,13 +2285,13 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	uint64_t cqfPosition1 = 0, cqfPosition2 = 0;
 
 	uint64_t kmerCount = 0;
-	uint64_t kmer1, kmer2;// eqClass1, eqClass2;
+	uint64_t kmer1, kmer2;
 	std::pair<uint64_t, uint64_t> idPair;
 	key_obj cqfEntry1, cqfEntry2;
 
 
 	if(it1.done() || it2.done())
-		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
+		console -> error("One or more CQF iterator(s) already at the end position before starting walk.");
 
 
 	if(!it1.done())
@@ -2338,34 +2310,28 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 			kmer2 = cqfEntry2.key;
 
 
-		// eqClassX = 0 implies absence in CdBG X.
 		if(it1.done())
 		{
-			// eqClass1 = 0, eqClass2 = cqfEntry2.count;
 			idPair.first = 0, idPair.second = cqfEntry2.count;
 			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
 		}
 		else if(it2.done())
 		{
-			// eqClass1 = cqfEntry1.count, eqClass2 = 0;
 			idPair.first = cqfEntry1.count, idPair.second = 0;
 			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
 		}
 		else if(kmer1 < kmer2)
 		{
-			// eqClass1 = cqfEntry1.count, eqClass2 = 0;
 			idPair.first = cqfEntry1.count, idPair.second = 0;
 			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1);// ++it1;
 		}
 		else if(kmer2 < kmer1)
 		{
-			// eqClass1 = 0, eqClass2 = cqfEntry2.count;
 			idPair.first = 0, idPair.second = cqfEntry2.count;
 			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
 		}
 		else
 		{
-			// eqClass1 = cqfEntry1.count, eqClass2 = cqfEntry2.count;
 			idPair.first = cqfEntry1.count, idPair.second = cqfEntry2.count;
 			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
 			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
@@ -2376,23 +2342,20 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 
 		if(sampledPairs.find(idPair) == sampledPairs.end())
 		{
-			// output << eqClass1 << " " << eqClass2 << "\n";
 			add_color_id_pair(idPair.first, idPair.second, diskBucket);
 			writtenPairsCount++;
 		}
 
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Observed count of distinct k-mers: {}M, written id-pairs to disk: {}. Time-stamp = {}",
+			console -> info("Observed count of distinct k-mers: {}M, written color-id pairs to disk: {}. Time-stamp = {}.",
 							kmerCount * 10 / PROGRESS_STEP, writtenPairsCount, time(nullptr) - start_time_);
 	}
 
 
-	console -> info("Distinct kmers found {}, id pairs written to disk {}. Time-stamp = {}",
+	console -> info("Distinct kmers found {}, color-id pairs written to disk {}. Time-stamp = {}.",
 					kmerCount, writtenPairsCount, time(nullptr) - start_time_);
 
-	// output.flush();
-	// output.close();
 
 	// Flush and close the disk-bucket files.
 	for(int i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
@@ -2443,7 +2406,6 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 									"_" + std::to_string(i) + "_" + std::to_string(j);
 
 			std::string sysCommand = "sort -u";
-			// TODO: Consult professor on parallelization and memory-usage details.
 			sysCommand += " --parallel=" + std::to_string(threadCount);
 			sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
 			sysCommand += " -o " + diskBucket + " " + diskBucket;
@@ -2462,18 +2424,16 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 			lineCount >> bucketSize[i][j];
 			lineCount.close();
 
-
 			colorClassCount += bucketSize[i][j];
 
-			console -> info("Filtered {} unique color-id pairs of disk-bucket {}. Time-stamp = {}",
+			console -> info("Filtered {} unique color-id pairs at disk-bucket {}. Time-stamp = {}.",
 							bucketSize[i][j], diskBucket, time(nullptr) - start_time_);
 		}
 
 
-	console -> info("Count of unique color-id pairs = {}. Time-stamp = {}",
+	console -> info("Count of unique color-id pairs = {}. Time-stamp = {}.",
 					colorClassCount, time(nullptr) - start_time_);
 
-	
 
 	auto t_end = time(nullptr);
 	console -> info("Filtering the unique color-id pairs took time {} seconds.", t_end - t_start);
@@ -2491,13 +2451,12 @@ void ColoredDbg<qf_obj, key_obj>::
 {	
 	auto t_start = time(nullptr);
 
-	console -> info("Building an MPH (Minimal Perfect Hash) table per disk-bucket. Time-stamp = {}",
+	console -> info("Building an MPH (Minimal Perfect Hash) table per disk-bucket. Time-stamp = {}.",
 					time(nullptr) - start_time_);
 
 
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
 					fileCount2 = cdbg2.get_eq_class_file_count();
-
 	uint64_t mphMemory = 0;
 
 	
@@ -2511,29 +2470,30 @@ void ColoredDbg<qf_obj, key_obj>::
 				colorIdPair.reserve(bucketSize[i][j]);
 
 
-				console -> info("Loading the unique color-id pairs from bucket ({}, {}) into memory. Time-stamp = {}",
+				console -> info("Loading the unique color-id pairs from bucket ({}, {}) into memory. Time-stamp = {}.",
 								i, j, time(nullptr) - start_time_);
 
 				std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
 									"_" + std::to_string(i) + "_" + std::to_string(j));
 				uint64_t id1, id2;
 
+				// TODO: Add faster file-read mechanism.
 				while(input >> id1 >> id2)
 					colorIdPair.emplace_back(id1, id2);
 
 				input.close();
 
-				console -> info("Loaded {} color-id pairs into memory. Time-stamp = {}", colorIdPair.size(),
+				console -> info("Loaded {} color-id pairs into memory. Time-stamp = {}.", colorIdPair.size(),
 								time(nullptr) - start_time_);
 
 				
-				console -> info("Constructing a BooPHF with {} elements using {} threads. Time-stamp = {}",
+				console -> info("Constructing a BooPHF with {} elements using {} threads. Time-stamp = {}.",
 								colorIdPair.size(), threadCount, time(nullptr) - start_time_);
 
-				// lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
-				double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
+				// Lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query.
+				double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key)
 
-				// build the mphf
+				// Build the mphf
 				MPH[i][j] = new boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher>(colorIdPair.size(),
 																								colorIdPair,
 																								threadCount,
@@ -2541,7 +2501,7 @@ void ColoredDbg<qf_obj, key_obj>::
 				mphMemory += MPH[i][j] -> totalBitSize();
 
 				
-				console -> info("For bucket ({}, {}) BooPHF constructed perfect hash for {} keys; total memory = {} MB, bits/elem : {}. Time-stamp = {}\n",
+				console -> info("For bucket ({}, {}) BooPHF constructed perfect hash for {} keys; total memory = {} MB, bits/elem : {}. Time-stamp = {}.",
 								i, j, colorIdPair.size(), (MPH[i][j] -> totalBitSize() / 8) / (1024 * 1024),
 								(double)(MPH[i][j] -> totalBitSize()) / colorIdPair.size(), time(nullptr) - start_time_);
 
@@ -2567,11 +2527,10 @@ void ColoredDbg<qf_obj, key_obj>::
 {
 	auto t_start = time(nullptr);
 
-	console -> info("At color-class building (bitvectors concatenation) phase. Time = {}\n",
+	console -> info("At color-class building (bitvectors concatenation) phase. Time-stamp = {}.",
 					time(nullptr) - start_time_);
 
 
-					
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(), fileCount2 = cdbg2.get_eq_class_file_count();
 
 	uint64_t writtenPairsCount = 0;
@@ -2583,7 +2542,7 @@ void ColoredDbg<qf_obj, key_obj>::
 		if(i > 0)
 		{
 			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
-			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time = {}.",
+			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
 							cdbg1.get_eq_class_files()[i - 1], time(nullptr) - start_time_);
 		}
 
@@ -2592,11 +2551,11 @@ void ColoredDbg<qf_obj, key_obj>::
 			if(j > 0)
 			{
 				sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
-				console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time = {}.",
+				console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
 								cdbg2.get_eq_class_files()[j - 1], time(nullptr) - start_time_);
 			}
 
-			console -> info("At bucket ({}, {}), size = {}. Time-stamp = {}", i, j, bucketSize[i][j],
+			console -> info("At bucket ({}, {}), size = {}. Time-stamp = {}.", i, j, bucketSize[i][j],
 							time(nullptr) - start_time_);
 
 
@@ -2608,9 +2567,7 @@ void ColoredDbg<qf_obj, key_obj>::
 				uint64_t queueCount = ((cumulativeBucketSize[i][j] + bucketSize[i][j] - 1) / mantis::NUM_BV_BUFFER)
 										- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER) + 1;
 
-				// std::vector<std::deque<std::pair<uint64_t, uint64_t>>> writeQueue;
 				std::vector<std::vector<std::pair<uint64_t, uint64_t>>> writeQueue;
-
 				writeQueue.resize(queueCount);
 
 				uint64_t remPairsCount = bucketSize[i][j];
@@ -2624,11 +2581,11 @@ void ColoredDbg<qf_obj, key_obj>::
 				}
 
 
-
 				std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
 									"_" + std::to_string(i) + "_" + std::to_string(j));
 				std::pair<uint64_t, uint64_t> idPair;
 
+				// TODO: Add faster file-read mechanism.
 				while(input >> idPair.first >> idPair.second)
 				{
 					uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(idPair)) / mantis::NUM_BV_BUFFER)
@@ -2637,7 +2594,6 @@ void ColoredDbg<qf_obj, key_obj>::
 				}
 
 				input.close();
-
 
 
 				for(uint64_t k = 0; k < queueCount; ++k)
@@ -2650,7 +2606,8 @@ void ColoredDbg<qf_obj, key_obj>::
 						concat(bitVec1, cdbg1.get_num_samples(), it -> first,
 								bitVec2, cdbg2.get_num_samples(), it -> second, colorClass);
 
-						add_bitvector(colorClass, colorID - 1), writtenPairsCount++;
+						add_bitvector(colorClass, colorID - 1),
+						writtenPairsCount++;
 
 						if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
 						{
@@ -2659,12 +2616,10 @@ void ColoredDbg<qf_obj, key_obj>::
 							bv_buffer_serialize(writtenPairsCount);
 						}
 					}
-
 					
 					writeQueue[k].clear();
 					writeQueue[k].shrink_to_fit();
 				}
-
 
 				writeQueue.clear();
 				writeQueue.shrink_to_fit();
@@ -2673,7 +2628,7 @@ void ColoredDbg<qf_obj, key_obj>::
 	}
 
 
-	// Serialize the bv buffer last time if needed
+	// Serialize the bitvector buffer last time if needed
 	if (writtenPairsCount % mantis::NUM_BV_BUFFER > 0)
 	{
 		console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
@@ -2709,7 +2664,7 @@ void ColoredDbg<qf_obj, key_obj>::
 {
 	auto t_start = time(nullptr);
 
-	console -> info("At CQFs merging phase. Time = {}\n", time(nullptr) - start_time_);
+	console -> info("At CQFs merging phase. Time-stamp = {}.\n", time(nullptr) - start_time_);
 
 
 	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
@@ -2717,16 +2672,14 @@ void ColoredDbg<qf_obj, key_obj>::
 									walkBehindIterator1, walkBehindIterator2, walkBehindIteratorOut;
 	uint64_t cqfPosition1 = 0, cqfPosition2 = 0, cqfOutPosition = 0;
 
-	uint64_t kmerCount = 0, equalKmerCount = 0;
-	uint64_t kmer1, kmer2, kmer;//, eqClass1, eqClass2;
+	uint64_t kmerCount = 0;
+	uint64_t kmer1, kmer2, kmer;
 	std::pair<uint64_t, uint64_t> idPair;
 	key_obj cqfEntry1, cqfEntry2;
 
 	
 	if(it1.done() || it2.done())
-		console -> error("One or more CQF iterator(s) already at end position before starting walk.");
-
-
+		console -> error("One or more CQF iterator(s) already at the end position before starting walk.");
 
 	
 	if(!it1.done())
@@ -2780,23 +2733,19 @@ void ColoredDbg<qf_obj, key_obj>::
 			idPair.first = cqfEntry1.count, idPair.second = cqfEntry2.count;
 			advance_iterator_window(it1, cqfPosition1, cqfEntry1, walkBehindIterator1, cqf1),// ++it1;
 			advance_iterator_window(it2, cqfPosition2, cqfEntry2, walkBehindIterator2, cqf2);// ++it2;
-
-			equalKmerCount++; // for debugging purpose(s)
 		}
 
 
-		// uint64_t colorId = mphRedirect[mph -> lookup(std::make_pair(eqClass1, eqClass2))]; 
 		add_kmer(kmer, get_color_id(idPair), cqfOutPosition, walkBehindIteratorOut);
-		// abundance[colorId]++;
 		kmerCount++;
 
 		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Kmers merged: {}M, time: {}", kmerCount * 10 / PROGRESS_STEP,
+			console -> info("Kmers merged: {}M, time-stamp: {}.", kmerCount * 10 / PROGRESS_STEP,
 							time(nullptr) - start_time_);
 	}
 
 
-	console -> info("Total kmers merged: {}. Time: {}", kmerCount, time(nullptr) - start_time_);
+	console -> info("Total kmers merged: {}. Time-stamp: {}.", kmerCount, time(nullptr) - start_time_);
 
 
 	auto t_end = time(nullptr);
@@ -2809,10 +2758,10 @@ void ColoredDbg<qf_obj, key_obj>::
 
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::
-	merge_2(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+	merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
 	auto t_start = time(nullptr);
-	console -> info ("Merge starting. Time = {}\n", time(nullptr) - start_time_);
+	console -> info ("Merge starting. Time = {}.\n", time(nullptr) - start_time_);
 
 
 	// Make the temporary directory if it doesn't exist.
@@ -2824,17 +2773,16 @@ void ColoredDbg<qf_obj, key_obj>::
 	// Check to see if the temporary directory exists now.
 	if(!mantis::fs::DirExists(tempDir.c_str()))
 	{
-		console->error("Temporary directory {} could not be successfully created.", tempDir);
+		console -> error("Temporary directory {} could not be created.", tempDir);
 		exit(1);
 	}
 
-
-	const uint64_t samplePairCount = 1000000;
+	
 	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
 	
-	sample_eq_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
+	sample_color_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
 	uint64_t kmerCount = fill_disk_buckets(cdbg1, cdbg2, sampledPairs);
-	sampledPairs.clear();
+	sampledPairs.erase(sampledPairs.begin(), sampledPairs.end());
 
 	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
 
@@ -2851,7 +2799,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	// Remove the temporary directory
 	std::string sysCommand = "rm -rf " + tempDir;
-	console -> info("Deleting the temporary directory. System command used:\n{}", sysCommand);
+	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
 
 	system(sysCommand.c_str());
 
