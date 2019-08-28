@@ -243,7 +243,9 @@ OPTIONS
                     directory where the results should be written
 ```
 
-`max_filtering_memory`: A very good choice for this argument is &lfloor;(2 x 20M x NUM_SAMPLES_IN_OUTPUT) / (8 x 1024<sup>3</sup>)&rfloor;. This ensures that the intermediate filtering phase does not dominate the peak memory usage of the merging process. Of course, any larger value can be used, trading off between peak memory-usage and total time consumed. This value needs to be an integer.
+`max_filtering_memory`: A good choice for this argument is &lfloor;(2 x 20M x NUM_SAMPLES_IN_OUTPUT) / (8 x 1024<sup>3</sup>)&rfloor;. This ensures that the intermediate unique color-id pairs filtering phase does not dominate the peak memory usage of the merge process. The default value for this argument is set to this, and any lower value supplied at the input is ignored. Of course, any larger value can be used, trading off between the peak memory-usage and the total time consumed. This value needs to be an integer.
+
+`num_threads`: The default number of threads to use at various intermediate phases is 1.
 
 **Note** Each directory passed with the `-i1` and `-i2` arguments must contain the CQF file (`.ser`), all the color-class files (`.cls`), and the sample-list file (`.lst`) of its corresponding mantis index.
 
