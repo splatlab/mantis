@@ -114,7 +114,8 @@ class ColoredDbg {
 
 		// Sets the maximum memory-usage limit for the intermediate step of unique
 		// id-pairs filtering.
-		inline void set_max_memory_for_sort(uint maxMemory) { maxMemoryForSort = maxMemory; }
+		inline void set_max_memory_for_sort(uint maxMemory)
+		{ maxMemoryForSort = std::max((2 * num_samples) / (8 * 1024 * 1024 * 1024), maxMemory); }
 
 		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into this Colored dBG.
 		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
