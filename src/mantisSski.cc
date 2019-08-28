@@ -160,7 +160,10 @@ void MantisSski::buildUnitigVec(uint32_t numThreads, std::string cfile) {
     }
     parser.stop();
     console->info("filled contig sequence vector and start idx vector.");
-    console->info("# of input unitigs: {}, # of 256bp slices: {}, # of 1kB buckets: {}", cnt1, cnt2, bucketCnt+1);
+    console->info("# of input unitigs: {}, "
+                  "# of 256bp slices: {}, "
+                  "# of 1kB buckets: {},"
+                  "# of seq vec elements: {}", cnt1, cnt2, bucketCnt+1, contigSeq.size());
     // store the 2bit-encoded references
     sdsl::store_to_file(contigSeq, outdir + "/seq.bin");
 }

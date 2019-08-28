@@ -292,10 +292,10 @@ int sski_query_main(QueryOpts &opt) {
 //            std::exit(3);
         }*/
         auto res = sski.queryKmer(kmer);
-        if (res)
+        /*if (res)
             out << kmer.to_str() << " f\n";
         else
-            out << kmer.to_str() << " nf\n";
+            out << kmer.to_str() << " nf\n";*/
         numOfQueries++;
 //        ++it;
         if (numOfQueries % 1000000 == 0)
