@@ -1258,7 +1258,7 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 
 	// Flush and close the disk-bucket files.
 	for(int i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
-		for(int j = 0; j <= cdbg1.get_eq_class_file_count(); ++j)
+		for(int j = 0; j <= cdbg2.get_eq_class_file_count(); ++j)
 		{
 			diskBucket[i][j].flush();
 			diskBucket[i][j].close();
