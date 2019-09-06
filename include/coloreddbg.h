@@ -153,14 +153,14 @@ class ColoredDbg {
 
 		// Mantis merge
 
-		// k-mer count in progress display
+		// k-mer count in progress display.
 		const static uint64_t PROGRESS_STEP = 10000000;
 
-		// CQF-window size to keep in memory
+		// CQF-window size to keep in memory.
 		const static uint64_t ITERATOR_WINDOW_SIZE = 4096;
 
 		// Count of popular color-id pairs to be sampled
-		const static uint64_t samplePairCount = 1000000;
+		const static uint64_t SAMPLE_PAIR_COUNT = 1000000;
 
 		// Name of the temporary working directory at disk; will be present
 		// temporarily inside the output directory.
@@ -224,12 +224,12 @@ class ColoredDbg {
 											typename CQF<key_obj>::Iterator &walkBehindIterator,
 											const CQF<key_obj> *cqf);
 
-		// Samples 'samplePairCount' number of most abundant color-id pairs from the
+		// Samples 'SAMPLE_PAIR_COUNT' number of most abundant color-id pairs from the
 		// first 'sampleKmerCount' distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
 		// into the set 'sampledPairs'.
 		void sample_color_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
-								uint64_t sampleKmerCount, uint64_t samplePairCount,
-								std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
+								uint64_t sampleKmerCount,
+								spp::sparse_hash_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
 		// Initializes the disk-buckets, i.e. initializes the disk-files, MPH tables,
 		// bucket sizes, cumulative size counts etc.
@@ -254,7 +254,7 @@ class ColoredDbg {
 		// form (X, 0) imply vice versa.
 		// Returns the number of distinct k-mers present at the CdBGs cdg1 and cdbg2.
 		uint64_t fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-									std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
+									spp::sparse_hash_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
 		// Returns the maximum amount of memory (in GB) to use at the color-id pairs
 		// filtering phase, specifically, in the 'sort -u' system command.
@@ -662,7 +662,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
     
 		// Progress tracker
 		static uint64_t last_size = 0;
-		if (dbg.dist_elts() % PROGRESS_STEP == 0 &&
+		if (dbg.dist_elts() % 10000000 == 0 &&
 				dbg.dist_elts() != last_size) {
 			last_size = dbg.dist_elts();
 			console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
@@ -990,13 +990,14 @@ inline void ColoredDbg<qf_obj, key_obj> ::
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::
 	sample_color_id_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg <qf_obj, key_obj> &cdbg2,
-							uint64_t sampleKmerCount, uint64_t samplePairCount,
-							std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
+							uint64_t sampleKmerCount,
+							spp::sparse_hash_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
 {
 	auto t_start = time(nullptr);
 
+	uint64_t sampleCount = SAMPLE_PAIR_COUNT;
 	console -> info("Sampling {} most-abundant color-id pairs from the first {} kmers. Time-stamp = {}.",
-					samplePairCount, sampleKmerCount, time(nullptr) - start_time_);
+					sampleCount, sampleKmerCount, time(nullptr) - start_time_);
 
 	
 	const CQF<key_obj> *cqf1 = cdbg1.get_cqf(), *cqf2 = cdbg2.get_cqf();
@@ -1078,7 +1079,7 @@ void ColoredDbg<qf_obj, key_obj>::
 	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<CountAndIdPair>> minPQ;
 
 	for(auto p = pairCount.begin(); p != pairCount.end(); ++p)
-		if(minPQ.size() < samplePairCount)
+		if(minPQ.size() < SAMPLE_PAIR_COUNT)
 			minPQ.push(std::make_pair(p -> second, p -> first));
 		else if(minPQ.top().first < p -> second)
 		{
@@ -1156,7 +1157,7 @@ void ColoredDbg<qf_obj, key_obj>::
 template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::
 	fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-						std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
+						spp::sparse_hash_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs)
 {
 	auto t_start = time(nullptr);
 
@@ -1739,11 +1740,12 @@ void ColoredDbg<qf_obj, key_obj>::
 	}
 
 	
-	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
+	spp::sparse_hash_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
 	
-	sample_color_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
+	sample_color_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, sampledPairs);
 	uint64_t kmerCount = fill_disk_buckets(cdbg1, cdbg2, sampledPairs);
-	sampledPairs.erase(sampledPairs.begin(), sampledPairs.end());
+	// sampledPairs.erase(sampledPairs.begin(), sampledPairs.end());
+	sampledPairs.clear();
 
 	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
 
