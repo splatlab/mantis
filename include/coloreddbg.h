@@ -256,6 +256,10 @@ class ColoredDbg {
 		uint64_t fill_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
 									std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> &sampledPairs);
 
+		// Returns the maximum amount of memory (in GB) to use at the color-id pairs
+		// filtering phase, specifically, in the 'sort -u' system command.
+		uint64_t get_max_sort_memory(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
 		// Filters the disk-buckets to contain only unique color-id pairs.
 		// Returns the count of unique color-id pairs.
 		uint64_t filter_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
@@ -1276,6 +1280,50 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 
 template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::
+	get_max_sort_memory(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
+	uint64_t bvBuffMemory = mantis::NUM_BV_BUFFER * num_samples / 8;
+	uint64_t maxRRR1size = 0, maxRRR2size = 0;
+
+	// File-size calculation reference:
+	// https://stackoverflow.com/questions/5840148/how-can-i-get-a-files-size-in-c
+
+	// Determine the maximum bitvectorRRR file-size for cdbg1.
+	for(uint64_t i = 0; i < cdbg1.get_eq_class_file_count(); ++i)
+	{
+		struct stat64 stat_buf;
+		if(stat64(cdbg1.get_eq_class_files()[i].c_str(), &stat_buf) == 0)
+			maxRRR1size = std::max(maxRRR1size, (uint64_t)stat_buf.st_size);
+		else
+		{
+			console -> error("File size of the bitvectorRRR file {} for CdBG1 cannot be determined.",
+							cdbg1.get_eq_class_files()[i]);
+			exit(1);
+		}
+	}
+
+	// Determine the maximum bitvectorRRR file-size for cdbg2.
+	for(uint64_t i = 0; i < cdbg2.get_eq_class_file_count(); ++i)
+	{
+		struct stat64 stat_buf;
+		if(stat64(cdbg2.get_eq_class_files()[i].c_str(), &stat_buf) == 0)
+			maxRRR2size = std::max(maxRRR2size, (uint64_t)stat_buf.st_size);
+		else
+		{
+			console -> error("File size of the bitvectorRRR file {} for CdBG2 cannot be determined.",
+							cdbg2.get_eq_class_files()[i]);
+			exit(1);
+		}
+	}
+
+
+	return (bvBuffMemory + maxRRR1size + maxRRR2size) / (1024 * 1024 * 1024);
+}
+
+
+
+template <typename qf_obj, typename key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>::
 	filter_disk_buckets(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
 {
 	if(!system(NULL))
@@ -1295,6 +1343,7 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
 					fileCount2 = cdbg2.get_eq_class_file_count();
 
+	maxMemoryForSort = std::max(get_max_sort_memory(cdbg1, cdbg2), (uint64_t)1);
 	
 	for(int i = 0; i <= fileCount1; ++i)
 		for(int j = 0; j <= fileCount2; ++j)
