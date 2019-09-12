@@ -95,8 +95,7 @@ class ColoredDbg {
 					std::string &prefix, int flag);
 
 		// Required to load the input CdBGs.
-		ColoredDbg(std::string &cqfFile, std::string &sampleListFile,
-					std::vector<std::string> &eqclassFiles, int flag);
+		ColoredDbg(std::string &dir, int flag);
 
 		// Returns the vector of names of all the color-class (bitvector) files.
 		inline std::vector<std::string> &get_eq_class_files() { return eqClsFiles; }
@@ -120,6 +119,8 @@ class ColoredDbg {
 
 		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into this Colored dBG.
 		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+		// friend class CdBG_Merger;
 
 
 	private:
@@ -818,13 +819,17 @@ start_time_(std::time(nullptr))
 
 template <class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj> ::
-	ColoredDbg(std::string &cqfFile, std::string &sampleListFile, std::vector<std::string> &eqclassFiles,
-				int flag):
+	ColoredDbg(std::string &dir, int flag):
 	bv_buffer(),
 	num_samples(0),
 	num_serializations(0),
 	start_time_(std::time(nullptr))
 	{
+		std::string cqfFile(dir + mantis::CQF_FILE);
+		std::string sampleListFile(dir + mantis::SAMPLEID_FILE);
+		std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE);
+
+
 		// Load the CQF
 		if(flag == MANTIS_DBG_IN_MEMORY)
 		{
@@ -861,14 +866,14 @@ ColoredDbg<qf_obj, key_obj> ::
 
 		// Load the color-class bitvector file names only.
 		std::map<uint, std::string> sortedFiles;
-		for (std::string file : eqclassFiles)
+		for (std::string file : colorClassFiles)
 		{
 			uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
 			sortedFiles[fileID] = file;
 		}
 		
 
-		eqClsFiles.reserve(eqclassFiles.size());
+		eqClsFiles.reserve(colorClassFiles.size());
 		for(auto idFilePair : sortedFiles)
 			eqClsFiles.push_back(idFilePair.second);
 
