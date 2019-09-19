@@ -39,6 +39,7 @@
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
+#include "CdBG_Merger.h"
 #include "squeakrconfig.h"
 #include "mantisconfig.hpp"
 
@@ -123,29 +124,18 @@ int merge_main(MergeOpts &opt)
 	
 	console -> info("Loading metadata for the first input colored dBG from disk.");
 
-	std::string cqfFile1(dir1 + mantis::CQF_FILE);
-	std::string sampleListFile1(dir1 + mantis::SAMPLEID_FILE);
-	std::vector<std::string> colorClassFiles1 = mantis::fs::GetFilesExt(dir1.c_str(), mantis::EQCLASS_FILE);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(dir1, MANTIS_DBG_ON_DISK);
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(cqfFile1, sampleListFile1, colorClassFiles1,
-																MANTIS_DBG_ON_DISK);
-
-	
-	console -> info("Read colored dBG with {} k-mers and {} color-class files.",
-					cdbg1.get_cqf() -> dist_elts(), cdbg1.get_eq_class_files().size());
+	console -> info("Read colored dBG over {} samples, with {} k-mers and {} color-class files.",
+					cdbg1.get_num_samples(), cdbg1.get_cqf() -> dist_elts(), cdbg1.get_eq_class_file_count());
 
 
 	console -> info("Loading metadata for the second input colored dBG from disk.");
 
-	std::string cqfFile2(dir2 + mantis::CQF_FILE);
-	std::string sampleListFile2(dir2 + mantis::SAMPLEID_FILE);
-	std::vector<std::string> colorClassFiles2 = mantis::fs::GetFilesExt(dir2.c_str(), mantis::EQCLASS_FILE);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(dir2, MANTIS_DBG_ON_DISK);
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(cqfFile2, sampleListFile2, colorClassFiles2,
-																MANTIS_DBG_ON_DISK);
-
-	console -> info("Read colored dBG with {} k-mers and {} color-class files.",
-					cdbg2.get_cqf() -> dist_elts(), cdbg2.get_eq_class_files().size());
+	console -> info("Read colored dBG over {} samples, with {} k-mers and {} color-class files.",
+					cdbg2.get_num_samples(), cdbg2.get_cqf() -> dist_elts(), cdbg2.get_eq_class_file_count());
 
 
 	if(!cdbg1.get_cqf() -> check_similarity(cdbg2.get_cqf()))
@@ -155,15 +145,13 @@ int merge_main(MergeOpts &opt)
 	}
 
 
-
 	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_ON_DISK);
 
-	
-	mergedCdBG.set_thread_count(opt.threadCount);
-	mergedCdBG.set_max_memory_for_sort(opt.maxMemory);
+	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG);
+	merger.set_console(console);
+	merger.set_thread_count(opt.threadCount);
 
-	mergedCdBG.set_console(console);
-	mergedCdBG.merge(cdbg1, cdbg2);
+	merger.merge();
 
 	return EXIT_SUCCESS;
 }
