@@ -107,6 +107,7 @@ class ColoredDbg {
 		// CdBG.
 		std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
 
+		// Friend class that merges two mantis indices into one.
 		template<typename q_obj, typename k_obj> friend class CdBG_Merger;
 
 	private:

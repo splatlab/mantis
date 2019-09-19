@@ -23,34 +23,13 @@ class CdBG_Merger
                     ColoredDbg<qf_obj, key_obj> &cdbgOut);
 
         void set_console(spdlog::logger* c) { console = c; }
-        // Remains in coloreddbg.h
-		// Required to instantitate the output CdBG.
-		// ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-		// 			std::string &prefix, int flag);
-
-        // Remains in coloreddbg.h
-		// Required to load the input CdBGs.
-		// ColoredDbg(std::string &cqfFile, std::string &sampleListFile,
-		// 			std::vector<std::string> &eqclassFiles, int flag);
-
-        // Remains in coloreddbg.h
-		// Returns the vector of names of all the color-class (bitvector) files.
-		// inline std::vector<std::string> &get_eq_class_files() { return eqClsFiles; }
-
-        // Remains in coloreddbg.h
-		// Returns the number of color-class (bitvector) files.
-		// inline uint64_t get_eq_class_file_count() { return eqClsFiles.size(); }
-
-        // Remains in coloreddbg.h
-		// Returns the collection of BitvectorRRR's (compressed color-classes) of this
-		// CdBG.
-		// std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
 
 		// Sets the number of processor-threads to be used at the intermediate steps of 
 		// unique id-pairs filtering and MPH building.
 		inline void set_thread_count(uint threadNum) { threadCount = threadNum; }
 
-		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into this Colored dBG.
+		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into the colored dBG 'cdbg'
+		// (all the CdBG's are private members).
 		void merge();
 
 
@@ -93,16 +72,8 @@ class CdBG_Merger
 		// color-id pairs filtering and MPH's building.
 		uint threadCount = 1;
 
-		// Maximum memory-usage limit (in GB) for the intermediate step of unique
-        // color-id pairs filtering.
-		uint maxMemoryForSort = 1;
-
-        // Utility information to display at result summary.
+        // Utility information to display at the result summary.
         uint64_t colorCount1 = 0, colorCount2 = 0;
-
-        // Remains in coloreddbg.h
-		// Color-class bitvector file names for this DBG.
-		// std::vector<std::string> eqClsFiles;
 
 		// Required to hash colo-id pair objects. Resorted to boost::hash_combine
 		// instead of plain XOR hashing. For more explanation, consult
@@ -143,10 +114,6 @@ class CdBG_Merger
 		std::vector<std::vector<boophf_t *>> MPH;
 
 
-
-        // Remains in coloreddbg.h
-		// Returns the sample-id mapping.
-		// inline std::unordered_map<uint64_t, std::string> &get_sample_id_map() { return sampleid_map; }
 
         // Advances the CQF iterator 'it', with keeping track of the 'step' count; and
 		// fetches the next CQF-entry into 'cqfEntry' if the iterator 'it' is advanced
@@ -643,7 +610,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
 					fileCount2 = cdbg2.get_eq_class_file_count();
 
-	maxMemoryForSort = std::max(get_max_sort_memory(), (uint64_t)1);
+	uint maxMemoryForSort = std::max(get_max_sort_memory(), (uint64_t)1);
 	
 	for(int i = 0; i <= fileCount1; ++i)
 		for(int j = 0; j <= fileCount2; ++j)
