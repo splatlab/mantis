@@ -217,11 +217,16 @@ CdBG_Merger<qf_obj, key_obj>::
 {
     start_time_ = std::time(nullptr);
 
-    this -> cdbg1 = cdbg1;
-    this -> cdbg2 = cdbg2;
-    cdbg = cdbgOut;
+	if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count())
+		this -> cdbg1 = cdbg1, this -> cdbg2 = cdbg2;
+	else
+	{
+		this -> cdbg1 = cdbg2, this -> cdbg2 = cdbg1;
 
-    // TODO: swap the cdbg references if cdbg2 has more color-class files than cdbg1.
+		console -> info("Mantis indices are swapped.");
+	}
+	
+    cdbg = cdbgOut;
 }
 
 
