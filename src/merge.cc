@@ -156,14 +156,14 @@ int merge_main(MergeOpts &opt)
 
 
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_ON_DISK);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_IN_MEMORY);
 
 	
 	mergedCdBG.set_thread_count(opt.threadCount);
 	mergedCdBG.set_max_memory_for_sort(opt.maxMemory);
 
 	mergedCdBG.set_console(console);
-	mergedCdBG.merge(cdbg1, cdbg2);
+	mergedCdBG.merge(cdbg1, cdbg2, opt);
 
 	return EXIT_SUCCESS;
 }

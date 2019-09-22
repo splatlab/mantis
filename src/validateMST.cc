@@ -82,12 +82,15 @@ int validate_mst_main(MSTValidateOpts &opt) {
                  "\n\t# of Samples: {}", eqCount, opt.numSamples);
     uint64_t cntr{0};
     LRUCacheMap cache_lru(100000);
+//    eqCount = 10;
+    uint64_t failure = 0;
     for (uint64_t idx = 0; idx < eqCount; idx++) {
         nonstd::optional<uint64_t> dummy{nonstd::nullopt};
         std::vector<uint64_t> newEq = mstQuery.buildColor(idx, queryStats, &cache_lru, nullptr, dummy);
         cache_lru.emplace(idx, newEq);
         std::vector<uint64_t> oldEq = buildColor(bvs, idx, opt.numSamples);
         if (newEq != oldEq) {
+            failure++;
             std::cerr << "AAAAA! LOOOSER!!\n";
             std::cerr << "index=" << idx << "\n";
             std::cerr << "new size: " << newEq.size() << " old size: " << oldEq.size() << "\n";
@@ -100,7 +103,8 @@ int validate_mst_main(MSTValidateOpts &opt) {
                 std::cerr << k << " ";
             }
             std::cerr << "\n";
-            std::exit(1);
+            if (failure > 10)
+                std::exit(1);
         }
         cntr++;
         if (cntr % 1000000 == 0) {

@@ -24,6 +24,7 @@
 #include "gqf/hashutil.h"
 
 #include "lru/lru.hpp"
+#include "mstQuery.h"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 using SpinLockT = std::mutex;
@@ -132,7 +133,11 @@ class MST {
 public:
     MST(std::string prefix, std::shared_ptr<spdlog::logger> logger, uint32_t numThreads);
 
+    MST(CQF<KeyObject>* cqf/*std::string prefix*/, spdlog::logger* logger, uint32_t numThreads, std::string prefix1, std::string prefix2, uint64_t numColorBuffers = 1);
+
     void buildMST();
+
+    void mergeMSTs();
 
 private:
     bool buildEdgeSets();
@@ -140,6 +145,8 @@ private:
     void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
 
     bool calculateWeights();
+
+    bool calculateMSTBasedWeights();
 
     bool encodeColorClassUsingMST();
 
@@ -152,6 +159,8 @@ private:
     uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2,
                          uint64_t &srcId, std::vector<uint64_t> &srcEq);
 
+    uint64_t mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, std::vector<uint64_t> &srcEq, bool isFirst);
+
     std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
 
     void buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv);
@@ -162,30 +171,44 @@ private:
                                            std::vector<spp::sparse_hash_set<Edge, edge_hash>> &edgesetList,
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
-    void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
-
+    void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, bool isMSTBased = false);
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
             sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
             sdsl::bit_vector::select_1_type &sbbv );
 
+    void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, MSTQuery *mst1, std::vector<uint64_t> & eq1);
+    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, bool isFirst);
+
     std::string prefix;
     uint32_t numSamples = 0;
+    uint32_t numOfFirstMantisSamples = 0;
     uint64_t k;
-    uint64_t num_of_ccBuffers;
+    uint64_t num_of_ccBuffers = 1;
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
     LRUCacheMap lru_cache;
+    LRUCacheMap lru_cache1;
+    LRUCacheMap lru_cache2;
+    QueryStats queryStats;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;
+    std::vector<std::pair<uint64_t , uint64_t >> colorPairs;
+    std::string prefix1;
+    std::string prefix2;
+    MSTQuery* mst1;
+    MSTQuery* mst2;
+    CQF<KeyObject>* cqf;
+    nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
     std::vector<std::vector<Edge>> edgeBucketList;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
+    std::unordered_set<uint64_t> test;
 
 };
 

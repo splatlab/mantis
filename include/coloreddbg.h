@@ -31,6 +31,11 @@
 
 #include "BooPHF.h"
 
+#include "lru/lru.hpp"
+#include "mst.h"
+
+using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
 
@@ -119,7 +124,7 @@ class ColoredDbg {
 										(uint64_t)maxMemory); }
 
 		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into this Colored dBG.
-		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+		void merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, MergeOpts &opt);
 
 
 	private:
@@ -277,10 +282,12 @@ class ColoredDbg {
 		void bv_buffer_serialize(uint64_t colorClsCount);
 
 		// Builds the output color-class bitvectors for the color-id pairs.
-		void build_color_class_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+		void store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, uint64_t& numColorBuffers);
+
+		void calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string& dir1, std::string& dir2);
 
 		// Initializes the CQF that will contain 'kmerCount' number of k-mers after
-		// mantii merge.
+		// manti merge.
 		void initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t kmerCount);
 
 		// Given a color-id pair 'idPair', returns the newly assigned color-id of this
@@ -1258,7 +1265,7 @@ uint64_t ColoredDbg<qf_obj, key_obj>::
 
 	// Flush and close the disk-bucket files.
 	for(int i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
-		for(int j = 0; j <= cdbg1.get_eq_class_file_count(); ++j)
+		for(int j = 0; j <= cdbg2.get_eq_class_file_count(); ++j)
 		{
 			diskBucket[i][j].flush();
 			diskBucket[i][j].close();
@@ -1416,7 +1423,8 @@ void ColoredDbg<qf_obj, key_obj>::
 
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::
-	build_color_class_table(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+	store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+			uint64_t& numColorBuffers)
 {
 	auto t_start = time(nullptr);
 
@@ -1426,21 +1434,50 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(), fileCount2 = cdbg2.get_eq_class_file_count();
 
+	console->info("EQClass Count for cdbg1 and 2: {}, {}", fileCount1, fileCount2);
 	uint64_t writtenPairsCount = 0;
-	BitVectorRRR bitVec1, bitVec2;
+	//BitVectorRRR bitVec1, bitVec2;
 
+    console->info("Writing color pairs and ids into file {}", prefix + "/newID2oldIDs" );
+    std::ofstream output(prefix + "newID2oldIDs");
+    output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
 
-	for(uint64_t i = 0; i <= fileCount1; ++i)
-	{
+    for(uint64_t i = 0; i <= fileCount1; ++i) {
+
+        for (uint64_t j = 0; j <= fileCount2; ++j) {
+
+            console->info("At bucket ({}, {}), size = {}. Time-stamp = {}.", i, j, bucketSize[i][j],
+                          time(nullptr) - start_time_);
+
+            std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+                                "_" + std::to_string(i) + "_" + std::to_string(j));
+            std::pair<uint64_t, uint64_t> idPair;
+			cumulativeBucketSize[i][j] = writtenPairsCount;
+            while (input >> idPair.first >> idPair.second) {
+                /// @fatemeh write down the pair and the associated colorID here
+                uint64_t colorID = cumulativeBucketSize[i][j] + MPH[i][j]->lookup(idPair);// + 1;
+                output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
+                output.write(reinterpret_cast<char*>(&(idPair.first)), sizeof(idPair.first));
+                output.write(reinterpret_cast<char*>(&(idPair.second)), sizeof(idPair.second));
+                writtenPairsCount++;
+            }
+			input.close();
+        }
+    }
+    output.seekp(0, std::ios::beg);
+    output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
+	output.close();
+	numColorBuffers = writtenPairsCount/mantis::NUM_BV_BUFFER + 1;
+
+/*	writtenPairsCount = 0;
+	for(uint64_t i = 0; i <= fileCount1; ++i) {
 		if(i > 0)
 		{
 			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
 			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
 							cdbg1.get_eq_class_files()[i - 1], time(nullptr) - start_time_);
 		}
-
-		for(uint64_t j = 0; j <= fileCount2; ++j)
-		{
+		for (uint64_t j = 0; j <= fileCount2; ++j) {
 			if(j > 0)
 			{
 				sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
@@ -1481,7 +1518,7 @@ void ColoredDbg<qf_obj, key_obj>::
 				// TODO: Add faster file-read mechanism.
 				while(input >> idPair.first >> idPair.second)
 				{
-					uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(idPair)) / mantis::NUM_BV_BUFFER)
+					uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j]->lookup(idPair)) / mantis::NUM_BV_BUFFER)
 										- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER);
 					writeQueue[queueIdx].push_back(idPair);
 				}
@@ -1494,7 +1531,6 @@ void ColoredDbg<qf_obj, key_obj>::
 					for(auto it = writeQueue[k].begin(); it != writeQueue[k].end(); ++it)
 					{
 						uint64_t colorID = cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(*it) + 1;
-
 						BitVector colorClass(num_samples);
 						concat(bitVec1, cdbg1.get_num_samples(), it -> first,
 								bitVec2, cdbg2.get_num_samples(), it -> second, colorClass);
@@ -1526,14 +1562,85 @@ void ColoredDbg<qf_obj, key_obj>::
 	{
 		console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
 		bv_buffer_serialize(writtenPairsCount);
-	}
-
+	}*/
 
 	auto t_end = time(nullptr);
 	console -> info("Color-class building phase took time {} seconds.", t_end - t_start);
 }
 
+template <typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string& dir1, std::string& dir2)
+{
+	auto t_start = time(nullptr);
 
+	console -> info("At color-class building (bitvectors concatenation) phase. Time-stamp = {}.",
+					time(nullptr) - start_time_);
+
+
+	const uint64_t bucketCnt1 = cdbg1.get_eq_class_file_count(), bucketCnt2 = cdbg2.get_eq_class_file_count();
+
+	uint64_t writtenPairsCount = 0;
+	BitVectorRRR bitVec1, bitVec2;
+
+	std::cerr << dir1 + mantis::PARENTBV_FILE << "\n";
+	std::cerr << dir2 + mantis::PARENTBV_FILE << "\n";
+	sdsl::int_vector<> parentbv1;
+	sdsl::load_from_file(parentbv1, dir1 + "/" + mantis::PARENTBV_FILE);
+	sdsl::int_vector<> parentbv2;
+	sdsl::load_from_file(parentbv2, dir2 + "/" + mantis::PARENTBV_FILE);
+
+	std::cerr << "loaded the files\n";
+	spp::sparse_hash_map<std::pair<uint64_t, uint64_t >, bool, Custom_Pair_Hasher> isVirtual;
+
+	std::cerr << "parents sizes: " << parentbv1.size() << " " << parentbv2.size() << "\n";
+	uint64_t zero1 = parentbv1.size() - 1;
+	uint64_t zero2 = parentbv2.size() - 1;
+
+	std::cerr << "# of buckets: " << bucketCnt1 << " " << bucketCnt2 << "\n";
+	for (uint64_t i = 0; i <= bucketCnt1; ++i)
+	{
+	    std::cerr << "\n" << i;
+		for(uint64_t j = 0; j <= bucketCnt2; ++j) {
+            std::cerr << "\n" << j << "\n";
+			std::ifstream input(prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+								"_" + std::to_string(i) + "_" + std::to_string(j));
+			std::pair<uint64_t, uint64_t> idPair;
+            uint64_t cntr{0};
+			while (input >> idPair.first >> idPair.second) {
+//				std::cerr << "reading the file: " << idPair.first << " " << idPair.second << "\n";
+				if (!idPair.first) idPair.first = zero1;
+				else idPair.first--;
+				if (!idPair.second) idPair.second = zero2;
+				else idPair.second--;
+				// doesn't matter if the idPair is in the map or not, we want to set the value to false
+				isVirtual[idPair] = false;
+				uint64_t pid1{idPair.first}, cid1{idPair.first}, pid2{idPair.second}, cid2{idPair.second};
+				std::cerr << "\r" << cntr++;
+				do {
+//					std::cerr << cid1 << " " << cid2 << "\n";
+					cid1 = pid1;
+					cid2 = pid2;
+					pid1 = parentbv1[cid1];
+					pid2 = parentbv2[cid2];
+					auto ppair = std::make_pair(pid1, pid2);
+					if (isVirtual.find(ppair) == isVirtual.end()) {
+						isVirtual[ppair] = true;
+					}
+				} while (pid1 != cid1 and pid2 != cid2);
+			}
+		}
+	}
+
+	uint64_t actualCnt{0}, virtualCnt{0};
+	for (auto& kv : isVirtual) {
+		if (kv.second) virtualCnt++;
+		else actualCnt++;
+	}
+
+	std::cerr << "actual cnt: " << actualCnt << " virtual cnt: " << virtualCnt << "\n";
+	std::exit(1);
+}
 
 template <typename qf_obj, typename key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, uint64_t> &idPair)
@@ -1626,6 +1733,7 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 		add_kmer(kmer, get_color_id(idPair), cqfOutPosition, walkBehindIteratorOut);
+
 		kmerCount++;
 
 		if(kmerCount % PROGRESS_STEP == 0)
@@ -1670,7 +1778,7 @@ void ColoredDbg<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
 
 template <typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::
-	merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+	merge(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, MergeOpts &opt)
 {
 	auto t_start = time(nullptr);
 	console -> info ("Merge starting. Time = {}.\n", time(nullptr) - start_time_);
@@ -1689,7 +1797,9 @@ void ColoredDbg<qf_obj, key_obj>::
 		exit(1);
 	}
 
-	
+
+	uint64_t num_colorBuffers = 1;
+
 	std::unordered_set<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> sampledPairs;
 	
 	sample_color_id_pairs(cdbg1, cdbg2, mantis::SAMPLE_SIZE, samplePairCount, sampledPairs);
@@ -1697,19 +1807,19 @@ void ColoredDbg<qf_obj, key_obj>::
 	sampledPairs.erase(sampledPairs.begin(), sampledPairs.end());
 
 	uint64_t colorClassCount = filter_disk_buckets(cdbg1, cdbg2);
-
 	build_MPH_tables(cdbg1, cdbg2);
+//	bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
+//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 
-	bv_buffer = BitVector(mantis::NUM_BV_BUFFER * num_samples);
-	build_color_class_table(cdbg1, cdbg2);
-	bv_buffer = BitVector(0);
+//	build_color_class_table(cdbg1, cdbg2, num_colorBuffers);
+    store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
+//	bv_buffer = BitVector(0);
 
-	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
+	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(),
 					kmerCount);
 	build_CQF(cdbg1, cdbg2);
 
-
-	// Remove the temporary directory
+    // Remove the temporary directory
 	std::string sysCommand = "rm -rf " + tempDir;
 	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
 
@@ -1724,7 +1834,16 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	console -> info("Merged CQF metadata:");
 	dbg.dump_metadata();
-	serialize_cqf_and_sampleid_list();
+//	serialize_cqf_and_sampleid_list();
+//    dbg.free();
+//    std::exit(1);
+	// @fatemeh: go over the cqf and create the edges
+//	num_colorBuffers = 2;
+	MST mst(&dbg, console, opt.threadCount, opt.dir1, opt.dir2, num_colorBuffers);
+	console->info("MST Initiated. Now merging the two MSTs..");
+	mst.mergeMSTs();
+
+
 }
 
 #endif
