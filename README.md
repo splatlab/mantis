@@ -216,15 +216,15 @@ The output file contains the list of experiments (i.e., hits) corresponding to e
 
 Merge Two Mantii
 -------
-`mantis merge` merges two mantis indices into one mantis index.
+`mantis merge` merges two mantis indices into a single mantis index.
 
 ``` bash
- $ ./bin/mantis merge -i1 raw/in1 -i2 raw/in2 -t 4 -m 1 -o raw/out
+ $ ./bin/mantis merge -i1 raw/in1 -i2 raw/in2 -t 4 -o raw/out
 ```
 
 ```bash
 SYNOPSIS
-        mantis merge -i1 <input_dir_1> -i2 <input_dir_2> [-t <num_threads>] [-m <max_filtering_memory>] -o <merge_output>
+        mantis merge -i1 <input_dir_1> -i2 <input_dir_2> [-t <num_threads>] -o <merge_output>
 
 OPTIONS
         <input_dir_1>
@@ -236,14 +236,9 @@ OPTIONS
         <num_threads>
                     number of threads to be used in intermediate color-id pairs filtering and MPH building phases
 
-        <max_filtering_memory>
-                    maximum memory (in GB) to be used in intermediate color-id pairs filtering phase
-
         <merge_output>
                     directory where the results should be written
 ```
-
-`max_filtering_memory`: A good choice for this argument is &lfloor;(2 x 20M x NUM_SAMPLES_IN_OUTPUT) / (8 x 1024<sup>3</sup>)&rfloor;. This ensures that the intermediate unique color-id pairs filtering phase does not dominate the peak memory usage of the merge process. The default value for this argument is set to this, and any lower value supplied at the input is ignored. Of course, any larger value can be used, trading off between the peak memory-usage and the total time consumed. This value needs to be an integer.
 
 `num_threads`: The default number of threads to use at various intermediate phases is 1.
 

@@ -1786,7 +1786,6 @@ bool qf_free(QF *qf)
 	if (buffer != NULL) {
 		/*free(buffer);*/
 		free(qf->metadata);
-		free(qf->blocks);
 		return true;
 	}
 

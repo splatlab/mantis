@@ -156,9 +156,7 @@ int main ( int argc, char *argv[] ) {
   
   auto merge_mode = (
                     command("merge").set(selected, mode::merge),
-                    // option("-e", "--eqclass_dist").set(mopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
 										option("-t", "--thread-count") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate unique color-id filtering phase",
-                    option("-m", "--max-memory") & value("max-memory", mopt.maxMemory) % "maximum memory (in GB) to use in intermediate unique color-id filtering phase",
                     required("-i1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-i2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
                     required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written"

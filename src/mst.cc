@@ -56,16 +56,18 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
     logger->info("# of experiments: {}", numSamples);
 }
 
-MST::MST(CQF<KeyObject>* cqfIn, /*std::string prefixIn,*/ spdlog::logger* loggerIn, uint32_t numThreads,
+MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, uint32_t numThreads,
         std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-        cqf(cqfIn), /*prefix(std::move(prefixIn)),*/ prefix1(prefixIn1), prefix2(prefixIn2), lru_cache1(1000), lru_cache2(1000), nThreads(numThreads),
+        cqf(cqfIn), prefix(std::move(prefixIn)),
+        prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
+        lru_cache1(1000), lru_cache2(1000), nThreads(numThreads),
         num_of_ccBuffers(numColorBuffersIn){
     logger = loggerIn;//.get();
 
     // Make sure the prefix is a full folder
-    /*if (prefix.back() != '/') {
+    if (prefix.back() != '/') {
         prefix.push_back('/');
-    }*/
+    }
     if (prefix1.back() != '/') {
         prefix1.push_back('/');
     }
@@ -124,8 +126,8 @@ void MST::buildMST() {
 
 void MST::mergeMSTs() {
     buildEdgeSets();
-//    calculateMSTBasedWeights();
-//    encodeColorClassUsingMST();
+    calculateMSTBasedWeights();
+    encodeColorClassUsingMST();
     logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 /**
@@ -414,7 +416,6 @@ void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, boo
         for (auto edge = itrStart; edge != itrEnd; edge++) {
             auto n1s = edge->n1 == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[edge->n1];
             auto n2s = edge->n2 == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[edge->n2];
-//            std::cerr << zero << " " << edge->n1 << " " << edge->n2 << " " << n1s.first << " " << n1s.second << " " << n2s.first << " " << n2s.second << "\n";
             auto w1 = mstBasedHammingDist(n1s.first, n2s.first, srcBV, isFirst);
             auto w2 = mstBasedHammingDist(n1s.second, n2s.second, srcBV, !isFirst);
             auto w = w1 + w2;

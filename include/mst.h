@@ -133,7 +133,7 @@ class MST {
 public:
     MST(std::string prefix, std::shared_ptr<spdlog::logger> logger, uint32_t numThreads);
 
-    MST(CQF<KeyObject>* cqf/*std::string prefix*/, spdlog::logger* logger, uint32_t numThreads, std::string prefix1, std::string prefix2, uint64_t numColorBuffers = 1);
+    MST(CQF<KeyObject>* cqf, std::string prefix, spdlog::logger* logger, uint32_t numThreads, std::string prefix1, std::string prefix2, uint64_t numColorBuffers = 1);
 
     void buildMST();
 
