@@ -172,6 +172,16 @@ class CdBG_Merger
 		// that are not sampled on abundance, i,e. those that are written to disk.
 		void build_color_class_table();
 
+		// Builds the output color-class bitvectors for the a subset of the 
+		// color-id pairs from the disk-bucket_(bucketRow, bucketCol); namely,
+		// the pairs present at the index-range [startIdx, endIdx) at 'writeQueue'.
+		// Constituent partitions for each bitvector (i.e. the bitvectors to be
+		// concatenated) are present at the RRR-compressed vectors 'bitVec1' and
+		// 'bitVec2'.
+		void build_color_classes(uint64_t bucketRow, uint64_t bucketCol,
+								std::vector<std::pair<uint64_t, uint64_t>> &writeQueue,
+								uint64_t startIdx, uint64_t endIdx, BitVectorRRR &bitVec1, BitVectorRRR &bitVec2);
+
         // Builds the output color-class bitvectors for the abundant (sampled)
 		// color-id pairs.
 		void build_abundant_color_classes();
@@ -934,23 +944,29 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 				for(uint64_t k = 0; k < queueCount; ++k)
 				{
-					for(auto it = writeQueue[k].begin(); it != writeQueue[k].end(); ++it)
+					std::vector<std::thread> T;
+					T.reserve(threadCount);
+
+					uint64_t perThreadTask = writeQueue[k].size() / threadCount;
+					for(uint64_t t = 0; t < threadCount; ++t)
+						T.emplace_back(&CdBG_Merger<SampleObject<CQF<KeyObject>*>, KeyObject>::build_color_classes,
+										this, i, j, std::ref(writeQueue[k]), t * perThreadTask,
+										t < threadCount - 1 ? (t + 1) * perThreadTask : writeQueue[k].size(),
+										std::ref(bitVec1), std::ref(bitVec2));
+
+					
+					for(uint64_t t = 0; t < threadCount; ++t)
+						T[t].join();
+
+					T.clear();
+
+
+					writtenPairsCount += writeQueue[k].size();
+					if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
 					{
-						uint64_t colorID = cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(*it) + 1;
-						BitVector colorClass(cdbg.num_samples);
+						console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
 
-						concat(bitVec1, cdbg1.get_num_samples(), it -> first,
-								bitVec2, cdbg2.get_num_samples(), it -> second, colorClass);
-
-						cdbg.add_bitvector(colorClass, colorID - 1),
-						writtenPairsCount++;
-
-						if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
-						{
-							console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
-
-							bv_buffer_serialize(writtenPairsCount);
-						}
+						bv_buffer_serialize(writtenPairsCount);
 					}
 					
 					writeQueue[k].clear();
@@ -1046,6 +1062,29 @@ void CdBG_Merger<qf_obj, key_obj>::
 			count (SAMPLE_PAIR_COUNT) is defined as less than or equal to the bitvector-buffer size.
 			(Check its declaration)
 		*/
+	}
+}
+
+
+
+template <typename qf_obj, typename key_obj>
+void CdBG_Merger<qf_obj, key_obj>::
+	build_color_classes(uint64_t bucketRow, uint64_t bucketCol,
+						std::vector<std::pair<uint64_t, uint64_t>> &writeQueue, uint64_t startIdx, uint64_t endIdx,
+						BitVectorRRR &bitVec1, BitVectorRRR &bitVec2)
+{
+	auto startPos = writeQueue.begin() + startIdx, endPos = writeQueue.begin() + endIdx;
+	auto &i = bucketRow, &j = bucketCol;
+
+	for(auto it = startPos; it != endPos; ++it)
+	{
+		uint64_t colorID = cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(*it) + 1;
+		BitVector colorClass(cdbg.num_samples);
+
+		concat(bitVec1, cdbg1.get_num_samples(), it -> first,
+				bitVec2, cdbg2.get_num_samples(), it -> second, colorClass);
+
+		cdbg.add_bitvector(colorClass, colorID - 1);
 	}
 }
 
