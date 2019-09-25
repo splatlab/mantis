@@ -153,6 +153,8 @@ int merge_main(MergeOpts &opt)
 
 	merger.merge();
 
+	merger.print_time_log();
+
 	return EXIT_SUCCESS;
 }
 

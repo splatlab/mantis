@@ -32,6 +32,9 @@ class CdBG_Merger
 		// (all the CdBG's are private members).
 		void merge();
 
+		// Prints the timing-log of the steps throughout the merge algorithm.
+		void print_time_log();
+
 
 	private:
 		// k-mer count in progress display.
@@ -168,6 +171,9 @@ class CdBG_Merger
 		// Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
 		void build_MPH_tables();
 
+		// Loads the RRR-compressed bitvector file of name 'fileName' into 'bitVec'.
+		void load_color_class_file(BitVectorRRR& bitVec, std::string &fileName);
+
         // Builds the output color-class bitvectors for the color-id pairs
 		// that are not sampled on abundance, i,e. those that are written to disk.
 		void build_color_class_table();
@@ -206,6 +212,15 @@ class CdBG_Merger
 
 		// Serializes the output CQF and sample-id mapping.
 		void serialize_cqf_and_sampleid_list();
+
+
+
+		class RunningTimeLog
+		{
+		public:
+			uint64_t sample, fillBuckets, filterBuckets, assignAbundantIds, buildMPH,
+					buildColorTable, fileRead, buildCQF, total;
+		} timeLog;
 };
 
 
@@ -290,7 +305,8 @@ void CdBG_Merger<qf_obj, key_obj>::
     console -> info("Merged colored dBG : over {} samples and has {} k-mers and {} color-classes.",
 					cdbg.get_num_samples(), cdbg.dbg.dist_elts(), colorClassCount);
     
-    console -> info("Total time taken = {} s.", t_end - t_start);
+	timeLog.total = t_end - t_start;
+    console -> info("Total time taken = {} s.", timeLog.total);
 
 
 	console -> info("Merged CQF metadata:");
@@ -426,7 +442,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 
 	auto t_end = time(nullptr);
-	console -> info("Sampling abundant color-id pairs took time {} seconds.", t_end - t_start);
+	timeLog.sample = t_end - t_start;
+	console -> info("Sampling abundant color-id pairs took time {} seconds.", timeLog.sample);
 }
 
 
@@ -571,7 +588,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 
 	
 	auto t_end = time(nullptr);
-	console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
+	timeLog.fillBuckets = t_end - t_start;
+	console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", timeLog.fillBuckets);
 
 
 	return kmerCount;
@@ -654,7 +672,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 
 
 	auto t_end = time(nullptr);
-	console -> info("Filtering the unique color-id pairs took time {} seconds.", t_end - t_start);
+	timeLog.filterBuckets = t_end - t_start;
+	console -> info("Filtering the unique color-id pairs took time {} seconds.", timeLog.filterBuckets);
 
 	return colorClassCount;
 }
@@ -728,7 +747,8 @@ void CdBG_Merger<qf_obj, key_obj>:: assign_abundant_color_ids()
 
 
 	auto t_end = time(nullptr);
-	console -> info("Assigning color-ids to the sampled pairs. Took time {} seconds.", t_end - t_start);
+	timeLog.assignAbundantIds = t_end - t_start;
+	console -> info("Assigning color-ids to the sampled pairs. Took time {} seconds.", timeLog.assignAbundantIds);
 }
 
 
@@ -800,7 +820,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 	
 
 	auto t_end = time(nullptr);
-	console -> info("Building the MPH tables took time {} seconds.", t_end - t_start);
+	timeLog.buildMPH = t_end - t_start;
+	console -> info("Building the MPH tables took time {} seconds.", timeLog.buildMPH);
 }
 
 
@@ -844,6 +865,19 @@ void CdBG_Merger<qf_obj, key_obj> ::
 
 
 
+
+template <typename qf_obj, typename key_obj>
+void CdBG_Merger<qf_obj, key_obj>::
+	load_color_class_file(BitVectorRRR& bitVec, std::string &fileName)
+	{
+		auto t_s = time(nullptr);
+		sdsl::load_from_file(bitVec, fileName);
+		auto t_e = time(nullptr);
+		timeLog.fileRead += (t_e - t_s);
+	}
+
+
+
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::
 	build_color_class_table()
@@ -877,7 +911,12 @@ void CdBG_Merger<qf_obj, key_obj>::
 	{
 		if(i > 0)
 		{
-			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
+			// auto t_s = time(nullptr);
+			// sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
+			// auto t_e = time(nullptr);
+			// timeLog.fileRead += (t_e - t_s);
+			load_color_class_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
+
 			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
 							cdbg1.get_eq_class_files()[i - 1], time(nullptr) - start_time_);
 		}
@@ -886,7 +925,12 @@ void CdBG_Merger<qf_obj, key_obj>::
 		{
 			if(j > 0)
 			{
-				sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
+				// auto t_s = time(nullptr);
+				// sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
+				// auto t_e = time(nullptr);
+				// timeLog.fileRead += (t_e - t_s);
+				load_color_class_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
+
 				console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
 								cdbg2.get_eq_class_files()[j - 1], time(nullptr) - start_time_);
 			}
@@ -973,7 +1017,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 
 	auto t_end = time(nullptr);
-	console -> info("Color-class building phase took time {} seconds.", t_end - t_start);
+	timeLog.buildColorTable = t_end - t_start;
+	console -> info("Color-class building phase took time {} seconds.", timeLog.buildColorTable);
 }
 
 
@@ -1016,7 +1061,12 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 		if(reqBucket1 && reqBucket1 != currBucket1)
 		{
-			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1 - 1]);
+			// auto t_s = time(nullptr);
+			// sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1 - 1]);
+			// auto t_e = time(nullptr);
+			// timeLog.fileRead += (t_e - t_s);
+			load_color_class_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1 - 1]);
+
 			currBucket1 = reqBucket1;
 
 			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
@@ -1025,7 +1075,12 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 		if(reqBucket2 && reqBucket2 != currBucket2)
 		{
-			sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2 - 1]);
+			// auto t_s = time(nullptr);
+			// sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2 - 1]);
+			// auto t_e = time(nullptr);
+			// timeLog.fileRead += (t_e - t_s);
+			load_color_class_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2 - 1]);
+
 			currBucket2 = reqBucket2;
 
 			console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
@@ -1203,7 +1258,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 
 	auto t_end = time(nullptr);
-	console -> info("Merging the CQFs took time {} seconds.", t_end - t_start);
+	timeLog.buildCQF = t_end - t_start;
+	console -> info("Merging the CQFs took time {} seconds.", timeLog.buildCQF);
 }
 
 
@@ -1266,6 +1322,17 @@ void CdBG_Merger<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
 	outputFile.close();
 
 	console -> info("Serialized sample-id mapping.");
+}
+
+
+
+template <typename qf_obj, typename key_obj>
+void CdBG_Merger<qf_obj, key_obj>:: print_time_log()
+{
+	console -> info("Summary time statistics for the algorithm steps.");
+	console -> info("================================================");
+
+	// TODO: Display summary time-statistics here.
 }
 
 #endif
