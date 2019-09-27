@@ -229,7 +229,7 @@ class CdBG_Merger
 		{
 		public:
 			uint64_t sample, fillBuckets, filterBuckets, assignAbundantIds, buildMPH,
-					buildColorTable, fileRead, buildCQF, total;
+					buildColorTable, fileRead = 0, colorTableSerialize = 0, buildCQF, total;
 		} timeLog;
 };
 
@@ -589,8 +589,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 
 
 	// Flush and close the disk-bucket files.
-	for(int i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
-		for(int j = 0; j <= cdbg2.get_eq_class_file_count(); ++j)
+	for(uint64_t i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
+		for(uint64_t j = 0; j <= cdbg2.get_eq_class_file_count(); ++j)
 		{
 			diskBucket[i][j].flush();
 			diskBucket[i][j].close();
@@ -879,12 +879,12 @@ void CdBG_Merger<qf_obj, key_obj> ::
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::
 	load_color_class_file(BitVectorRRR& bitVec, std::string &fileName)
-	{
-		auto t_s = time(nullptr);
-		sdsl::load_from_file(bitVec, fileName);
-		auto t_e = time(nullptr);
-		timeLog.fileRead += (t_e - t_s);
-	}
+{
+	auto t_s = time(nullptr);
+	sdsl::load_from_file(bitVec, fileName);
+	auto t_e = time(nullptr);
+	timeLog.fileRead += (t_e - t_s);
+}
 
 
 
@@ -921,10 +921,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 	{
 		if(i > 0)
 		{
-			// auto t_s = time(nullptr);
-			// sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
-			// auto t_e = time(nullptr);
-			// timeLog.fileRead += (t_e - t_s);
 			load_color_class_file(bitVec1, cdbg1.get_eq_class_files()[i - 1]);
 
 			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
@@ -935,10 +931,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 		{
 			if(j > 0)
 			{
-				// auto t_s = time(nullptr);
-				// sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
-				// auto t_e = time(nullptr);
-				// timeLog.fileRead += (t_e - t_s);
 				load_color_class_file(bitVec2, cdbg2.get_eq_class_files()[j - 1]);
 
 				console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
@@ -988,6 +980,10 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 				for(uint64_t k = 0; k < queueCount; ++k)
 				{
+					// sdsd::bit_vector writes (disjoint) are not thread-safe.
+					// TODO: Dig deep.
+
+					/*
 					std::vector<std::thread> T;
 					T.reserve(threadCount);
 
@@ -1003,15 +999,24 @@ void CdBG_Merger<qf_obj, key_obj>::
 						T[t].join();
 
 					T.clear();
+					*/
+
+
+					for(auto it = writeQueue[k].begin(); it != writeQueue[k].end(); ++it)
+					{
+						uint64_t colorID = cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(*it) + 1;
+						BitVector colorClass(cdbg.num_samples);
+
+						concat(bitVec1, cdbg1.get_num_samples(), it -> first,
+								bitVec2, cdbg2.get_num_samples(), it -> second, colorClass);
+
+						cdbg.add_bitvector(colorClass, colorID - 1);
+					}
 
 
 					writtenPairsCount += writeQueue[k].size();
 					if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
-					{
-						console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
-
 						bv_buffer_serialize(writtenPairsCount);
-					}
 					
 					writeQueue[k].clear();
 					writeQueue[k].shrink_to_fit();
@@ -1026,10 +1031,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 	// Serialize the bitvector buffer last time if needed.
 	if (writtenPairsCount % mantis::NUM_BV_BUFFER > 0)
-	{
-		console -> info("Serializing bitvector buffer with {} color-classes.", writtenPairsCount);
 		bv_buffer_serialize(writtenPairsCount);
-	}
 
 
 	auto t_end = time(nullptr);
@@ -1077,10 +1079,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 		if(reqBucket1 && reqBucket1 != currBucket1)
 		{
-			// auto t_s = time(nullptr);
-			// sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1 - 1]);
-			// auto t_e = time(nullptr);
-			// timeLog.fileRead += (t_e - t_s);
 			load_color_class_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1 - 1]);
 
 			currBucket1 = reqBucket1;
@@ -1091,10 +1089,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 		if(reqBucket2 && reqBucket2 != currBucket2)
 		{
-			// auto t_s = time(nullptr);
-			// sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2 - 1]);
-			// auto t_e = time(nullptr);
-			// timeLog.fileRead += (t_e - t_s);
 			load_color_class_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2 - 1]);
 
 			currBucket2 = reqBucket2;
@@ -1115,7 +1109,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 		/*
 			No bitvector-buffer serialization required, as the number of sampled pairs'
 			count (SAMPLE_PAIR_COUNT) is defined as less than or equal to the bitvector-buffer size.
-			(Check its declaration)
+			(Check its declaration.)
 		*/
 	}
 }
@@ -1148,12 +1142,18 @@ void CdBG_Merger<qf_obj, key_obj>::
 template <class qf_obj, class key_obj>
 void CdBG_Merger<qf_obj, key_obj>:: bv_buffer_serialize(uint64_t colorClsCount)
 {
-	if (colorClsCount % mantis::NUM_BV_BUFFER > 0)
+	console -> info("Serializing the bitvector buffer. Total color-class count: {}.", colorClsCount);
+
+	if(colorClsCount % mantis::NUM_BV_BUFFER > 0)
 		cdbg.bv_buffer.resize((colorClsCount % mantis::NUM_BV_BUFFER) * cdbg.num_samples);
 	
 	BitVectorRRR final_com_bv(cdbg.bv_buffer);
 	std::string bv_file(cdbg.prefix + std::to_string(cdbg.num_serializations) + "_" + mantis::EQCLASS_FILE);
+	
+	auto t_s = time(nullptr);
 	sdsl::store_to_file(final_com_bv, bv_file);
+	auto t_e = time(nullptr);
+	timeLog.colorTableSerialize += (t_e - t_s);
 
 	cdbg.num_serializations++;
 }
@@ -1371,7 +1371,18 @@ void CdBG_Merger<qf_obj, key_obj>:: print_time_log()
 	console -> info("Summary time statistics for the algorithm steps.");
 	console -> info("================================================");
 
-	// TODO: Display summary time-statistics here.
+	console -> info("Sample abundant color-id pairs:\t{}", timeLog.sample);
+	console -> info("Gather unsampled color-id pairs into buckets:\t{}", timeLog.fillBuckets);
+	console -> info("Filter the buckets for unique color-id pairs:\t{}", timeLog.filterBuckets);
+	console -> info("Assigning the most abundant (approx.) ids:\t{}", timeLog.assignAbundantIds);
+	console -> info("Build MPH tables for the unsampled ids:\t{}", timeLog.buildMPH);
+	console -> info("Build the color-class table:\t{}", timeLog.buildColorTable);
+	console -> info("Build the merged CQF:\t{}", timeLog.buildCQF);
+	console -> info("================================================");
+
+	console -> info("Total time taken for merge:\t{}", timeLog.total);
+	console -> info("Time consumed in disk-read of color-class tables:\t{}", timeLog.fileRead);
+	console -> info("Time consumed in disk-write of the color-class table:\t{}", timeLog.colorTableSerialize);
 }
 
 #endif
