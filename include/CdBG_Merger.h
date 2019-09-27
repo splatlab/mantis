@@ -20,9 +20,7 @@ class CdBG_Merger
 {
 	public:
         CdBG_Merger(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                    ColoredDbg<qf_obj, key_obj> &cdbgOut);
-
-        void set_console(spdlog::logger* c) { console = c; }
+                    ColoredDbg<qf_obj, key_obj> &cdbgOut, spdlog::logger *c);
 
 		// Sets the number of processor-threads to be used at the intermediate steps of 
 		// unique id-pairs filtering and MPH building.
@@ -238,9 +236,11 @@ class CdBG_Merger
 template<typename qf_obj, typename key_obj>
 CdBG_Merger<qf_obj, key_obj>::
     CdBG_Merger(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                ColoredDbg<qf_obj, key_obj> &cdbgOut)
+                ColoredDbg<qf_obj, key_obj> &cdbgOut, spdlog::logger* c)
 {
     start_time_ = std::time(nullptr);
+
+	console = c;
 
 	if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count())
 		this -> cdbg1 = cdbg1, this -> cdbg2 = cdbg2;
