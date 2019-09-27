@@ -147,13 +147,13 @@ int merge_main(MergeOpts &opt)
 
 	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_ON_DISK);
 
-	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG);
-	merger.set_console(console);
+	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG, console);
 	merger.set_thread_count(opt.threadCount);
 
 	merger.merge();
 
-	merger.print_time_log();
+	if(opt.timeLog)
+		merger.print_time_log();
 
 	return EXIT_SUCCESS;
 }

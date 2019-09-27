@@ -66,16 +66,19 @@ public:
 };
 
 
-// Mantis merge: Jamshed
+
 class MergeOpts
 {
 	public:
 		uint threadCount{1};
+    bool timeLog{false};
     std::string dir1;
 		std::string dir2;
 		std::string out;
 		std::shared_ptr<spdlog::logger> console{nullptr};
 };
+
+
 
 class ValidateMergeOpts
 {
