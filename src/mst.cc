@@ -15,9 +15,8 @@
 #define MAX_ALLOWED_TMP_EDGES 31250000
 
 MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_t numThreads) :
-        prefix(std::move(prefixIn)), lru_cache(10000), nThreads(numThreads) {
+        prefix(std::move(prefixIn)), lru_cache(10000), lru_cache1(1000), lru_cache2(1000), nThreads(numThreads) {
     logger = loggerIn.get();
-
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
         prefix.push_back('/');
@@ -60,7 +59,7 @@ MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, 
         std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
         cqf(cqfIn), prefix(std::move(prefixIn)),
         prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
-        lru_cache1(1000), lru_cache2(1000), nThreads(numThreads),
+        lru_cache(10), lru_cache1(1000), lru_cache2(1000), nThreads(numThreads),
         num_of_ccBuffers(numColorBuffersIn){
     logger = loggerIn;//.get();
 
@@ -364,15 +363,15 @@ bool MST::calculateMSTBasedWeights() {
     weightBuckets.resize(numSamples);
     queryStats.numSamples = numSamples;
     queryStats.trySample = true;
-//    for (auto i = 0; i < eqclass_files.size(); i++) {
-//        for (auto j = i; j < eqclass_files.size(); j++) {
-    auto &edgeBucket = edgeBucketList[0];//i * num_of_ccBuffers + j];
+    for (auto i = 0; i < eqclass_files.size(); i++) {
+        for (auto j = i; j < eqclass_files.size(); j++) {
+            auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
             //std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeBucket.size();
             //std::vector<std::thread> threads;
-    calcHammingDistInParallel(0, edgeBucket, true);
-    edgeBucket.clear();
-//        }
-//    }
+            calcHammingDistInParallel(0, edgeBucket, true);
+            edgeBucket.clear();
+        }
+    }
 //    std::cerr << "\r";
     edgeBucketList.clear();
     logger->info("Calculated the weight for the edges");
@@ -763,19 +762,26 @@ void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *ms
     RankScores rs(1);
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
+    LRUCacheMap::ConstAccessor got;
 
-    if (lru_cache.contains(eqid)) {
+    if (lru_cache.find(got, eqid)) {
+        eq = (*got);//.get(eqclass_id);
+        queryStats.cacheCntr++;
+    }
+    /*if (lru_cache.contains(eqid)) {
         eq = lru_cache[eqid];//.get(eqclass_id);
         queryStats.cacheCntr++;
-    } else {
+    }*/ else {
         queryStats.noCacheCntr++;
         queryStats.trySample = (queryStats.noCacheCntr % 20 == 0);
         toDecode.reset();
         eq = mst1->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode);
-        lru_cache.emplace(eqid, eq);
+//        lru_cache.emplace(eqid, eq);
+        lru_cache.insert(eqid, eq);
         if (queryStats.trySample and toDecode) {
             auto s = mst1->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-            lru_cache.emplace(*toDecode, s);
+//            lru_cache.emplace(*toDecode, s);
+            lru_cache.insert(*toDecode, s);
         }
     }
 }

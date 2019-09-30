@@ -8,13 +8,16 @@
 #include "spdlog/spdlog.h"
 #include "sdsl/bit_vectors.hpp"
 #include "mantisconfig.hpp"
-#include "lru/lru.hpp"
+//#include "lru/lru.hpp"
 #include "gqf_cpp.h"
 #include "common_types.h"
 #include "tsl/hopscotch_map.h"
 #include "nonstd/optional.hpp"
+#include "concurrentlru/concurrent-scalable-cache.h"
 
-using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+//using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+
+using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};

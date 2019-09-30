@@ -15,8 +15,12 @@
 #include "lru/lru.hpp"
 #include "mst.h"
 
-using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+#include "concurrentlru/concurrent-scalable-cache.h"
 
+
+//using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+
+using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
 template <class qf_obj, class key_obj>
 class CdBG_Merger
@@ -1381,11 +1385,9 @@ merge()
 	build_MPH_tables();
 
 	uint64_t num_colorBuffers = 1;
-/*
 	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
 	build_color_class_table();
 	cdbg.bv_buffer = BitVector(0);
-*/
 
 	//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);

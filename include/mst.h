@@ -23,10 +23,14 @@
 #include "sdsl/bit_vectors.hpp"
 #include "gqf/hashutil.h"
 
-#include "lru/lru.hpp"
+//#include "lru/lru.hpp"
 #include "mstQuery.h"
+#include "concurrentlru/concurrent-scalable-cache.h"
 
-using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+//using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+
+using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
+
 using SpinLockT = std::mutex;
 
 typedef sdsl::bit_vector BitVector;
@@ -189,9 +193,9 @@ private:
     uint64_t mstTotalWeight = 0;
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
-    LRUCacheMap lru_cache;
-    LRUCacheMap lru_cache1;
-    LRUCacheMap lru_cache2;
+    LRUCacheMap lru_cache;//10000);
+    LRUCacheMap lru_cache1;//10000);
+    LRUCacheMap lru_cache2;//10000);
     QueryStats queryStats;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;

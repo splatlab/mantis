@@ -87,7 +87,8 @@ int validate_mst_main(MSTValidateOpts &opt) {
     for (uint64_t idx = 0; idx < eqCount; idx++) {
         nonstd::optional<uint64_t> dummy{nonstd::nullopt};
         std::vector<uint64_t> newEq = mstQuery.buildColor(idx, queryStats, &cache_lru, nullptr, dummy);
-        cache_lru.emplace(idx, newEq);
+//        cache_lru.emplace(idx, newEq);
+        cache_lru.insert(idx, newEq);
         std::vector<uint64_t> oldEq = buildColor(bvs, idx, opt.numSamples);
         if (newEq != oldEq) {
             failure++;
