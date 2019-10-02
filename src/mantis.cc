@@ -53,6 +53,9 @@ int stats_main(StatsOpts& statsOpts);
 
 int merge_main(MergeOpts &opt);
 int validate_merge_main(ValidateMergeOpts &opt);
+int lsmt_initialize_main(LSMT_InitializeOpts &opt);
+int lsmt_update_main(LSMT_UpdateOpts &opt);
+int lsmt_query_main(LSMT_QueryOpts &opt);
 
 
 
@@ -64,7 +67,8 @@ int validate_merge_main(ValidateMergeOpts &opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge,
+                  lsmt_init, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -76,6 +80,7 @@ int main ( int argc, char *argv[] ) {
   StatsOpts sopt;
   MergeOpts mopt;
   ValidateMergeOpts vmopt;
+  LSMT_InitializeOpts lsmtiopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
@@ -83,6 +88,7 @@ int main ( int argc, char *argv[] ) {
   sopt.console = console;
   mopt.console = console;
   vmopt.console = console;
+  lsmtiopt.console = console;
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -169,10 +175,22 @@ int main ( int argc, char *argv[] ) {
                               required("-m", "--merged-cdbg") & value("merged-cdbg", vmopt.mergeRes) % "directory containing the merged CdBG"
                             );
 
+  auto lsmt_init_mode = (
+                        command("lsmt_init").set(selected, mode::lsmt_init),
+                        required("-d", "--dir") & value("dir", lsmtiopt.dir)
+                        % "directory where the LSM-tree will reside",
+                        option("-c", "--scaling-factor") & value("scaling-factor", lsmtiopt.scalingFactor)
+                        % "scaling factor for the LSM-tree levels",
+                        option("-k", "--kmer-threshold") & value("kmer-threshold", lsmtiopt.kmerThreshold)
+                        % "kmer count threshold for the level 0 of the LSM-tree",
+                        option("-s", "--sample-threshold") & value("sample-threshold", lsmtiopt.sampleThreshold)
+                        % "threshold on the count of samples kept pending before insertion into the LSM-tree"
+                        );
+
 
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
-              merge_mode | validate_merge_mode | command("help").set(selected,mode::help) |
+              merge_mode | validate_merge_mode | lsmt_init_mode | command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -185,6 +203,7 @@ int main ( int argc, char *argv[] ) {
   assert(stats_mode.flags_are_prefix_free());
   assert(merge_mode.flags_are_prefix_free());
   assert(validate_merge_mode.flags_are_prefix_free());
+  assert(lsmt_init_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -208,6 +227,7 @@ int main ( int argc, char *argv[] ) {
     case mode::stats: stats_main(sopt);  break;
     case mode::merge: merge_main(mopt);  break;
     case mode::validate_merge: validate_merge_main(vmopt); break;
+    case mode::lsmt_init: lsmt_initialize_main(lsmtiopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -231,6 +251,8 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(merge_mode, "mantis");
       } else if (b->arg() == "validate_merge") {
         std::cout << make_man_page(validate_merge_mode, "mantis");
+      } else if (b->arg() == "lsmt_init") {
+        std::cout << make_man_page(lsmt_init_mode, "mantis");
       }else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';

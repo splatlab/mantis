@@ -15,7 +15,7 @@
 
 
 
-template <class qf_obj, class key_obj>
+template <typename qf_obj, typename key_obj>
 class CdBG_Merger
 {
 	public:
@@ -980,7 +980,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 				for(uint64_t k = 0; k < queueCount; ++k)
 				{
-					// sdsd::bit_vector writes (disjoint) are not thread-safe.
+					// sdsl::bit_vector writes (disjoint) are not thread-safe.
 					// TODO: Dig deep.
 
 					/*

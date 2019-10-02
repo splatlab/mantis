@@ -87,4 +87,35 @@ class ValidateMergeOpts
 		std::string mergeRes;
 		std::shared_ptr<spdlog::logger> console{nullptr};
 };
+
+
+
+class LSMT_InitializeOpts
+{
+  public:
+    std::string dir;
+    uint scalingFactor{4};
+    uint64_t kmerThreshold{1000000000UL};
+    uint64_t sampleThreshold{100};
+    std::shared_ptr<spdlog::logger> console{nullptr};
+};
+
+
+
+class LSMT_UpdateOpts
+{
+  public:
+    // TODO: Fill-up here
+    std::shared_ptr<spdlog::logger> console{nullptr};
+};
+
+
+
+class LSMT_QueryOpts
+{
+  public:
+    // TODO: Fill-up here
+    std::shared_ptr<spdlog::logger> console{nullptr};
+};
+
 #endif //__MANTIS_PROG_OPTS__
