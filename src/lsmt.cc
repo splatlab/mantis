@@ -46,7 +46,7 @@
 
 
 
-void lsmt_initialize_main(LSMT_InitializeOpts &opt)
+int lsmt_initialize_main(LSMT_InitializeOpts &opt)
 {
 	spdlog::logger *console = opt.console.get();
 
@@ -61,17 +61,18 @@ void lsmt_initialize_main(LSMT_InitializeOpts &opt)
 	// Check to see if the directory exists now.
 	if(!mantis::fs::DirExists(dir.c_str()))
 	{
-		console -> error("LSM Tree dir {} could not be created.", dir);
+		console -> error("LSM Tree directory {} could not be created.", dir);
 		exit(1);
 	}
 
-	const char PARAM_FILE[] = "lsmt-params.json"; // TODO: move it
+	std::ofstream pendingSamples(dir + mantis::PENDING_SAMPLES_LIST);
+	pendingSamples.close();
 
 
 	// Record the LSM tree parameters.
 	nlohmann::json paramInfo;
 	{
-		std::ofstream jfile(dir + PARAM_FILE);
+		std::ofstream jfile(dir + mantis::PARAM_FILE);
 		if (jfile.is_open())
 		{
 			paramInfo["dir"] = dir;
@@ -89,8 +90,61 @@ void lsmt_initialize_main(LSMT_InitializeOpts &opt)
 			exit(1);
 		}
 
-		console -> info("LSM-tree parameters recorded at file {}.", dir + PARAM_FILE);
+		console -> info("LSM-tree parameters recorded at file {}.", dir + mantis::PARAM_FILE);
 		
 		jfile.close();
 	}
+
+	return EXIT_SUCCESS;
+}
+
+
+
+int lsmt_update_main(LSMT_UpdateOpts &opt)
+{
+	spdlog::logger *console = opt.console.get();
+
+
+	std::string dir = opt.dir;
+	if(dir.back() != '/')	// Make sure it is a full directory.
+		dir += '/';
+
+	// Make sure the input directory exists.
+	if(!mantis::fs::DirExists(dir.c_str()))
+	{
+		console -> error("LSM tree directory {} does not exist.", dir);
+		exit(1);
+	}
+
+	using LSMT_t = LSMT<SampleObject<CQF<KeyObject> *>, KeyObject>;
+
+	
+	if(!LSMT_t::is_valid_LSMT(dir, console))
+		exit(1);
+
+	std::ifstream inputList(opt.inputList);
+	std::vector<std::string> inputSamples;
+
+	if(!inputList.is_open())
+	{
+		console -> error("Input file {} does not exist or could not be opened.", opt.inputList);
+		exit(1);
+	}
+
+	std::string sample;
+	while(inputList >> sample)
+		inputSamples.push_back(sample);
+	
+	inputList.close();
+
+	
+	LSMT_t lsmt(dir);
+	lsmt.set_console(opt.console);
+
+	lsmt.print_config();
+
+	lsmt.update(inputSamples, opt.threadCount);
+
+
+	return EXIT_SUCCESS;
 }

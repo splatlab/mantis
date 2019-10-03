@@ -10,32 +10,271 @@
 #ifndef _LSMT_H_
 #define _LSMT_H_
 
-#include "coloreddbg.h"
-#include "BooPHF.h"
+#include "CdBG_Merger.h"
 
 
 
-template <typename qf_obj, typename key_obj>
+int build_main (BuildOpts& opt);
+int merge_main(MergeOpts &opt);
+
+
+
+template<typename qf_obj, typename key_obj>
 class LSMT
 {
+    using ColoredDbg_t = ColoredDbg<qf_obj, key_obj>;
+    
     public:
+        // Checks if all the required data for the mantis indices at each LSMT-level
+        // exists at the LSMT directory 'dir'.
+        static bool is_valid_LSMT(std::string &dir, spdlog::logger *console);
+
+        // Constructor to load an LSM tree configuration from the LSMT directory
+        // 'dir'.
+        LSMT(std::string &dir);
+
+        inline void set_console(std::shared_ptr<spdlog::logger> &c)
+        { sharedConsole = c; console = sharedConsole.get(); }
+
+        // Print the LSM tree parameters.
+        void print_config();
+
+        // Update the LSM tree by merging the input samples present, whose paths are
+        // present at the list 'sampleList'.
+        void update(std::vector<std::string> &sampleList, uint threadCount);
+
+
+
+    private:
         std::string dir;
-        // std::string pendingSamplesList;
         uint scalingFactor;
         uint64_t kmerThreshold;
         uint64_t sampleThreshold;
+        uint levels;
+        std::vector<std::string> pendingSamples;
+
+        std::shared_ptr<spdlog::logger> sharedConsole;
+        spdlog::logger *console;
 
 
 
-        LSMT(nlohmann::json &params);
+        // Merges the mantis index present at directory 'upperLevelDir' into the mantis
+        // index (if exists) at LSM-tree['level']; or move the index from 'upperLevelDir'
+        // to LSM-tree['level'] if currently there is no matis index at 'level'. Also,
+        // the mantis index at 'upperLevelDir' is removed.
+        void merge_into_level(uint level, std::string upperLevelDir, uint threadCount);
+        
+        void dump_pending_list();
+
+        void build_index();
+
+        void merge_indices(std::string cdbg1, std::string cdbg2, std::string cdbg, uint threadCount);
 };
 
 
 
 template<typename qf_obj, typename key_obj>
-LSMT<qf_obj, key_obj>::
-    LSMT(nlohmann::json &params)
+bool LSMT<qf_obj, key_obj>::
+    is_valid_LSMT(std::string &dir, spdlog::logger *console)
 {
+	// Check for the LSMT parameters configuration file.
+	if(!mantis::fs::FileExists((dir + mantis::PARAM_FILE).c_str()))
+	{
+		console -> error("LSMT parameters configuration file {} does not exist in input directory {}.",
+						mantis::PARAM_FILE, dir);
+		return false;
+	}
+
+    // Check for the list of the pending samples.
+	if(!mantis::fs::FileExists((dir + mantis::PENDING_SAMPLES_LIST).c_str()))
+	{
+		console -> error("LSMT pending samples list {} does not exist in input directory {}.",
+						mantis::PENDING_SAMPLES_LIST, dir);
+		return false;
+	}
+
+    // Check validity of each LSM tree level.
+	std::ifstream paramFile(dir + mantis::PARAM_FILE);
+    nlohmann::json param;
+
+    paramFile >> param;
+
+	uint levels = param["levels"];
+	for(uint i = 0; i < levels; ++i)
+	{
+		std::string levelDir = mantis::LSMT_LEVEL_DIR + i;
+        if(mantis::fs::DirExists(levelDir.c_str()) && !ColoredDbg_t::data_exists(levelDir, console))
+        {
+            console -> error("Level {} has missing files.", i);
+            return false;
+        }
+	}
+
+
+	return true;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+LSMT<qf_obj, key_obj>::
+    LSMT(std::string &dir)
+{
+    std::ifstream paramFile(dir + mantis::PARAM_FILE);
+    nlohmann::json param;
+
+    paramFile >> param;
+
+    this -> dir = dir,
+    scalingFactor = param["scalingFactor"],
+    kmerThreshold = param["kmerThreshold"],
+    sampleThreshold = param["sampleThreshold"],
+    levels = param["levels"];
+
+    std::ifstream pendingList(dir + mantis::PENDING_SAMPLES_LIST);
+    std::string sample;
+
+    if(!pendingList.is_open())
+    {
+        console -> error("Cannot read from file {}.", dir + mantis::PENDING_SAMPLES_LIST);
+        exit(1);
+    }
+
+    while(pendingList >> sample)
+        pendingSamples.push_back(sample);
+
+    pendingList.close();
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    print_config()
+{
+    console -> info("LSM tree configuration:");
+    console -> info("LSM tree home directory: {}", dir);
+    console -> info("kmer threshold for level 0: {}", kmerThreshold);
+    console -> info("Scaling factor between levels: {}", scalingFactor);
+    console -> info("Maximum number of pending samples at a given time: {}", sampleThreshold);
+    console -> info("Current number of levels in tree: {}", levels);
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    update(std::vector<std::string> &sampleList, uint threadCount)
+{
+    for(auto p = sampleList.begin(); p != sampleList.end(); ++p)
+    {
+        pendingSamples.push_back(*p);
+
+        if(pendingSamples.size() >= sampleThreshold)
+        {
+            console -> info("Pushing {} samples into the LSM tree from the pending list.", pendingSamples.size());
+
+            dump_pending_list();
+            build_index();
+
+            pendingSamples.clear();
+
+            merge_into_level(0, dir + mantis::TEMP_BUILD_IDX_DIR, threadCount);
+
+            
+            // TODO: Propagate data down if required.
+
+        }
+    }
+
+    dump_pending_list();
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    dump_pending_list()
+{
+    std::ofstream pendingList(dir + mantis::PENDING_SAMPLES_LIST);
+
+    if(!pendingList.is_open())
+    {
+        console -> error("Cannot write to file {}.", dir + mantis::PENDING_SAMPLES_LIST);
+        exit(1);
+    }
+
+    
+    for(auto p = pendingSamples.begin(); p != pendingSamples.end(); ++p)
+        pendingList << *p << "\n";
+
+    pendingList.close();
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    build_index()
+{
+    BuildOpts buildOpts;
+
+    buildOpts.flush_eqclass_dist = false;
+    buildOpts.qbits = 31; // TODO: Consult at meeting / Prof.
+    buildOpts.inlist = dir + mantis::PENDING_SAMPLES_LIST;
+    buildOpts.out = dir + mantis::TEMP_BUILD_IDX_DIR;
+    buildOpts.console = sharedConsole;
+
+    build_main(buildOpts);
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    merge_into_level(uint level, std::string upperLevelDir, uint threadCount)
+{
+    std::string levelDir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
+
+    // LSM tree 'level' does not exist, or is empty.
+    if(!mantis::fs::DirExists(levelDir.c_str()))
+    {
+        // Make the level directory and move all the mantis index files from 'upperLevelDir' to there.
+
+        ColoredDbg_t::move_index(upperLevelDir, levelDir, console);
+
+        console -> info("Mantis index successfully moved from directory {} to {}.", upperLevelDir, levelDir);
+    }
+    else
+    {
+        // Merge the mantis index present at 'upperLevelDir' into the index at directory 'levelDir'.
+
+        merge_indices(upperLevelDir, levelDir, dir + mantis::TEMP_MERGE_IDX_DIR, threadCount);
+
+        ColoredDbg_t::move_index(dir + mantis::TEMP_MERGE_IDX_DIR, levelDir, console);
+
+        console -> info("Mantis indices at directories {} and {} merged into directory {}.",
+                        upperLevelDir, levelDir, levelDir);
+    }
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    merge_indices(std::string cdbg1, std::string cdbg2, std::string cdbg, uint threadCount)
+{
+    MergeOpts mergeOpts;
+
+    mergeOpts.threadCount = threadCount;
+    mergeOpts.timeLog = false;
+    mergeOpts.removeIndices = true;
+    mergeOpts.dir1 = cdbg1;
+	mergeOpts.dir2 = cdbg2;
+	mergeOpts.out = cdbg;
+	mergeOpts.console = sharedConsole;
+
+    merge_main(mergeOpts);
 }
 
 #endif
