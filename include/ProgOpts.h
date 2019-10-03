@@ -72,6 +72,7 @@ class MergeOpts
 	public:
 		uint threadCount{1};
     bool timeLog{false};
+    bool removeIndices{false};
     std::string dir1;
 		std::string dir2;
 		std::string out;
@@ -105,7 +106,9 @@ class LSMT_InitializeOpts
 class LSMT_UpdateOpts
 {
   public:
-    // TODO: Fill-up here
+    std::string dir;
+    std::string inputList;
+    uint threadCount{1};
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 

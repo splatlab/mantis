@@ -64,7 +64,7 @@ class CdBG_Merger
         ColoredDbg<qf_obj, key_obj> cdbg;
 
         // Console to display messages.
-        spdlog::logger* console;
+        spdlog::logger *console;
 
         // Initial time-stamp of object creation.
         std::time_t start_time_;

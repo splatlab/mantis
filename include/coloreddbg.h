@@ -88,6 +88,9 @@ class ColoredDbg {
 
 		// Additional public members required for mantii merge.
 
+		// Checks if all the required data for a mantis index exists at directory 'dir'.
+		static bool data_exists(std::string &dir, spdlog::logger *console);
+
 		ColoredDbg() {}
 
 		// Required to load the input CdBGs for mantii merge.
@@ -106,6 +109,12 @@ class ColoredDbg {
 		// Returns the collection of BitvectorRRR's (compressed color-classes) of this
 		// CdBG.
 		std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
+
+		// Remove the mantis index residing at directory 'dir'.
+		static void remove_index(std::string dir, spdlog::logger *console);
+
+		// Move the mantis index at directory 'source' to directory 'destination'.
+		static void move_index(std::string source, std::string destination, spdlog::logger *console);
 
 		// Friend class that merges two mantis indices into one.
 		template<typename q_obj, typename k_obj> friend class CdBG_Merger;
@@ -619,7 +628,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 
 
 
-template <class qf_obj, class key_obj>
+template<typename qf_obj, typename key_obj>
 ColoredDbg<qf_obj, key_obj> ::
 	ColoredDbg(std::string &dir, int flag):
 	bv_buffer(),
@@ -684,7 +693,7 @@ ColoredDbg<qf_obj, key_obj> ::
 
 
 
-template <class qf_obj, class key_obj>
+template<typename qf_obj, typename key_obj>
 ColoredDbg<qf_obj, key_obj>::
 	ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string &prefix,
 				int flag):
@@ -702,6 +711,171 @@ start_time_(std::time(nullptr))
 
 	for(auto idSample : cdbg2.get_sample_id_map())
 		sampleid_map[cdbg1.get_num_samples() + idSample.first] = idSample.second;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+bool ColoredDbg <qf_obj, key_obj> ::
+	data_exists(std::string &dir, spdlog::logger *console)
+{
+	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
+	{
+		console -> error("CQF file {} does not exist in input directory {}.", mantis::CQF_FILE, dir);
+		return false;
+	}
+
+	if(!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str()))
+	{
+		console -> error("Sample-ID list file {} does not exist in input directory {}.",
+						mantis::SAMPLEID_FILE, dir);
+		return false;
+	}
+
+	if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
+	{
+		console -> error("No equivalence-class file with extension {} exists in input directory {}.",
+						mantis::EQCLASS_FILE, dir);
+		return false;
+	}
+
+
+	return true;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	remove_index(std::string dir, spdlog::logger *console)
+{
+	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
+		console -> error("CQF file {} does not exist in directory {}.", mantis::CQF_FILE, dir);
+	else if(remove((dir + mantis::CQF_FILE).c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.", dir + mantis::CQF_FILE);
+		exit(1);
+	}
+	else
+		console -> info("CQF file {} successfully deleted.", dir + mantis::CQF_FILE);
+
+
+	if(!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str()))
+		console -> error("Sample-ID list file {} does not exist in directory {}.",
+						mantis::SAMPLEID_FILE, dir);
+	else if(remove((dir + mantis::SAMPLEID_FILE).c_str()) != 0)
+	{
+		console -> error("Sample-ID list file deletion of {} failed.", dir + mantis::SAMPLEID_FILE);
+		exit(1);
+	}
+	else
+		console -> info("File {} successfully deleted.", dir + mantis::SAMPLEID_FILE);
+
+
+	auto eqclassFiles = mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE);
+	if(eqclassFiles.empty())
+		console -> error("No equivalence-class file with extension {} exists in directory {}.",
+						mantis::EQCLASS_FILE, dir);
+	else
+	{
+		for(auto p = eqclassFiles.begin(); p != eqclassFiles.end(); ++p)
+			if(remove(p -> c_str()) != 0)
+			{
+				console -> error("File deletion of {} failed.", *p);
+				exit(1);
+			}
+
+		console -> info("Color-class bitvector files with extension {} at directory {} successfully deleted.",
+						mantis::EQCLASS_FILE, dir);
+	}
+
+
+	if(mantis::fs::FileExists((dir + mantis::meta_file_name).c_str()) &&
+		remove((dir + mantis::meta_file_name).c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.",
+						dir + mantis::meta_file_name);
+		exit(1);
+	}
+
+	if(rmdir(dir.c_str()) == -1)
+	{
+		console -> error("Cannot remove directory {}.", dir);
+		exit(1);
+	}
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	move_index(std::string source, std::string destination, spdlog::logger *console)
+{
+	if(destination.back() != '/')
+		destination += '/'; // Make sure it is a full directory.
+
+	if(!mantis::fs::DirExists(destination.c_str()))
+		mantis::fs::MakeDir(destination.c_str());
+        
+	if(!mantis::fs::DirExists(destination.c_str()))
+	{
+		console -> error("Directory {} could not be created.", destination);
+		exit(1);
+	}
+
+
+    console -> info("Directory {} created.", destination);
+
+	if(rename((source + mantis::CQF_FILE).c_str(), (destination + mantis::CQF_FILE).c_str()) != 0)
+	{
+		console -> error("Moving CQF file {} to directory {} failed.", source + mantis::CQF_FILE, destination);
+		exit(1);
+	}        
+	
+	if(rename((source + mantis::SAMPLEID_FILE).c_str(), (destination + mantis::SAMPLEID_FILE).c_str()) != 0)
+	{
+		console -> error("Moving sample-id list file {} to directory {} failed.",
+						source + mantis::SAMPLEID_FILE, destination);
+		exit(1);
+	}
+
+
+	std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(source.c_str(), mantis::EQCLASS_FILE);
+	std::map<uint, std::string> sortedFiles;
+
+	for (std::string file : colorClassFiles)
+	{
+		uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
+		sortedFiles[fileID] = file;
+	}
+
+	colorClassFiles.clear();
+	for(auto idFilePair : sortedFiles)
+		colorClassFiles.push_back(idFilePair.second);
+
+	for(uint i = 0; i < colorClassFiles.size(); ++i)
+		if(rename(colorClassFiles[i].c_str(),
+					(destination + std::to_string(i) + "_" + mantis::EQCLASS_FILE).c_str()) != 0)
+		{
+			console -> error("Moving color-class bitvector file {} to directory {} failed.",
+							colorClassFiles[i], destination);
+			exit(1);
+		}
+
+	
+	if(mantis::fs::FileExists((source + mantis::meta_file_name).c_str()) &&
+		remove((source + mantis::meta_file_name).c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.",
+						source + mantis::meta_file_name);
+		exit(1);
+	}
+
+	if(rmdir(source.c_str()) == -1)
+	{
+		console -> error("Cannot remove directory {}.", source);
+		exit(1);
+	}
 }
 
 #endif

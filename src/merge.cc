@@ -44,33 +44,6 @@
 #include "mantisconfig.hpp"
 
 
-bool data_exists(std::string &dir, spdlog::logger *console)
-{
-	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
-	{
-		console -> error("CQF file {} does not exist in input directory {}.", mantis::CQF_FILE, dir);
-		return false;
-	}
-
-	if(!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str()))
-	{
-		console -> error("Sample-ID list file {} does not exist in input directory {}.",
-						mantis::SAMPLEID_FILE, dir);
-		return false;
-	}
-
-	if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
-	{
-		console -> error("No equivalence-class file with extension {} exists in input directory {}.",
-						mantis::EQCLASS_FILE, dir);
-		return false;
-	}
-
-
-	return true;
-}
-
-
 
 int merge_main(MergeOpts &opt)
 {
@@ -116,26 +89,28 @@ int merge_main(MergeOpts &opt)
 		exit(1);
 	}
 
+	using ColoredDbG_t = ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>;
+
 
 	// Check if all the required data exist in the input directories.
-	if(!data_exists(dir1, console) || !data_exists(dir2, console))
+	if(!ColoredDbG_t::data_exists(dir1, console) || !ColoredDbG_t::data_exists(dir2, console))
 		exit(1);
 
 	
 	console -> info("Loading metadata for the first input colored dBG from disk.");
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(dir1, MANTIS_DBG_ON_DISK);
+	ColoredDbG_t cdbg1(dir1, MANTIS_DBG_ON_DISK);
 
-	console -> info("Read colored dBG over {} samples, with {} k-mers and {} color-class files.",
-					cdbg1.get_num_samples(), cdbg1.get_cqf() -> dist_elts(), cdbg1.get_eq_class_file_count());
+	console -> info("Read colored dBG from {} over {} samples, with {} k-mers and {} color-class files.",
+					dir1, cdbg1.get_num_samples(), cdbg1.get_cqf() -> dist_elts(), cdbg1.get_eq_class_file_count());
 
 
 	console -> info("Loading metadata for the second input colored dBG from disk.");
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(dir2, MANTIS_DBG_ON_DISK);
+	ColoredDbG_t cdbg2(dir2, MANTIS_DBG_ON_DISK);
 
-	console -> info("Read colored dBG over {} samples, with {} k-mers and {} color-class files.",
-					cdbg2.get_num_samples(), cdbg2.get_cqf() -> dist_elts(), cdbg2.get_eq_class_file_count());
+	console -> info("Read colored dBG from {} over {} samples, with {} k-mers and {} color-class files.",
+					dir2, cdbg2.get_num_samples(), cdbg2.get_cqf() -> dist_elts(), cdbg2.get_eq_class_file_count());
 
 
 	if(!cdbg1.get_cqf() -> check_similarity(cdbg2.get_cqf()))
@@ -145,7 +120,7 @@ int merge_main(MergeOpts &opt)
 	}
 
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_ON_DISK);
+	ColoredDbG_t mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_ON_DISK);
 
 	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG, console);
 	merger.set_thread_count(opt.threadCount);
@@ -154,6 +129,13 @@ int merge_main(MergeOpts &opt)
 
 	if(opt.timeLog)
 		merger.print_time_log();
+
+	if(opt.removeIndices)
+	{
+		console -> info("Removing the input mantis indices from disk.");
+		ColoredDbG_t::remove_index(dir1, console),
+		ColoredDbG_t::remove_index(dir2, console);
+	}
 
 	return EXIT_SUCCESS;
 }

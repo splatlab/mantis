@@ -68,7 +68,7 @@ int lsmt_query_main(LSMT_QueryOpts &opt);
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
   enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge,
-                  lsmt_init, help};
+                  lsmt_init, lsmt_update, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -81,6 +81,7 @@ int main ( int argc, char *argv[] ) {
   MergeOpts mopt;
   ValidateMergeOpts vmopt;
   LSMT_InitializeOpts lsmtiopt;
+  LSMT_UpdateOpts lsmtuopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
@@ -89,6 +90,8 @@ int main ( int argc, char *argv[] ) {
   mopt.console = console;
   vmopt.console = console;
   lsmtiopt.console = console;
+  lsmtuopt.console = console;
+
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -166,7 +169,8 @@ int main ( int argc, char *argv[] ) {
                     required("-i1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-i2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
                     required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written",
-                    option("-tl", "--time-log").set(mopt.timeLog) % "write the summary time-log for the algorithm"
+                    option("-tl", "--time-log").set(mopt.timeLog) % "write the summary time-log for the algorithm",
+                    option("-rm", "--remove-indices").set(mopt.removeIndices) % "remove the input mantis indices from disk"
                     );
 
   auto validate_merge_mode = (
@@ -187,10 +191,21 @@ int main ( int argc, char *argv[] ) {
                         % "threshold on the count of samples kept pending before insertion into the LSM-tree"
                         );
 
+  auto lsmt_update_mode = (
+                          command("lsmt_update").set(selected, mode::lsmt_update),
+                          required("-d", "--dir") & value("dir", lsmtuopt.dir)
+                          % "directory where the LSM-tree resides",
+                          required("-i", "--input-list") & value(ensure_file_exists, "input_list", lsmtuopt.inputList)
+                          % "file containing list of input sample-filters",
+                          option("-t", "--thread-count") & value("thread-count", lsmtuopt.threadCount)
+                          % "number of threads to use in intermediate merge operations"
+                          );
+
 
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
-              merge_mode | validate_merge_mode | lsmt_init_mode | command("help").set(selected,mode::help) |
+              merge_mode | validate_merge_mode | lsmt_init_mode | lsmt_update_mode |
+              command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -204,6 +219,7 @@ int main ( int argc, char *argv[] ) {
   assert(merge_mode.flags_are_prefix_free());
   assert(validate_merge_mode.flags_are_prefix_free());
   assert(lsmt_init_mode.flags_are_prefix_free());
+  assert(lsmt_update_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -228,6 +244,7 @@ int main ( int argc, char *argv[] ) {
     case mode::merge: merge_main(mopt);  break;
     case mode::validate_merge: validate_merge_main(vmopt); break;
     case mode::lsmt_init: lsmt_initialize_main(lsmtiopt); break;
+    case mode::lsmt_update: lsmt_update_main(lsmtuopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
