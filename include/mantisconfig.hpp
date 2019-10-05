@@ -17,8 +17,13 @@ namespace mantis{
     constexpr char DELTABV_FILE[] = "deltas.bv";
     constexpr char BOUNDARYBV_FILE[] = "boundaries.bv";
 
+    // Constants for manti merge.
     constexpr char TEMP_DIR[] = "temp/";
 
+    // Constants for LSM tree.
+    constexpr uint SCALING_FACTOR = 4;
+    constexpr uint64_t KMER_THRESHOLD = 1000000000UL;
+    constexpr uint64_t SAMPLE_THRESHOLD = 100;
     constexpr char PARAM_FILE[] = "lsmt-params.json";
 	constexpr char PENDING_SAMPLES_LIST[] = "pending-samples.lst";
     constexpr char LSMT_LEVEL_DIR[] = "lsmt-level-";

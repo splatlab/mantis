@@ -140,16 +140,16 @@ build_main ( BuildOpts& opt )
 			}
 		}
 		if (config.cutoff == 1) {
-			console->warn("Squeakr file {} is not filtered.", squeakr_file);
+			// console->warn("Squeakr file {} is not filtered.", squeakr_file);
 		}
 
     cqfs.emplace_back(squeakr_file, CQF_MMAP);
 		//std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
 																									//'.'), '_');
 		std::string sample_id = squeakr_file;
-		console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
-		console->info("Sample id {}", sample_id);
-		cqfs.back().dump_metadata();
+		// console->info("Reading CQF {} Seed {}",nqf, cqfs[nqf].seed());
+		// console->info("Sample id {}", sample_id);
+		// cqfs.back().dump_metadata();
     inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
 		if (!cqfs.front().check_similarity(&cqfs.back())) {
 			console->error("Passed Squeakr files are not similar.", squeakr_file);

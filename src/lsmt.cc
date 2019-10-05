@@ -80,6 +80,7 @@ int lsmt_initialize_main(LSMT_InitializeOpts &opt)
 			paramInfo["kmerThreshold"] = opt.kmerThreshold;
 			paramInfo["sampleThreshold"] = opt.sampleThreshold;
 			paramInfo["levels"] = 0;
+			paramInfo["sampleCount"] = 0;
 
 
 			jfile << paramInfo.dump(4);
@@ -102,6 +103,8 @@ int lsmt_initialize_main(LSMT_InitializeOpts &opt)
 
 int lsmt_update_main(LSMT_UpdateOpts &opt)
 {
+	using LSMT_t = LSMT<SampleObject<CQF<KeyObject> *>, KeyObject>;
+
 	spdlog::logger *console = opt.console.get();
 
 
@@ -115,8 +118,6 @@ int lsmt_update_main(LSMT_UpdateOpts &opt)
 		console -> error("LSM tree directory {} does not exist.", dir);
 		exit(1);
 	}
-
-	using LSMT_t = LSMT<SampleObject<CQF<KeyObject> *>, KeyObject>;
 
 	
 	if(!LSMT_t::is_valid_LSMT(dir, console))
@@ -140,7 +141,6 @@ int lsmt_update_main(LSMT_UpdateOpts &opt)
 	
 	LSMT_t lsmt(dir);
 	lsmt.set_console(opt.console);
-
 	lsmt.print_config();
 
 	lsmt.update(inputSamples, opt.threadCount);

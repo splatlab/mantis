@@ -3,6 +3,7 @@
 #include <memory>
 #include "spdlog/spdlog.h"
 #include "json.hpp"
+#include "mantisconfig.hpp"
 
 
 class BuildOpts {
@@ -95,9 +96,9 @@ class LSMT_InitializeOpts
 {
   public:
     std::string dir;
-    uint scalingFactor{4};
-    uint64_t kmerThreshold{1000000000UL};
-    uint64_t sampleThreshold{100};
+    uint scalingFactor{mantis::SCALING_FACTOR};
+    uint64_t kmerThreshold{mantis::KMER_THRESHOLD};
+    uint64_t sampleThreshold{mantis::SAMPLE_THRESHOLD};
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 
