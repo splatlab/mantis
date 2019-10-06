@@ -594,6 +594,14 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 		{
 			diskBucket[i][j].flush();
 			diskBucket[i][j].close();
+
+			if(!diskBucket[i][j])
+			{
+				// Reference: https://stackoverflow.com/questions/28342660/error-handling-in-stdofstream-while-writing-data
+
+				console -> error("Writing to the intermediate temporary disk-files were corrupted (`badbit` set).");
+				exit(1);
+			}
 		}
 
 	
