@@ -252,6 +252,7 @@ CdBG_Merger<qf_obj, key_obj>::
 	}
 	
     cdbg = cdbgOut;
+	cdbg.concat_sample_id_maps(this -> cdbg1, this -> cdbg2);
 }
 
 

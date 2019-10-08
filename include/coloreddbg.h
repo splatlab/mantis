@@ -155,6 +155,10 @@ class ColoredDbg {
 
 		// Returns the sample-id mapping.
 		inline std::unordered_map<uint64_t, std::string> &get_sample_id_map() { return sampleid_map; }
+
+		// Concatenates the sample-id mappings of the CdBG's 'cdbg1' and 'cdbg2' into
+		// the sample-id list of this CdBG, in order.
+		void concat_sample_id_maps(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -705,7 +709,15 @@ dbg_alloc_flag(flag),
 start_time_(std::time(nullptr))
 {
 	// Construct the sample-id list.
-	
+	concat_sample_id_maps(cdbg1, cdbg2);
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	concat_sample_id_maps(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
 	for(auto idSample : cdbg1.get_sample_id_map())
 		sampleid_map[idSample.first] = idSample.second;
 
