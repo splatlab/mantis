@@ -576,16 +576,6 @@ bool MST::encodeColorClassUsingMST(bool isMst) {
             }
 */
 
-            struct Delta {
-                uint64_t startingOffset{0};
-                std::vector<uint32_t> deltaVals;
-                Delta() = default;
-
-                Delta(uint64_t so) {
-                    startingOffset = so;
-                }
-            };
-            std::vector<Delta> deltas;
             std::vector<std::thread> threads;
             for (uint32_t t = 0; t < nThreads; ++t) {
                 threads.emplace_back(std::thread(&MST::calcDeltasInParallel, this,
