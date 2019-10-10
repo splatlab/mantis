@@ -61,6 +61,7 @@ MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, 
         prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
         lru_cache(10), lru_cache1(1000), lru_cache2(1000), nThreads(numThreads),
         num_of_ccBuffers(numColorBuffersIn){
+    eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
     // Make sure the prefix is a full folder
@@ -365,8 +366,10 @@ bool MST::calculateMSTBasedWeights() {
     queryStats.trySample = true;
     for (auto i = 0; i < eqclass_files.size(); i++) {
         for (auto j = i; j < eqclass_files.size(); j++) {
+            std::cerr << "\rEq classes " << i << " and " << j ;
             auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
-            //std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeBucket.size();
+            std::cerr << " -> edgeset size: " << edgeBucket.size();
+//            auto &edgeBucket = edgeBucketList[0];
             //std::vector<std::thread> threads;
             calcHammingDistInParallel(0, edgeBucket, true);
             edgeBucket.clear();
