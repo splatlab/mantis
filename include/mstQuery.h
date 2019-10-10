@@ -8,7 +8,7 @@
 #include "spdlog/spdlog.h"
 #include "sdsl/bit_vectors.hpp"
 #include "mantisconfig.hpp"
-//#include "lru/lru.hpp"
+#include "lru/lru.hpp"
 #include "gqf_cpp.h"
 #include "common_types.h"
 #include "tsl/hopscotch_map.h"

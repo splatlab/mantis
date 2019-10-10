@@ -43,7 +43,7 @@ target_link_libraries(mantis_core
 # with the relevant sub-commands
 add_executable(mantis mantis.cc)
 target_include_directories(mantis PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_link_libraries(mantis tbb mantis_core)
+target_link_libraries(mantis mantis_core)
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:CXX>>:${MANTIS_DEBUG_CXXFLAGS}>")
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:RELEASE>,$<COMPILE_LANGUAGE:C>>:${MANTIS_RELEASE_CFLAGS}>")

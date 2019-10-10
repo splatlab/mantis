@@ -132,26 +132,19 @@ std::vector<uint64_t> Stat::queryColor() {
     std::vector<uint64_t> setbits;
     RankScores rs(1);
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-    LRUCacheMap::ConstAccessor got;
 
-    if (cache_lru->find(got, idx)) {
-        setbits = (*got);//.get(eqclass_id);
-        queryStats.cacheCntr++;
-    }
-    /*if (cache_lru->contains(idx)) {
+    if (cache_lru->contains(idx)) {
         setbits = (*cache_lru)[idx];//.get(eqclass_id);
         queryStats.cacheCntr++;
-    }*/ else {
+    } else {
         queryStats.noCacheCntr++;
         queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
         toDecode.reset();
         setbits = mstQuery->buildColor(idx, queryStats, cache_lru, &rs, toDecode);
-        cache_lru->insert(idx, setbits);
-//        cache_lru->emplace(idx, setbits);
+        cache_lru->emplace(idx, setbits);
         if (queryStats.trySample and toDecode) {
             auto s = mstQuery->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-            cache_lru->insert(*toDecode, s);
-//            cache_lru->emplace(*toDecode, s);
+            cache_lru->emplace(*toDecode, s);
         }
     }
     return setbits;

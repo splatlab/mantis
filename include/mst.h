@@ -23,13 +23,13 @@
 #include "sdsl/bit_vectors.hpp"
 #include "gqf/hashutil.h"
 
-//#include "lru/lru.hpp"
+#include "lru/lru.hpp"
 #include "mstQuery.h"
-#include "concurrentlru/concurrent-scalable-cache.h"
+//#include "concurrentlru/concurrent-scalable-cache.h"
 
-//using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
-using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
+//using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
 using SpinLockT = std::mutex;
 
@@ -152,7 +152,7 @@ private:
 
     bool calculateMSTBasedWeights();
 
-    bool encodeColorClassUsingMST(bool isMst);
+    bool encodeColorClassUsingMST();
 
     DisjointSets kruskalMSF();
 
@@ -178,8 +178,7 @@ private:
     void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, bool isMSTBased = false);
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
             sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-            sdsl::bit_vector::select_1_type &sbbv,
-            bool isMst);
+            sdsl::bit_vector::select_1_type &sbbv);
 
     void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, MSTQuery *mst1, std::vector<uint64_t> & eq1);
     std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, bool isFirst);
