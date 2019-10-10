@@ -120,14 +120,14 @@ MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, 
 void MST::buildMST() {
     buildEdgeSets();
     calculateWeights();
-    encodeColorClassUsingMST();
+    encodeColorClassUsingMST(false);
     logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
 void MST::mergeMSTs() {
     buildEdgeSets();
     calculateMSTBasedWeights();
-    encodeColorClassUsingMST();
+    encodeColorClassUsingMST(true);
     logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 /**
@@ -371,8 +371,16 @@ bool MST::calculateMSTBasedWeights() {
             std::cerr << " -> edgeset size: " << edgeBucket.size();
 //            auto &edgeBucket = edgeBucketList[0];
             //std::vector<std::thread> threads;
-            calcHammingDistInParallel(0, edgeBucket, true);
+            std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeBucket.size();
+            std::vector<std::thread> threads;
+            for (uint32_t t = 0; t < nThreads; ++t) {
+                threads.emplace_back(std::thread(&MST::calcHammingDistInParallel, this, t,
+                                                 std::ref(edgeBucket), true));
+            }
+            for (auto &t : threads) { t.join(); }
             edgeBucket.clear();
+//            calcHammingDistInParallel(0, edgeBucket, true);
+//            edgeBucket.clear();
         }
     }
 //    std::cerr << "\r";
@@ -499,7 +507,7 @@ DisjointSets MST::kruskalMSF() {
  * serializes these three int-vectors as the encoding of color classes
  * @return true if encoding and serializing the DS is successful
  */
-bool MST::encodeColorClassUsingMST() {
+bool MST::encodeColorClassUsingMST(bool isMst) {
     // build mst of color class graph
     kruskalMSF();
 
@@ -578,47 +586,13 @@ bool MST::encodeColorClassUsingMST() {
                 }
             };
             std::vector<Delta> deltas;
-
-            uint64_t mst1Zero = mst1->parentbv.size()-1, mst2Zero = mst2->parentbv.size()-1;
-//            std::cerr << "\n\nGot here\n\n";
-            for (colorIdType p = 0; p < parentbv.size(); p++) {
-                if (getBucketId(p, parentbv[p]) == i * num_of_ccBuffers + j) {
-                    auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
-                    deltas.push_back(deltaOffset);
-//                    std::cerr << deltaOffset << " ";
-                    auto n1s = p == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[p];
-                    auto n2s = parentbv[p] == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[parentbv[p]];
-//                    std::cerr << p << ":[" << n1s.first << "," << n1s.second << "] " <<
-//                    parentbv[p] <<":[" << n2s.first << "," << n2s.second << "] " <<  " ";
-                    auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, true);
-                    auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, false);
-//                    std::cerr << firstDelta.size() << " " << secondDelta.size() << "\n";
-                    deltas.back().deltaVals = firstDelta;
-                    for (auto& v : secondDelta) {
-                        v += numOfFirstMantisSamples;
-                        deltas.back().deltaVals.push_back(v);
-//                        std::cerr << v << "\n";
-                    }
-                    //std::copy(secondDelta.begin(), secondDelta.end(), deltas.back().deltaVals.end());
-                }
-            }
-            for (auto &v : deltas) {
-//                std::cerr << v.startingOffset << ": " << v.deltaVals.size() << "\n";
-                for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
-                    deltabv[v.startingOffset+cntr] = v.deltaVals[cntr];
-            }
-
-
-
-/*
             std::vector<std::thread> threads;
             for (uint32_t t = 0; t < nThreads; ++t) {
                 threads.emplace_back(std::thread(&MST::calcDeltasInParallel, this,
                         t, i, j,
-                        std::ref(parentbv), std::ref(deltabv), std::ref(sbbv)));
+                        std::ref(parentbv), std::ref(deltabv), std::ref(sbbv), isMst));
             }
             for (auto &t : threads) { t.join(); }
-*/
         }
     }
     std::cerr << "\r";
@@ -641,7 +615,7 @@ bool MST::encodeColorClassUsingMST() {
 
 void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
                                sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-                               sdsl::bit_vector::select_1_type &sbbv ) {
+                               sdsl::bit_vector::select_1_type &sbbv, bool isMst ) {
 
     struct Delta {
         uint64_t startingOffset{0};
@@ -660,7 +634,20 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
         if (getBucketId(p, parentbv[p]) == cbvID1 * num_of_ccBuffers + cbvID2) {
             auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
             deltas.push_back(deltaOffset);
-            deltas.back().deltaVals = getDeltaList(p, parentbv[p]);
+            if (!isMst) {
+                deltas.back().deltaVals = getDeltaList(p, parentbv[p]);
+            } else {
+                uint64_t mst1Zero = mst1->parentbv.size()-1, mst2Zero = mst2->parentbv.size()-1;
+                auto n1s = p == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[p];
+                auto n2s = parentbv[p] == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[parentbv[p]];
+                auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, true);
+                auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, false);
+                deltas.back().deltaVals = firstDelta;
+                for (auto& v : secondDelta) {
+                    v += numOfFirstMantisSamples;
+                    deltas.back().deltaVals.push_back(v);
+                }
+            }
         }
     }
     colorMutex.lock();
