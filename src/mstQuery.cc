@@ -37,13 +37,10 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
     queryStats.totEqcls++;
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
-    LRUCacheMap::ConstAccessor got;
     while (iparent != i) {
         //std::cerr << i << " " << iparent << "\n";
-        if (lru_cache->find(got, i)) {
-            const auto &vs = (*got);
-//        if (lru_cache and lru_cache->contains(i)) {
-//            const auto &vs = (*lru_cache)[i];
+        if (lru_cache and lru_cache->contains(i)) {
+            const auto &vs = (*lru_cache)[i];
             for (auto v : vs) {
                 xorflips[v] = 1;
             }
@@ -61,18 +58,9 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
                 (occ > 10) and
                 (height > 10) and
                 (lru_cache and
-                 !lru_cache->find(got, iparent))) {
-                toDecode = iparent;
-            }
-/*
-            if ((!toDecode) and
-                (occ > 10) and
-                (height > 10) and
-                (lru_cache and
                  !lru_cache->contains(iparent))) {
                 toDecode = iparent;
             }
-*/
         }
         i = iparent;
         iparent = parentbv[i];
@@ -139,31 +127,24 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
     mantis::QueryResult sample_map(queryStats.numSamples, 0);
     nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-    LRUCacheMap::ConstAccessor got;
 
     for (auto &it : query_eqclass_set) {
         uint64_t eqclass_id = it;
 
         std::vector<uint64_t> setbits;
-        if (lru_cache.find(got, eqclass_id)) {
-            setbits = (*got);//.get(eqclass_id);
-            queryStats.cacheCntr++;
-        }
-        /*if (lru_cache.contains(eqclass_id)) {
+        if (lru_cache.contains(eqclass_id)) {
             setbits = lru_cache[eqclass_id];//.get(eqclass_id);
             queryStats.cacheCntr++;
-        } */else {
+        } else {
             queryStats.noCacheCntr++;
             toDecode.reset();
             dummy.reset();
             queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
             setbits = buildColor(eqclass_id, queryStats, &lru_cache, rs, toDecode);
-//            lru_cache.emplace(eqclass_id, setbits);
-            lru_cache.insert(eqclass_id, setbits);
+            lru_cache.emplace(eqclass_id, setbits);
             if ((queryStats.trySample) and toDecode) {
                 auto s = buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-                lru_cache.insert(*toDecode, s);
-//                lru_cache.emplace(*toDecode, s);
+                lru_cache.emplace(*toDecode, s);
             }
         }
         cid2expMap[eqclass_id] = setbits;
