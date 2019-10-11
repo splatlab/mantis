@@ -370,7 +370,15 @@ bool MST::calculateMSTBasedWeights() {
             auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
             //std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeBucket.size();
             //std::vector<std::thread> threads;
-            calcHammingDistInParallel(0, edgeBucket, true);
+//            calcHammingDistInParallel(0, edgeBucket, true);
+//            edgeBucket.clear();
+            std::cerr << "\rEq classes " << i << " and " << j << " -> edgeset size: " << edgeBucket.size();
+            std::vector<std::thread> threads;
+            for (uint32_t t = 0; t < nThreads; ++t) {
+                threads.emplace_back(std::thread(&MST::calcHammingDistInParallel, this, t,
+                                                 std::ref(edgeBucket), true));
+            }
+            for (auto &t : threads) { t.join(); }
             edgeBucket.clear();
         }
     }
@@ -388,7 +396,7 @@ void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, boo
     uint64_t s = 0, e;
     // If the list contains less than a hundred edges, don't bother with multi-threading and
     // just run the first thread
-   if (edgeList.size() < 100 or isMSTBased) {
+   if (edgeList.size() < 100/* or isMSTBased*/) {
         if (i == 0) {
             e = edgeList.size();
         } else {
@@ -567,6 +575,7 @@ bool MST::encodeColorClassUsingMST() {
             }
 */
 
+/*
             struct Delta {
                 uint64_t startingOffset{0};
                 std::vector<uint32_t> deltaVals;
@@ -606,18 +615,17 @@ bool MST::encodeColorClassUsingMST() {
                 for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
                     deltabv[v.startingOffset+cntr] = v.deltaVals[cntr];
             }
+*/
 
 
 
-/*
             std::vector<std::thread> threads;
             for (uint32_t t = 0; t < nThreads; ++t) {
                 threads.emplace_back(std::thread(&MST::calcDeltasInParallel, this,
                         t, i, j,
-                        std::ref(parentbv), std::ref(deltabv), std::ref(sbbv)));
+                        std::ref(parentbv), std::ref(deltabv), std::ref(sbbv), true));
             }
             for (auto &t : threads) { t.join(); }
-*/
         }
     }
     std::cerr << "\r";
@@ -640,7 +648,8 @@ bool MST::encodeColorClassUsingMST() {
 
 void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
                                sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-                               sdsl::bit_vector::select_1_type &sbbv ) {
+                               sdsl::bit_vector::select_1_type &sbbv,
+                               bool isMSTBased) {
 
     struct Delta {
         uint64_t startingOffset{0};
@@ -655,11 +664,33 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
 
     colorIdType s = parentbv.size() * threadID / nThreads;
     colorIdType e = parentbv.size() * (threadID+1) / nThreads;
-    for (colorIdType p = s; p < e; p++) {
-        if (getBucketId(p, parentbv[p]) == cbvID1 * num_of_ccBuffers + cbvID2) {
+    if (!isMSTBased) {
+        for (colorIdType p = s; p < e; p++) {
+            if (getBucketId(p, parentbv[p]) == cbvID1 * num_of_ccBuffers + cbvID2) {
+                auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
+                deltas.push_back(deltaOffset);
+                deltas.back().deltaVals = getDeltaList(p, parentbv[p]);
+            }
+        }
+    } else {
+        uint64_t mst1Zero = mst1->parentbv.size()-1, mst2Zero = mst2->parentbv.size()-1;
+        for (colorIdType p = s; p < e; p++) {
             auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
             deltas.push_back(deltaOffset);
-            deltas.back().deltaVals = getDeltaList(p, parentbv[p]);
+//                    std::cerr << deltaOffset << " ";
+            auto n1s = p == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[p];
+            auto n2s = parentbv[p] == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[parentbv[p]];
+//                    std::cerr << p << ":[" << n1s.first << "," << n1s.second << "] " <<
+//                    parentbv[p] <<":[" << n2s.first << "," << n2s.second << "] " <<  " ";
+            auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, true);
+            auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, false);
+//                    std::cerr << firstDelta.size() << " " << secondDelta.size() << "\n";
+            deltas.back().deltaVals = firstDelta;
+            for (auto &v : secondDelta) {
+                v += numOfFirstMantisSamples;
+                deltas.back().deltaVals.push_back(v);
+//                        std::cerr << v << "\n";
+            }
         }
     }
     colorMutex.lock();
@@ -760,23 +791,26 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2,
     return dist;
 }
 
-void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *mst1, std::vector<uint64_t> & eq) {
+void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, std::mutex& cacheMutex, MSTQuery *mst1, std::vector<uint64_t> & eq) {
     RankScores rs(1);
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
 
-    if (lru_cache.contains(eqid)) {
-        eq = lru_cache[eqid];//.get(eqclass_id);
+    auto eq_ptr = lru_cache.lookup_ts(eqid, cacheMutex);
+    if (eq_ptr != nullptr) {
+//    if (lru_cache.contains(eqid)) {
+//        eq = lru_cache[eqid];//.get(eqclass_id);
+        eq = (*eq_ptr.get());
         queryStats.cacheCntr++;
     } else {
         queryStats.noCacheCntr++;
         queryStats.trySample = (queryStats.noCacheCntr % 20 == 0);
         toDecode.reset();
-        eq = mst1->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode);
-        lru_cache.emplace(eqid, eq);
+        eq = mst1->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode, cacheMutex);
+        lru_cache.emplace_ts(eqid, eq, cacheMutex);
         if (queryStats.trySample and toDecode) {
-            auto s = mst1->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-            lru_cache.emplace(*toDecode, s);
+            auto s = mst1->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy, cacheMutex);
+            lru_cache.emplace_ts(*toDecode, s, cacheMutex);
         }
     }
 }
@@ -787,14 +821,14 @@ uint64_t MST::mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, std::vector<ui
     std::vector<uint64_t> eq1, eq2;
 
     if (isFirst) {
-        buildMSTBasedColor(eqid1, lru_cache1, mst1, eq1);
+        buildMSTBasedColor(eqid1, lru_cache1, cacheMutex1, mst1, eq1);
         // fetch the second color ID's BV
-        buildMSTBasedColor(eqid2, lru_cache1, mst1, eq2);
+        buildMSTBasedColor(eqid2, lru_cache1, cacheMutex1, mst1, eq2);
     }
     else {
-        buildMSTBasedColor(eqid1, lru_cache2, mst2, eq1);
+        buildMSTBasedColor(eqid1, lru_cache2, cacheMutex2, mst2, eq1);
         // fetch the second color ID's BV
-        buildMSTBasedColor(eqid2, lru_cache2, mst2, eq2);
+        buildMSTBasedColor(eqid2, lru_cache2, cacheMutex2, mst2, eq2);
     }
 
     /// calc distance
@@ -848,11 +882,11 @@ std::vector<uint32_t> MST::getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, 
     if (eqid1 == eqid2) return res;
     std::vector<uint64_t> eq1, eq2;
     if (isFirst) {
-        buildMSTBasedColor(eqid1, lru_cache1, mst1, eq1);
-        buildMSTBasedColor(eqid2, lru_cache1, mst1, eq2);
+        buildMSTBasedColor(eqid1, lru_cache1, cacheMutex1, mst1, eq1);
+        buildMSTBasedColor(eqid2, lru_cache1, cacheMutex1, mst1, eq2);
     } else {
-        buildMSTBasedColor(eqid1, lru_cache2, mst2, eq1);
-        buildMSTBasedColor(eqid2, lru_cache2, mst2, eq2);
+        buildMSTBasedColor(eqid1, lru_cache2, cacheMutex2, mst2, eq1);
+        buildMSTBasedColor(eqid2, lru_cache2, cacheMutex2, mst2, eq2);
     }
     /// calc delta
     auto i{0}, j{0};

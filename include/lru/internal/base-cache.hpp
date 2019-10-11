@@ -43,6 +43,8 @@
 #include <lru/internal/statistics-mutator.hpp>
 #include <lru/internal/utility.hpp>
 #include <lru/statistics.hpp>
+#include <nonstd/optional.hpp>
+#include <mutex>
 
 namespace LRU {
 namespace Internal {
@@ -851,6 +853,16 @@ class BaseCache {
     }
   }
 
+  virtual std::shared_ptr<Value> lookup_ts(const Key& key, std::mutex& mutex) {
+    std::lock_guard<std::mutex> l(mutex);
+    std::shared_ptr<Value> v_ptr;
+//    nonstd::optional<std::shared_ptr> doesntContain{nonstd::nullopt};
+    if (!contains(key)) return v_ptr;//return doesntContain;
+    auto& v = lookup(key);
+    v_ptr = std::make_shared<Value>(v);
+    return v_ptr;
+  }
+
   /// Attempts to return an iterator to the given key in the cache.
   ///
   /// If the key is found in the cache, it is moved to the front. Any iterators
@@ -1085,6 +1097,14 @@ class BaseCache {
     auto value_tuple = std::forward_as_tuple(std::forward<V>(value_argument));
     return emplace(std::piecewise_construct, key_tuple, value_tuple);
   }
+
+    template <typename K, typename V>
+    InsertionResultType emplace_ts(K&& key_argument, V&& value_argument, std::mutex& mutex) {
+      std::lock_guard<std::mutex> mutex_guard(mutex);
+      auto key_tuple = std::forward_as_tuple(std::forward<K>(key_argument));
+      auto value_tuple = std::forward_as_tuple(std::forward<V>(value_argument));
+      return emplace(std::piecewise_construct, key_tuple, value_tuple);
+    }
 
   /// Erases the given key from the cache, if it is present.
   ///

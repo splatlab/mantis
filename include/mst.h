@@ -178,9 +178,10 @@ private:
     void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, bool isMSTBased = false);
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
             sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-            sdsl::bit_vector::select_1_type &sbbv);
+            sdsl::bit_vector::select_1_type &sbbv,
+            bool isMSTBased);
 
-    void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, MSTQuery *mst1, std::vector<uint64_t> & eq1);
+    void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, std::mutex& cacheMutex, MSTQuery *mst1, std::vector<uint64_t> & eq1);
     std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, bool isFirst);
 
     std::string prefix;
@@ -213,6 +214,8 @@ private:
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
     std::unordered_set<uint64_t> test;
+    std::mutex cacheMutex1;
+    std::mutex cacheMutex2;
 
 };
 
