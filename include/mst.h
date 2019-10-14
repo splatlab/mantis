@@ -27,7 +27,7 @@
 #include "mstQuery.h"
 //#include "concurrentlru/concurrent-scalable-cache.h"
 
-using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
+using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
 
 //using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
@@ -181,7 +181,7 @@ private:
             sdsl::bit_vector::select_1_type &sbbv,
             bool isMSTBased);
 
-    void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, std::mutex& cacheMutex, MSTQuery *mst1, std::vector<uint64_t> & eq1);
+    void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, MSTQuery *mst1, std::vector<uint64_t> & eq1);
     std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, bool isFirst);
 
     std::string prefix;
@@ -206,7 +206,6 @@ private:
     MSTQuery* mst1;
     MSTQuery* mst2;
     CQF<KeyObject>* cqf;
-    nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
     std::vector<std::vector<Edge>> edgeBucketList;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
@@ -214,8 +213,6 @@ private:
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
     std::unordered_set<uint64_t> test;
-    std::mutex cacheMutex1;
-    std::mutex cacheMutex2;
 
 };
 

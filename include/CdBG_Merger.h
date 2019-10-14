@@ -12,14 +12,8 @@
 
 #include "coloreddbg.h"
 #include "BooPHF.h"
-#include "lru/lru.hpp"
+
 #include "mst.h"
-
-//#include "concurrentlru/concurrent-scalable-cache.h"
-
-using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
-
-//using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
 template <class qf_obj, class key_obj>
 class CdBG_Merger

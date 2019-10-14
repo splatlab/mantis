@@ -853,14 +853,12 @@ class BaseCache {
     }
   }
 
-  virtual std::shared_ptr<Value> lookup_ts(const Key& key, std::mutex& mutex) {
-    std::lock_guard<std::mutex> l(mutex);
-    std::shared_ptr<Value> v_ptr;
-//    nonstd::optional<std::shared_ptr> doesntContain{nonstd::nullopt};
-    if (!contains(key)) return v_ptr;//return doesntContain;
-    auto& v = lookup(key);
-    v_ptr = std::make_shared<Value>(v);
-    return v_ptr;
+  virtual Value lookup_ts(const Key& key) {
+    std::lock_guard<std::mutex> l(cacheMutex);
+    Value val;
+    if (!contains(key)) return val;
+    val = lookup(key);
+    return val;
   }
 
   /// Attempts to return an iterator to the given key in the cache.
@@ -1099,11 +1097,9 @@ class BaseCache {
   }
 
     template <typename K, typename V>
-    InsertionResultType emplace_ts(K&& key_argument, V&& value_argument, std::mutex& mutex) {
-      std::lock_guard<std::mutex> mutex_guard(mutex);
-      auto key_tuple = std::forward_as_tuple(std::forward<K>(key_argument));
-      auto value_tuple = std::forward_as_tuple(std::forward<V>(value_argument));
-      return emplace(std::piecewise_construct, key_tuple, value_tuple);
+    InsertionResultType emplace_ts(K&& key_argument, V&& value_argument) {
+      std::lock_guard<std::mutex> mutex_guard(cacheMutex);
+      return emplace(key_argument, value_argument);
     }
 
   /// Erases the given key from the cache, if it is present.
@@ -1601,6 +1597,8 @@ class BaseCache {
 
   /// The current capacity of the cache.
   size_t _capacity;
+
+  std::mutex cacheMutex;
 };
 }  // namespace Internal
 }  // namespace LRU

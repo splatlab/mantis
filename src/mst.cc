@@ -791,26 +791,29 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2,
     return dist;
 }
 
-void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, std::mutex& cacheMutex, MSTQuery *mst1, std::vector<uint64_t> & eq) {
+void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *mst1, std::vector<uint64_t> & eq) {
     RankScores rs(1);
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
 
-    auto eq_ptr = lru_cache.lookup_ts(eqid, cacheMutex);
-    if (eq_ptr != nullptr) {
+    auto eq_ptr = lru_cache.lookup_ts(eqid);
+    if (eq_ptr) {
 //    if (lru_cache.contains(eqid)) {
 //        eq = lru_cache[eqid];//.get(eqclass_id);
-        eq = (*eq_ptr.get());
+        eq = *eq_ptr;
         queryStats.cacheCntr++;
     } else {
+        nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
         queryStats.noCacheCntr++;
         queryStats.trySample = (queryStats.noCacheCntr % 20 == 0);
         toDecode.reset();
-        eq = mst1->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode, cacheMutex);
-        lru_cache.emplace_ts(eqid, eq, cacheMutex);
+        eq = mst1->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode);
+        auto sp = std::make_shared<std::vector<uint64_t>>(eq);
+        lru_cache.emplace_ts(eqid, sp);
         if (queryStats.trySample and toDecode) {
-            auto s = mst1->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy, cacheMutex);
-            lru_cache.emplace_ts(*toDecode, s, cacheMutex);
+            auto s = mst1->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
+            auto sp1 = std::make_shared<std::vector<uint64_t>>(s);
+            lru_cache.emplace_ts(*toDecode, sp1);
         }
     }
 }
@@ -821,14 +824,14 @@ uint64_t MST::mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, std::vector<ui
     std::vector<uint64_t> eq1, eq2;
 
     if (isFirst) {
-        buildMSTBasedColor(eqid1, lru_cache1, cacheMutex1, mst1, eq1);
+        buildMSTBasedColor(eqid1, lru_cache1, mst1, eq1);
         // fetch the second color ID's BV
-        buildMSTBasedColor(eqid2, lru_cache1, cacheMutex1, mst1, eq2);
+        buildMSTBasedColor(eqid2, lru_cache1, mst1, eq2);
     }
     else {
-        buildMSTBasedColor(eqid1, lru_cache2, cacheMutex2, mst2, eq1);
+        buildMSTBasedColor(eqid1, lru_cache2, mst2, eq1);
         // fetch the second color ID's BV
-        buildMSTBasedColor(eqid2, lru_cache2, cacheMutex2, mst2, eq2);
+        buildMSTBasedColor(eqid2, lru_cache2, mst2, eq2);
     }
 
     /// calc distance
@@ -882,11 +885,11 @@ std::vector<uint32_t> MST::getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, 
     if (eqid1 == eqid2) return res;
     std::vector<uint64_t> eq1, eq2;
     if (isFirst) {
-        buildMSTBasedColor(eqid1, lru_cache1, cacheMutex1, mst1, eq1);
-        buildMSTBasedColor(eqid2, lru_cache1, cacheMutex1, mst1, eq2);
+        buildMSTBasedColor(eqid1, lru_cache1, mst1, eq1);
+        buildMSTBasedColor(eqid2, lru_cache1, mst1, eq2);
     } else {
-        buildMSTBasedColor(eqid1, lru_cache2, cacheMutex2, mst2, eq1);
-        buildMSTBasedColor(eqid2, lru_cache2, cacheMutex2, mst2, eq2);
+        buildMSTBasedColor(eqid1, lru_cache2, mst2, eq1);
+        buildMSTBasedColor(eqid2, lru_cache2, mst2, eq2);
     }
     /// calc delta
     auto i{0}, j{0};
