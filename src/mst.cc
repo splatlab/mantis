@@ -65,6 +65,8 @@ MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, 
     eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
+//    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
+//    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
         prefix.push_back('/');
@@ -382,7 +384,7 @@ bool MST::calculateMSTBasedWeights() {
             edgeBucket.clear();
         }
     }
-//    std::cerr << "\r";
+    std::cerr << "\r";
     edgeBucketList.clear();
     logger->info("Calculated the weight for the edges");
     return true;
@@ -791,7 +793,7 @@ uint64_t MST::hammingDist(uint64_t eqid1, uint64_t eqid2,
     return dist;
 }
 
-void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *mst1, std::vector<uint64_t> & eq) {
+void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *mst, std::vector<uint64_t> & eq) {
     RankScores rs(1);
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
@@ -807,11 +809,11 @@ void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *ms
         queryStats.noCacheCntr++;
         queryStats.trySample = (queryStats.noCacheCntr % 20 == 0);
         toDecode.reset();
-        eq = mst1->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode);
+        eq = mst->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode);
         auto sp = std::make_shared<std::vector<uint64_t>>(eq);
         lru_cache.emplace_ts(eqid, sp);
         if (queryStats.trySample and toDecode) {
-            auto s = mst1->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
+            auto s = mst->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
             auto sp1 = std::make_shared<std::vector<uint64_t>>(s);
             lru_cache.emplace_ts(*toDecode, sp1);
         }

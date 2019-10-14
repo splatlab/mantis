@@ -13,6 +13,8 @@
 #include "common_types.h"
 #include "tsl/hopscotch_map.h"
 #include "nonstd/optional.hpp"
+#include <mutex>
+
 //#include "concurrentlru/concurrent-scalable-cache.h"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;

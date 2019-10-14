@@ -27,13 +27,14 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
                                            LRUCacheMap *lru_cache,
                                            RankScores *rs,
                                            nonstd::optional<uint64_t> &toDecode) {
+
     (void) rs;
     std::vector<uint32_t> flips(numSamples);
     std::vector<uint32_t> xorflips(numSamples, 0);
     uint64_t i{eqid}, from{0}, to{0};
     int64_t height{0};
-    auto froms = queryStats.buffer;
-    froms.clear();
+    auto froms = std::vector<uint64_t>();//queryStats.buffer;
+//    froms.clear();
     queryStats.totEqcls++;
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
@@ -57,10 +58,11 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         froms.push_back(from);
 
         if (queryStats.trySample) {
-            auto &occ = queryStats.numOcc[iparent];
-            ++occ;
+//            std::lock_guard<std::mutex> m(buildColorMutex);
+//            auto &occ = queryStats.numOcc[iparent];
+//            ++occ;
             if ((!toDecode) and
-                (occ > 10) and
+//                (occ > 10) and
                 (height > 10))
 //                and
 //                (lru_cache and
@@ -74,14 +76,14 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         }
         i = iparent;
         iparent = parentbv[i];
-        ++queryStats.totSel;
+//        ++queryStats.totSel;
         ++height;
     }
     if (!foundCache and i != zero) {
         from = (i > 0) ? (sbbv(i) + 1) : 0;
         froms.push_back(from);
-        ++queryStats.totSel;
-        queryStats.rootedNonZero++;
+//        ++queryStats.totSel;
+//        queryStats.rootedNonZero++;
         ++height;
     }
     uint64_t pctr{0};

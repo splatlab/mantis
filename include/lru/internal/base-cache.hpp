@@ -45,7 +45,7 @@
 #include <lru/statistics.hpp>
 #include <nonstd/optional.hpp>
 #include <mutex>
-
+#include "../../util.h"
 namespace LRU {
 namespace Internal {
 
@@ -854,10 +854,15 @@ class BaseCache {
   }
 
   virtual Value lookup_ts(const Key& key) {
-    std::lock_guard<std::mutex> l(cacheMutex);
+//    std::lock_guard<std::mutex> l(cacheMutex);
+    cacheMutex.lock();
     Value val;
-    if (!contains(key)) return val;
+    if (!contains(key)) {
+      cacheMutex.unlock();
+      return val;
+    }
     val = lookup(key);
+    cacheMutex.unlock();
     return val;
   }
 
@@ -1098,8 +1103,11 @@ class BaseCache {
 
     template <typename K, typename V>
     InsertionResultType emplace_ts(K&& key_argument, V&& value_argument) {
-      std::lock_guard<std::mutex> mutex_guard(cacheMutex);
-      return emplace(key_argument, value_argument);
+//      std::lock_guard<std::mutex> mutex_guard(cacheMutex);
+      cacheMutex.lock();
+      auto res = emplace(key_argument, value_argument);
+      cacheMutex.unlock();
+      return res;//emplace(key_argument, value_argument);
     }
 
   /// Erases the given key from the cache, if it is present.
@@ -1598,7 +1606,8 @@ class BaseCache {
   /// The current capacity of the cache.
   size_t _capacity;
 
-  std::mutex cacheMutex;
+//  std::mutex cacheMutex;
+LightweightLock cacheMutex;
 };
 }  // namespace Internal
 }  // namespace LRU
