@@ -17,7 +17,8 @@
 
 //#include "concurrentlru/concurrent-scalable-cache.h"
 
-using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
+//using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
+using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
 //using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 

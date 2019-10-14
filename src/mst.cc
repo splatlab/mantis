@@ -60,13 +60,14 @@ MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, 
         std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
         cqf(cqfIn), prefix(std::move(prefixIn)),
         prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
-        lru_cache1(1000), lru_cache2(1000), nThreads(numThreads),
+        /*lru_cache1(1000), lru_cache2(1000), */nThreads(numThreads),
         num_of_ccBuffers(numColorBuffersIn){
     eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
 //    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
 //    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
+
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
         prefix.push_back('/');
@@ -91,6 +92,11 @@ MST::MST(CQF<KeyObject>* cqfIn, std::string prefixIn, spdlog::logger* loggerIn, 
         std::exit(1);
     }
 */
+
+    for (uint64_t t = 0; t < nThreads; t++) {
+        lru_cache1.emplace_back(1000);
+        lru_cache2.emplace_back(1000);
+    }
 
     std::string sample_file = prefix1 + mantis::SAMPLEID_FILE;//(prefix.c_str() , mantis::SAMPLEID_FILE);
     std::ifstream sampleid(sample_file);
@@ -427,8 +433,8 @@ void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, boo
         for (auto edge = itrStart; edge != itrEnd; edge++) {
             auto n1s = edge->n1 == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[edge->n1];
             auto n2s = edge->n2 == zero? std::make_pair(mst1Zero, mst2Zero):colorPairs[edge->n2];
-            auto w1 = mstBasedHammingDist(n1s.first, n2s.first, srcBV, isFirst);
-            auto w2 = mstBasedHammingDist(n1s.second, n2s.second, srcBV, !isFirst);
+            auto w1 = mstBasedHammingDist(n1s.first, n2s.first, lru_cache1[i], srcBV, isFirst);
+            auto w2 = mstBasedHammingDist(n1s.second, n2s.second, lru_cache2[i], srcBV, !isFirst);
             auto w = w1 + w2;
             if (w == 0) {
                 logger->error("Hamming distance of 0:<{},{}> between edges {}:<{},{}> & {}:<{},{}>",
@@ -684,8 +690,8 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
             auto n2s = parentbv[p] == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[parentbv[p]];
 //                    std::cerr << p << ":[" << n1s.first << "," << n1s.second << "] " <<
 //                    parentbv[p] <<":[" << n2s.first << "," << n2s.second << "] " <<  " ";
-            auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, true);
-            auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, false);
+            auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, lru_cache1[threadID], true);
+            auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, lru_cache2[threadID], false);
 //                    std::cerr << firstDelta.size() << " " << secondDelta.size() << "\n";
             deltas.back().deltaVals = firstDelta;
             for (auto &v : secondDelta) {
@@ -798,11 +804,11 @@ void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *ms
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
 
-    auto eq_ptr = lru_cache.lookup_ts(eqid);
-    if (eq_ptr) {
-//    if (lru_cache.contains(eqid)) {
-//        eq = lru_cache[eqid];//.get(eqclass_id);
-        eq = *eq_ptr;
+//    auto eq_ptr = lru_cache.lookup_ts(eqid);
+//    if (eq_ptr) {
+    if (lru_cache.contains(eqid)) {
+        eq = lru_cache[eqid];//.get(eqclass_id);
+//        eq = *eq_ptr;
         queryStats.cacheCntr++;
     } else {
         nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
@@ -810,30 +816,32 @@ void MST::buildMSTBasedColor(uint64_t eqid, LRUCacheMap& lru_cache, MSTQuery *ms
         queryStats.trySample = (queryStats.noCacheCntr % 20 == 0);
         toDecode.reset();
         eq = mst->buildColor(eqid, queryStats, &lru_cache, &rs, toDecode);
-        auto sp = std::make_shared<std::vector<uint64_t>>(eq);
-        lru_cache.emplace_ts(eqid, sp);
+//        auto sp = std::make_shared<std::vector<uint64_t>>(eq);
+        lru_cache.emplace(eqid, eq);
+//        lru_cache.emplace_ts(eqid, sp);
         if (queryStats.trySample and toDecode) {
             auto s = mst->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-            auto sp1 = std::make_shared<std::vector<uint64_t>>(s);
-            lru_cache.emplace_ts(*toDecode, sp1);
+            lru_cache.emplace(*toDecode, s);
+//            auto sp1 = std::make_shared<std::vector<uint64_t>>(s);
+//            lru_cache.emplace_ts(*toDecode, sp1);
         }
     }
 }
 
-uint64_t MST::mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, std::vector<uint64_t> &srcEq, bool isFirst) {
+uint64_t MST::mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache, std::vector<uint64_t> &srcEq, bool isFirst) {
 
     uint64_t dist{0};
     std::vector<uint64_t> eq1, eq2;
 
     if (isFirst) {
-        buildMSTBasedColor(eqid1, lru_cache1, mst1, eq1);
+        buildMSTBasedColor(eqid1, lru_cache, mst1, eq1);
         // fetch the second color ID's BV
-        buildMSTBasedColor(eqid2, lru_cache1, mst1, eq2);
+        buildMSTBasedColor(eqid2, lru_cache, mst1, eq2);
     }
     else {
-        buildMSTBasedColor(eqid1, lru_cache2, mst2, eq1);
+        buildMSTBasedColor(eqid1, lru_cache, mst2, eq1);
         // fetch the second color ID's BV
-        buildMSTBasedColor(eqid2, lru_cache2, mst2, eq2);
+        buildMSTBasedColor(eqid2, lru_cache, mst2, eq2);
     }
 
     /// calc distance
@@ -882,16 +890,16 @@ std::vector<uint32_t> MST::getDeltaList(uint64_t eqid1, uint64_t eqid2) {
     return res; // rely on c++ optimization
 }
 
-std::vector<uint32_t> MST::getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, bool isFirst) {
+std::vector<uint32_t> MST::getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache, bool isFirst) {
     std::vector<uint32_t> res;
     if (eqid1 == eqid2) return res;
     std::vector<uint64_t> eq1, eq2;
     if (isFirst) {
-        buildMSTBasedColor(eqid1, lru_cache1, mst1, eq1);
-        buildMSTBasedColor(eqid2, lru_cache1, mst1, eq2);
+        buildMSTBasedColor(eqid1, lru_cache, mst1, eq1);
+        buildMSTBasedColor(eqid2, lru_cache, mst1, eq2);
     } else {
-        buildMSTBasedColor(eqid1, lru_cache2, mst2, eq1);
-        buildMSTBasedColor(eqid2, lru_cache2, mst2, eq2);
+        buildMSTBasedColor(eqid1, lru_cache, mst2, eq1);
+        buildMSTBasedColor(eqid2, lru_cache, mst2, eq2);
     }
     /// calc delta
     auto i{0}, j{0};

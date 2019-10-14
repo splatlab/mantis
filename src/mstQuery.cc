@@ -38,14 +38,15 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
     queryStats.totEqcls++;
     bool foundCache = false;
     uint32_t iparent = parentbv[i];
+//    std::cerr << iparent << " " << i << " " << lru_cache->size() << "\n";
     while (iparent != i) {
         //std::cerr << i << " " << iparent << "\n";
-        if (lru_cache) {
-            auto eq_ptr = lru_cache->lookup_ts(i);
-            if (eq_ptr) {
-                const auto &vs = *eq_ptr;
-//        if (lru_cache and lru_cache->contains(i)) {
-//            const auto &vs = (*lru_cache)[i];
+//        if (lru_cache) {
+//            auto eq_ptr = lru_cache->lookup_ts(i);
+//            if (eq_ptr) {
+//                const auto &vs = *eq_ptr;
+        if (lru_cache and lru_cache->contains(i)) {
+            const auto &vs = (*lru_cache)[i];
             for (auto v : vs) {
                 xorflips[v] = 1;
             }
@@ -53,7 +54,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
             foundCache = true;
             break;
         }
-        }
+//        }
         from = (i > 0) ? (sbbv(i) + 1) : 0;
         froms.push_back(from);
 
@@ -63,15 +64,15 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
 //            ++occ;
             if ((!toDecode) and
 //                (occ > 10) and
-                (height > 10))
-//                and
-//                (lru_cache and
-//                 !lru_cache->contains(iparent))) {
-                if (lru_cache) {
-                    auto eq_ptr = lru_cache->lookup_ts(iparent);
-                    if (eq_ptr) {
+                (height > 10)
+                and
+                (lru_cache and
+                 !lru_cache->contains(iparent))) {
+//                if (lru_cache) {
+//                    auto eq_ptr = lru_cache->lookup_ts(iparent);
+//                    if (eq_ptr) {
                         toDecode = iparent;
-                    }
+//                    }
             }
         }
         i = iparent;
@@ -145,7 +146,8 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
 
         std::vector<uint64_t> setbits;
         if (lru_cache.contains(eqclass_id)) {
-            setbits = (*lru_cache[eqclass_id]);//.get(eqclass_id);
+            setbits = lru_cache[eqclass_id];//.get(eqclass_id);
+//            setbits = (*lru_cache[eqclass_id]);//.get(eqclass_id);
             queryStats.cacheCntr++;
         } else {
             queryStats.noCacheCntr++;
@@ -153,12 +155,12 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
             dummy.reset();
             queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
             setbits = buildColor(eqclass_id, queryStats, &lru_cache, rs, toDecode);
-            auto sp = std::make_shared<std::vector<uint64_t>>(setbits);
-            lru_cache.emplace(eqclass_id, sp);
+//            auto sp = std::make_shared<std::vector<uint64_t>>(setbits);
+            lru_cache.emplace(eqclass_id, setbits);
             if ((queryStats.trySample) and toDecode) {
                 auto s = buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-                auto sp = std::make_shared<std::vector<uint64_t>>(s);
-                lru_cache.emplace(*toDecode, sp);
+//                auto sp = std::make_shared<std::vector<uint64_t>>(s);
+                lru_cache.emplace(*toDecode, s);
             }
         }
         cid2expMap[eqclass_id] = setbits;

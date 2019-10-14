@@ -27,7 +27,8 @@
 #include "mstQuery.h"
 //#include "concurrentlru/concurrent-scalable-cache.h"
 
-using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
+//using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
+using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
 //using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
@@ -163,7 +164,7 @@ private:
     uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2,
                          uint64_t &srcId, std::vector<uint64_t> &srcEq);
 
-    uint64_t mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, std::vector<uint64_t> &srcEq, bool isFirst);
+    uint64_t mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache, std::vector<uint64_t> &srcEq, bool isFirst);
 
     std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
 
@@ -182,7 +183,7 @@ private:
             bool isMSTBased);
 
     void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, MSTQuery *mst1, std::vector<uint64_t> & eq1);
-    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, bool isFirst);
+    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache, bool isFirst);
 
     std::string prefix;
     uint32_t numSamples = 0;
@@ -195,8 +196,8 @@ private:
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
     LRUCacheMap lru_cache;//10000);
-    LRUCacheMap lru_cache1;//10000);
-    LRUCacheMap lru_cache2;//10000);
+    std::vector<LRUCacheMap> lru_cache1;//10000);
+    std::vector<LRUCacheMap> lru_cache2;//10000);
     QueryStats queryStats;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;

@@ -133,17 +133,20 @@ std::vector<uint64_t> Stat::queryColor() {
     RankScores rs(1);
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
     if (cache_lru->contains(idx)) {
-        setbits = (*(*cache_lru)[idx]);//.get(eqclass_id);
+//        setbits = (*(*cache_lru)[idx]);//.get(eqclass_id);
+        setbits = (*cache_lru)[idx];
         queryStats.cacheCntr++;
     } else {
         queryStats.noCacheCntr++;
         queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
         toDecode.reset();
         setbits = mstQuery->buildColor(idx, queryStats, cache_lru, &rs, toDecode);
-        cache_lru->emplace(idx, std::make_shared<std::vector<uint64_t>>(setbits));
+        cache_lru->emplace(idx, setbits);
+//        cache_lru->emplace(idx, std::make_shared<std::vector<uint64_t>>(setbits));
         if (queryStats.trySample and toDecode) {
             auto s = mstQuery->buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
-            cache_lru->emplace(*toDecode, std::make_shared<std::vector<uint64_t>>(s));
+            cache_lru->emplace(*toDecode, s);
+//            cache_lru->emplace(*toDecode, std::make_shared<std::vector<uint64_t>>(s));
         }
     }
     return setbits;
