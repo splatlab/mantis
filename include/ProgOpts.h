@@ -118,7 +118,16 @@ class LSMT_UpdateOpts
 class LSMT_QueryOpts
 {
   public:
-    // TODO: Fill-up here
+    std::string dir;
+    std::string queryFile;
+    std::string output;
+    uint64_t k = 0;
+    // uint32_t numThreads = 1;
+    // bool use_json{false};
+    bool process_in_bulk{false};
+    // bool use_colorclasses{false};
+    // bool keep_colorclasses{false};
+    // bool remove_colorClasses{false};
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 

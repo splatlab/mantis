@@ -43,6 +43,22 @@ class LSMT
         // present at the list 'sampleList'.
         void update(std::vector<std::string> &sampleList, uint threadCount);
 
+        // Returns the length of the k-mers that this LSM tree is built upon.
+        uint64_t kmer_len();
+
+        // Queries the k-mers from 'kmerSets' into the LSM tree;
+        // where 'kmerSets' is a collection of sets of k-mers with each set corresponding
+        // to one read; and writes the query results (histogram) for each read into the
+        // 'output' file.
+        void query(std::vector<std::unordered_set<uint64_t>> &kmerSets, std::string &output);
+
+        // Queries the k-mers from 'kmerSets' into the pendling samples;
+        // where 'kmerSets' is a collection of sets of k-mers with each set corresponding
+        // to one read; and appends the query results (histogram) for each read into the
+        // list 'resultSet'.
+        void query_pending_list(std::vector<std::unordered_set<uint64_t>> &kmerSets,
+                                std::vector<std::vector<std::pair<std::string, uint64_t>>> &totalResult);
+
 
 
     private:
@@ -226,7 +242,7 @@ void LSMT<qf_obj, key_obj>::
 
     
     auto t_end = time(nullptr);
-    console -> info("Time taken for update = {} s.", t_end - t_start);
+    console -> info("Time taken to update with {} samples = {} s.", sampleList.size(), t_end - t_start);
 }
 
 
@@ -341,6 +357,30 @@ uint64_t LSMT<qf_obj, key_obj>::
 
 
 template<typename qf_obj, typename key_obj>
+uint64_t LSMT<qf_obj, key_obj>::
+    kmer_len()
+{
+    for(uint level = 0; level < levels; ++level)
+    {
+        std::string levelDir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
+        if(mantis::fs::DirExists(levelDir.c_str()))
+        {
+            std::string cqfFile = levelDir + mantis::CQF_FILE;
+            CQF<key_obj> cqf(cqfFile, CQF_MMAP);
+
+            uint64_t kmerLen = cqf.keybits() / 2;
+            cqf.close();
+
+            return kmerLen;
+        }
+    }
+
+    return 0;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
 void LSMT<qf_obj, key_obj>::
     dump_parameters()
 {
@@ -369,6 +409,128 @@ void LSMT<qf_obj, key_obj>::
 		
 		jfile.close();
 	}
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    query(std::vector<std::unordered_set<uint64_t>> &kmerSets, std::string &output)
+{
+    auto t_start = time(nullptr);
+
+    std::vector<std::vector<std::pair<std::string, uint64_t>>> totalResult;
+
+    std::ofstream outputFile(output);
+    if(!outputFile.is_open())
+    {
+        console -> error("Cannot write to file {}.", dir + mantis::PENDING_SAMPLES_LIST);
+        exit(1);
+    }
+
+    totalResult.resize(kmerSets.size());
+
+    console -> info("Number of reads in query: {}.", totalResult.size());
+
+    for(uint level = 0; level < levels; ++level)
+    {
+        std::string levelDir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
+        if(mantis::fs::DirExists(levelDir.c_str()))
+        {
+            std::string cqfFile = levelDir + mantis::CQF_FILE;
+            std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(levelDir.c_str(),
+                                                                                mantis::EQCLASS_FILE);
+            std::string sampleListFile = levelDir + mantis::SAMPLEID_FILE;
+            ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(cqfFile, colorClassFiles, sampleListFile,
+                                                                        MANTIS_DBG_IN_MEMORY);
+
+            uint64_t kmerLen = cdbg.get_cqf() -> keybits() / 2;
+
+            console -> info("Loaded level {} colored dBG with {} k-mers and {} color classes.",
+                            level, cdbg.get_cqf() -> dist_elts(), cdbg.get_num_bitvectors());
+            
+            console -> info("Querying at level {}.", level);
+
+            // Go over each read
+            for(auto k = 0; k < kmerSets.size(); ++k)
+            {
+                std::vector<uint64_t> result = cdbg.find_samples(kmerSets[k]);
+
+                // Aggregate the query result for this read into this LSM tree level into
+                // this read's cumulative result.
+                for(auto i = 0; i < result.size(); ++i)
+                    if(result[i] > 0)
+                        totalResult[k].emplace_back(cdbg.get_sample(i), result[i]);
+            }
+
+            console -> info("Query done at level {}.", level);
+        }
+    }
+
+    console -> info("Query completed for full LSM-tree. Now querying the {} pending samples.",
+                    pendingSamples.size());
+
+    query_pending_list(kmerSets, totalResult);
+
+    console -> info("Query completed for the pending samples.");
+
+
+    console -> info("Serializing the query results.");
+    
+    for(auto k = 0; k < kmerSets.size(); ++k)
+    {
+        outputFile << k << "\t" << kmerSets[k].size() << "\n";
+        for(auto sampleCount: totalResult[k])
+            outputFile << sampleCount.first << "\t" << sampleCount.second << "\n";    
+    }
+
+    console -> info("Query results serialization completed.");
+    
+    outputFile.flush();
+    outputFile.close();
+
+    auto t_end = time(nullptr);
+    console -> info("Time taken to query with {} reads = {} s.", kmerSets.size(), t_end - t_start);
+	
+	// if (use_json) {
+	// output_results_json(multi_kmers, cdbg, opfile, opt.process_in_bulk, uniqueKmers);
+	// } else {
+	// output_results(multi_kmers, cdbg, opfile, opt.process_in_bulk, uniqueKmers);
+	// }
+	// //std::cout << "Writing samples and abundances out." << std::endl;
+	// opfile.close();
+	// console->info("Writing done.");
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    query_pending_list(std::vector<std::unordered_set<uint64_t>> &kmerSets,
+                        std::vector<std::vector<std::pair<std::string, uint64_t>>> &totalResult)
+{
+    // Go over each sample.
+    for(auto sample: pendingSamples)
+    {
+        CQF<key_obj> cqf(sample, CQF_FREAD);
+
+        // Go over each read.
+        for(auto k = 0; k < kmerSets.size(); ++k)
+        {
+            uint64_t hitCount = 0;
+
+            // Go over each k-mer of this read.
+            for(auto kmer : kmerSets[k])
+            {
+                key_obj key(kmer, 0, 0);
+                if(cqf.query(key, 0))
+                    hitCount++;        
+            }
+            
+            if(hitCount)
+                totalResult[k].emplace_back(sample, hitCount);
+        }
+    }
 }
 
 #endif

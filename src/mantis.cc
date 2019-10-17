@@ -68,7 +68,7 @@ int lsmt_query_main(LSMT_QueryOpts &opt);
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
   enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge,
-                  lsmt_init, lsmt_update, help};
+                  lsmt_init, lsmt_update, lsmt_query, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -82,6 +82,7 @@ int main ( int argc, char *argv[] ) {
   ValidateMergeOpts vmopt;
   LSMT_InitializeOpts lsmtiopt;
   LSMT_UpdateOpts lsmtuopt;
+  LSMT_QueryOpts lsmtqopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
@@ -91,6 +92,7 @@ int main ( int argc, char *argv[] ) {
   vmopt.console = console;
   lsmtiopt.console = console;
   lsmtuopt.console = console;
+  lsmtqopt.console = console;
 
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
@@ -195,16 +197,27 @@ int main ( int argc, char *argv[] ) {
                           command("lsmt_update").set(selected, mode::lsmt_update),
                           required("-d", "--dir") & value("dir", lsmtuopt.dir)
                           % "directory where the LSM-tree resides",
-                          required("-i", "--input-list") & value(ensure_file_exists, "input_list", lsmtuopt.inputList)
+                          required("-i", "--input-list") & value(ensure_file_exists, "input-list", lsmtuopt.inputList)
                           % "file containing list of input sample-filters",
                           option("-t", "--thread-count") & value("thread-count", lsmtuopt.threadCount)
                           % "number of threads to use in intermediate merge operations"
                           );
 
+  auto lsmt_query_mode = (
+                          command("lsmt_query").set(selected, mode::lsmt_query),
+                          required("-d", "--dir") & value("dir", lsmtqopt.dir)
+                          % "directory where the LSM-tree resides",
+                          required("-q", "--query-file") & value(ensure_file_exists, "query-file", lsmtqopt.queryFile)
+                          % "file containing the query transcripts",
+                          required("-o", "--output") & value("query-output", lsmtqopt.output)
+                          % "file containing the query results",
+                          option("-k", "--kmer-length") & value("kmer-length", lsmtqopt.k) % "length of k-mers"
+                        );
+
 
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
-              merge_mode | validate_merge_mode | lsmt_init_mode | lsmt_update_mode |
+              merge_mode | validate_merge_mode | lsmt_init_mode | lsmt_update_mode | lsmt_query_mode |
               command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
@@ -220,6 +233,7 @@ int main ( int argc, char *argv[] ) {
   assert(validate_merge_mode.flags_are_prefix_free());
   assert(lsmt_init_mode.flags_are_prefix_free());
   assert(lsmt_update_mode.flags_are_prefix_free());
+  assert(lsmt_query_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -245,6 +259,7 @@ int main ( int argc, char *argv[] ) {
     case mode::validate_merge: validate_merge_main(vmopt); break;
     case mode::lsmt_init: lsmt_initialize_main(lsmtiopt); break;
     case mode::lsmt_update: lsmt_update_main(lsmtuopt); break;
+    case mode::lsmt_query: lsmt_query_main(lsmtqopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -270,7 +285,10 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(validate_merge_mode, "mantis");
       } else if (b->arg() == "lsmt_init") {
         std::cout << make_man_page(lsmt_init_mode, "mantis");
-      }else {
+      } else if(b->arg() == "lsmt_query") {
+        std::cout << make_man_page(lsmt_query_mode, "mantis");
+      }
+      else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';
       }

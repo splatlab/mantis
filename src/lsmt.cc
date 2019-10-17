@@ -43,6 +43,7 @@
 #include "squeakrconfig.h"
 #include "mantisconfig.hpp"
 #include "lsmt.h"
+#include "kmer.h"
 
 
 
@@ -145,6 +146,57 @@ int lsmt_update_main(LSMT_UpdateOpts &opt)
 
 	lsmt.update(inputSamples, opt.threadCount);
 
+
+	return EXIT_SUCCESS;
+}
+
+
+
+int lsmt_query_main(LSMT_QueryOpts &opt)
+{
+	using LSMT_t = LSMT<SampleObject<CQF<KeyObject> *>, KeyObject>;
+
+	spdlog::logger *console = opt.console.get();
+
+
+	std::string dir = opt.dir;
+	if(dir.back() != '/')	// Make sure it is a full directory.
+		dir += '/';
+
+	// Make sure the input directory exists.
+	if(!mantis::fs::DirExists(dir.c_str()))
+	{
+		console -> error("LSM tree directory {} does not exist.", dir);
+		exit(1);
+	}
+
+	
+	if(!LSMT_t::is_valid_LSMT(dir, console))
+		exit(1);
+
+
+	console -> info("Loading LSM-tree metadata.");
+	
+	LSMT_t lsmt(dir);
+	lsmt.set_console(opt.console);
+	lsmt.print_config();
+
+
+	std::string queryFile = opt.queryFile;
+	std::string output = opt.output;
+
+	uint64_t kmerLen = lsmt.kmer_len();
+	console -> info("Loading query k-mers ({}-mers) from disk.", kmerLen);
+
+	uint32_t seed = 2038074743;
+	uint64_t totalKmers = 0;
+	std::unordered_map<uint64_t, uint64_t> uniqueKmers;
+	std::vector<std::unordered_set<uint64_t>> kmerSets = Kmer::parse_kmers(queryFile.c_str(), kmerLen,
+																			totalKmers, opt.process_in_bulk,
+																			uniqueKmers);
+	console -> info("Total k-mers to query: {}", totalKmers);
+
+	lsmt.query(kmerSets, output);
 
 	return EXIT_SUCCESS;
 }
