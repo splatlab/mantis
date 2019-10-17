@@ -221,6 +221,8 @@ class CdBG_Merger
 		// Serializes the output CQF and sample-id mapping.
 		void serialize_cqf_and_sampleid_list();
 
+		// Closes the input indices. Also closes and serializes the output index.
+		void serialize_and_close();
 
 
 		class RunningTimeLog
@@ -322,7 +324,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 	console -> info("Merged CQF metadata:");
 	cdbg.dbg.dump_metadata();
-	serialize_cqf_and_sampleid_list();
+
+	serialize_and_close();
 }
 
 
@@ -1173,6 +1176,9 @@ template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj> ::
 	initialize_CQF(uint32_t keybits, qf_hashmode hashMode, uint32_t seed, uint64_t kmerCount)
 {
+	console -> info("Initializing merged CQF for {} k-mers, with parameters: keybits = {}, hashMode = {}, seed = {}.",
+					kmerCount, keybits, hashMode, seed);
+
 	// Get floor(log2(kmerCount))
 	uint32_t qbits;
 	for(qbits = 0; (kmerCount >> qbits) != (uint64_t)1; qbits++);
@@ -1201,6 +1207,8 @@ void CdBG_Merger<qf_obj, key_obj> ::
 	}
 
 	cdbg.dbg.set_auto_resize();
+
+	console -> info("Merged CQF initialized with {} qbits.", qbits);
 }
 
 
@@ -1345,6 +1353,17 @@ inline void CdBG_Merger<qf_obj, key_obj> ::
 		walkBehindIterator = cdbg.dbg.begin(true);
 	else if(step > ITERATOR_WINDOW_SIZE)
 		++walkBehindIterator;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void CdBG_Merger<qf_obj, key_obj>::
+	serialize_and_close()
+{
+	serialize_cqf_and_sampleid_list();
+
+	cdbg1.dbg.close(), cdbg2.dbg.close();
 }
 
 

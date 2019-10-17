@@ -329,7 +329,10 @@ uint64_t LSMT<qf_obj, key_obj>::
         std::string cqfFile = levelDir + mantis::CQF_FILE;
         CQF<key_obj> cqf(cqfFile, CQF_MMAP);
 
-        return cqf.dist_elts();
+        uint64_t kmerCount = cqf.dist_elts();
+        cqf.close();
+
+        return kmerCount;
     }
     
     return 0;
