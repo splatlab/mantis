@@ -92,6 +92,16 @@ class ValidateMergeOpts
 
 
 
+class CompareIndicesOpt
+{
+	public:
+    std::string cdbg1;
+		std::string cdbg2;
+		std::shared_ptr<spdlog::logger> console{nullptr};
+};
+
+
+
 class LSMT_InitializeOpts
 {
   public:

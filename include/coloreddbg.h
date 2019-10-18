@@ -74,6 +74,8 @@ class ColoredDbg {
 		uint32_t seed(void) const { return dbg.seed(); }
 		uint64_t range(void) const { return dbg.range(); }
 
+		inline uint64_t get_color_class_per_buffer(void) const { return colorClassPerBuffer; }
+
 		std::vector<uint64_t>
 			find_samples(const mantis::QuerySet& kmers);
 
@@ -147,7 +149,7 @@ class ColoredDbg {
 		spdlog::logger* console;
 
 		// Maximum number of color-class bitvectors that can be present at the bitvector buffer.
-		uint64_t colorClassPerBuffer;
+		uint64_t colorClassPerBuffer{mantis::NUM_BV_BUFFER};
 
 
 

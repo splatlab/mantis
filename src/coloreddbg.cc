@@ -2,7 +2,8 @@
  * ============================================================================
  *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
- *   Organization:  Stony Brook University
+ * 					Jamshed Khan (), jamshed@umd.edu
+ *   Organization:  Stony Brook University, University of Maryland
  *
  * ============================================================================
  */
@@ -229,3 +230,154 @@ build_main ( BuildOpts& opt )
 
   return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
+
+
+
+int compare_indices_main(CompareIndicesOpt &opt)
+{
+	spdlog::logger* console = opt.console.get();
+
+	console -> info("Comparing the colored dBG's.");
+	
+	std::string dir1(opt.cdbg1);
+	if (dir1.back() != '/')
+		dir1 += '/';
+
+	std::string dir2(opt.cdbg2);
+	if (dir2.back() != '/')
+		dir2 += '/';
+
+
+	std::string cqf1 = dir1 + mantis::CQF_FILE;
+	std::vector<std::string> colClsFiles1 = mantis::fs::GetFilesExt(dir1.c_str(), mantis::EQCLASS_FILE);
+	std::string sampleList1 = dir1 + mantis::SAMPLEID_FILE;
+	
+
+	console -> info("Loading the first CdBG from directory {} into memory.", dir1);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(cqf1, colClsFiles1,
+																sampleList1, MANTIS_DBG_IN_MEMORY);
+	
+	console -> info("Loaded the first CdBG; it has {} k-mers, {} color-class files, and {} color-classes.",
+					cdbg1.get_cqf() -> dist_elts(), colClsFiles1.size(), cdbg1.get_num_bitvectors());
+
+
+	std::string cqf2 = dir2 + mantis::CQF_FILE;
+	std::vector<std::string> colClsFiles2 = mantis::fs::GetFilesExt(dir2.c_str(), mantis::EQCLASS_FILE);	  
+	std::string sampleList2 = dir2 + mantis::SAMPLEID_FILE;
+	
+	console -> info("Loading the second CdBG from directory {} into memory.", dir2);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(cqf2, colClsFiles2,
+																sampleList2, MANTIS_DBG_IN_MEMORY);
+
+	console -> info("Loaded the second CdBG; it has {} k-mers, {} color-class files, {} color-classes, and {} color-classes per bitvector buffer.",
+					cdbg2.get_cqf() -> dist_elts(), colClsFiles2.size(), cdbg2.get_num_bitvectors(),
+					cdbg2.get_color_class_per_buffer());
+
+
+	if(cdbg1.get_cqf() -> dist_elts() != cdbg2.get_cqf() -> dist_elts())
+	{
+		console -> error("Mismatching number of k-mers ({}, {}).",
+						cdbg1.get_cqf() -> dist_elts(), cdbg2.get_cqf() -> dist_elts());
+		exit(1);
+	}
+	else if(cdbg1.get_num_samples() != cdbg2.get_num_samples())
+	{
+		console -> error("Mismatching number of samples ({}, {}).",
+						cdbg1.get_num_samples(), cdbg2.get_num_samples());
+		exit(1);
+	}
+	else
+		console -> info("k-mer and sample count matches.");
+																	
+
+	auto eqclasses2 = cdbg2.get_eqclasses(), eqclasses1 = cdbg1.get_eqclasses();		
+	
+	// Linear scan over the CQFs
+	auto it2 = cdbg2.get_cqf() -> begin(), it1 = cdbg1.get_cqf() -> begin();
+	uint64_t kmerCount = 0;
+	const uint64_t PROGRESS_STEP = 10000000;
+
+
+	while(!it2.done() && !it1.done())
+	{
+		KeyObject entry2 = it2.get_cur_hash(), entry1 = it1.get_cur_hash();
+
+		if(entry2.key != entry1.key)
+		{
+			console -> error("Mismatching k-mers found.");
+			exit(1);
+		}
+
+
+		uint64_t colorId2 = entry2.count, colorId1 = entry1.count;
+		std::unordered_set<std::string> sampleSet2, sampleSet1;
+		const uint64_t wordLen = 64;
+
+
+		uint64_t sampleCount = cdbg2.get_num_samples();
+
+		// Fetch the set of samples in the first CdBG containing the k-mer of this iteration (entry1.key).
+		uint64_t bucketIdx1 = (colorId1 - 1) / mantis::NUM_BV_BUFFER; // Assuming it's of the old mantis version.
+		// uint64_t bucketIdx1 = (colorId1 - 1) / cdbg1.get_color_class_per_buffer();
+		uint64_t offset1 = ((colorId1 - 1) % mantis::NUM_BV_BUFFER) * sampleCount; // Assuming it's of the old mantis version.
+		// uint64_t offset1 = ((colorId1 - 1) % cdbg1.get_color_class_per_buffer()) * sampleCount;
+
+		for(uint32_t wordCount = 0; wordCount <= sampleCount / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, sampleCount - wordCount * wordLen);
+			uint64_t word = eqclasses1[bucketIdx1].get_int(offset1, readLen);
+
+			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
+				if((word >> bitIdx) & 0x01)
+					sampleSet1.insert(cdbg1.get_sample(sampleID));
+
+			offset1 += readLen;
+		}
+	
+		// Fetch the set of samples in the second CdBG containing the k-mer of this iteration (entry2.key).
+		// uint64_t bucketIdx2 = (colorId2 - 1) / mantis::NUM_BV_BUFFER;
+		uint64_t bucketIdx2 = (colorId2 - 1) / cdbg2.get_color_class_per_buffer(); // Assuming it's of the new mantis version.
+		// uint64_t offset2 = ((colorId2 - 1) % mantis::NUM_BV_BUFFER) * sampleCount;
+		uint64_t offset2 = ((colorId2 - 1) % cdbg2.get_color_class_per_buffer()) * sampleCount; // Assuming it's of the new mantis version.
+
+		for(uint32_t wordCount = 0; wordCount <= sampleCount / wordLen; ++wordCount)
+		{
+			uint64_t readLen = std::min(wordLen, sampleCount - wordCount * wordLen);
+			uint64_t word = eqclasses2[bucketIdx2].get_int(offset2, readLen);
+
+			for(uint32_t bitIdx = 0, sampleID = wordCount * wordLen; bitIdx < readLen; ++bitIdx, ++sampleID)
+				if((word >> bitIdx) & 0x01)
+					sampleSet2.insert(cdbg2.get_sample(sampleID));
+
+			offset2 += readLen;
+		}
+
+
+		// Match the sample sets containing the k-mer of this iteration.
+
+		if(sampleSet1.size() != sampleSet2.size())
+		{
+			console -> error("For one or more k-mers, the sample set sizes are found to be different between the CdBGs.");
+			exit(1);
+		}
+		
+		for(auto sample : sampleSet1)
+			if(sampleSet2.find(sample) == sampleSet2.end())
+			{
+				console -> error("Sample sets mismatch for one or more kmers.");
+				exit(1);
+			}
+
+
+		++it2, ++it1, kmerCount++;
+
+		if(kmerCount % PROGRESS_STEP == 0)
+			console -> info("{}M k-mers matched.", kmerCount * 10 / PROGRESS_STEP);
+	}
+
+
+	console -> info("CQF sizes = {}, matching k-mers found {}.", cdbg1.get_cqf() -> dist_elts(), kmerCount);
+	console -> info("Matching completed. The CdBGs contain the same set of k-mers and equivalent color-classes for those k-mers.");
+
+	return EXIT_SUCCESS;
+}
