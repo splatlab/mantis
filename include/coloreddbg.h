@@ -3,7 +3,7 @@
  *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *                  Mike Ferdman (), mferdman@cs.stonybrook.edu
- *                  Jamshed Khan (), jamshed@cs.umd.edu
+ *                  Jamshed Khan (), jamshed@umd.edu
  *   Organization:  Stony Brook University, University of Maryland
  *
  * ============================================================================
@@ -139,12 +139,15 @@ class ColoredDbg {
 		BitVector bv_buffer;
 		std::vector<BitVectorRRR> eqclasses;
 		std::string prefix;
-		uint64_t num_samples;
+		uint64_t num_samples;		
 		uint64_t num_serializations;
 		int dbg_alloc_flag;
 		bool flush_eqclass_dis{false};
 		std::time_t start_time_;
 		spdlog::logger* console;
+
+		// Maximum number of color-class bitvectors that can be present at the bitvector buffer.
+		uint64_t colorClassPerBuffer;
 
 
 
@@ -201,24 +204,29 @@ template <class qf_obj, class key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::get_num_bitvectors(void) const {
 	uint64_t total = 0;
 	for (uint32_t i = 0; i < num_serializations; i++)
-		total += eqclasses[i].size();
+		// total += eqclasses[i].size();
+		total += eqclasses[i].size() / num_samples;
 
-	return total / num_samples;
+	// return total / num_samples;
+	return total;
 }
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj,
 		 key_obj>::reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
-			 BitVector new_bv_buffer(mantis::NUM_BV_BUFFER * num_samples);
+			//  BitVector new_bv_buffer(mantis::NUM_BV_BUFFER * num_samples);
+			BitVector new_bv_buffer(colorClassPerBuffer * num_samples);
 			 for (auto& it_input : map) {
 				 auto it_local = eqclass_map.find(it_input.first);
 				 if (it_local == eqclass_map.end()) {
 					 console->error("Can't find the vector hash during shuffling");
 					 exit(1);
 				 } else {
-					 assert(it_local->second.first <= mantis::NUM_BV_BUFFER &&
-									it_input.second.first <= mantis::NUM_BV_BUFFER);
+					//  assert(it_local->second.first <= mantis::NUM_BV_BUFFER &&
+					// 				it_input.second.first <= mantis::NUM_BV_BUFFER);
+					assert(it_local->second.first <= colorClassPerBuffer &&
+									it_input.second.first <= colorClassPerBuffer);
 					 uint64_t src_idx = ((it_local->second.first - 1) * num_samples);
 					 uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
 					 for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
@@ -244,7 +252,8 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	reshuffle_bit_vectors(map);
 	// Check if the current bit vector buffer is full and needs to be serialized.
 	// This happens when the sampling phase fills up the bv buffer.
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0) {
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0) {
+	if (get_num_eqclasses() % colorClassPerBuffer == 0) {
 		// The bit vector buffer is full.
 		console->info("Serializing bit vector with {} eq classes.",
 									get_num_eqclasses());
@@ -304,7 +313,8 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector,
 																								uint64_t eq_id) {
-	uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
+	// uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
+	uint64_t start_idx = (eq_id  % colorClassPerBuffer) * num_samples;
 	for (uint32_t i = 0; i < num_samples/64*64; i+=64)
 		bv_buffer.set_int(start_idx+i, vector.get_int(i, 64), 64);
 	if (num_samples%64)
@@ -316,8 +326,11 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector,
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 	BitVector bv_temp(bv_buffer);
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0) {
-		bv_temp.resize((get_num_eqclasses() % mantis::NUM_BV_BUFFER) *
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0) {
+	if (get_num_eqclasses() % colorClassPerBuffer > 0) {
+		// bv_temp.resize((get_num_eqclasses() % mantis::NUM_BV_BUFFER) *
+		// 							 num_samples);
+		bv_temp.resize((get_num_eqclasses() % colorClassPerBuffer) *
 									 num_samples);
 	}
 
@@ -338,7 +351,8 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 		dbg.close();
 
 	// serialize the bv buffer last time if needed
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
+	if (get_num_eqclasses() % colorClassPerBuffer > 0)
 		bv_buffer_serialize();
 
 	//serialize the eq class id map
@@ -377,8 +391,10 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 		auto count = it->second;
 		// counter starts from 1.
 		uint64_t start_idx = (eqclass_id - 1);
-		uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-		uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		uint64_t bucket_idx = start_idx / colorClassPerBuffer;
+		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
 		for (uint32_t w = 0; w <= num_samples / 64; w++) {
 			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
 			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
@@ -413,8 +429,10 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const std::unordered_map<mantis::KmerHa
 		auto &vec = it->second;
 		// counter starts from 1.
 		uint64_t start_idx = (eqclass_id - 1);
-		uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-		uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		uint64_t bucket_idx = start_idx / colorClassPerBuffer;
+		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
 		for (uint32_t w = 0; w <= num_samples / 64; w++) {
 			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
 			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
@@ -530,7 +548,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		}
 
 		// Check if the bit vector buffer is full and needs to be serialized.
-		if (added_eq_class and (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0))
+		// if (added_eq_class and (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0))
+		if (added_eq_class and (get_num_eqclasses() % colorClassPerBuffer == 0))
 		{
 			// Check if the process is in the sampling phase.
 			if (is_sampling) {
@@ -564,8 +583,12 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				enum qf_hashmode hashmode,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf, int flag) :
-	bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
-	num_serializations(0), start_time_(std::time(nullptr)) {
+	// bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
+	// num_serializations(0), start_time_(std::time(nullptr)) {
+	prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
+		colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+		bv_buffer = BitVector(colorClassPerBuffer * num_samples);
+
 		if (flag == MANTIS_DBG_IN_MEMORY) {
 			CQF<key_obj> cqf(qbits, key_bits, hashmode, seed);
 			dbg = cqf;
@@ -627,6 +650,9 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 			sampleid_map.insert(pair);
 			num_samples++;
 		}
+
+		colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+
 		sampleid.close();
 }
 
@@ -676,6 +702,8 @@ ColoredDbg<qf_obj, key_obj> ::
 			num_samples++;
 		}
 
+		colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+
 		sampleList.close();
 
 
@@ -688,6 +716,7 @@ ColoredDbg<qf_obj, key_obj> ::
 		}
 		
 
+		// Store the color-class files names in sorted order (based on their sequence).
 		eqClsFiles.reserve(colorClassFiles.size());
 		for(auto idFilePair : sortedFiles)
 			eqClsFiles.push_back(idFilePair.second);
@@ -708,6 +737,8 @@ num_serializations(0),
 dbg_alloc_flag(flag),
 start_time_(std::time(nullptr))
 {
+	colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+
 	// Construct the sample-id list.
 	concat_sample_id_maps(cdbg1, cdbg2);
 }
