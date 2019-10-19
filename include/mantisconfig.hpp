@@ -18,11 +18,16 @@ namespace mantis{
     constexpr char BOUNDARYBV_FILE[] = "boundaries.bv";
 
     // Constants for manti merge.
-    constexpr char TEMP_DIR[] = "temp/";
+    constexpr uint64_t PROGRESS_STEP = 10000000;    // k-mer count in progress display.
+    constexpr uint64_t ITERATOR_WINDOW_SIZE = 4096; // CQF-window size to keep in memory.
+    constexpr uint64_t SAMPLE_PAIR_COUNT = 1000000; // Count of popular color-id pairs to be sampled.
+    constexpr char TEMP_DIR[] = "temp/";    // Name of the temporary working directory at disk; will be present temporarily inside the output directory.
+    constexpr char EQ_ID_PAIRS_FILE[] = "color-id-pairs";   // Name of the temporary list of color-id pairs.
+    constexpr char ID_PAIR_COUNT_FILE[] = "color-id-pairs-count";   // Name of the temporary file to contain count of distinct color-id pairs.
 
     // Constants for LSM tree.
     constexpr uint SCALING_FACTOR = 4;
-    constexpr uint64_t KMER_THRESHOLD = 1000000000UL;
+    constexpr uint64_t KMER_THRESHOLD = 1500000000UL;
     constexpr uint64_t SAMPLE_THRESHOLD = 100;
     constexpr char PARAM_FILE[] = "lsmt-params.json";
 	constexpr char PENDING_SAMPLES_LIST[] = "pending-samples.lst";

@@ -1,7 +1,7 @@
 /*
  * ============================================================================
  *
- *         Author:  Jamshed Khan, jamshed@cs.umd.edu
+ *         Author:  Jamshed Khan, jamshed@umd.edu
  *   Organization:  University of Maryland
  *
  * ============================================================================
@@ -35,25 +35,6 @@ class CdBG_Merger
 
 
 	private:
-		// k-mer count in progress display.
-		const static uint64_t PROGRESS_STEP = 10000000;
-
-		// CQF-window size to keep in memory.
-		const static uint64_t ITERATOR_WINDOW_SIZE = 4096;
-
-		// Count of popular color-id pairs to be sampled
-		const static uint64_t SAMPLE_PAIR_COUNT = std::min((uint64_t)1000000, mantis::NUM_BV_BUFFER);
-
-		// Name of the temporary working directory at disk; will be present
-		// temporarily inside the output directory.
-		const std::string TEMP_DIR = std::string("temp/");
-
-		// Name of the temporary list of color-id pairs.
-		const std::string EQ_ID_PAIRS_FILE = std::string("color-id-pairs");
-
-		// Name of the temporary file to contain count of distinct color-id pairs.
-		const std::string ID_PAIR_COUNT_FILE = std::string("color-id-pairs-count");
-
         // First input colored dBG.
         ColoredDbg<qf_obj, key_obj> cdbg1;
 
@@ -66,7 +47,7 @@ class CdBG_Merger
         // Console to display messages.
         spdlog::logger *console;
 
-        // Initial time-stamp of object creation.
+        // Initial time-stamp of the object creation.
         std::time_t start_time_;
 		
 		// Number of processor-threads to be used at the intermediate steps of  unique
@@ -76,7 +57,7 @@ class CdBG_Merger
         // Utility information to display at the result summary.
         uint64_t colorCount1 = 0, colorCount2 = 0;
 
-		// Required to hash colo-id pair objects. Resorted to boost::hash_combine
+		// Required to hash color-id pair objects. Resorted to boost::hash_combine
 		// instead of plain XOR hashing. For more explanation, consult
 		// https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
 		class Custom_Pair_Hasher
@@ -119,12 +100,12 @@ class CdBG_Merger
         // Advances the CQF iterator 'it', with keeping track of the 'step' count; and
 		// fetches the next CQF-entry into 'cqfEntry' if the iterator 'it' is advanced
 		// into a non-end position. Also, advances or initializes the iterator
-		// 'walkBehindIterator' that trails 'it' by ITERATOR_WINDOW_SIZE.
+		// 'walkBehindIterator' that trails 'it' by mantis::ITERATOR_WINDOW_SIZE.
 		static void advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &step, key_obj &cqfEntry,
 											typename CQF<key_obj>::Iterator &walkBehindIterator,
 											const CQF<key_obj> *cqf);
 
-        // Samples 'SAMPLE_PAIR_COUNT' number of most abundant color-id pairs from the
+        // Samples 'samplePairCount' number of most abundant color-id pairs from the
 		// first 'sampleKmerCount' distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
 		// into the map 'sampledPairs', which is of the format (pair -> abundance).
 		void sample_color_id_pairs(uint64_t sampleKmerCount);
@@ -218,6 +199,9 @@ class CdBG_Merger
 		void add_kmer(uint64_t kmer, uint64_t colorID, uint64_t &step,
 						typename CQF<key_obj>::Iterator &walkBehindIterator);
 
+		// Calculates the total intermediate disk-space (in MB) used temporarily.
+		uint64_t get_intermediate_disk_space();
+
 		// Serializes the output CQF and sample-id mapping.
 		void serialize_cqf_and_sampleid_list();
 
@@ -268,7 +252,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 
 	// Make the temporary directory if it doesn't exist.
-	std::string tempDir = cdbg.prefix + TEMP_DIR;
+	std::string tempDir = cdbg.prefix + mantis::TEMP_DIR;
 
 	if(!mantis::fs::DirExists(tempDir.c_str()))
 		mantis::fs::MakeDir(tempDir.c_str());
@@ -291,7 +275,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 	assign_abundant_color_ids();
 	build_MPH_tables();
 
-	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
+	// cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
+	cdbg.bv_buffer = BitVector(cdbg.colorClassPerBuffer * cdbg.num_samples);
 	build_color_class_table();
 	cdbg.bv_buffer = BitVector(0);
 
@@ -300,7 +285,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 	build_CQF();
 
 
-	// Remove the temporary directory.
+	// Calculate the size of and then remove the temporary directory.
+	uint64_t diskSpace = get_intermediate_disk_space();
 	std::string sysCommand = "rm -rf " + tempDir;
 	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
 
@@ -320,6 +306,7 @@ void CdBG_Merger<qf_obj, key_obj>::
     
 	timeLog.total = t_end - t_start;
     console -> info("Total time taken = {} s.", timeLog.total);
+	console -> info("Intermediate disk space used = {} MB ({} GB).", diskSpace, diskSpace / 1024.0);
 
 
 	console -> info("Merged CQF metadata:");
@@ -339,9 +326,9 @@ inline void CdBG_Merger <qf_obj, key_obj> ::
 	if(!it.done())
 		cqfEntry = it.get_cur_hash();
 
-	if(step == ITERATOR_WINDOW_SIZE)
+	if(step == mantis::ITERATOR_WINDOW_SIZE)
 		walkBehindIterator = cqf -> begin(true);
-	else if(step > ITERATOR_WINDOW_SIZE)
+	else if(step > mantis::ITERATOR_WINDOW_SIZE)
 		++walkBehindIterator;
 }
 
@@ -353,7 +340,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 {
 	auto t_start = time(nullptr);
 
-	uint64_t sampleCount = SAMPLE_PAIR_COUNT;
+	uint64_t sampleCount = std::min(mantis::SAMPLE_PAIR_COUNT, cdbg.colorClassPerBuffer);
 	console -> info("Sampling {} most-abundant color-id pairs from the first {} kmers. Time-stamp = {}.",
 					sampleCount, sampleKmerCount, time(nullptr) - start_time_);
 
@@ -422,10 +409,9 @@ void CdBG_Merger<qf_obj, key_obj>::
 		pairCount[std::make_pair(eqClass1, eqClass2)]++;
 		kmerCount++;
 
-		if(kmerCount % PROGRESS_STEP == 0)
+		if(kmerCount % mantis::PROGRESS_STEP == 0)
 			console -> info("Sampled {}M k-mers, color-classes found: {}. Time-stamp = {}.",
-							kmerCount * 10 / PROGRESS_STEP, pairCount.size(),
-							time(nullptr) - start_time_);
+							kmerCount / 1000000, pairCount.size(), time(nullptr) - start_time_);
 	}
 
 	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}.",
@@ -437,7 +423,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<CountAndIdPair>> minPQ;
 
 	for(auto p = pairCount.begin(); p != pairCount.end(); ++p)
-		if(minPQ.size() < SAMPLE_PAIR_COUNT)
+		if(minPQ.size() < sampleCount)
 			minPQ.push(std::make_pair(p -> second, p -> first));
 		else if(minPQ.top().first < p -> second)
 		{
@@ -484,14 +470,14 @@ void CdBG_Merger<qf_obj, key_obj>::
 		MPH[i].resize(fileCount2 + 1);
 		
 		for(uint64_t j = 0; j <= fileCount2; ++j)
-			diskBucket[i][j] = std::ofstream(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE + "_" +
+			diskBucket[i][j] = std::ofstream(cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE + "_" +
 											std::to_string(i) + "_" + std::to_string(j)),
 			bucketSize[i][j] = 0,
 			cumulativeBucketSize[i][j] = 0,
 			MPH[i][j] = NULL;
 	}
 
-	console -> info("{} x {} disk-buckets  and associated data structures initialized.",
+	console -> info("{} x {} disk-buckets and associated data structures initialized.",
 					fileCount1 + 1, fileCount2 + 1);
 }
 
@@ -504,7 +490,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	auto t_start = time(nullptr);
 
 	console -> info("Writing the non-sampled color-id pairs to disk-files of form ({}). Time-stamp = {}.",
-					TEMP_DIR + EQ_ID_PAIRS_FILE + std::string("_X_Y"), time(nullptr) - start_time_);
+					std::string(mantis::TEMP_DIR) + std::string(mantis::EQ_ID_PAIRS_FILE) + std::string("_X_Y"),
+					time(nullptr) - start_time_);
 
 
 
@@ -582,9 +569,9 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 		}
 
 
-		if(kmerCount % PROGRESS_STEP == 0)
+		if(kmerCount % mantis::PROGRESS_STEP == 0)
 			console -> info("Observed count of distinct k-mers: {}M, written color-id pairs to disk: {}. Time-stamp = {}.",
-							kmerCount * 10 / PROGRESS_STEP, writtenPairsCount, time(nullptr) - start_time_);
+							kmerCount / 1000000, writtenPairsCount, time(nullptr) - start_time_);
 	}
 
 
@@ -603,7 +590,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 			{
 				// Reference: https://stackoverflow.com/questions/28342660/error-handling-in-stdofstream-while-writing-data
 
-				console -> error("Writing to the intermediate temporary disk-files were corrupted (`badbit` set).");
+				console -> error("Writing to the intermediate temporary disk-files were corrupted (`badbit` or `failbit` set).");
 				exit(1);
 			}
 		}
@@ -626,8 +613,10 @@ void CdBG_Merger<qf_obj, key_obj>::
 {
 	// TODO: Add faster file-write mechanism.
 
-	const uint64_t row = (colorID1 ? (colorID1 - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-					col = (colorID2 ? (colorID2 - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+	// const uint64_t row = (colorID1 ? (colorID1 - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+	// 				col = (colorID2 ? (colorID2 - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+	const uint64_t row = (colorID1 ? ((colorID1 - 1) / cdbg1.colorClassPerBuffer) + 1 : 0),
+					col = (colorID2 ? ((colorID2 - 1) / cdbg2.colorClassPerBuffer) + 1 : 0);
 
 	diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
 }
@@ -648,7 +637,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	auto t_start = time(nullptr);
 
 	console -> info("Filtering out the unique eq-id pairs from files {} with {} threads. Time-stamp = {}",
-					TEMP_DIR + EQ_ID_PAIRS_FILE + "_X_Y", threadCount, time(nullptr) - start_time_);
+					std::string(mantis::TEMP_DIR) + std::string(mantis::EQ_ID_PAIRS_FILE) + std::string("_X_Y"),
+					threadCount, time(nullptr) - start_time_);
 
 
 	uint64_t colorClassCount = 0;
@@ -660,7 +650,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	for(int i = 0; i <= fileCount1; ++i)
 		for(int j = 0; j <= fileCount2; ++j)
 		{
-			std::string diskBucket = cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+			std::string diskBucket = cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE +
 									"_" + std::to_string(i) + "_" + std::to_string(j);
 
 			std::string sysCommand = "sort -u";
@@ -673,7 +663,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 			system(sysCommand.c_str());
 
 			
-			std::string lineCountFile = cdbg.prefix + TEMP_DIR + ID_PAIR_COUNT_FILE;
+			std::string lineCountFile = cdbg.prefix + mantis::TEMP_DIR + mantis::ID_PAIR_COUNT_FILE;
 			sysCommand = "wc -l " + diskBucket + " | egrep -o \"[0-9]+ \" > " + lineCountFile;
 			system(sysCommand.c_str());
 
@@ -706,7 +696,8 @@ template <typename qf_obj, typename key_obj>
 uint64_t CdBG_Merger<qf_obj, key_obj>::
 	get_max_sort_memory()
 {
-	uint64_t bvBuffMemory = mantis::NUM_BV_BUFFER * cdbg.num_samples / 8;
+	// uint64_t bvBuffMemory = mantis::NUM_BV_BUFFER * cdbg.num_samples / 8;
+	uint64_t bvBuffMemory = cdbg.colorClassPerBuffer * cdbg.num_samples / 8;
 	uint64_t maxRRR1size = 0, maxRRR2size = 0;
 
 	// File-size calculation reference:
@@ -803,7 +794,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 				console -> info("Loading the unique color-id pairs from bucket ({}, {}) into memory. Time-stamp = {}.",
 								i, j, time(nullptr) - start_time_);
 
-				std::ifstream input(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+				std::ifstream input(cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE +
 									"_" + std::to_string(i) + "_" + std::to_string(j));
 				uint64_t id1, id2;
 
@@ -859,10 +850,11 @@ void CdBG_Merger<qf_obj, key_obj> ::
 
 	if(colorID1)	// Color ID = 0 implies an absent color-id.
 	{
-		uint64_t offset = ((colorID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+		// uint64_t offset = ((colorID1 - 1) % mantis::NUM_BV_BUFFER) * colCount1;
+		uint64_t offset = ((colorID1 - 1) % cdbg1.colorClassPerBuffer) * colCount1;
 
 		for(uint32_t blockStart = 0; blockStart < (colCount1 / wordLen) * wordLen; blockStart += wordLen)
-				resultVec.set_int(blockStart, bv1.get_int(offset + blockStart, wordLen), wordLen);
+			resultVec.set_int(blockStart, bv1.get_int(offset + blockStart, wordLen), wordLen);
 
 		if(colCount1 % wordLen)
 			resultVec.set_int((colCount1 / wordLen) * wordLen,
@@ -873,10 +865,11 @@ void CdBG_Merger<qf_obj, key_obj> ::
 
 	if(colorID2)	// Color ID = 0 implies an absent color-id.
 	{
-		uint64_t offset = ((colorID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+		// uint64_t offset = ((colorID2 - 1) % mantis::NUM_BV_BUFFER) * colCount2;
+		uint64_t offset = ((colorID2 - 1) % cdbg2.colorClassPerBuffer) * colCount2;
 
 		for(uint32_t blockStart = 0; blockStart < (colCount2 / wordLen) * wordLen; blockStart += wordLen)
-				resultVec.set_int(colCount1 + blockStart, bv2.get_int(offset + blockStart, wordLen), wordLen);
+			resultVec.set_int(colCount1 + blockStart, bv2.get_int(offset + blockStart, wordLen), wordLen);
 
 		if(colCount2 % wordLen)
 			resultVec.set_int(colCount1 + (colCount2 / wordLen) * wordLen,
@@ -918,7 +911,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 	build_abundant_color_classes();
 	
 	writtenPairsCount = sampledPairs.size();
-	if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
+	// if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
+	if(writtenPairsCount % cdbg.colorClassPerBuffer == 0)
 		bv_buffer_serialize(writtenPairsCount);
 
 	console -> info("Color-classes built for the {} sampled (on abundance) color-id pairs. Time-stamp = {}.",
@@ -927,7 +921,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(), fileCount2 = cdbg2.get_eq_class_file_count();
 	BitVectorRRR bitVec1, bitVec2;
-
 
 	for(uint64_t i = 0; i <= fileCount1; ++i)
 	{
@@ -958,8 +951,10 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 			if(bucketSize[i][j])
 			{
-				uint64_t queueCount = ((cumulativeBucketSize[i][j] + bucketSize[i][j] - 1) / mantis::NUM_BV_BUFFER)
-										- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER) + 1;
+				// uint64_t queueCount = ((cumulativeBucketSize[i][j] + bucketSize[i][j] - 1) / mantis::NUM_BV_BUFFER)
+				// 						- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER) + 1;
+				uint64_t queueCount = ((cumulativeBucketSize[i][j] + bucketSize[i][j] - 1) / cdbg.colorClassPerBuffer)
+										- (cumulativeBucketSize[i][j] / cdbg.colorClassPerBuffer) + 1;
 
 				std::vector<std::vector<std::pair<uint64_t, uint64_t>>> writeQueue;
 				writeQueue.resize(queueCount);
@@ -967,23 +962,27 @@ void CdBG_Merger<qf_obj, key_obj>::
 				uint64_t remPairsCount = bucketSize[i][j];
 				for(uint64_t k = 0; k < queueCount; ++k)
 				{
-					uint64_t queueLen = std::min(remPairsCount, mantis::NUM_BV_BUFFER -
-							(cumulativeBucketSize[i][j] + (bucketSize[i][j] - remPairsCount)) % mantis::NUM_BV_BUFFER);
+					// uint64_t queueLen = std::min(remPairsCount, mantis::NUM_BV_BUFFER -
+					// 		(cumulativeBucketSize[i][j] + (bucketSize[i][j] - remPairsCount)) % mantis::NUM_BV_BUFFER);
+					uint64_t queueLen = std::min(remPairsCount, cdbg.colorClassPerBuffer -
+							(cumulativeBucketSize[i][j] + (bucketSize[i][j] - remPairsCount)) % cdbg.colorClassPerBuffer);
 					writeQueue[k].reserve(queueLen);
 
 					remPairsCount -= queueLen;
 				}
 
 
-				std::ifstream input(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE +
+				std::ifstream input(cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE +
 									"_" + std::to_string(i) + "_" + std::to_string(j));
 				std::pair<uint64_t, uint64_t> idPair;
 
 				// TODO: Add faster file-read mechanism.
 				while(input >> idPair.first >> idPair.second)
 				{
-					uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(idPair)) / mantis::NUM_BV_BUFFER)
-										- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER);
+					// uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(idPair)) / mantis::NUM_BV_BUFFER)
+					// 					- (cumulativeBucketSize[i][j] / mantis::NUM_BV_BUFFER);
+					uint64_t queueIdx = ((cumulativeBucketSize[i][j] + MPH[i][j] -> lookup(idPair)) / cdbg.colorClassPerBuffer)
+										- (cumulativeBucketSize[i][j] / cdbg.colorClassPerBuffer);
 					writeQueue[queueIdx].push_back(idPair);
 				}
 
@@ -992,7 +991,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 				for(uint64_t k = 0; k < queueCount; ++k)
 				{
-					// sdsl::bit_vector writes (disjoint) are not thread-safe.
+					// sdsl::bit_vector writes (even if disjoint) are not thread-safe.
 					// TODO: Dig deep.
 
 					/*
@@ -1027,7 +1026,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 
 					writtenPairsCount += writeQueue[k].size();
-					if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
+					// if(writtenPairsCount % mantis::NUM_BV_BUFFER == 0)
+					if(writtenPairsCount % cdbg.colorClassPerBuffer == 0)
 						bv_buffer_serialize(writtenPairsCount);
 					
 					writeQueue[k].clear();
@@ -1042,7 +1042,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 
 	// Serialize the bitvector buffer last time if needed.
-	if (writtenPairsCount % mantis::NUM_BV_BUFFER > 0)
+	// if (writtenPairsCount % mantis::NUM_BV_BUFFER > 0)
+	if (writtenPairsCount % cdbg.colorClassPerBuffer > 0)
 		bv_buffer_serialize(writtenPairsCount);
 
 
@@ -1067,16 +1068,20 @@ void CdBG_Merger<qf_obj, key_obj>::
 		idPairs.push_back(it -> first);
 
 	sort(idPairs.begin(), idPairs.end(),
-		[](const std::pair<uint64_t, uint64_t> &lhs, const std::pair<uint64_t, uint64_t> &rhs)
+		[this](const std::pair<uint64_t, uint64_t> &lhs, const std::pair<uint64_t, uint64_t> &rhs)
 		{
-			uint64_t bucket1 = (lhs.first ? (lhs.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-						bucket2 = (rhs.first ? (rhs.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+			// uint64_t bucket1 = (lhs.first ? (lhs.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+			// 			bucket2 = (rhs.first ? (rhs.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+			uint64_t bucket1 = (lhs.first ? ((lhs.first - 1) / cdbg1.colorClassPerBuffer) + 1 : 0),
+					bucket2 = (rhs.first ? ((rhs.first - 1) / cdbg1.colorClassPerBuffer) + 1 : 0);
 
 			if(bucket1 != bucket2)
 				return bucket1 < bucket2;
 
-			bucket1 = (lhs.second ? (lhs.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-			bucket2 = (rhs.second ? (rhs.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+			// bucket1 = (lhs.second ? (lhs.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+			// bucket2 = (rhs.second ? (rhs.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+			bucket1 = (lhs.second ? ((lhs.second - 1) / cdbg2.colorClassPerBuffer) + 1 : 0),
+			bucket2 = (rhs.second ? ((rhs.second - 1) / cdbg2.colorClassPerBuffer) + 1 : 0);
 
 			return bucket1 < bucket2;
 		});
@@ -1086,13 +1091,14 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 	for(auto it = idPairs.begin(); it != idPairs.end(); ++it)
 	{
-		uint64_t reqBucket1 = (it -> first ? (it -> first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-					reqBucket2 = (it -> second ? (it -> second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+		// uint64_t reqBucket1 = (it -> first ? (it -> first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+		// 			reqBucket2 = (it -> second ? (it -> second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+		uint64_t reqBucket1 = (it -> first ? ((it -> first - 1) / cdbg1.colorClassPerBuffer) + 1 : 0),
+				reqBucket2 = (it -> second ? ((it -> second - 1) / cdbg2.colorClassPerBuffer) + 1 : 0);
 
 		if(reqBucket1 && reqBucket1 != currBucket1)
 		{
 			load_color_class_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1 - 1]);
-
 			currBucket1 = reqBucket1;
 
 			console -> info("Mantis 1: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
@@ -1102,7 +1108,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 		if(reqBucket2 && reqBucket2 != currBucket2)
 		{
 			load_color_class_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2 - 1]);
-
 			currBucket2 = reqBucket2;
 
 			console -> info("Mantis 2: loaded one bitvectorRRR from file {}. Time-stamp = {}.",
@@ -1120,7 +1125,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 		/*
 			No bitvector-buffer serialization required, as the number of sampled pairs'
-			count (SAMPLE_PAIR_COUNT) is defined as less than or equal to the bitvector-buffer size.
+			count (sampleCount) is defined as less than or equal to the bitvector-buffer size.
 			(Check its declaration.)
 		*/
 	}
@@ -1156,8 +1161,10 @@ void CdBG_Merger<qf_obj, key_obj>:: bv_buffer_serialize(uint64_t colorClsCount)
 {
 	console -> info("Serializing the bitvector buffer. Total color-class count: {}.", colorClsCount);
 
-	if(colorClsCount % mantis::NUM_BV_BUFFER > 0)
-		cdbg.bv_buffer.resize((colorClsCount % mantis::NUM_BV_BUFFER) * cdbg.num_samples);
+	// if(colorClsCount % mantis::NUM_BV_BUFFER > 0)
+	// 	cdbg.bv_buffer.resize((colorClsCount % mantis::NUM_BV_BUFFER) * cdbg.num_samples);
+	if(colorClsCount % cdbg.colorClassPerBuffer > 0)
+		cdbg.bv_buffer.resize((colorClsCount % cdbg.colorClassPerBuffer) * cdbg.num_samples);
 	
 	BitVectorRRR final_com_bv(cdbg.bv_buffer);
 	std::string bv_file(cdbg.prefix + std::to_string(cdbg.num_serializations) + "_" + mantis::EQCLASS_FILE);
@@ -1302,8 +1309,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 		if(colorId <= sampledPairs.size())
 			foundAbundantId++;
 
-		if(kmerCount % PROGRESS_STEP == 0)
-			console -> info("Kmers merged: {}M, time-stamp: {}.", kmerCount * 10 / PROGRESS_STEP,
+		if(kmerCount % mantis::PROGRESS_STEP == 0)
+			console -> info("Kmers merged: {}M, time-stamp: {}.", kmerCount / 1000000,
 							time(nullptr) - start_time_);
 	}
 
@@ -1327,8 +1334,10 @@ uint64_t CdBG_Merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 	if(it != sampledPairs.end())
 		return it -> second;
 
-	const uint64_t row = (idPair.first ? (idPair.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-					col = (idPair.second ? (idPair.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+	// const uint64_t row = (idPair.first ? (idPair.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
+	// 				col = (idPair.second ? (idPair.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+	const uint64_t row = (idPair.first ? ((idPair.first - 1) / cdbg1.colorClassPerBuffer) + 1 : 0),
+					col = (idPair.second ? ((idPair.second - 1) / cdbg2.colorClassPerBuffer) + 1 : 0);
 
 
 	return cumulativeBucketSize[row][col] + MPH[row][col] -> lookup(idPair) + 1;
@@ -1349,10 +1358,45 @@ inline void CdBG_Merger<qf_obj, key_obj> ::
 
 	
 	step++;
-	if(step == ITERATOR_WINDOW_SIZE)
+	if(step == mantis::ITERATOR_WINDOW_SIZE)
 		walkBehindIterator = cdbg.dbg.begin(true);
-	else if(step > ITERATOR_WINDOW_SIZE)
+	else if(step > mantis::ITERATOR_WINDOW_SIZE)
 		++walkBehindIterator;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+uint64_t CdBG_Merger<qf_obj, key_obj>::
+	get_intermediate_disk_space()
+{
+	uint64_t diskSpace = 0;
+
+	uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
+			fileCount2 = cdbg2.get_eq_class_file_count();
+
+
+	// File-size calculation reference:
+	// https://stackoverflow.com/questions/5840148/how-can-i-get-a-files-size-in-c
+
+	// Calculate the total disk-bucket sizes.
+	for(uint64_t i = 0; i <= fileCount1; ++i)
+		for(uint64_t j = 0; j <= fileCount2; ++j)
+		{
+			struct stat64 stat_buf;
+			std::string fileName = cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE + "_" +
+									std::to_string(i) + "_" + std::to_string(j);
+
+			if(stat64(fileName.c_str(), &stat_buf) == 0)
+				diskSpace += (uint64_t)stat_buf.st_size;
+			else
+			{
+				console -> error("File size of the temporary file {} cannot be determined.", fileName);
+				exit(1);
+			}
+		}
+
+	return diskSpace / (1024 * 1024);
 }
 
 
@@ -1408,9 +1452,9 @@ void CdBG_Merger<qf_obj, key_obj>:: print_time_log()
 	console -> info("Build the merged CQF:\t{}", timeLog.buildCQF);
 	console -> info("================================================");
 
-	console -> info("Total time taken for merge:\t{}", timeLog.total);
-	console -> info("Time consumed in disk-read of color-class tables:\t{}", timeLog.fileRead);
-	console -> info("Time consumed in disk-write of the color-class table:\t{}", timeLog.colorTableSerialize);
+	console -> info("Total time taken for merge:\t{} s", timeLog.total);
+	console -> info("Time consumed in disk-read of color-class tables:\t{} s", timeLog.fileRead);
+	console -> info("Time consumed in disk-write of the color-class table:\t{} s", timeLog.colorTableSerialize);
 }
 
 #endif

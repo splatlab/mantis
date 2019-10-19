@@ -242,7 +242,8 @@ void LSMT<qf_obj, key_obj>::
 
     
     auto t_end = time(nullptr);
-    console -> info("Time taken to update with {} samples = {} s.", sampleList.size(), t_end - t_start);
+    console -> info("Time taken to update with {} samples = {} s. Total samples = {}.",
+                    sampleList.size(), t_end - t_start, sampleCount);
 }
 
 
@@ -322,7 +323,7 @@ void LSMT<qf_obj, key_obj>::
     MergeOpts mergeOpts;
 
     mergeOpts.threadCount = threadCount;
-    mergeOpts.timeLog = false;
+    mergeOpts.timeLog = true;
     mergeOpts.removeIndices = true;
     mergeOpts.dir1 = cdbg1;
 	mergeOpts.dir2 = cdbg2;
