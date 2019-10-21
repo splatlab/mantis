@@ -199,7 +199,9 @@ int main ( int argc, char *argv[] ) {
                         option("-k", "--kmer-threshold") & value("kmer-threshold", lsmtiopt.kmerThreshold)
                         % "kmer count threshold for the level 0 of the LSM-tree",
                         option("-s", "--sample-threshold") & value("sample-threshold", lsmtiopt.sampleThreshold)
-                        % "threshold on the count of samples kept pending before insertion into the LSM-tree"
+                        % "threshold on the count of samples kept pending before insertion into the LSM-tree",
+                        option("-q", "--q-bit-init-build") & value("q-bit-init-build", lsmtiopt.qBitInitBuild)
+                        % "q (quotient)-bit count for the initial mantis build at an update"
                         );
 
   auto lsmt_update_mode = (

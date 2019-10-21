@@ -29,6 +29,7 @@ namespace mantis{
     constexpr uint SCALING_FACTOR = 4;
     constexpr uint64_t KMER_THRESHOLD = 1500000000UL;
     constexpr uint64_t SAMPLE_THRESHOLD = 100;
+    constexpr uint64_t INIT_BUILD_Q_BIT = 31;
     constexpr char PARAM_FILE[] = "lsmt-params.json";
 	constexpr char PENDING_SAMPLES_LIST[] = "pending-samples.lst";
     constexpr char LSMT_LEVEL_DIR[] = "lsmt-level-";
@@ -36,7 +37,7 @@ namespace mantis{
     constexpr char TEMP_MERGE_IDX_DIR[] = "temp-merge-idx/";
 
     constexpr const uint64_t NUM_BV_BUFFER{20000000};
-    constexpr const uint64_t BV_BUF_LEN{20000000000};
+    constexpr const uint64_t BV_BUF_LEN{(uint64_t)20000000000};
     constexpr const uint64_t INITIAL_EQ_CLASSES{10000};
     constexpr const uint64_t SAMPLE_SIZE{(1ULL << 26)};
 } // namespace mantis

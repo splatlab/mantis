@@ -109,6 +109,7 @@ class LSMT_InitializeOpts
     uint scalingFactor{mantis::SCALING_FACTOR};
     uint64_t kmerThreshold{mantis::KMER_THRESHOLD};
     uint64_t sampleThreshold{mantis::SAMPLE_THRESHOLD};
+    uint qBitInitBuild{mantis::INIT_BUILD_Q_BIT};
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 

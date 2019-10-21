@@ -68,6 +68,7 @@ class LSMT
         uint64_t sampleThreshold;
         uint levels;
         uint sampleCount = 0;
+        uint qBitInitBuild;
         std::vector<std::string> pendingSamples;
 
         std::shared_ptr<spdlog::logger> sharedConsole;
@@ -155,6 +156,7 @@ LSMT<qf_obj, key_obj>::
     sampleThreshold = param["sampleThreshold"],
     levels = param["levels"];
     sampleCount = param["sampleCount"];
+    qBitInitBuild = param["qBitInitBuild"];
 
 
     std::ifstream pendingList(dir + mantis::PENDING_SAMPLES_LIST);
@@ -183,6 +185,7 @@ void LSMT<qf_obj, key_obj>::
     console -> info("kmer threshold for level 0: {}", kmerThreshold);
     console -> info("Scaling factor between levels: {}", scalingFactor);
     console -> info("Maximum number of pending samples at a given time: {}", sampleThreshold);
+    console -> info("Quotient bit for the initial mantis build at an update: {}", qBitInitBuild);
     console -> info("Current number of levels in tree: {}", levels);
     console -> info("Current number of samples in tree: {}", sampleCount);
 }
@@ -276,7 +279,7 @@ void LSMT<qf_obj, key_obj>::
     BuildOpts buildOpts;
 
     buildOpts.flush_eqclass_dist = false;
-    buildOpts.qbits = 31; // TODO: Consult at meeting / Prof. Also, move the constant out of this file.
+    buildOpts.qbits = qBitInitBuild;
     buildOpts.inlist = inputList;
     buildOpts.out = outDir;
     buildOpts.console = sharedConsole;

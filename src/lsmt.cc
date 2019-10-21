@@ -82,6 +82,7 @@ int lsmt_initialize_main(LSMT_InitializeOpts &opt)
 			paramInfo["sampleThreshold"] = opt.sampleThreshold;
 			paramInfo["levels"] = 0;
 			paramInfo["sampleCount"] = 0;
+			paramInfo["qBitInitBuild"] = opt.qBitInitBuild;
 
 
 			jfile << paramInfo.dump(4);
