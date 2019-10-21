@@ -1348,7 +1348,7 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::merge()
 {
-	auto t_start = time(nullptr);
+	/*auto t_start = time(nullptr);
 	console -> info ("Merge starting. Time-stamp = {}.\n", time(nullptr) - start_time_);
 
 
@@ -1366,7 +1366,6 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	}
 
 
-
 	sample_color_id_pairs(mantis::SAMPLE_SIZE);
 
 	init_disk_buckets();
@@ -1377,9 +1376,9 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	build_MPH_tables();
 
 	uint64_t num_colorBuffers = 1;
-	/*cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
-	build_color_class_table();
-	cdbg.bv_buffer = BitVector(0);*/
+//	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
+//	build_color_class_table();
+//	cdbg.bv_buffer = BitVector(0);
 
 	//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
@@ -1415,8 +1414,8 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	serialize_cqf_and_sampleid_list();
 
 
-	console->info("Done with cqf merge");
-//    uint64_t num_colorBuffers = 1;
+	console->info("Done with cqf merge");*/
+    uint64_t num_colorBuffers = 4;
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
 	MST mst(&cdbg.dbg, cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");

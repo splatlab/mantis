@@ -36,6 +36,11 @@ struct QueryStats {
     tsl::hopscotch_map<uint32_t, uint64_t> numOcc;
     bool trySample{false};
     //std::unordered_map<uint32_t, uint64_t> numOcc;
+    std::vector<uint16_t> heightDist;
+    std::vector<uint32_t> weightDist;
+    std::vector<uint16_t> noCache_heightDist;
+    std::vector<uint32_t> noCache_weightDist;
+
 };
 
 class RankScores {
@@ -70,6 +75,7 @@ private:
     spdlog::logger *logger{nullptr};
     mantis::QueryMap kmer2cidMap;
     mantis::EqMap cid2expMap;
+    uint64_t fixed_size{0};
 
 public:
     uint32_t queryK;
@@ -89,6 +95,7 @@ public:
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
                                      LRUCacheMap *lru_cache,
                                      RankScores* rs,
+                                     std::vector<std::vector<uint64_t>> *fixed_cache,
                                      nonstd::optional<uint64_t>& toDecode // output param.  Also decode these
                                      );
 
@@ -105,6 +112,10 @@ public:
 
     uint64_t getNumOfDistinctKmers() {
         return kmer2cidMap.size();
+    }
+
+    void setFixed_size(uint64_t fixed_sizeIn) {
+        fixed_size = fixed_sizeIn;
     }
 };
 

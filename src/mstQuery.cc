@@ -26,13 +26,14 @@ void MSTQuery::loadIdx(std::string indexDir) {
 std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats,
                                            LRUCacheMap *lru_cache,
                                            RankScores *rs,
+                                           std::vector<std::vector<uint64_t>> *fixed_cache,
                                            nonstd::optional<uint64_t> &toDecode) {
 
     (void) rs;
     std::vector<uint32_t> flips(numSamples);
     std::vector<uint32_t> xorflips(numSamples, 0);
     uint64_t i{eqid}, from{0}, to{0};
-    int64_t height{0};
+    int64_t height{0}, weight{0};
     auto froms = std::vector<uint64_t>();//queryStats.buffer;
 //    froms.clear();
     queryStats.totEqcls++;
@@ -45,7 +46,15 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
 //            auto eq_ptr = lru_cache->lookup_ts(i);
 //            if (eq_ptr) {
 //                const auto &vs = *eq_ptr;
-        if (lru_cache and lru_cache->contains(i)) {
+        if (i < fixed_size) {
+            const auto &vs = (*fixed_cache)[i];
+            for (auto v : vs) {
+                xorflips[v] = 1;
+            }
+            queryStats.cacheCntr++;
+            foundCache = true;
+            break;
+        } else if (lru_cache and lru_cache->contains(i)) {
             const auto &vs = (*lru_cache)[i];
             for (auto v : vs) {
                 xorflips[v] = 1;
@@ -60,10 +69,10 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
 
         if (queryStats.trySample) {
 //            std::lock_guard<std::mutex> m(buildColorMutex);
-//            auto &occ = queryStats.numOcc[iparent];
-//            ++occ;
+            auto &occ = queryStats.numOcc[iparent];
+            ++occ;
             if ((!toDecode) and
-//                (occ > 10) and
+                (occ > 10) and
                 (height > 10)
                 and
                 (lru_cache and
@@ -77,14 +86,14 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         }
         i = iparent;
         iparent = parentbv[i];
-//        ++queryStats.totSel;
+        ++queryStats.totSel;
         ++height;
     }
     if (!foundCache and i != zero) {
         from = (i > 0) ? (sbbv(i) + 1) : 0;
         froms.push_back(from);
-//        ++queryStats.totSel;
-//        queryStats.rootedNonZero++;
+        ++queryStats.totSel;
+        queryStats.rootedNonZero++;
         ++height;
     }
     uint64_t pctr{0};
@@ -100,6 +109,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
             for (uint64_t j = 0; j < 64; j++) {
                 //std::cerr << deltabv[start + j] << " ";
                 flips[deltabv[start + j]] ^= 0x01;
+                weight++;
                 if ((wrd >> j) & 0x01) {
                     found = true;
                     break;
@@ -109,6 +119,13 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         } while (!found);
     }
 
+    if (foundCache) {
+        queryStats.heightDist.push_back(height);
+        queryStats.weightDist.push_back(weight);
+    } else {
+        queryStats.noCache_heightDist.push_back(height);
+        queryStats.noCache_weightDist.push_back(weight);
+    }
     std::vector<uint64_t> eq;
     eq.reserve(numWrds);
     uint64_t one = 1;
@@ -149,16 +166,18 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
             setbits = lru_cache[eqclass_id];//.get(eqclass_id);
 //            setbits = (*lru_cache[eqclass_id]);//.get(eqclass_id);
             queryStats.cacheCntr++;
+            queryStats.heightDist.push_back(0);
+            queryStats.weightDist.push_back(0);
         } else {
             queryStats.noCacheCntr++;
             toDecode.reset();
             dummy.reset();
             queryStats.trySample = (queryStats.noCacheCntr % 10 == 0);
-            setbits = buildColor(eqclass_id, queryStats, &lru_cache, rs, toDecode);
+            setbits = buildColor(eqclass_id, queryStats, &lru_cache, rs, nullptr, toDecode);
 //            auto sp = std::make_shared<std::vector<uint64_t>>(setbits);
             lru_cache.emplace(eqclass_id, setbits);
             if ((queryStats.trySample) and toDecode) {
-                auto s = buildColor(*toDecode, queryStats, nullptr, nullptr, dummy);
+                auto s = buildColor(*toDecode, queryStats, nullptr, nullptr, nullptr, dummy);
 //                auto sp = std::make_shared<std::vector<uint64_t>>(s);
                 lru_cache.emplace(*toDecode, s);
             }
@@ -170,6 +189,14 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
 
         ++queryStats.globalQueryNum;*/
     }
+    std::ofstream cacheHeight("cacheHeight.dist");
+    std::ofstream cacheWeight("cacheWeight.dist");
+    std::ofstream noCacheHeight("noCacheHeight.dist");
+    std::ofstream noCacheWeight("noCacheWeight.dist");
+    for (auto v : queryStats.heightDist) cacheHeight << "1 " << v << "\n";
+    for (auto v : queryStats.weightDist) cacheWeight << "1 " << v << "\n";
+    for (auto v : queryStats.noCache_heightDist) noCacheHeight << "1 " << v << "\n";
+    for (auto v : queryStats.noCache_weightDist) noCacheWeight << "1 " << v << "\n";
 }
 
 

@@ -39,12 +39,17 @@ typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
 
 
+// undirected edge
 struct Edge {
     colorIdType n1;
     colorIdType n2;
 
     Edge() : n1{static_cast<colorIdType>(-1)}, n2{static_cast<colorIdType>(-1)} {}
-    Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {}
+    Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {
+        if (n1 > n2) {
+            std::swap(n1, n2);
+        }
+    }
 
     bool operator==(const Edge &e) const {
         return n1 == e.n1 && n2 == e.n2;
@@ -164,7 +169,13 @@ private:
     uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2,
                          uint64_t &srcId, std::vector<uint64_t> &srcEq);
 
-    uint64_t mstBasedHammingDist(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache, std::vector<uint64_t> &srcEq, bool isFirst);
+    uint64_t mstBasedHammingDist(uint64_t eqid1,
+            uint64_t eqid2,
+            MSTQuery* mst,
+            LRUCacheMap& lru_cache,
+            std::vector<uint64_t> &srcEq,
+            QueryStats& queryStats,
+            std::vector<std::vector<uint64_t>> &fixed_cache);
 
     std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
 
@@ -176,18 +187,30 @@ private:
                                            std::vector<spp::sparse_hash_set<Edge, edge_hash>> &edgesetList,
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
-    void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList, bool isMSTBased = false);
+    void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
+    void calcMSTHammingDistInParallel(uint32_t i, std::unordered_map<Edge, uint32_t, edge_hash> &edgeList,
+                                      MSTQuery *mst,
+                                      std::vector<LRUCacheMap> &lru_cache,
+                                      std::vector<QueryStats> &queryStats,
+                                      std::vector<std::vector<uint64_t>> &fixed_cache,
+                                      uint32_t numSamples);
+
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
             sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
             sdsl::bit_vector::select_1_type &sbbv,
             bool isMSTBased);
 
-    void buildMSTBasedColor(uint64_t eqid1, LRUCacheMap& lru_cache1, MSTQuery *mst1, std::vector<uint64_t> & eq1);
-    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache, bool isFirst);
+    void buildMSTBasedColor(uint64_t eqid1, MSTQuery *mst1,
+            LRUCacheMap& lru_cache1, std::vector<uint64_t> & eq1,
+            QueryStats &queryStats,
+            std::vector<std::vector<uint64_t>> &fixed_cache);
+    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache,
+            bool isFirst, QueryStats& queryStats);
 
     std::string prefix;
     uint32_t numSamples = 0;
     uint32_t numOfFirstMantisSamples = 0;
+    uint32_t secondMantisSamples = 0;
     uint64_t k;
     uint64_t num_of_ccBuffers = 1;
     uint64_t num_edges = 0;
@@ -198,7 +221,11 @@ private:
     LRUCacheMap lru_cache;//10000);
     std::vector<LRUCacheMap> lru_cache1;//10000);
     std::vector<LRUCacheMap> lru_cache2;//10000);
-    QueryStats queryStats;
+    uint64_t fixed_size = 200;
+    std::vector<std::vector<uint64_t>> fixed_cache1;
+    std::vector<std::vector<uint64_t>> fixed_cache2;
+    std::vector<QueryStats> queryStats1;
+    std::vector<QueryStats> queryStats2;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;
     std::vector<std::pair<uint64_t , uint64_t >> colorPairs;
