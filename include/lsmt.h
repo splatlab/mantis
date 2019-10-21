@@ -399,6 +399,7 @@ void LSMT<qf_obj, key_obj>::
 			paramInfo["sampleThreshold"] = sampleThreshold;
 			paramInfo["levels"] = levels;
             paramInfo["sampleCount"] = sampleCount;
+            paramInfo["qBitInitBuild"] = qBitInitBuild;
 
 
 			jfile << paramInfo.dump(4);
