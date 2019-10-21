@@ -89,17 +89,17 @@ namespace boomphf {
 
 			if(!timer_mode)
 			{
-				 fprintf(stderr,"[");fflush(stderr);
+				//  fprintf(stderr,"[");fflush(stderr);
 			}
 		}
 
 		void finish()
 		{
 			set(todo);
-			 if(timer_mode)
-			 	fprintf(stderr,"\n");
-			 else
-			 	fprintf(stderr,"]\n");
+			//  if(timer_mode)
+			//  	fprintf(stderr,"\n");
+			//  else
+			//  	fprintf(stderr,"]\n");
 
 			fflush(stderr);
 			todo= 0;
@@ -138,15 +138,15 @@ namespace boomphf {
 					int min_r  = (int)(rem / 60) ;
 					rem -= min_r*60;
 
-				 fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
-				 		message.c_str(),
-				 		100*(double)done/todo,
-				 		min_e,elapsed,min_r,rem);
+				//  fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
+				//  		message.c_str(),
+				//  		100*(double)done/todo,
+				//  		min_e,elapsed,min_r,rem);
 
 				}
 				else
 				{
-					 fprintf(stderr,"-");fflush(stderr);
+					//  fprintf(stderr,"-");fflush(stderr);
 				}
 				partial -= steps;
 			}
@@ -177,14 +177,14 @@ namespace boomphf {
 					int min_r  =  (int)(rem / 60) ;
 					rem -= min_r*60;
 
-					 fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
-					 		message.c_str(),
-					 		100*(double)total_done/todo,
-					 		min_e,elapsed,min_r,rem);
+					//  fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
+					//  		message.c_str(),
+					//  		100*(double)total_done/todo,
+					//  		min_e,elapsed,min_r,rem);
 				}
 				else
 				{
-					 fprintf(stderr,"-");fflush(stderr);
+					//  fprintf(stderr,"-");fflush(stderr);
 				}
 				partial_threaded[tid] -= steps;
 
