@@ -1416,6 +1416,11 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 	console->info("Done with cqf merge");*/
     uint64_t num_colorBuffers = 4;
+//    MSTQuery mst1(cdbg1.prefix, 23, 23, 10, console);
+//    MSTQuery mst2(cdbg2.prefix, 23, 23, 10, console);
+
+//    mst1.storeStructure();
+//    mst2.storeStructure();
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
 	MST mst(&cdbg.dbg, cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");

@@ -98,8 +98,8 @@ MST::MST(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, 
     queryStats1.resize(nThreads);
     queryStats2.resize(nThreads);
     for (uint64_t t = 0; t < nThreads; t++) {
-        lru_cache1.emplace_back(1000);
-        lru_cache2.emplace_back(1000);
+        lru_cache1.emplace_back(10000000);
+        lru_cache2.emplace_back(10000000);
     }
 
     std::string sample_file = prefix1 + mantis::SAMPLEID_FILE;//(prefix.c_str() , mantis::SAMPLEID_FILE);
@@ -135,14 +135,14 @@ void MST::buildMST() {
     buildEdgeSets();
     calculateWeights();
     encodeColorClassUsingMST();
-    logger->info("# of times the node was found in the cache: {}", gcntr);
+//    logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
 void MST::mergeMSTs() {
     buildEdgeSets();
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
-    logger->info("# of times the node was found in the cache: {}", gcntr);
+//    logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
 /**
@@ -360,7 +360,7 @@ bool MST::calculateMSTBasedWeights() {
 
     QueryStats dummyStats1, dummyStats2;
 
-    fixed_cache1.resize(fixed_size);
+   /* fixed_cache1.resize(fixed_size);
     for (uint64_t i = 0; i < fixed_size; i++) {
         auto setbits = mst1->buildColor(i, dummyStats1, nullptr, nullptr, nullptr, dummy);
         fixed_cache1[i] = setbits;
@@ -373,7 +373,7 @@ bool MST::calculateMSTBasedWeights() {
         auto setbits = mst2->buildColor(i, dummyStats2, nullptr, nullptr, nullptr, dummy);
         fixed_cache2[i] = setbits;
     }
-    mst2->setFixed_size(fixed_size);
+    mst2->setFixed_size(fixed_size);*/
 
     logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, mst1->parentbv.size(),
                  mst2->parentbv.size());
@@ -419,7 +419,7 @@ bool MST::calculateMSTBasedWeights() {
 
         }
     }
-  /*  std::ofstream edge1(prefix + "/edge1.list");
+    /*std::ofstream edge1(prefix + "/edge1.list");
     for (auto &edge: edge1list) {
         edge1 << edge.first.n1 << " " << edge.first.n2 << "\n";
     }
@@ -431,10 +431,19 @@ bool MST::calculateMSTBasedWeights() {
     edge2.close();*/
 
 
+    logger->info("num of edges in first mst: {}", edge1list.size());
+    logger->info("num of edges in second mst: {}", edge2list.size());
 
-    logger->info("num of nodes in first mst: {}", edge1list.size());
-    logger->info("num of nodes in second mst: {}", edge2list.size());
+    std::vector<colorIdType> colorsInCache;
+    planCaching(mst1, edge1list, colorsInCache);
+    logger->info("fixed cache size for mst1 is : {}", colorsInCache.size());
+    // fillout fixed_cache1
+    for (auto i : colorsInCache) {
+        auto setbits = mst1->buildColor(i, dummyStats1, &lru_cache1[0], nullptr, &fixed_cache1, dummy);
+        fixed_cache1[i] = setbits;
+    }
 
+    logger->info("Done filling the fixed cache for mst2. Calling multi-threaded MSTBasedHammingDist .. ");
     std::vector<std::thread> threads;
     for (uint32_t t = 0; t < nThreads; ++t) {
         threads.emplace_back(std::thread(&MST::calcMSTHammingDistInParallel, this, t,
@@ -448,6 +457,17 @@ bool MST::calculateMSTBasedWeights() {
     for (auto &t : threads) { t.join(); }
     threads.clear();
 
+    colorsInCache.clear();
+    planCaching(mst2, edge2list, colorsInCache);
+    logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
+//    std::exit(3);
+    //fillout fixed_cache2
+    for (auto i : colorsInCache) {
+        auto setbits = mst2->buildColor(i, dummyStats2, &lru_cache1[2], nullptr, &fixed_cache2, dummy);
+        fixed_cache2[i] = setbits;
+    }
+
+    logger->info("Done filling the fixed cache for mst2. Calling multi-threaded MSTBasedHammingDist .. ");
     for (uint32_t t = 0; t < nThreads; ++t) {
         threads.emplace_back(std::thread(&MST::calcMSTHammingDistInParallel, this, t,
                                          std::ref(edge2list),
@@ -465,8 +485,8 @@ bool MST::calculateMSTBasedWeights() {
             for (auto &edge : edgeBucket) {
                 auto n1s = edge.n1 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n1];
                 auto n2s = edge.n2 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n2];
-                weightBuckets[edge1list[Edge(n1s.first, n2s.first)] + edge2list[Edge(n1s.second, n2s.second)] -
-                              1].push_back(edge);
+                weightBuckets[edge1list
+                [Edge(n1s.first, n2s.first)] + edge2list[Edge(n1s.second, n2s.second)] - 1].push_back(edge);
             }
         }
     }
@@ -479,7 +499,7 @@ bool MST::calculateMSTBasedWeights() {
     std::cerr << "\r";
     edgeBucketList.clear();
     logger->info("Calculated the weight for the edges");
-    /*logger->info("Writing the distributions down ..");
+    logger->info("Writing the distributions down ..");
     std::ofstream cacheHeight(prefix + "/cacheHeight.dist");
     std::ofstream cacheWeight(prefix + "/cacheWeight.dist");
     std::ofstream noCacheHeight(prefix + "/noCacheHeight.dist");
@@ -500,7 +520,7 @@ bool MST::calculateMSTBasedWeights() {
     cacheWeight.close();
     noCacheHeight.close();
     noCacheWeight.close();
-    logger->info("Done Writing the distributions down");*/
+    logger->info("Done Writing the distributions down");
     return true;
 }
 
@@ -510,7 +530,7 @@ void MST::calcMSTHammingDistInParallel(uint32_t i,
                                        MSTQuery *mst,
                                        std::vector<LRUCacheMap> &lru_cache,
                                        std::vector<QueryStats> &queryStats,
-                                       std::vector<std::vector<uint64_t>> &fixed_cache,
+                                       std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
                                        uint32_t numSamples) {
     std::vector<uint64_t> srcBV;
     std::vector<std::vector<Edge>> localWeightBucket;
@@ -543,11 +563,10 @@ void MST::calcMSTHammingDistInParallel(uint32_t i,
                     fixed_cache);
             edge->second = w;
         }
-        if (++cntr % 1000) {
-            std::cerr << "\r" << cntr << " edges out of " << e-s << " edges processed";
+        if (++cntr % 1000000 == 0) {
+            std::cerr << "\rThread " << i << ": " << cntr << " edges out of " << e-s;
         }
     }
-
 }
 
 void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList) {
@@ -943,14 +962,14 @@ void MST::buildMSTBasedColor(uint64_t eqid,
                              LRUCacheMap &lru_cache,
                              std::vector<uint64_t> &eq,
                              QueryStats &queryStats,
-                             std::vector<std::vector<uint64_t>> &fixed_cache) {
+                             std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache) {
     RankScores rs(1);
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
 
 //    auto eq_ptr = lru_cache.lookup_ts(eqid);
 //    if (eq_ptr) {
-    if (eqid < fixed_size) {
+    if (fixed_cache.find(eqid) != fixed_cache.end()) {
 //        std::cerr << "happens! ";
         eq = fixed_cache[eqid];
         queryStats.cacheCntr++;
@@ -986,7 +1005,7 @@ uint64_t MST::mstBasedHammingDist(uint64_t eqid1,
                                   LRUCacheMap &lru_cache,
                                   std::vector<uint64_t> &srcEq,
                                   QueryStats &queryStats,
-                                  std::vector<std::vector<uint64_t>> &fixed_cache) {
+                                  std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache) {
 
     uint64_t dist{0};
     std::vector<uint64_t> eq1, eq2;
@@ -1144,4 +1163,81 @@ int build_mst_main(QueryOpts &opt) {
         }
     }
     return 0;
+}
+
+
+void MST::planCaching(MSTQuery *mst,
+        std::unordered_map<Edge, uint32_t, edge_hash>& edges,
+                      std::vector<colorIdType> &colorsInCache) {
+    std::vector<Cost> mstCost(mst->parentbv.size());
+
+    logger->info("In planner ..");
+    // setting local edge costs
+    for (auto& edge: edges) {
+        mstCost[edge.first.n1].numQueries++;
+        mstCost[edge.first.n2].numQueries++;
+    }
+    logger->info("Done setting the local costs");
+
+    std::vector<std::vector<colorIdType>> children(mst->parentbv.size());
+    for (uint64_t i = 0; i < mst->parentbv.size()-1; i++) {
+        children[mst->parentbv[i]].push_back(i);
+    }
+    logger->info("Done creating the parent->children map");
+    // recursive planner
+    logger->info("Calling the recursive planner for {} nodes", mst->parentbv.size());
+    uint64_t cntr{0};
+    planRecursively(mst->parentbv.size()-1, children, mstCost, colorsInCache, cntr);
+}
+
+void MST::planRecursively(uint64_t nodeId,
+                          std::vector<std::vector<colorIdType>> &children,
+                          std::vector<Cost> &mstCost,
+                          std::vector<colorIdType> &colorsInCache,
+                          uint64_t &cntr) {
+
+    uint64_t avgCostThreshold = 16;
+
+//    std::cerr << "\rsize for node " << nodeId << " " << children[nodeId].size();
+    for (auto c : children[nodeId]) {
+        planRecursively(c, children, mstCost, colorsInCache, cntr);
+    }
+
+    std::unordered_set<colorIdType> localCache;
+    uint64_t numQueries{0}, numSteps{0};
+    colorIdType childWithMaxAvg{0};
+    float maxChildAvg{0};
+    do {
+//        auto tmp = numQueries == 0 ? 0 : (float)numSteps/(float)numQueries;
+//        std::cerr << "\rnodeId " << nodeId << " " << tmp << " " << numSteps << " " << numQueries << " " <<localCache.size();
+        if (maxChildAvg != 0) {
+            localCache.insert(childWithMaxAvg);
+            childWithMaxAvg = 0;
+            maxChildAvg = 0;
+        }
+
+        numQueries = mstCost[nodeId].numQueries;
+        numSteps = mstCost[nodeId].numSteps;
+        for (auto c : children[nodeId]) {
+            if (localCache.find(c) == localCache.end()) {
+                numQueries += mstCost[c].numQueries;
+                // steps in parent += steps in children + 1 for each child
+                numSteps += mstCost[c].numSteps + mstCost[c].numQueries;
+                float currChildAvg = mstCost[c].numQueries == 0? 0: (float)mstCost[c].numSteps/(float)mstCost[c].numQueries;
+                if (mstCost[c].numSteps != 0 and
+                        (currChildAvg > maxChildAvg or
+                        (currChildAvg == maxChildAvg and mstCost[childWithMaxAvg].numQueries < mstCost[c].numQueries))) {
+                    maxChildAvg = currChildAvg;
+                    childWithMaxAvg = c;
+                }
+            }
+        }
+    } while (numQueries != 0 and (float)numSteps/(float)numQueries > avgCostThreshold);
+    mstCost[nodeId].numQueries = numQueries;
+    mstCost[nodeId].numSteps = numSteps;
+    for (auto c : localCache) {
+        colorsInCache.push_back(c);
+    }
+    if (++cntr % 1000000 == 0)
+        std::cerr << "\r" << cntr++;
 }

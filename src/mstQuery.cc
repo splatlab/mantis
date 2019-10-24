@@ -26,7 +26,7 @@ void MSTQuery::loadIdx(std::string indexDir) {
 std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats,
                                            LRUCacheMap *lru_cache,
                                            RankScores *rs,
-                                           std::vector<std::vector<uint64_t>> *fixed_cache,
+                                           std::unordered_map<uint64_t, std::vector<uint64_t>> *fixed_cache,
                                            nonstd::optional<uint64_t> &toDecode) {
 
     (void) rs;
@@ -46,7 +46,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
 //            auto eq_ptr = lru_cache->lookup_ts(i);
 //            if (eq_ptr) {
 //                const auto &vs = *eq_ptr;
-        if (i < fixed_size) {
+        if (fixed_cache and fixed_cache->find(i) != fixed_cache->end()) {
             const auto &vs = (*fixed_cache)[i];
             for (auto v : vs) {
                 xorflips[v] = 1;

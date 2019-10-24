@@ -38,6 +38,10 @@ typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
 
+struct Cost {
+    uint64_t numSteps{0};
+    uint64_t numQueries{0};
+};
 
 // undirected edge
 struct Edge {
@@ -175,7 +179,7 @@ private:
             LRUCacheMap& lru_cache,
             std::vector<uint64_t> &srcEq,
             QueryStats& queryStats,
-            std::vector<std::vector<uint64_t>> &fixed_cache);
+            std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
 
     std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
 
@@ -192,7 +196,7 @@ private:
                                       MSTQuery *mst,
                                       std::vector<LRUCacheMap> &lru_cache,
                                       std::vector<QueryStats> &queryStats,
-                                      std::vector<std::vector<uint64_t>> &fixed_cache,
+                                      std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
                                       uint32_t numSamples);
 
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
@@ -203,9 +207,19 @@ private:
     void buildMSTBasedColor(uint64_t eqid1, MSTQuery *mst1,
             LRUCacheMap& lru_cache1, std::vector<uint64_t> & eq1,
             QueryStats &queryStats,
-            std::vector<std::vector<uint64_t>> &fixed_cache);
+            std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
     std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache,
             bool isFirst, QueryStats& queryStats);
+
+    void planCaching(MSTQuery *mst, std::unordered_map<Edge,
+            uint32_t, edge_hash>& edges,
+                     std::vector<colorIdType> &colorsInCache);
+
+    void planRecursively(uint64_t nodeId,
+                         std::vector<std::vector<colorIdType>> &children,
+            std::vector<Cost> &mstCost,
+            std::vector<colorIdType> &colorsInCache,
+            uint64_t &cntr);
 
     std::string prefix;
     uint32_t numSamples = 0;
@@ -222,8 +236,8 @@ private:
     std::vector<LRUCacheMap> lru_cache1;//10000);
     std::vector<LRUCacheMap> lru_cache2;//10000);
     uint64_t fixed_size = 200;
-    std::vector<std::vector<uint64_t>> fixed_cache1;
-    std::vector<std::vector<uint64_t>> fixed_cache2;
+    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache1;
+    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache2;
     std::vector<QueryStats> queryStats1;
     std::vector<QueryStats> queryStats2;
     uint64_t gcntr = 0;

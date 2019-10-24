@@ -75,7 +75,8 @@ private:
     spdlog::logger *logger{nullptr};
     mantis::QueryMap kmer2cidMap;
     mantis::EqMap cid2expMap;
-    uint64_t fixed_size{0};
+//    uint64_t fixed_size{0};
+    std::string prefix;
 
 public:
     uint32_t queryK;
@@ -84,9 +85,9 @@ public:
     sdsl::int_vector<> deltabv;
     sdsl::bit_vector::select_1_type sbbv;
 
-    MSTQuery(std::string prefix, uint32_t indexKIn, uint32_t queryKIn,
+    MSTQuery(std::string prefixIn, uint32_t indexKIn, uint32_t queryKIn,
             uint64_t numSamplesIn, spdlog::logger *loggerIn) :
-    numSamples(numSamplesIn), indexK(indexKIn), queryK(queryKIn), logger(loggerIn) {
+    numSamples(numSamplesIn), indexK(indexKIn), queryK(queryKIn), logger(loggerIn), prefix(prefixIn) {
         numWrds = (uint64_t) std::ceil((double) numSamples / 64.0);
         loadIdx(prefix);
     }
@@ -95,7 +96,7 @@ public:
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
                                      LRUCacheMap *lru_cache,
                                      RankScores* rs,
-                                     std::vector<std::vector<uint64_t>> *fixed_cache,
+                                     std::unordered_map<uint64_t, std::vector<uint64_t>> *fixed_cache,
                                      nonstd::optional<uint64_t>& toDecode // output param.  Also decode these
                                      );
 
@@ -110,13 +111,45 @@ public:
 
     void reset();
 
+    void storeStructure() {
+        auto rootID = parentbv.size()-1;
+        //BFS
+        uint64_t cntr=0;
+        std::map<uint64_t, uint64_t> depthMap;
+        depthMap[rootID] = 0;
+        while (cntr != parentbv.size()-1) {
+            uint64_t depth = 0;
+            if (depthMap.find(parentbv[cntr]) == depthMap.end()) {
+                auto id = cntr;
+                auto parentId = parentbv[id];
+                while (id != parentId) {
+                    depth++;
+                    id = parentbv[cntr];
+                    parentId = parentbv[id];
+                }
+            } else {
+                depth = depthMap[parentbv[cntr]] + 1;
+            }
+            depthMap[cntr] = depth;
+            cntr++;
+            if (cntr % 100000 == 0)
+                std::cerr << "\r" << cntr;
+        }
+        std::cerr << "\n";
+        std::ofstream st(prefix + "/mstStructure.out");
+        for (auto &kv : depthMap) {
+            st << kv.first << " " << kv.second << "\n";
+        }
+        st.close();
+    }
+
     uint64_t getNumOfDistinctKmers() {
         return kmer2cidMap.size();
     }
 
-    void setFixed_size(uint64_t fixed_sizeIn) {
+    /*void setFixed_size(uint64_t fixed_sizeIn) {
         fixed_size = fixed_sizeIn;
-    }
+    }*/
 };
 
 #endif //MANTIS_MSTQUERY_H
