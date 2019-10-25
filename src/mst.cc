@@ -60,15 +60,15 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
 
 MST::MST(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
          std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-/*cqf(cqfIn),*/ prefix(std::move(prefixIn)),
+cqf(cqfIn), prefix(std::move(prefixIn)),
                 prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
         /*lru_cache1(1000), lru_cache2(1000), */nThreads(numThreads),
                 num_of_ccBuffers(numColorBuffersIn) {
     eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
-    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
-    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
+//    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
+//    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
 
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
@@ -98,8 +98,8 @@ MST::MST(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, 
     queryStats1.resize(nThreads);
     queryStats2.resize(nThreads);
     for (uint64_t t = 0; t < nThreads; t++) {
-        lru_cache1.emplace_back(10000000);
-        lru_cache2.emplace_back(10000000);
+        lru_cache1.emplace_back(1000);
+        lru_cache2.emplace_back(1000);
     }
 
     std::string sample_file = prefix1 + mantis::SAMPLEID_FILE;//(prefix.c_str() , mantis::SAMPLEID_FILE);
@@ -443,7 +443,7 @@ bool MST::calculateMSTBasedWeights() {
         fixed_cache1[i] = setbits;
     }
 
-    logger->info("Done filling the fixed cache for mst2. Calling multi-threaded MSTBasedHammingDist .. ");
+    logger->info("Done filling the fixed cache for mst1. Calling multi-threaded MSTBasedHammingDist .. ");
     std::vector<std::thread> threads;
     for (uint32_t t = 0; t < nThreads; ++t) {
         threads.emplace_back(std::thread(&MST::calcMSTHammingDistInParallel, this, t,
@@ -456,8 +456,8 @@ bool MST::calculateMSTBasedWeights() {
     }
     for (auto &t : threads) { t.join(); }
     threads.clear();
-
     colorsInCache.clear();
+    logger->info("Done calculating Dist for mst1");
     planCaching(mst2, edge2list, colorsInCache);
     logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
 //    std::exit(3);
@@ -478,6 +478,8 @@ bool MST::calculateMSTBasedWeights() {
                                          secondMantisSamples));
     }
     for (auto &t : threads) { t.join(); }
+    colorsInCache.clear();
+    logger->info("Done calculating Dist for mst2");
 
     for (auto i = 0; i < eqclass_files.size(); i++) {
         for (auto j = i; j < eqclass_files.size(); j++) {
@@ -485,15 +487,16 @@ bool MST::calculateMSTBasedWeights() {
             for (auto &edge : edgeBucket) {
                 auto n1s = edge.n1 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n1];
                 auto n2s = edge.n2 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n2];
-                weightBuckets[edge1list
-                [Edge(n1s.first, n2s.first)] + edge2list[Edge(n1s.second, n2s.second)] - 1].push_back(edge);
+                weightBuckets[
+                        edge1list[Edge(n1s.first, n2s.first)] +
+                        edge2list[Edge(n1s.second, n2s.second)] - 1
+                        ].push_back(edge);
             }
+            edgeBucket.clear();
         }
     }
     edge1list.clear();
     edge2list.clear();
-
-//            edgeBucket.clear();
 
 
     std::cerr << "\r";
@@ -990,7 +993,7 @@ void MST::buildMSTBasedColor(uint64_t eqid,
 //        auto sp = std::make_shared<std::vector<uint64_t>>(eq);
         lru_cache.emplace(eqid, eq);
 //        lru_cache.emplace_ts(eqid, sp);
-        if (queryStats.trySample and toDecode) {
+        if (queryStats.trySample and toDecode and fixed_cache.find(*toDecode) == fixed_cache.end()) {
             auto s = mst->buildColor(*toDecode, queryStats, nullptr, nullptr, &fixed_cache, dummy);
             lru_cache.emplace(*toDecode, s);
 //            auto sp1 = std::make_shared<std::vector<uint64_t>>(s);
