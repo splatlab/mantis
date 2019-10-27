@@ -36,10 +36,10 @@ struct QueryStats {
     tsl::hopscotch_map<uint32_t, uint64_t> numOcc;
     bool trySample{false};
     //std::unordered_map<uint32_t, uint64_t> numOcc;
-    std::vector<uint16_t> heightDist;
+    /*std::vector<uint16_t> heightDist;
     std::vector<uint32_t> weightDist;
     std::vector<uint16_t> noCache_heightDist;
-    std::vector<uint32_t> noCache_weightDist;
+    std::vector<uint32_t> noCache_weightDist;*/
 
 };
 

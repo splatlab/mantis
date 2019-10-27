@@ -37,6 +37,7 @@ using SpinLockT = std::mutex;
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
+typedef uint16_t weightType;
 
 struct Cost {
     uint64_t numSteps{0};
@@ -192,7 +193,9 @@ private:
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
     void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
-    void calcMSTHammingDistInParallel(uint32_t i, std::unordered_map<Edge, uint32_t, edge_hash> &edgeList,
+    void calcMSTHammingDistInParallel(uint32_t i,
+                                      std::vector<std::pair<colorIdType, weightType>>& edgeList,
+                                      std::vector<uint32_t> &srcStarts,
                                       MSTQuery *mst,
                                       std::vector<LRUCacheMap> &lru_cache,
                                       std::vector<QueryStats> &queryStats,
@@ -211,8 +214,9 @@ private:
     std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache,
             bool isFirst, QueryStats& queryStats);
 
-    void planCaching(MSTQuery *mst, std::unordered_map<Edge,
-            uint32_t, edge_hash>& edges,
+    void planCaching(MSTQuery *mst,
+            std::vector<std::pair<colorIdType, weightType>>& edges,
+            std::vector<uint32_t>& outDegrees,
                      std::vector<colorIdType> &colorsInCache);
 
     void planRecursively(uint64_t nodeId,
@@ -242,7 +246,7 @@ private:
     std::vector<QueryStats> queryStats2;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;
-    std::vector<std::pair<uint64_t , uint64_t >> colorPairs;
+    std::vector<std::pair<colorIdType , colorIdType >> colorPairs;
     std::string prefix1;
     std::string prefix2;
     MSTQuery* mst1;

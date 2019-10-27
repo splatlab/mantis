@@ -122,7 +122,8 @@ validate_main ( ValidateOpts& opt )
 	}
 	// make the output directory if it doesn't exist
 	if (!mantis::fs::DirExists(prefix.c_str())) {
-		mantis::fs::MakeDir(prefix.c_str());
+		std::cerr << "Couldn't find the input mantis directory.\n";
+		std::exit(3);
 	}
 
 	// Read the colored dBG

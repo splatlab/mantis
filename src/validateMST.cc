@@ -58,21 +58,30 @@ std::vector<uint64_t> buildColor(eqvec &bvs,
 
 int validate_mst_main(MSTValidateOpts &opt) {
     spdlog::logger *logger = opt.console.get();
-    std::string dbg_file(opt.prefix + mantis::CQF_FILE);
-    std::string sample_file(opt.prefix + mantis::SAMPLEID_FILE);
+    std::string prefix = opt.prefix;
+    if (prefix.back() != '/') {
+        prefix += '/';
+    }
+    // make the output directory if it doesn't exist
+    if (!mantis::fs::DirExists(prefix.c_str())) {
+        std::cerr << "Couldn't find the input mantis directory.\n";
+        std::exit(3);
+    }
+    std::string dbg_file(prefix + mantis::CQF_FILE);
+    std::string sample_file(prefix + mantis::SAMPLEID_FILE);
 
     QueryStats queryStats;
     queryStats.numSamples = opt.numSamples;
     logger->info("Number of experiments: {}", queryStats.numSamples);
 
     logger->info("Loading parentbv, deltabv, and bbv...");
-    MSTQuery mstQuery(opt.prefix, opt.k, opt.k, queryStats.numSamples, logger);
+    MSTQuery mstQuery(prefix, opt.k, opt.k, queryStats.numSamples, logger);
     logger->info("Done Loading data structure. Total # of color classes is {}",
                  mstQuery.parentbv.size() - 1);
 
     logger->info("Loading color classes...");
     eqvec bvs;
-    loadEqs(logger, opt.prefix, bvs);
+    loadEqs(logger, prefix, bvs);
     uint64_t eqCount{0};
     for (auto &bv:bvs) {
         eqCount += bv.size()/opt.numSamples;

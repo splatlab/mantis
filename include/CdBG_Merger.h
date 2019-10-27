@@ -229,7 +229,7 @@ CdBG_Merger<qf_obj, key_obj>::
 	{
 		this -> cdbg1 = cdbg2, this -> cdbg2 = cdbg1;
 
-		console -> info("Mantis indices are swapped.");
+//		console -> info("Mantis indices are swapped.");
 	}
 	
     cdbg = cdbgOut;
@@ -1376,9 +1376,9 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	build_MPH_tables();
 
 	uint64_t num_colorBuffers = 1;
-//	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
-//	build_color_class_table();
-//	cdbg.bv_buffer = BitVector(0);
+	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
+	build_color_class_table();
+	cdbg.bv_buffer = BitVector(0);
 
 	//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
@@ -1415,7 +1415,7 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 
 	console->info("Done with cqf merge");
-//    uint64_t num_colorBuffers = 4;
+//    uint64_t num_colorBuffers = 6;
 //    MSTQuery mst1(cdbg1.prefix, 23, 23, 10, console);
 //    MSTQuery mst2(cdbg2.prefix, 23, 23, 10, console);
 

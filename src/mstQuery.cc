@@ -69,10 +69,10 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
 
         if (queryStats.trySample) {
 //            std::lock_guard<std::mutex> m(buildColorMutex);
-            auto &occ = queryStats.numOcc[iparent];
-            ++occ;
+//            auto &occ = queryStats.numOcc[iparent];
+//            ++occ;
             if ((!toDecode) and
-                (occ > 10) and
+//                (occ > 10) and
                 (height > 10)
                 and
                 (lru_cache and
@@ -119,13 +119,13 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         } while (!found);
     }
 
-    if (foundCache) {
+    /*if (foundCache) {
         queryStats.heightDist.push_back(height);
         queryStats.weightDist.push_back(weight);
     } else {
         queryStats.noCache_heightDist.push_back(height);
         queryStats.noCache_weightDist.push_back(weight);
-    }
+    }*/
     std::vector<uint64_t> eq;
     eq.reserve(numWrds);
     uint64_t one = 1;
@@ -166,8 +166,8 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
             setbits = lru_cache[eqclass_id];//.get(eqclass_id);
 //            setbits = (*lru_cache[eqclass_id]);//.get(eqclass_id);
             queryStats.cacheCntr++;
-            queryStats.heightDist.push_back(0);
-            queryStats.weightDist.push_back(0);
+//            queryStats.heightDist.push_back(0);
+//            queryStats.weightDist.push_back(0);
         } else {
             queryStats.noCacheCntr++;
             toDecode.reset();
@@ -189,14 +189,14 @@ void MSTQuery::findSamples(CQF<KeyObject> &dbg,
 
         ++queryStats.globalQueryNum;*/
     }
-    std::ofstream cacheHeight("cacheHeight.dist");
+    /*std::ofstream cacheHeight("cacheHeight.dist");
     std::ofstream cacheWeight("cacheWeight.dist");
     std::ofstream noCacheHeight("noCacheHeight.dist");
     std::ofstream noCacheWeight("noCacheWeight.dist");
     for (auto v : queryStats.heightDist) cacheHeight << "1 " << v << "\n";
     for (auto v : queryStats.weightDist) cacheWeight << "1 " << v << "\n";
     for (auto v : queryStats.noCache_heightDist) noCacheHeight << "1 " << v << "\n";
-    for (auto v : queryStats.noCache_weightDist) noCacheWeight << "1 " << v << "\n";
+    for (auto v : queryStats.noCache_weightDist) noCacheWeight << "1 " << v << "\n";*/
 }
 
 

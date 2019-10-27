@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <unordered_map>
 #include <iterator>
+#include <algorithm>
 
 #include "MantisFS.h"
 #include "mst.h"
@@ -60,7 +61,7 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
 
 MST::MST(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
          std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-cqf(cqfIn), prefix(std::move(prefixIn)),
+        cqf(cqfIn), prefix(std::move(prefixIn)),
                 prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
         /*lru_cache1(1000), lru_cache2(1000), */nThreads(numThreads),
                 num_of_ccBuffers(numColorBuffersIn) {
@@ -135,14 +136,12 @@ void MST::buildMST() {
     buildEdgeSets();
     calculateWeights();
     encodeColorClassUsingMST();
-//    logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
 void MST::mergeMSTs() {
     buildEdgeSets();
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
-//    logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
 /**
@@ -360,21 +359,6 @@ bool MST::calculateMSTBasedWeights() {
 
     QueryStats dummyStats1, dummyStats2;
 
-   /* fixed_cache1.resize(fixed_size);
-    for (uint64_t i = 0; i < fixed_size; i++) {
-        auto setbits = mst1->buildColor(i, dummyStats1, nullptr, nullptr, nullptr, dummy);
-        fixed_cache1[i] = setbits;
-    }
-    mst1->setFixed_size(fixed_size);
-
-
-    fixed_cache2.resize(fixed_size);
-    for (uint64_t i = 0; i < fixed_size; i++) {
-        auto setbits = mst2->buildColor(i, dummyStats2, nullptr, nullptr, nullptr, dummy);
-        fixed_cache2[i] = setbits;
-    }
-    mst2->setFixed_size(fixed_size);*/
-
     logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, mst1->parentbv.size(),
                  mst2->parentbv.size());
     std::ifstream cp(prefix + "newID2oldIDs");
@@ -393,7 +377,7 @@ bool MST::calculateMSTBasedWeights() {
     }
     cp.close();
 
-    logger->info("Going over all the edges and calculating the weights for {} eqclass buckets.", eqclass_files.size());
+    logger->info("Splitting the edges into edges for MST1 and MST2 for {} eqclass buckets.", eqclass_files.size());
     uint64_t numEdges = 0;
     weightBuckets.resize(numSamples);
     for (auto &qf : queryStats1) {
@@ -404,50 +388,95 @@ bool MST::calculateMSTBasedWeights() {
         qf.numSamples = numSamples;
         qf.trySample = true;
     }
-    uint64_t mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
-    std::unordered_map<Edge, uint32_t, edge_hash> edge1list;
-    std::unordered_map<Edge, uint32_t, edge_hash> edge2list;
+    colorIdType mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
+    std::vector<std::pair<colorIdType, weightType>> edge1list;
+    std::vector<std::pair<colorIdType, weightType>> edge2list;
+    std::vector<uint32_t> srcStartIdx1(mst1->parentbv.size(), 0), srcStartIdx2(mst2->parentbv.size(), 0);
+
+
+    // total merged edges can be a good estimate to reserve a vector per mst
+    uint64_t totalEdgeCnt{0};
     for (auto i = 0; i < eqclass_files.size(); i++) {
         for (auto j = i; j < eqclass_files.size(); j++) {
             auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
-            for (auto &edge : edgeBucket) {
-                auto n1s = edge.n1 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n1];
-                auto n2s = edge.n2 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n2];
-                edge1list[Edge(n1s.first, n2s.first)] = 0;
-                edge2list[Edge(n1s.second, n2s.second)] = 0;
-            }
-
+            totalEdgeCnt+=edgeBucket.size();
         }
     }
-    /*std::ofstream edge1(prefix + "/edge1.list");
-    for (auto &edge: edge1list) {
-        edge1 << edge.first.n1 << " " << edge.first.n2 << "\n";
-    }
-    edge1.close();
-    std::ofstream edge2(prefix + "/edge2.list");
-    for (auto &edge: edge2list) {
-        edge2 << edge.first.n1 << " " << edge.first.n2 << "\n";
-    }
-    edge2.close();*/
+    logger->info("Total # of edges: {}", totalEdgeCnt);
 
+    // lambda function to get sorted list of unique edges for each mantis.
+    auto edgeSplitter = [=](std::vector<uint32_t> &srcStartIdx,
+                            std::vector<std::pair<colorIdType, weightType>> &destWeightList,
+                            colorIdType mstZero,
+                            bool isFirst) {
+        std::vector<Edge> edgeList;
+        edgeList.reserve(totalEdgeCnt);
+        // put all of the edges for one of the merged mantises in a vector
+        for (auto i = 0; i < eqclass_files.size(); i++) {
+            for (auto j = i; j < eqclass_files.size(); j++) {
+                auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
+                for (auto &edge : edgeBucket) {
+                    auto n1 = edge.n1 == zero ? mstZero : (isFirst? colorPairs[edge.n1].first : colorPairs[edge.n1].second);
+                    auto n2 = edge.n2 == zero ? mstZero : (isFirst? colorPairs[edge.n2].first : colorPairs[edge.n2].second);
+                    if (n1 != n2)
+                        edgeList.emplace_back(n1, n2);
+                }
+                std::cerr << "\rmantis" << (isFirst?"1":"2") << " edgelist for " << i << "," << j << "  ";
+            }
+        }
+        std::cerr << "\r";
+        // sort - unique the vector
+        std::sort(edgeList.begin(), edgeList.end(),
+                  [](Edge &e1, Edge &e2) {
+                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+                  });
+        edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
+                                   [](Edge &e1, Edge &e2) {
+                                       return e1.n1 == e2.n1 and e1.n2 == e2.n2;
+                                   }), edgeList.end());
 
-    logger->info("num of edges in first mst: {}", edge1list.size());
-    logger->info("num of edges in second mst: {}", edge2list.size());
+        // move all the unique edges for one mantis to the designed low-memory data structure
+        destWeightList.resize(edgeList.size());
+        uint64_t destIdx{0}, prevCnt{0};
+        for (auto& e : edgeList) {
+            srcStartIdx[e.n1]++;
+            destWeightList[destIdx++] = std::make_pair(e.n2, 0);
+        }
+        // accumulate the out-degrees per sorted source edges to get to source start index
+        // now each value in srcStartIdx is pointing to the start of the next source in the edge-weight vec.
+        for (auto &outCnt : srcStartIdx) {
+            outCnt+=prevCnt;
+            prevCnt = outCnt;
+        }
+    };
+    // call the lambda function per mantis
+    edgeSplitter(srcStartIdx1, edge1list, mst1Zero, true);
+    edgeSplitter(srcStartIdx2, edge2list, mst2Zero, false);
+
+    logger->info("num of edges in first mantis: {}", edge1list.size());
+    logger->info("num of edges in second mantis: {}", edge2list.size());
 
     std::vector<colorIdType> colorsInCache;
-    planCaching(mst1, edge1list, colorsInCache);
+    planCaching(mst1, edge1list, srcStartIdx1, colorsInCache);
     logger->info("fixed cache size for mst1 is : {}", colorsInCache.size());
     // fillout fixed_cache1
-    for (auto i : colorsInCache) {
-        auto setbits = mst1->buildColor(i, dummyStats1, &lru_cache1[0], nullptr, &fixed_cache1, dummy);
-        fixed_cache1[i] = setbits;
+    // walking in reverse order on colorsInCache is intentional
+    // because as we've filled out the colorsInCache vector in a post-order traversal of MST,
+    // if we walk in from end to the beginning we can always guarantee that we've already put the ancestors
+    // for the new colors we want to put in the fixed_cache and that will make the whole color bv construction
+    // FASTER!!
+    for (int64_t idx = colorsInCache.size()-1; idx >= 0; idx--) {
+        auto setbits = mst1->buildColor(colorsInCache[idx], dummyStats1, &lru_cache1[0], nullptr, &fixed_cache1, dummy);
+        fixed_cache1[colorsInCache[idx]] = setbits;
     }
+    colorsInCache.clear();
 
     logger->info("Done filling the fixed cache for mst1. Calling multi-threaded MSTBasedHammingDist .. ");
     std::vector<std::thread> threads;
     for (uint32_t t = 0; t < nThreads; ++t) {
         threads.emplace_back(std::thread(&MST::calcMSTHammingDistInParallel, this, t,
                                          std::ref(edge1list),
+                                         std::ref(srcStartIdx1),
                                          mst1,
                                          std::ref(lru_cache1),
                                          std::ref(queryStats1),
@@ -456,21 +485,23 @@ bool MST::calculateMSTBasedWeights() {
     }
     for (auto &t : threads) { t.join(); }
     threads.clear();
-    colorsInCache.clear();
     logger->info("Done calculating Dist for mst1");
-    planCaching(mst2, edge2list, colorsInCache);
+
+
+    planCaching(mst2, edge2list, srcStartIdx2, colorsInCache);
     logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
 //    std::exit(3);
     //fillout fixed_cache2
-    for (auto i : colorsInCache) {
-        auto setbits = mst2->buildColor(i, dummyStats2, &lru_cache1[2], nullptr, &fixed_cache2, dummy);
-        fixed_cache2[i] = setbits;
+    for (int64_t idx = colorsInCache.size()-1; idx >= 0; idx--) {
+        auto setbits = mst2->buildColor(colorsInCache[idx], dummyStats2, &lru_cache2[0], nullptr, &fixed_cache2, dummy);
+        fixed_cache2[colorsInCache[idx]] = setbits;
     }
 
     logger->info("Done filling the fixed cache for mst2. Calling multi-threaded MSTBasedHammingDist .. ");
     for (uint32_t t = 0; t < nThreads; ++t) {
         threads.emplace_back(std::thread(&MST::calcMSTHammingDistInParallel, this, t,
                                          std::ref(edge2list),
+                                         std::ref(srcStartIdx2),
                                          mst2,
                                          std::ref(lru_cache2),
                                          std::ref(queryStats2),
@@ -480,29 +511,60 @@ bool MST::calculateMSTBasedWeights() {
     for (auto &t : threads) { t.join(); }
     colorsInCache.clear();
     logger->info("Done calculating Dist for mst2");
+    uint64_t cntr{0};
 
+    //abstract out the part repeated for mst1 and mst2 as a lambda function
+    auto findWeight = [=](Edge &edge, std::vector<std::pair<colorIdType, weightType>> &edgeList,
+            std::vector<uint32_t> &srcStartIdx, colorIdType mstZero, bool isFirst) {
+//            std::cerr << edge.n1 << " " << edge.n2 << "\n";
+//            std::cerr << mstZero << "\n";
+            auto n1 = edge.n1 == zero ? mstZero : (isFirst?colorPairs[edge.n1].first:colorPairs[edge.n1].second);
+            auto n2 = edge.n2 == zero ? mstZero : (isFirst?colorPairs[edge.n2].first:colorPairs[edge.n2].second);
+//            std::cerr << n1 << " " << n2 << " ";
+            if (n1 == n2) return static_cast<weightType>(0);
+            if (n1 > n2) std::swap(n1, n2);
+            weightType w{0};
+            auto srcStart = n1 == 0 ? 0 : srcStartIdx[n1 - 1];
+            if (srcStart < edgeList.size()) {
+                auto srcEnd = srcStartIdx[n1];
+                if (n2 == mstZero) { // zero is the biggest color ID, and hence the last in a sorted list
+                    w = (*(edgeList.begin()+srcEnd-1)).second; // look at the last elm. for n1
+                } else {
+                    auto wItr = std::lower_bound(edgeList.begin() + srcStart, edgeList.begin() + srcEnd,
+                                                 std::make_pair(n2, 0),
+                                                 [](auto &v1, auto &v2) {
+                                                     return v1.first <= v2.first;
+                                                 });
+                    w = (*wItr).second;
+                }
+            }
+//        std::cerr << n1 << " " << n2 << " " << w << "\n";
+        return w;
+    };
     for (auto i = 0; i < eqclass_files.size(); i++) {
         for (auto j = i; j < eqclass_files.size(); j++) {
             auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
             for (auto &edge : edgeBucket) {
-                auto n1s = edge.n1 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n1];
-                auto n2s = edge.n2 == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[edge.n2];
-                weightBuckets[
-                        edge1list[Edge(n1s.first, n2s.first)] +
-                        edge2list[Edge(n1s.second, n2s.second)] - 1
-                        ].push_back(edge);
+//                std::cerr << edge.n1 << " " << edge.n2 << "\n";
+                auto w1 = findWeight(edge, edge1list, srcStartIdx1, mst1Zero, true);
+                auto w2 = findWeight(edge, edge2list, srcStartIdx2, mst2Zero, false);
+//                std::cerr << w1 << " " << w2 << "\n";
+                weightBuckets[w1 + w2 - 1].push_back(edge);
+                if (++cntr % 10000000 == 0)
+                    std::cerr << "\r" << cntr <<  " out of " << totalEdgeCnt;
             }
             edgeBucket.clear();
         }
     }
-    edge1list.clear();
-    edge2list.clear();
-
-
     std::cerr << "\r";
     edgeBucketList.clear();
+    srcStartIdx1.clear();
+    srcStartIdx2.clear();
+    edge1list.clear();
+    edge2list.clear();
+    std::cerr << "\r";
     logger->info("Calculated the weight for the edges");
-    logger->info("Writing the distributions down ..");
+    /*logger->info("Writing the distributions down ..");
     std::ofstream cacheHeight(prefix + "/cacheHeight.dist");
     std::ofstream cacheWeight(prefix + "/cacheWeight.dist");
     std::ofstream noCacheHeight(prefix + "/noCacheHeight.dist");
@@ -523,21 +585,20 @@ bool MST::calculateMSTBasedWeights() {
     cacheWeight.close();
     noCacheHeight.close();
     noCacheWeight.close();
-    logger->info("Done Writing the distributions down");
+    logger->info("Done Writing the distributions down");*/
     return true;
 }
 
 
 void MST::calcMSTHammingDistInParallel(uint32_t i,
-                                       std::unordered_map<Edge, uint32_t, edge_hash> &edgeList,
+                                       std::vector<std::pair<colorIdType, weightType>>& edgeList,
+                                       std::vector<uint32_t> &srcStarts,
                                        MSTQuery *mst,
                                        std::vector<LRUCacheMap> &lru_cache,
                                        std::vector<QueryStats> &queryStats,
                                        std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
                                        uint32_t numSamples) {
     std::vector<uint64_t> srcBV;
-    std::vector<std::vector<Edge>> localWeightBucket;
-    localWeightBucket.resize(numSamples);
     uint64_t s = 0, e;
     // If the list contains less than a hundred edges, don't bother with multi-threading and
     // just run the first thread
@@ -551,25 +612,30 @@ void MST::calcMSTHammingDistInParallel(uint32_t i,
         s = edgeList.size() * i / nThreads;
         e = edgeList.size() * (i + 1) / nThreads;
     }
-    auto itrStart = edgeList.begin();
-    std::advance(itrStart, s);
-    auto itrEnd = edgeList.end();
-    if (e < edgeList.size()) {
-        itrEnd = edgeList.begin();
-        std::advance(itrEnd, e);
-    }
-    uint64_t cntr{0};
-    logger->info("initiated thread {} with {} edges", i, e-s);
+    auto start = std::upper_bound(srcStarts.begin(), srcStarts.end(), s);
+    colorIdType n1 = static_cast<colorIdType>(start - srcStarts.begin());
+    auto itrStart = edgeList.begin() + s;
+    auto itrEnd = edgeList.begin() + e;
+    uint64_t cntr{0}, edgeCntr{s};
+    std::cerr << "\r";
+//    logger->info("initiated thread {} from {} to {} with {} edges", i, s, e, e-s);
     for (auto edge = itrStart; edge != itrEnd; edge++) {
-        if ((edge->first).n1 != (edge->first).n2) {
-            auto w = mstBasedHammingDist((edge->first).n1, (edge->first).n2, mst, lru_cache[i], srcBV, queryStats[i],
+        if (n1+1 < srcStarts.size() and srcStarts[n1+1] == edgeCntr) {
+            n1++;
+        }
+        colorIdType n2 = edge->first;
+        if (n1 != n2) {
+            auto w = mstBasedHammingDist(n1, n2,
+                    mst, lru_cache[i], srcBV, queryStats[i],
                     fixed_cache);
-            edge->second = w;
+            edge->second = static_cast<weightType>(w);
         }
         if (++cntr % 1000000 == 0) {
-            std::cerr << "\rThread " << i << ": " << cntr << " edges out of " << e-s;
+            std::cerr << "\rthread " << i << ": " << cntr << " edges out of " << e-s << "   ";
         }
+        edgeCntr++;
     }
+    std::cerr << "\r";
 }
 
 void MST::calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList) {
@@ -713,11 +779,6 @@ bool MST::encodeColorClassUsingMST() {
         uint64_t deltaOffset{0};
         for (uint64_t i = 0; i < num_colorClasses; i++) {
             deltaOffset += static_cast<uint64_t>(weightbv[i]);
-            /*if (bbv[deltaOffset - 1] == 1) {
-                std::cerr << "EXCEPTION!! SHOULDN'T HAPPEN " << i << " " << deltaOffset
-                          << " " << weightbv[i] << " " << bbv[deltaOffset - 1] << "\n";
-                std::exit(1);
-            }*/
             bbv[deltaOffset - 1] = 1;
         }
     }
@@ -839,25 +900,20 @@ void MST::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvI
             }
         }
     } else {
-        uint64_t mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
+        colorIdType mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
         for (colorIdType p = s; p < e; p++) {
             auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
             deltas.push_back(deltaOffset);
-//                    std::cerr << deltaOffset << " ";
             auto n1s = p == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[p];
             auto n2s = parentbv[p] == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[parentbv[p]];
-//                    std::cerr << p << ":[" << n1s.first << "," << n1s.second << "] " <<
-//                    parentbv[p] <<":[" << n2s.first << "," << n2s.second << "] " <<  " ";
             auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, lru_cache1[threadID], true,
                                                    queryStats1[threadID]);
             auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, lru_cache2[threadID], false,
                                                     queryStats2[threadID]);
-//                    std::cerr << firstDelta.size() << " " << secondDelta.size() << "\n";
             deltas.back().deltaVals = firstDelta;
             for (auto &v : secondDelta) {
                 v += numOfFirstMantisSamples;
                 deltas.back().deltaVals.push_back(v);
-//                        std::cerr << v << "\n";
             }
         }
     }
@@ -976,14 +1032,14 @@ void MST::buildMSTBasedColor(uint64_t eqid,
 //        std::cerr << "happens! ";
         eq = fixed_cache[eqid];
         queryStats.cacheCntr++;
-        queryStats.heightDist.push_back(0);
-        queryStats.weightDist.push_back(0);
+//        queryStats.heightDist.push_back(0);
+//        queryStats.weightDist.push_back(0);
     } else if (lru_cache.contains(eqid)) {
         eq = lru_cache[eqid];//.get(eqclass_id);
 //        eq = *eq_ptr;
         queryStats.cacheCntr++;
-        queryStats.heightDist.push_back(0);
-        queryStats.weightDist.push_back(0);
+//        queryStats.heightDist.push_back(0);
+//        queryStats.weightDist.push_back(0);
     } else {
         nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
         queryStats.noCacheCntr++;
@@ -1149,36 +1205,22 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
     return cb1 * num_of_ccBuffers + cb2;
 }
 
-/**
- ********* MAIN *********
- * main function to call Color graph and MST construction and color class encoding and serializing
- */
-int build_mst_main(QueryOpts &opt) {
-    MST mst(opt.prefix, opt.console, opt.numThreads);
-    mst.buildMST();
-    if (opt.remove_colorClasses && !opt.keep_colorclasses) {
-        for (auto &f : mantis::fs::GetFilesExt(opt.prefix.c_str(), mantis::EQCLASS_FILE)) {
-            std::cerr << f.c_str() << "\n";
-            if (std::remove(f.c_str()) != 0) {
-                std::cerr << "Unable to delete file " << f << "\n";
-                std::exit(1);
-            }
-        }
-    }
-    return 0;
-}
-
-
 void MST::planCaching(MSTQuery *mst,
-        std::unordered_map<Edge, uint32_t, edge_hash>& edges,
+                      std::vector<std::pair<colorIdType, weightType>>& edges,
+                      std::vector<uint32_t>& outDegrees,
                       std::vector<colorIdType> &colorsInCache) {
     std::vector<Cost> mstCost(mst->parentbv.size());
 
     logger->info("In planner ..");
     // setting local edge costs
+    uint64_t src{0}, edgeCntr{0};
     for (auto& edge: edges) {
-        mstCost[edge.first.n1].numQueries++;
-        mstCost[edge.first.n2].numQueries++;
+        if (edgeCntr == outDegrees[src]) {
+            src++;
+        }
+        mstCost[src].numQueries++;
+        mstCost[edge.first].numQueries++;
+        edgeCntr++;
     }
     logger->info("Done setting the local costs");
 
@@ -1191,6 +1233,7 @@ void MST::planCaching(MSTQuery *mst,
     logger->info("Calling the recursive planner for {} nodes", mst->parentbv.size());
     uint64_t cntr{0};
     planRecursively(mst->parentbv.size()-1, children, mstCost, colorsInCache, cntr);
+    std::cerr << "\r";
 }
 
 void MST::planRecursively(uint64_t nodeId,
@@ -1243,4 +1286,24 @@ void MST::planRecursively(uint64_t nodeId,
     }
     if (++cntr % 1000000 == 0)
         std::cerr << "\r" << cntr++;
+}
+
+
+/**
+ ********* MAIN *********
+ * main function to call Color graph and MST construction and color class encoding and serializing
+ */
+int build_mst_main(QueryOpts &opt) {
+    MST mst(opt.prefix, opt.console, opt.numThreads);
+    mst.buildMST();
+    if (opt.remove_colorClasses && !opt.keep_colorclasses) {
+        for (auto &f : mantis::fs::GetFilesExt(opt.prefix.c_str(), mantis::EQCLASS_FILE)) {
+            std::cerr << f.c_str() << "\n";
+            if (std::remove(f.c_str()) != 0) {
+                std::cerr << "Unable to delete file " << f << "\n";
+                std::exit(1);
+            }
+        }
+    }
+    return 0;
 }
