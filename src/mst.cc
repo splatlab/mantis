@@ -452,7 +452,17 @@ bool MST::calculateMSTBasedWeights() {
     // call the lambda function per mantis
     edgeSplitter(srcStartIdx1, edge1list, mst1Zero, true);
     edgeSplitter(srcStartIdx2, edge2list, mst2Zero, false);
-
+/*
+    std::cerr << "\n";
+    for (auto i = 0; i < 10; i++) {
+        std::cerr << i << ":" << srcStartIdx1[i] << "\n";
+        auto j = i == 0? 0 : srcStartIdx1[i-1];
+        while (j < srcStartIdx1[i]) {
+            std::cerr << j << ":" << edge1list[j].first << " ";
+            j++;
+        }
+        std::cerr << "\n";
+    }*/
     logger->info("num of edges in first mantis: {}", edge1list.size());
     logger->info("num of edges in second mantis: {}", edge2list.size());
 
@@ -528,13 +538,27 @@ bool MST::calculateMSTBasedWeights() {
             if (srcStart < edgeList.size()) {
                 auto srcEnd = srcStartIdx[n1];
                 if (n2 == mstZero) { // zero is the biggest color ID, and hence the last in a sorted list
+                    if ((*(edgeList.begin()+srcEnd-1)).first != n2) {
+                        std::cerr << "!!NOOOOOO!\n";
+                        std::cerr << n1 << " " << srcStart << " " << srcEnd << " " << n2 << " " << (*(edgeList.begin()+srcEnd-1)).first << "\n";
+                        std::exit(3);
+                    }
                     w = (*(edgeList.begin()+srcEnd-1)).second; // look at the last elm. for n1
                 } else {
                     auto wItr = std::lower_bound(edgeList.begin() + srcStart, edgeList.begin() + srcEnd,
                                                  std::make_pair(n2, 0),
                                                  [](auto &v1, auto &v2) {
-                                                     return v1.first <= v2.first;
+                                                     return v1.first < v2.first;
                                                  });
+                    if (wItr == edgeList.begin() + srcEnd) {
+                        std::cerr << "Couldn't find the element in the vector. Should not happen.\n";
+                        std::exit(3);
+                    }
+                    if ((*wItr).first != n2) {
+                        std::cerr << "NOOOOOO!\n";
+                        std::cerr << n1 << " " << srcStart << " " << srcEnd << " " << n2 << " " << (*wItr).first << "\n";
+                        std::exit(3);
+                    }
                     w = (*wItr).second;
                 }
             }
@@ -620,7 +644,7 @@ void MST::calcMSTHammingDistInParallel(uint32_t i,
     std::cerr << "\r";
 //    logger->info("initiated thread {} from {} to {} with {} edges", i, s, e, e-s);
     for (auto edge = itrStart; edge != itrEnd; edge++) {
-        if (n1+1 < srcStarts.size() and srcStarts[n1+1] == edgeCntr) {
+        if (srcStarts[n1] == edgeCntr) {
             n1++;
         }
         colorIdType n2 = edge->first;
