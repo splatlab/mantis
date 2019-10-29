@@ -1376,9 +1376,9 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	build_MPH_tables();
 
 	uint64_t num_colorBuffers = 1;
-//	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
-//	build_color_class_table();
-//	cdbg.bv_buffer = BitVector(0);
+	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
+	build_color_class_table();
+	cdbg.bv_buffer = BitVector(0);
 
 	//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
