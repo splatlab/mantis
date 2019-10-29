@@ -24,37 +24,21 @@
 #include "gqf/hashutil.h"
 
 #include "lru/lru.hpp"
-#include "mstQuery.h"
-//#include "concurrentlru/concurrent-scalable-cache.h"
 
-//using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
-
-//using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
-
 using SpinLockT = std::mutex;
 
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
-typedef uint16_t weightType;
 
-struct Cost {
-    uint64_t numSteps{0};
-    uint64_t numQueries{0};
-};
 
-// undirected edge
 struct Edge {
     colorIdType n1;
     colorIdType n2;
 
     Edge() : n1{static_cast<colorIdType>(-1)}, n2{static_cast<colorIdType>(-1)} {}
-    Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {
-        if (n1 > n2) {
-            std::swap(n1, n2);
-        }
-    }
+    Edge(colorIdType inN1, colorIdType inN2) : n1(inN1), n2(inN2) {}
 
     bool operator==(const Edge &e) const {
         return n1 == e.n1 && n2 == e.n2;
@@ -148,11 +132,7 @@ class MST {
 public:
     MST(std::string prefix, std::shared_ptr<spdlog::logger> logger, uint32_t numThreads);
 
-    MST(CQF<KeyObject>* cqf, std::string prefix, spdlog::logger* logger, uint32_t numThreads, std::string prefix1, std::string prefix2, uint64_t numColorBuffers = 1);
-
     void buildMST();
-
-    void mergeMSTs();
 
 private:
     bool buildEdgeSets();
@@ -160,8 +140,6 @@ private:
     void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
 
     bool calculateWeights();
-
-    bool calculateMSTBasedWeights();
 
     bool encodeColorClassUsingMST();
 
@@ -174,14 +152,6 @@ private:
     uint64_t hammingDist(uint64_t eqid1, uint64_t eqid2,
                          uint64_t &srcId, std::vector<uint64_t> &srcEq);
 
-    uint64_t mstBasedHammingDist(uint64_t eqid1,
-            uint64_t eqid2,
-            MSTQuery* mst,
-            LRUCacheMap& lru_cache,
-            std::vector<uint64_t> &srcEq,
-            QueryStats& queryStats,
-            std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
-
     std::vector<uint32_t> getDeltaList(uint64_t eqid1, uint64_t eqid2);
 
     void buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv);
@@ -193,72 +163,29 @@ private:
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
     void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
-    void calcMSTHammingDistInParallel(uint32_t i,
-                                      std::vector<std::pair<colorIdType, weightType>>& edgeList,
-                                      std::vector<uint32_t> &srcStarts,
-                                      MSTQuery *mst,
-                                      std::vector<LRUCacheMap> &lru_cache,
-                                      std::vector<QueryStats> &queryStats,
-                                      std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
-                                      uint32_t numSamples);
 
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
             sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-            sdsl::bit_vector::select_1_type &sbbv,
-            bool isMSTBased);
-
-    void buildMSTBasedColor(uint64_t eqid1, MSTQuery *mst1,
-            LRUCacheMap& lru_cache1, std::vector<uint64_t> & eq1,
-            QueryStats &queryStats,
-            std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
-    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap& lru_cache,
-            bool isFirst, QueryStats& queryStats);
-
-    void planCaching(MSTQuery *mst,
-            std::vector<std::pair<colorIdType, weightType>>& edges,
-            std::vector<uint32_t>& outDegrees,
-                     std::vector<colorIdType> &colorsInCache);
-
-    void planRecursively(uint64_t nodeId,
-                         std::vector<std::vector<colorIdType>> &children,
-            std::vector<Cost> &mstCost,
-            std::vector<colorIdType> &colorsInCache,
-            uint64_t &cntr);
+            sdsl::bit_vector::select_1_type &sbbv );
 
     std::string prefix;
     uint32_t numSamples = 0;
-    uint32_t numOfFirstMantisSamples = 0;
-    uint32_t secondMantisSamples = 0;
     uint64_t k;
-    uint64_t num_of_ccBuffers = 1;
+    uint64_t num_of_ccBuffers;
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
     BitVectorRRR *bvp1, *bvp2;
-    LRUCacheMap lru_cache;//10000);
-    std::vector<LRUCacheMap> lru_cache1;//10000);
-    std::vector<LRUCacheMap> lru_cache2;//10000);
-    uint64_t fixed_size = 200;
-    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache1;
-    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache2;
-    std::vector<QueryStats> queryStats1;
-    std::vector<QueryStats> queryStats2;
+    LRUCacheMap lru_cache;
     uint64_t gcntr = 0;
     std::vector<std::string> eqclass_files;
-    std::vector<std::pair<colorIdType , colorIdType >> colorPairs;
-    std::string prefix1;
-    std::string prefix2;
-    MSTQuery* mst1;
-    MSTQuery* mst2;
-    CQF<KeyObject>* cqf;
     std::vector<std::vector<Edge>> edgeBucketList;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
-    std::unordered_set<uint64_t> test;
 
 };
 

@@ -53,6 +53,10 @@ int stats_main(StatsOpts& statsOpts);
 
 int merge_main(MergeOpts &opt);
 int validate_merge_main(ValidateMergeOpts &opt);
+int compare_indices_main(CompareIndicesOpt &opt);
+int lsmt_initialize_main(LSMT_InitializeOpts &opt);
+int lsmt_update_main(LSMT_UpdateOpts &opt);
+int lsmt_query_main(LSMT_QueryOpts &opt);
 
 
 
@@ -64,7 +68,8 @@ int validate_merge_main(ValidateMergeOpts &opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge, help};
+  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge,
+                  compare_indices, lsmt_init, lsmt_update, lsmt_query, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -76,6 +81,10 @@ int main ( int argc, char *argv[] ) {
   StatsOpts sopt;
   MergeOpts mopt;
   ValidateMergeOpts vmopt;
+  CompareIndicesOpt ciopt;
+  LSMT_InitializeOpts lsmtiopt;
+  LSMT_UpdateOpts lsmtuopt;
+  LSMT_QueryOpts lsmtqopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
@@ -83,6 +92,11 @@ int main ( int argc, char *argv[] ) {
   sopt.console = console;
   mopt.console = console;
   vmopt.console = console;
+  ciopt.console = console;
+  lsmtiopt.console = console;
+  lsmtuopt.console = console;
+  lsmtqopt.console = console;
+
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
     bool exists = mantis::fs::FileExists(s.c_str());
@@ -159,7 +173,9 @@ int main ( int argc, char *argv[] ) {
 										option("-t", "--thread-count") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate unique color-id filtering phase",
                     required("-i1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-i2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
-                    required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written"
+                    required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written",
+                    option("-tl", "--time-log").set(mopt.timeLog) % "write the summary time-log for the algorithm",
+                    option("-rm", "--remove-indices").set(mopt.removeIndices) % "remove the input mantis indices from disk"
                     );
 
   auto validate_merge_mode = (
@@ -168,10 +184,53 @@ int main ( int argc, char *argv[] ) {
                               required("-m", "--merged-cdbg") & value("merged-cdbg", vmopt.mergeRes) % "directory containing the merged CdBG"
                             );
 
+  auto compare_indices_mode = (
+                              command("compare_indices").set(selected, mode::compare_indices),
+                              required("-c1", "--cdbg-1") & value("cdbg-1", ciopt.cdbg1) % "directory containing the first CdBG",
+                              required("-c2", "--cdbg-2") & value("cdbg-2", ciopt.cdbg2) % "directory containing the second CdBG"
+                              );
+
+  auto lsmt_init_mode = (
+                        command("lsmt_init").set(selected, mode::lsmt_init),
+                        required("-d", "--dir") & value("dir", lsmtiopt.dir)
+                        % "directory where the LSM-tree will reside",
+                        option("-c", "--scaling-factor") & value("scaling-factor", lsmtiopt.scalingFactor)
+                        % "scaling factor for the LSM-tree levels",
+                        option("-k", "--kmer-threshold") & value("kmer-threshold", lsmtiopt.kmerThreshold)
+                        % "kmer count threshold for the level 0 of the LSM-tree",
+                        option("-s", "--sample-threshold") & value("sample-threshold", lsmtiopt.sampleThreshold)
+                        % "threshold on the count of samples kept pending before insertion into the LSM-tree",
+                        option("-q", "--q-bit-init-build") & value("q-bit-init-build", lsmtiopt.qBitInitBuild)
+                        % "q (quotient)-bit count for the initial mantis build at an update"
+                        );
+
+  auto lsmt_update_mode = (
+                          command("lsmt_update").set(selected, mode::lsmt_update),
+                          required("-d", "--dir") & value("dir", lsmtuopt.dir)
+                          % "directory where the LSM-tree resides",
+                          required("-i", "--input-list") & value(ensure_file_exists, "input-list", lsmtuopt.inputList)
+                          % "file containing list of input sample-filters",
+                          option("-t", "--thread-count") & value("thread-count", lsmtuopt.threadCount)
+                          % "number of threads to use in intermediate merge operations"
+                          );
+
+  auto lsmt_query_mode = (
+                          command("lsmt_query").set(selected, mode::lsmt_query),
+                          required("-d", "--dir") & value("dir", lsmtqopt.dir)
+                          % "directory where the LSM-tree resides",
+                          required("-q", "--query-file") & value(ensure_file_exists, "query-file", lsmtqopt.queryFile)
+                          % "file containing the query transcripts",
+                          required("-o", "--output") & value("query-output", lsmtqopt.output)
+                          % "file containing the query results",
+                          option("-k", "--kmer-length") & value("kmer-length", lsmtqopt.k) % "length of k-mers"
+                        );
+
 
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
-              merge_mode | validate_merge_mode | command("help").set(selected,mode::help) |
+              merge_mode | validate_merge_mode | compare_indices_mode |
+              lsmt_init_mode | lsmt_update_mode | lsmt_query_mode |
+              command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
              );
@@ -184,6 +243,10 @@ int main ( int argc, char *argv[] ) {
   assert(stats_mode.flags_are_prefix_free());
   assert(merge_mode.flags_are_prefix_free());
   assert(validate_merge_mode.flags_are_prefix_free());
+  assert(compare_indices_mode.flags_are_prefix_free());
+  assert(lsmt_init_mode.flags_are_prefix_free());
+  assert(lsmt_update_mode.flags_are_prefix_free());
+  assert(lsmt_query_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -207,6 +270,10 @@ int main ( int argc, char *argv[] ) {
     case mode::stats: stats_main(sopt);  break;
     case mode::merge: merge_main(mopt);  break;
     case mode::validate_merge: validate_merge_main(vmopt); break;
+    // case mode::compare_indices: compare_indices_main(ciopt); break;
+    case mode::lsmt_init: lsmt_initialize_main(lsmtiopt); break;
+    case mode::lsmt_update: lsmt_update_main(lsmtuopt); break;
+    case mode::lsmt_query: lsmt_query_main(lsmtqopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -230,7 +297,14 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(merge_mode, "mantis");
       } else if (b->arg() == "validate_merge") {
         std::cout << make_man_page(validate_merge_mode, "mantis");
-      }else {
+      } else if (b->arg() == "compare_indices") {
+        std::cout << make_man_page(compare_indices_mode, "mantis");
+      } else if (b->arg() == "lsmt_init") {
+        std::cout << make_man_page(lsmt_init_mode, "mantis");
+      } else if(b->arg() == "lsmt_query") {
+        std::cout << make_man_page(lsmt_query_mode, "mantis");
+      }
+      else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";
         std::cout << usage_lines(cli, "mantis") << '\n';
       }

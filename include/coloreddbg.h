@@ -3,7 +3,7 @@
  *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *                  Mike Ferdman (), mferdman@cs.stonybrook.edu
- *                  Jamshed Khan (), jamshed@cs.umd.edu
+ *                  Jamshed Khan (), jamshed@umd.edu
  *   Organization:  Stony Brook University, University of Maryland
  *
  * ============================================================================
@@ -28,8 +28,6 @@
 #include "gqf/hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
-
-#include "BooPHF.h"
 
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
@@ -76,6 +74,8 @@ class ColoredDbg {
 		uint32_t seed(void) const { return dbg.seed(); }
 		uint64_t range(void) const { return dbg.range(); }
 
+		inline uint64_t get_color_class_per_buffer(void) const { return colorClassPerBuffer; }
+
 		std::vector<uint64_t>
 			find_samples(const mantis::QuerySet& kmers);
 
@@ -89,6 +89,9 @@ class ColoredDbg {
 
 
 		// Additional public members required for mantii merge.
+
+		// Checks if all the required data for a mantis index exists at directory 'dir'.
+		static bool data_exists(std::string &dir, spdlog::logger *console);
 
 		ColoredDbg() {}
 
@@ -108,6 +111,12 @@ class ColoredDbg {
 		// Returns the collection of BitvectorRRR's (compressed color-classes) of this
 		// CdBG.
 		std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
+
+		// Remove the mantis index residing at directory 'dir'.
+		static void remove_index(std::string dir, spdlog::logger *console);
+
+		// Move the mantis index at directory 'source' to directory 'destination'.
+		static void move_index(std::string source, std::string destination, spdlog::logger *console);
 
 		// Friend class that merges two mantis indices into one.
 		template<typename q_obj, typename k_obj> friend class CdBG_Merger;
@@ -132,12 +141,15 @@ class ColoredDbg {
 		BitVector bv_buffer;
 		std::vector<BitVectorRRR> eqclasses;
 		std::string prefix;
-		uint64_t num_samples;
+		uint64_t num_samples;		
 		uint64_t num_serializations;
 		int dbg_alloc_flag;
 		bool flush_eqclass_dis{false};
 		std::time_t start_time_;
 		spdlog::logger* console;
+
+		// Maximum number of color-class bitvectors that can be present at the bitvector buffer.
+		uint64_t colorClassPerBuffer{mantis::NUM_BV_BUFFER};
 
 
 
@@ -148,6 +160,10 @@ class ColoredDbg {
 
 		// Returns the sample-id mapping.
 		inline std::unordered_map<uint64_t, std::string> &get_sample_id_map() { return sampleid_map; }
+
+		// Concatenates the sample-id mappings of the CdBG's 'cdbg1' and 'cdbg2' into
+		// the sample-id list of this CdBG, in order.
+		void concat_sample_id_maps(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
 };
 
 template <class T>
@@ -190,24 +206,29 @@ template <class qf_obj, class key_obj>
 uint64_t ColoredDbg<qf_obj, key_obj>::get_num_bitvectors(void) const {
 	uint64_t total = 0;
 	for (uint32_t i = 0; i < num_serializations; i++)
-		total += eqclasses[i].size();
+		// total += eqclasses[i].size();
+		total += eqclasses[i].size() / num_samples;
 
-	return total / num_samples;
+	// return total / num_samples;
+	return total;
 }
 
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj,
 		 key_obj>::reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t,
 																		 std::pair<uint64_t, uint64_t>>& map) {
-			 BitVector new_bv_buffer(mantis::NUM_BV_BUFFER * num_samples);
+			//  BitVector new_bv_buffer(mantis::NUM_BV_BUFFER * num_samples);
+			BitVector new_bv_buffer(colorClassPerBuffer * num_samples);
 			 for (auto& it_input : map) {
 				 auto it_local = eqclass_map.find(it_input.first);
 				 if (it_local == eqclass_map.end()) {
 					 console->error("Can't find the vector hash during shuffling");
 					 exit(1);
 				 } else {
-					 assert(it_local->second.first <= mantis::NUM_BV_BUFFER &&
-									it_input.second.first <= mantis::NUM_BV_BUFFER);
+					//  assert(it_local->second.first <= mantis::NUM_BV_BUFFER &&
+					// 				it_input.second.first <= mantis::NUM_BV_BUFFER);
+					assert(it_local->second.first <= colorClassPerBuffer &&
+									it_input.second.first <= colorClassPerBuffer);
 					 uint64_t src_idx = ((it_local->second.first - 1) * num_samples);
 					 uint64_t dest_idx = ((it_input.second.first - 1) * num_samples);
 					 for (uint32_t i = 0; i < num_samples; i++, src_idx++, dest_idx++)
@@ -233,7 +254,8 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	reshuffle_bit_vectors(map);
 	// Check if the current bit vector buffer is full and needs to be serialized.
 	// This happens when the sampling phase fills up the bv buffer.
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0) {
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0) {
+	if (get_num_eqclasses() % colorClassPerBuffer == 0) {
 		// The bit vector buffer is full.
 		console->info("Serializing bit vector with {} eq classes.",
 									get_num_eqclasses());
@@ -293,8 +315,8 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector,
 																								uint64_t eq_id) {
-	uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
-//	std::cerr << eq_id << " " << eq_id  % mantis::NUM_BV_BUFFER << start_idx << " " << vector.size() << " " << bv_buffer.size() << " " << num_samples << "\n";
+	// uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
+	uint64_t start_idx = (eq_id  % colorClassPerBuffer) * num_samples;
 	for (uint32_t i = 0; i < num_samples/64*64; i+=64)
 		bv_buffer.set_int(start_idx+i, vector.get_int(i, 64), 64);
 	if (num_samples%64)
@@ -306,8 +328,11 @@ void ColoredDbg<qf_obj, key_obj>::add_bitvector(const BitVector& vector,
 template <class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::bv_buffer_serialize() {
 	BitVector bv_temp(bv_buffer);
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0) {
-		bv_temp.resize((get_num_eqclasses() % mantis::NUM_BV_BUFFER) *
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0) {
+	if (get_num_eqclasses() % colorClassPerBuffer > 0) {
+		// bv_temp.resize((get_num_eqclasses() % mantis::NUM_BV_BUFFER) *
+		// 							 num_samples);
+		bv_temp.resize((get_num_eqclasses() % colorClassPerBuffer) *
 									 num_samples);
 	}
 
@@ -328,7 +353,8 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 		dbg.close();
 
 	// serialize the bv buffer last time if needed
-	if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
+	// if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
+	if (get_num_eqclasses() % colorClassPerBuffer > 0)
 		bv_buffer_serialize();
 
 	//serialize the eq class id map
@@ -367,8 +393,10 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const mantis::QuerySet& kmers) {
 		auto count = it->second;
 		// counter starts from 1.
 		uint64_t start_idx = (eqclass_id - 1);
-		uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-		uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		uint64_t bucket_idx = start_idx / colorClassPerBuffer;
+		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
 		for (uint32_t w = 0; w <= num_samples / 64; w++) {
 			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
 			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
@@ -403,8 +431,10 @@ ColoredDbg<qf_obj,key_obj>::find_samples(const std::unordered_map<mantis::KmerHa
 		auto &vec = it->second;
 		// counter starts from 1.
 		uint64_t start_idx = (eqclass_id - 1);
-		uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
-		uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		// uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
+		uint64_t bucket_idx = start_idx / colorClassPerBuffer;
+		// uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
+		uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
 		for (uint32_t w = 0; w <= num_samples / 64; w++) {
 			uint64_t len = std::min((uint64_t)64, num_samples - w * 64);
 			uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
@@ -520,7 +550,8 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 		}
 
 		// Check if the bit vector buffer is full and needs to be serialized.
-		if (added_eq_class and (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0))
+		// if (added_eq_class and (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0))
+		if (added_eq_class and (get_num_eqclasses() % colorClassPerBuffer == 0))
 		{
 			// Check if the process is in the sampling phase.
 			if (is_sampling) {
@@ -554,8 +585,12 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 																				enum qf_hashmode hashmode,
 																				uint32_t seed, std::string& prefix,
 																				uint64_t nqf, int flag) :
-	bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
-	num_serializations(0), start_time_(std::time(nullptr)) {
+	// bv_buffer(mantis::NUM_BV_BUFFER * nqf), prefix(prefix), num_samples(nqf),
+	// num_serializations(0), start_time_(std::time(nullptr)) {
+	prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
+		colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+		bv_buffer = BitVector(colorClassPerBuffer * num_samples);
+
 		if (flag == MANTIS_DBG_IN_MEMORY) {
 			CQF<key_obj> cqf(qbits, key_bits, hashmode, seed);
 			dbg = cqf;
@@ -617,12 +652,15 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string& cqf_file,
 			sampleid_map.insert(pair);
 			num_samples++;
 		}
+
+		colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+
 		sampleid.close();
 }
 
 
 
-template <class qf_obj, class key_obj>
+template<typename qf_obj, typename key_obj>
 ColoredDbg<qf_obj, key_obj> ::
 	ColoredDbg(std::string &dir, int flag):
 	bv_buffer(),
@@ -666,6 +704,8 @@ ColoredDbg<qf_obj, key_obj> ::
 			num_samples++;
 		}
 
+		colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+
 		sampleList.close();
 
 
@@ -678,6 +718,7 @@ ColoredDbg<qf_obj, key_obj> ::
 		}
 		
 
+		// Store the color-class files names in sorted order (based on their sequence).
 		eqClsFiles.reserve(colorClassFiles.size());
 		for(auto idFilePair : sortedFiles)
 			eqClsFiles.push_back(idFilePair.second);
@@ -687,7 +728,7 @@ ColoredDbg<qf_obj, key_obj> ::
 
 
 
-template <class qf_obj, class key_obj>
+template<typename qf_obj, typename key_obj>
 ColoredDbg<qf_obj, key_obj>::
 	ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string &prefix,
 				int flag):
@@ -698,13 +739,211 @@ num_serializations(0),
 dbg_alloc_flag(flag),
 start_time_(std::time(nullptr))
 {
-	// Construct the sample-id list.
+	colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
 
+	// Construct the sample-id list.
+	concat_sample_id_maps(cdbg1, cdbg2);
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	concat_sample_id_maps(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2)
+{
 	for(auto idSample : cdbg1.get_sample_id_map())
 		sampleid_map[idSample.first] = idSample.second;
 
 	for(auto idSample : cdbg2.get_sample_id_map())
 		sampleid_map[cdbg1.get_num_samples() + idSample.first] = idSample.second;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+bool ColoredDbg <qf_obj, key_obj> ::
+	data_exists(std::string &dir, spdlog::logger *console)
+{
+	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
+	{
+		console -> error("CQF file {} does not exist in input directory {}.", mantis::CQF_FILE, dir);
+		return false;
+	}
+
+	if(!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str()))
+	{
+		console -> error("Sample-ID list file {} does not exist in input directory {}.",
+						mantis::SAMPLEID_FILE, dir);
+		return false;
+	}
+
+	if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
+	{
+		console -> error("No equivalence-class file with extension {} exists in input directory {}.",
+						mantis::EQCLASS_FILE, dir);
+		return false;
+	}
+
+
+	return true;
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	remove_index(std::string dir, spdlog::logger *console)
+{
+	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
+		console -> error("CQF file {} does not exist in directory {}.", mantis::CQF_FILE, dir);
+	else if(remove((dir + mantis::CQF_FILE).c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.", dir + mantis::CQF_FILE);
+		exit(1);
+	}
+	else
+		console -> info("CQF file {} successfully deleted.", dir + mantis::CQF_FILE);
+
+
+	if(!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str()))
+		console -> error("Sample-ID list file {} does not exist in directory {}.",
+						mantis::SAMPLEID_FILE, dir);
+	else if(remove((dir + mantis::SAMPLEID_FILE).c_str()) != 0)
+	{
+		console -> error("Sample-ID list file deletion of {} failed.", dir + mantis::SAMPLEID_FILE);
+		exit(1);
+	}
+	else
+		console -> info("File {} successfully deleted.", dir + mantis::SAMPLEID_FILE);
+
+
+	auto eqclassFiles = mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE);
+	if(eqclassFiles.empty())
+		console -> error("No equivalence-class file with extension {} exists in directory {}.",
+						mantis::EQCLASS_FILE, dir);
+	else
+	{
+		for(auto p = eqclassFiles.begin(); p != eqclassFiles.end(); ++p)
+			if(remove(p -> c_str()) != 0)
+			{
+				console -> error("File deletion of {} failed.", *p);
+				exit(1);
+			}
+
+		console -> info("Color-class bitvector files with extension {} at directory {} successfully deleted.",
+						mantis::EQCLASS_FILE, dir);
+	}
+
+
+	if(mantis::fs::FileExists((dir + mantis::meta_file_name).c_str()) &&
+		remove((dir + mantis::meta_file_name).c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.",
+						dir + mantis::meta_file_name);
+		exit(1);
+	}
+
+	if(rmdir(dir.c_str()) == -1)
+	{
+		console -> error("Cannot remove directory {}.", dir);
+		exit(1);
+	}
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	move_index(std::string source, std::string destination, spdlog::logger *console)
+{
+	if(destination.back() != '/')
+		destination += '/'; // Make sure it is a full directory.
+
+	if(!mantis::fs::DirExists(destination.c_str()))
+		mantis::fs::MakeDir(destination.c_str());
+        
+	if(!mantis::fs::DirExists(destination.c_str()))
+	{
+		console -> error("Directory {} could not be created.", destination);
+		exit(1);
+	}
+
+
+    console -> info("Directory {} created.", destination);
+
+	if(rename((source + mantis::CQF_FILE).c_str(), (destination + mantis::CQF_FILE).c_str()) != 0)
+	{
+		console -> error("Moving CQF file {} to directory {} failed.", source + mantis::CQF_FILE, destination);
+		exit(1);
+	}        
+	
+	if(rename((source + mantis::SAMPLEID_FILE).c_str(), (destination + mantis::SAMPLEID_FILE).c_str()) != 0)
+	{
+		console -> error("Moving sample-id list file {} to directory {} failed.",
+						source + mantis::SAMPLEID_FILE, destination);
+		exit(1);
+	}
+
+
+	// std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(source.c_str(), mantis::EQCLASS_FILE);
+	// std::map<uint, std::string> sortedFiles;
+
+	// for (std::string file : colorClassFiles)
+	// {
+	// 	uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
+	// 	sortedFiles[fileID] = file;
+	// }
+
+	// colorClassFiles.clear();
+	// for(auto idFilePair : sortedFiles)
+	// 	colorClassFiles.push_back(idFilePair.second);
+
+	// for(uint i = 0; i < colorClassFiles.size(); ++i)
+	// 	if(rename(colorClassFiles[i].c_str(),
+	// 				(destination + std::to_string(i) + "_" + mantis::EQCLASS_FILE).c_str()) != 0)
+	// 	{
+	// 		console -> error("Moving color-class bitvector file {} to directory {} failed.",
+	// 						colorClassFiles[i], destination);
+	// 		exit(1);
+	// 	}
+
+	if(rename((source + mantis::PARENTBV_FILE).c_str(), (destination + mantis::PARENTBV_FILE).c_str()) != 0)
+	{
+		console -> error("Moving parent-bv file {} to directory {} failed.",
+						source + mantis::PARENTBV_FILE, destination);
+		exit(1);
+	}
+
+
+	if(rename((source + mantis::BOUNDARYBV_FILE).c_str(), (destination + mantis::BOUNDARYBV_FILE).c_str()) != 0)
+	{
+		console -> error("Moving boundary-bv file {} to directory {} failed.",
+						source + mantis::BOUNDARYBV_FILE, destination);
+		exit(1);
+	}
+
+
+	if(rename((source + mantis::DELTABV_FILE).c_str(), (destination + mantis::DELTABV_FILE).c_str()) != 0)
+	{
+		console -> error("Moving delta-bv file {} to directory {} failed.",
+						source + mantis::DELTABV_FILE, destination);
+		exit(1);
+	}
+
+	
+	if(mantis::fs::FileExists((source + mantis::meta_file_name).c_str()) &&
+		remove((source + mantis::meta_file_name).c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.",
+						source + mantis::meta_file_name);
+		exit(1);
+	}
+
+	if(rmdir(source.c_str()) == -1)
+	{
+		console -> error("Cannot remove directory {}.", source);
+		exit(1);
+	}
 }
 
 #endif
