@@ -11,6 +11,7 @@ add_library(mantis_core STATIC
   		coloreddbg.cc
 		canonicalKmer.cc
   		mst.cc
+		mstMerger.cc
 		stat.cc
 		merge.cc
   		MantisFS.cc
