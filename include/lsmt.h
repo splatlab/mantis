@@ -429,7 +429,7 @@ void LSMT<qf_obj, key_obj>::
     std::ofstream outputFile(output);
     if(!outputFile.is_open())
     {
-        console -> error("Cannot write to file {}.", dir + mantis::PENDING_SAMPLES_LIST);
+        console -> error("Cannot write to file {}.", output);
         exit(1);
     }
 

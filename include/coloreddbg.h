@@ -819,7 +819,9 @@ void ColoredDbg<qf_obj, key_obj>::
 
 	auto eqclassFiles = mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE);
 	if(eqclassFiles.empty())
-		console -> error("No equivalence-class file with extension {} exists in directory {}.",
+		// console -> error("No equivalence-class file with extension {} exists in directory {}.",
+		// 				mantis::EQCLASS_FILE, dir);
+		console -> info("No equivalence-class file with extension {} exists in directory {}.",
 						mantis::EQCLASS_FILE, dir);
 	else
 	{

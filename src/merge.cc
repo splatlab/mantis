@@ -125,7 +125,7 @@ int merge_main(MergeOpts &opt)
 	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG, console);
 	merger.set_thread_count(opt.threadCount);
 
-	merger.merge();
+	merger.merge(opt.removeIndices);
 
 	if(opt.timeLog)
 		merger.print_time_log();
