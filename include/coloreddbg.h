@@ -777,12 +777,12 @@ bool ColoredDbg <qf_obj, key_obj> ::
 		return false;
 	}
 
-	if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
+	/*if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
 	{
 		console -> error("No equivalence-class file with extension {} exists in input directory {}.",
 						mantis::EQCLASS_FILE, dir);
 		return false;
-	}
+	}*/
 
 
 	return true;

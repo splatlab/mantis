@@ -1411,7 +1411,6 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 	console -> info("Merged CQF metadata:");
 	cdbg.dbg.dump_metadata();
-	serialize_cqf_and_sampleid_list();
 
 
 	console->info("Done with cqf merge");
@@ -1425,6 +1424,8 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	MSTMerger mst(&cdbg.dbg, cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");
 	mst.mergeMSTs();
+	serialize_cqf_and_sampleid_list();
+
 
 }
 

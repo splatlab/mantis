@@ -302,6 +302,7 @@ void LSMT<qf_obj, key_obj>::
     qopt.prefix = outDir;
     qopt.numThreads = threadCount;
     qopt.remove_colorClasses = true;
+    qopt.console = sharedConsole;
 
     build_mst_main(qopt);
 }
