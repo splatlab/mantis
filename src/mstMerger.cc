@@ -257,7 +257,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
         colorMutex.unlock();
         blockCntr++;
         if (blockId % 10000 == 0)
-            std::cerr << "\r" << threadId << "->" << blockId << "  ";
+            std::cerr << "\r" << threadId << "->" << blockId;
         auto nextBlockId = blockId + 1;
         blockId <<= SHIFTBITS;
         nextBlockId <<= SHIFTBITS;
@@ -270,8 +270,8 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
             dna::canonical_kmer n(static_cast<int>(k), keyObject.key);
             // Add an edge between the color class and each of its neighbors' colors in dbg
             for (const auto b : dna::bases) {
-                auto newNode = n << b;
-                if (newNode.val >= n.val) {
+                dna::canonical_kmer newNode = n << b;
+                if (newNode.val > n.val) {
                     uint64_t idx = (newNode.val & LOWBIT_MASK) >> SHIFTBITS;
                     localBlocks[idx].emplace_back(curEqId, newNode.val);
                     if (localBlocks[idx].size() == MAX_ALLOWED_BLOCK_SIZE) {
@@ -285,7 +285,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                 }
 
                 newNode = b >> n;
-                if (newNode.val >= n.val) {
+                if (newNode.val > n.val) {
                     uint64_t idx = (newNode.val & LOWBIT_MASK) >> SHIFTBITS;
                     localBlocks[idx].emplace_back(curEqId, newNode.val);
                     if (localBlocks[idx].size() == MAX_ALLOWED_BLOCK_SIZE) {
@@ -300,7 +300,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
             }
             ++it;
         }
-        if (blockCntr % 10 == 0) {
+//        if (blockCntr % 10 == 0) {
             for (auto idx = 0; idx < localBlocks.size(); idx++) {
                 blockMutex[idx]->lock();
                 if (!localBlocks[idx].empty())
@@ -311,7 +311,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                 blockMutex[idx]->unlock();
                 localBlocks[idx].clear();
             }
-        }
+//        }
     }
 }
 
@@ -349,13 +349,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         std::string blockFileName = prefix + "/tmpblock" + std::to_string(blockId);
         std::remove(blockFileName.c_str());
 
+        auto nextBlockId = blockId + 1;
 
         blockId <<= SHIFTBITS;
-        __uint128_t startPoint = blockId;
-        __uint128_t blockRange = 0x00000000FFFFFFFF;
-        __uint128_t maxBlockVal = cqf.range() < (blockId | blockRange) ? cqf.range() : (blockId | blockRange);
-        __uint128_t endPoint = maxBlockVal;
-        auto it = cqf.setIteratorLimits(startPoint, endPoint);
+        nextBlockId <<= SHIFTBITS;
+        __uint128_t startPoint = cqf.range() < blockId? cqf.range() : blockId;
+        __uint128_t endPoint = cqf.range() < nextBlockId? cqf.range() : nextBlockId;
         std::sort(blockBuffer.begin(), blockBuffer.end(),
                   [](auto &e1, auto &e2) {
                       return e1.second == e2.second ? e1.first < e2.first : e1.second < e2.second;
@@ -368,16 +367,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         auto tmpEdgeListSize = MAX_ALLOWED_TMP_EDGES / nThreads;
         std::vector<Edge> edgeList;
         edgeList.reserve(tmpEdgeListSize);
+        auto it = cqf.setIteratorLimits(startPoint, endPoint);
         KeyObject keyObject = *it;
         dna::canonical_kmer n(static_cast<int>(k), keyObject.key);
-        auto curKey = static_cast<uint32_t > (n.val & LOWBIT_MASK);
-        uint64_t curColorId = keyObject.count - 1;
-        uint32_t blockKey{0}, blockColorId{0};
-        if (!blockBuffer.empty()) {
-            blockColorId = blockBuffer[0].first;
-            blockKey = blockBuffer[0].second;
-        }
-        bool fetchCQFVal{false}, fetchBlockVal{false};
+        uint32_t curKey{0}, blockKey{0}, blockColorId{0};
+        uint64_t curColorId{0};
+        bool fetchCQFVal{true}, fetchBlockVal{true};
         while (!it.reachedHashLimit() and bCntr < blockBuffer.size()) {
             if (fetchCQFVal) {
                 keyObject = *it;
@@ -410,9 +405,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                 //blockKey++
                 bCntr++;
                 fetchBlockVal = true;
+                localMaxId = curColorId > localMaxId ? (curColorId > blockColorId ? curColorId : blockColorId) :
+                             (blockColorId > localMaxId ? blockColorId : localMaxId);
             }
-            localMaxId = curColorId > localMaxId ? (curColorId > blockColorId ? curColorId : blockColorId) :
-                         (blockColorId > localMaxId ? blockColorId : localMaxId);
             if (edgeList.size() >= tmpEdgeListSize/* and colorMutex.try_lock()*/) {
                 tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge) * edgeList.size());
                 edgeCntr += edgeList.size();
@@ -424,12 +419,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         colorMutex.lock();
         if (blockIds.empty()) {
             maxId = localMaxId > maxId ? localMaxId : maxId;
+            colorMutex.unlock();
             std::cerr << "\r";
             logger->info("Thread {}: added {} edges", threadId, edgeCntr);
             tmpfile.seekp(0);
             tmpfile.write(reinterpret_cast<const char *>(&edgeCntr), sizeof(edgeCntr));
             tmpfile.close();
-            colorMutex.unlock();
             return;
         }
         blockId = blockIds.front();
