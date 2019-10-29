@@ -284,7 +284,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                     if (localBlocks[idx].size() == MAX_ALLOWED_BLOCK_SIZE) {
                         blockMutex[idx]->lock();
                         blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                              (sizeof(colorIdType) + sizeof(uint32_t)) * MAX_ALLOWED_BLOCK_SIZE);
+                                              (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) * MAX_ALLOWED_BLOCK_SIZE);
                         blockCnt[idx] += localBlocks[idx].size();
                         blockMutex[idx]->unlock();
                         localBlocks[idx].clear();
@@ -300,7 +300,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                     if (localBlocks[idx].size() == MAX_ALLOWED_BLOCK_SIZE) {
                         blockMutex[idx]->lock();
                         blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                              (sizeof(colorIdType) + sizeof(uint32_t)) * MAX_ALLOWED_BLOCK_SIZE);
+                                              (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) * MAX_ALLOWED_BLOCK_SIZE);
                         blockCnt[idx] += localBlocks[idx].size();
                         blockMutex[idx]->unlock();
                         localBlocks[idx].clear();
@@ -314,7 +314,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                 blockMutex[idx]->lock();
                 if (!localBlocks[idx].empty()) {
                     blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                          (sizeof(colorIdType) + sizeof(uint32_t)) * localBlocks[idx].size());
+                                          (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) * localBlocks[idx].size());
                 }
 //                std::cerr << localBlocks[idx].size() << "\n";
                 blockCnt[idx] += localBlocks[idx].size();
@@ -353,7 +353,7 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
 //        logger->info("{}:{}", blockId, blockKmerCnt);
         blockBuffer.resize(blockKmerCnt);
         blockFiles[blockId].read(reinterpret_cast<char *>(blockBuffer.data()),
-                                 blockKmerCnt * (sizeof(colorIdType) + sizeof(uint32_t)));
+                                 blockKmerCnt * (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)));
         blockFiles[blockId].close();
 
         std::string blockFileName = prefix + "/tmpblock" + std::to_string(blockId);
@@ -417,8 +417,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                 localMaxId = curColorId > localMaxId ? (curColorId > blockColorId ? curColorId : blockColorId) :
                              (blockColorId > localMaxId ? blockColorId : localMaxId);
             }
-            if (edgeList.size() >= tmpEdgeListSize/* and colorMutex.try_lock()*/) {
-                tmpfile.write(reinterpret_cast<const char *>(edgeList.data(
+            if (edgeList.size() >= tmpEdgeListSize) {
+                tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge) * edgeList.size());
+                edgeCntr += edgeList.size();
+                edgeList.clear();
+            }
+        }
         tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge) * edgeList.size());
         edgeCntr += edgeList.size();
         colorMutex.lock();
