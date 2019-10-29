@@ -184,6 +184,8 @@ private:
     void buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                            CQF<KeyObject> &cqf,
                                            std::queue<uint64_t> &blockIds,
+                                           std::vector<std::ifstream> &blockFiles,
+                                           std::vector<uint64_t> &blockCnt,
                                            uint64_t &maxId);
 
     void calcMSTHammingDistInParallel(uint32_t i,
@@ -252,6 +254,8 @@ private:
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
+    std::vector<SpinLockT*> blockMutex;
+
     std::unordered_set<uint64_t> test;
 
 };
