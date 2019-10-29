@@ -173,7 +173,6 @@ bool MST::buildEdgeSets() {
     }
     for (auto &t : threads) { t.join(); }
     cqf->free();
-    logger->info("Total number of kmers observed: {}", numOfKmers);
 //    logger->info("Total number of edges observed: {}", num_edges);
 
 
