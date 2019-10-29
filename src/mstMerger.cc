@@ -141,19 +141,21 @@ bool MSTMerger::buildEdgeSets() {
     logger->info("Done with writing down the block files.");
     threads.clear();
     uint64_t removed{0};
+    std::vector<bool> blockValid(NUMBlocks, true);
     for (auto blockId = 0; blockId < NUMBlocks; blockId++) {
 //        blockFiles[blockId].close();
         if (blockCnt[blockId] == 0) {
 //            blockFiles[blockId].close();
             std::string file = prefix + "/tmpblock" + std::to_string(blockId);
             std::remove(file.c_str());
+            blockValid[blockId] = false;
             removed++;
         }
         if (blockId % 1000 == 0) {
             std::cerr << "\r" << "out of " << blockId << " files " << removed << " were removed.";
         }
     }
-    blockFiles.clear();
+//    blockFiles.clear();
     std::cerr << "\r";
     logger->info("{} block files were empty and removed.", removed);
 
@@ -161,10 +163,10 @@ bool MSTMerger::buildEdgeSets() {
     // blockIds should be empty at this point, so we refill it
     for (uint64_t blockId = 0; blockId < NUMBlocks; blockId++) {
         std::string blockFileName = prefix + "/tmpblock" + std::to_string(blockId);
-        if (mantis::fs::FileExists(blockFileName.c_str())) {
+//        if (mantis::fs::FileExists(blockFileName.c_str())) {
+        if (blockValid[blockId]) {
             blockIds.push(blockId);
             readBlockFiles[blockId].open(blockFileName, std::ios::in | std::ios::binary);
-
         }
     }
     logger->info("Block counts for next step is {}.", blockIds.size());
@@ -256,11 +258,11 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
         blockCntr++;
         if (blockId % 10000 == 0)
             std::cerr << "\r" << threadId << "->" << blockId << "  ";
+        auto nextBlockId = blockId + 1;
         blockId <<= SHIFTBITS;
+        nextBlockId <<= SHIFTBITS;
         __uint128_t startPoint = cqf.range() < blockId ? cqf.range() : blockId;
-        __uint128_t blockRange = 0x00000000FFFFFFFF;
-        __uint128_t maxBlockVal = cqf.range() < (blockId | blockRange) ? cqf.range() : (blockId | blockRange);
-        __uint128_t endPoint = maxBlockVal;
+        __uint128_t endPoint = cqf.range() < nextBlockId ? cqf.range() : nextBlockId;
         auto it = cqf.setIteratorLimits(startPoint, endPoint);
         while (!it.reachedHashLimit()) {
             KeyObject keyObject = *it;
