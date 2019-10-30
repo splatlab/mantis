@@ -28,7 +28,7 @@ class CdBG_Merger
 
 		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into the colored dBG 'cdbg'
 		// (all the CdBG's are private members).
-		void merge();
+		void merge(bool removeIndices);
 
 		// Prints the timing-log of the steps throughout the merge algorithm.
 		void print_time_log();
@@ -155,7 +155,7 @@ class CdBG_Merger
 
         // Builds the output color-class bitvectors for the color-id pairs
 		// that are not sampled on abundance, i,e. those that are written to disk.
-		void build_color_class_table();
+		void build_color_class_table(bool removeIndices);
 
 		// Builds the output color-class bitvectors for the a subset of the 
 		// color-id pairs from the disk-bucket_(bucketRow, bucketCol); namely,
@@ -245,7 +245,7 @@ CdBG_Merger<qf_obj, key_obj>::
 
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::
-	merge()
+	merge(bool removeIndices)
 {
 	auto t_start = time(nullptr);
 	console -> info ("Merge starting. Time-stamp = {}.\n", time(nullptr) - start_time_);
@@ -275,20 +275,19 @@ void CdBG_Merger<qf_obj, key_obj>::
 	assign_abundant_color_ids();
 	build_MPH_tables();
 
+	// Calculate the size of and then remove the temporary directory.
+	uint64_t diskSpace = get_intermediate_disk_space();
+	std::string sysCommand = "rm -rf " + tempDir;
+	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
+
 	// cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
 	cdbg.bv_buffer = BitVector(cdbg.colorClassPerBuffer * cdbg.num_samples);
-	build_color_class_table();
+	build_color_class_table(removeIndices);
 	cdbg.bv_buffer = BitVector(0);
 
 	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
 					kmerCount);
 	build_CQF();
-
-
-	// Calculate the size of and then remove the temporary directory.
-	uint64_t diskSpace = get_intermediate_disk_space();
-	std::string sysCommand = "rm -rf " + tempDir;
-	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
 
 	system(sysCommand.c_str());
 
@@ -895,7 +894,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::
-	build_color_class_table()
+	build_color_class_table(bool removeIndices)
 {
 	auto t_start = time(nullptr);
 
@@ -1038,7 +1037,24 @@ void CdBG_Merger<qf_obj, key_obj>::
 				writeQueue.shrink_to_fit();
 			}
 		}
+
+
+		if(removeIndices && i > 0)
+			if(remove(cdbg1.get_eq_class_files()[i - 1].c_str()) != 0)
+			{
+				console -> error("File deletion of {} failed.", cdbg1.get_eq_class_files()[i - 1]);
+				exit(1);
+			}
 	}
+
+
+	if(removeIndices)
+		for(auto p = cdbg2.get_eq_class_files().begin(); p != cdbg2.get_eq_class_files().end(); ++p)
+			if(remove(p -> c_str()) != 0)
+			{
+				console -> error("File deletion of {} failed.", *p);
+				exit(1);
+			}
 
 
 	// Serialize the bitvector buffer last time if needed.
