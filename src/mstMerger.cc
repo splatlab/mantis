@@ -698,7 +698,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
             auto srcEnd = srcStartIdx[n1];
             if (n2 == mstZero) { // zero is the biggest color ID, and hence the last in a sorted list
                 if ((*(edgeList.begin() + srcEnd - 1)).first != n2) {
-                    std::cerr << "!!NOOOOOO!\n";
+                    std::cerr << "!!NOOOOOO! Last end node for this start node is not zero while it's expected to be\n";
                     std::cerr << n1 << " " << srcStart << " " << srcEnd << " " << n2 << " "
                               << (*(edgeList.begin() + srcEnd - 1)).first << "\n";
                     std::exit(3);
