@@ -324,7 +324,7 @@ int main ( int argc, char *argv[] ) {
       } else if(b->arg() == "lsmt_query") {
         std::cout << make_man_page(lsmt_query_mode, "mantis");
       }
-      else if(b->arg()) {
+      else if(b->arg() == "query_disk") {
         std::cout << make_man_page(query_disk_mode, "mantis");
       }
       else {

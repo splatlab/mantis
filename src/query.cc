@@ -234,6 +234,8 @@ int query_main (QueryOpts& opt)
 
 int query_disk_main(QueryOpts &opt)
 {
+  auto t_start = time(nullptr);
+
   spdlog::logger *console = opt.console.get();
 
 
@@ -252,7 +254,14 @@ int query_disk_main(QueryOpts &opt)
 	std::string output = opt.output;
 
 
-  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dir, MANTIS_DBG_ON_DISK);  
+  console -> info("Loading the CdBG metadata from {}.", dir);
+
+  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dir, MANTIS_DBG_ON_DISK);
+
+  console -> info("Loaded the CdBG metadata. It has {} samples, {} k-mers, and {} color-class files.",
+                  cdbg.get_num_samples(), cdbg.get_cqf() -> dist_elts(), cdbg.get_eq_class_file_count());
+
+  cdbg.set_console(console);
 
 	uint64_t kmerLen = cdbg.get_cqf() -> keybits() / 2;
 	console -> info("Loading query k-mers ({}-mers) from disk.", kmerLen);
@@ -263,22 +272,30 @@ int query_disk_main(QueryOpts &opt)
 	std::vector<std::unordered_set<uint64_t>> kmerSets = Kmer::parse_kmers(queryFile.c_str(), kmerLen,
                                                                         totalKmers, opt.process_in_bulk,
                                                                         uniqueKmers);
-	console -> info("Total k-mers to query: {}", totalKmers);
+	console -> info("Total k-mers to query: {}. Number of reads = {}.", totalKmers, kmerSets.size());
 
   std::ofstream outputFile(output);
-	console -> info("Querying the colored dbg.");
+	console -> info("Querying the colored dbg from disk with {} threads.", opt.numThreads);
 
 
   for(auto k = 0; k < kmerSets.size(); ++k)
   {
-      outputFile << k << "\t" << kmerSets[k].size() << "\n";
-      auto result = cdbg.find_samples(kmerSets[k], opt.numThreads);
+    console -> info("Querying read {}.", k);
+    
+    outputFile << k << "\t" << kmerSets[k].size() << "\n";
+    auto result = cdbg.find_samples(kmerSets[k], opt.numThreads);
 
-      for (auto i = 0; i < result.size(); ++i)
-        if(result[i] > 0)
-          outputFile << cdbg.get_sample(i) << "\t" << result[i] << "\n"; 
+    for (auto i = 0; i < result.size(); ++i)
+      if(result[i] > 0)
+        outputFile << cdbg.get_sample(i) << "\t" << result[i] << "\n"; 
   }
 
+  outputFile.flush();
+  outputFile.close();
+
+
+  auto t_end = time(nullptr);
+  console -> info("Query completed and results serialized. Total time taken = {}", t_end - t_start);
 
   return EXIT_SUCCESS;
 }
