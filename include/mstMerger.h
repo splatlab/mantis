@@ -180,7 +180,7 @@ private:
                                               std::queue<uint64_t> &blockIds,
                                               std::vector<std::ofstream> &blockFiles,
                                               std::vector<uint64_t> &blockCnt,
-                                              std::vector<bool> &isDone,
+                                              std::vector<uint8_t> &isDone,
                                               uint64_t &maxDone);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId,
@@ -256,6 +256,7 @@ private:
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
+    SpinLockT fileClosingMutex;
     std::vector<SpinLockT*> blockMutex;
 
     std::unordered_set<uint64_t> test;

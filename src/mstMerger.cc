@@ -27,15 +27,15 @@ static constexpr uint64_t NUMBlocks {1 << 16};
 
 MSTMerger::MSTMerger(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
                      std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-        /*cqf(cqfIn), */prefix(std::move(prefixIn)),
+        cqf(cqfIn), prefix(std::move(prefixIn)),
         prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
         nThreads(numThreads),
         num_of_ccBuffers(numColorBuffersIn) {
     eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
-    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
-    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
+//    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
+//    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
 
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
@@ -128,7 +128,7 @@ bool MSTMerger::buildEdgeSets() {
     blockMutex.resize(NUMBlocks);
     for (auto &b: blockMutex) { b = new std::mutex(); }
     std::queue<uint64_t> blockIds;
-    std::vector<bool> isDone(NUMBlocks, false);
+    std::vector<uint8_t> isDone(NUMBlocks, 0);
     for (uint64_t blockId = 0; blockId < NUMBlocks; blockId++) {
         blockFiles[blockId].open(prefix + "/tmpblock" + std::to_string(blockId),
                                  std::ios::out | std::ios::binary);
@@ -148,17 +148,19 @@ bool MSTMerger::buildEdgeSets() {
     logger->info("Done with writing down the block files.");
     threads.clear();
     uint64_t removed{0}, totalCnt{0};
-    for (auto blockId = 0; blockId < NUMBlocks; blockId++) {
+    logger->info("LAST FILE THAT HAS BEEN CLOSED: {}", maxDone);
+    for (auto blockId = maxDone; blockId < NUMBlocks; blockId++) {
         blockFiles[blockId].close();
         if (blockCnt[blockId] == 0) {
 //            blockFiles[blockId].close();
             std::string file = prefix + "/tmpblock" + std::to_string(blockId);
             std::remove(file.c_str());
-            removed++;
+//            removed++;
         }
         totalCnt += blockCnt[blockId];
         if (blockId % 1000 == 0) {
-            std::cerr << "\r" << "out of " << blockId << " files " << removed << " were removed.";
+            std::cerr << "\r" << blockId << "   ";
+//            std::cerr << "\r" << "out of " << blockId << " files " << removed << " were removed.";
         }
     }
 //    blockFiles.clear();
@@ -245,7 +247,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                                                      std::queue<uint64_t> &blockIds,
                                                      std::vector<std::ofstream> &blockFiles,
                                                      std::vector<uint64_t> &blockCnt,
-                                                     std::vector<bool> &isDone,
+                                                     std::vector<uint8_t> &isDone,
                                                      uint64_t &maxDone) {
     logger->info("writePotentialColorIdEdgesInParallel {}", threadId);
     uint64_t blockCntr{0};
@@ -265,8 +267,6 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
         blockIds.pop();
         colorMutex.unlock();
         blockCntr++;
-        if (blockId % 10000 == 0)
-            std::cerr << "\r" << threadId << "->" << blockId;
         auto shiftedBlockId = blockId << SHIFTBITS;
         auto nextBlockId = blockId + 1;
         nextBlockId <<= SHIFTBITS;
@@ -315,35 +315,40 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
             }
             ++it;
         }
-//            isDone[blockId] = true;
-//            bool stillGood = true;
-        auto localMaxDone = 0;
-        colorMutex.lock();
-        localMaxDone = maxDone;
-        colorMutex.unlock();
-        for (auto idx = localMaxDone; idx < localBlocks.size(); idx++) {
-            blockMutex[idx]->lock();
-            if (!localBlocks[idx].empty()) {
-                blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                      (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) * localBlocks[idx].size());
-                blockCnt[idx] += localBlocks[idx].size();
-            }
-
-            /*if (stillGood and idx < blockId and isDone[idx] and blockFiles[idx].good()) {
+        if (blockId % 10000 == 0) {
+            std::cerr << "\r" << threadId << "-> blockId:" << blockId << ", last block flushed:" << maxDone << "   ";
+            fileClosingMutex.lock();
+            uint64_t idx = maxDone;
+//            std::stringstream ss;
+//            ss << blockId << " closing files\n";
+            while (idx < blockId and isDone[idx] == 1 and blockFiles[idx].good()) {
+//                ss << idx << " ";
                 blockFiles[idx].close();
                 if (blockCnt[idx] == 0) {
                     std::string file = prefix + "/tmpblock" + std::to_string(idx);
                     std::remove(file.c_str());
                 }
-            } else {
-                colorMutex.lock();
-                maxDone = idx;
-                colorMutex.unlock();
-                stillGood = false;
-            }*/
+                idx++;
+            }
+//            ss << "\nreason: " << static_cast<uint16_t>(isDone[idx]) << " " << blockFiles[idx].good() << "\n";
+            maxDone = std::max(maxDone, idx);
+//            ss << maxDone << "\n";
+//            std::cerr << ss.str();
+            fileClosingMutex.unlock();
+        }
+        for (auto idx = maxDone; idx < localBlocks.size(); idx++) {
+            blockMutex[idx]->lock();
+            if (blockFiles[idx].good() and !localBlocks[idx].empty()) {
+                blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
+                                      (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) * localBlocks[idx].size());
+                blockCnt[idx] += localBlocks[idx].size();
+            }
             blockMutex[idx]->unlock();
             localBlocks[idx].clear();
         }
+//        colorMutex.lock();
+        isDone[blockId] = 1;
+//        colorMutex.unlock();
     }
 }
 
