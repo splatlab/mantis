@@ -179,7 +179,9 @@ private:
                                               CQF<KeyObject> &cqf,
                                               std::queue<uint64_t> &blockIds,
                                               std::vector<std::ofstream> &blockFiles,
-                                              std::vector<uint64_t> &blockCnt);
+                                              std::vector<uint64_t> &blockCnt,
+                                              std::vector<bool> &isDone,
+                                              uint64_t &maxDone);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                            CQF<KeyObject> &cqf,
