@@ -424,12 +424,14 @@ void LSMT<qf_obj, key_obj>::
 {
     auto t_start = time(nullptr);
 
+    uint64_t diskReadTime = 0, queryTime = 0;
+
     std::vector<std::vector<std::pair<std::string, uint64_t>>> totalResult;
 
     std::ofstream outputFile(output);
     if(!outputFile.is_open())
     {
-        console -> error("Cannot write to file {}.", dir + mantis::PENDING_SAMPLES_LIST);
+        console -> error("Cannot write to file {}.", output);
         exit(1);
     }
 
@@ -446,15 +448,25 @@ void LSMT<qf_obj, key_obj>::
             std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(levelDir.c_str(),
                                                                                 mantis::EQCLASS_FILE);
             std::string sampleListFile = levelDir + mantis::SAMPLEID_FILE;
+
+            auto t_diskRead_start = time(nullptr);
+            console -> info("Loading LSM-tree level {} into memory.", level);
+
             ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(cqfFile, colorClassFiles, sampleListFile,
                                                                         MANTIS_DBG_IN_MEMORY);
 
+            auto t_diskRead_end = time(nullptr);
+            diskReadTime += t_diskRead_end - t_diskRead_start;
+
+            console -> info("Loaded level {} colored dBG with {} k-mers and {} color classes. Time taken = {}s.",
+                            level, cdbg.get_cqf() -> dist_elts(), cdbg.get_num_bitvectors(),
+                            t_diskRead_end - t_diskRead_start);
+
+
             uint64_t kmerLen = cdbg.get_cqf() -> keybits() / 2;
 
-            console -> info("Loaded level {} colored dBG with {} k-mers and {} color classes.",
-                            level, cdbg.get_cqf() -> dist_elts(), cdbg.get_num_bitvectors());
-            
             console -> info("Querying at level {}.", level);
+            auto t_query_start = time(nullptr);
 
             // Go over each read
             for(auto k = 0; k < kmerSets.size(); ++k)
@@ -468,17 +480,21 @@ void LSMT<qf_obj, key_obj>::
                         totalResult[k].emplace_back(cdbg.get_sample(i), result[i]);
             }
 
-            console -> info("Query done at level {}.", level);
+            auto t_query_end = time(nullptr);
+            queryTime += t_query_end - t_query_start;
+
+            console -> info("Query done at level {}. Time taken = {}s.", level, t_query_end - t_query_start);
         }
     }
 
-    console -> info("Query completed for full LSM-tree. Now querying the {} pending samples.",
-                    pendingSamples.size());
+    console -> info("Query completed for full LSM-tree. Time taken at disk-read = {}s, at actual query = {}s.",
+                    diskReadTime, queryTime);
+
+    console -> info("Now querying the {} pending samples.", pendingSamples.size());
 
     query_pending_list(kmerSets, totalResult);
 
-    console -> info("Query completed for the pending samples.");
-
+    // console -> info("Query completed for the pending samples.");
 
     console -> info("Serializing the query results.");
     
@@ -514,10 +530,19 @@ void LSMT<qf_obj, key_obj>::
     query_pending_list(std::vector<std::unordered_set<uint64_t>> &kmerSets,
                         std::vector<std::vector<std::pair<std::string, uint64_t>>> &totalResult)
 {
+    uint64_t diskReadTime = 0, queryTime = 0;
+
     // Go over each sample.
     for(auto sample: pendingSamples)
     {
+        auto t_diskRead_start = time(nullptr);
         CQF<key_obj> cqf(sample, CQF_FREAD);
+        auto t_diskRead_end = time(nullptr);
+
+        diskReadTime += t_diskRead_end - t_diskRead_start;
+
+
+        auto t_query_start = time(nullptr);
 
         // Go over each read.
         for(auto k = 0; k < kmerSets.size(); ++k)
@@ -535,7 +560,13 @@ void LSMT<qf_obj, key_obj>::
             if(hitCount)
                 totalResult[k].emplace_back(sample, hitCount);
         }
+
+        auto t_query_end = time(nullptr);
+        queryTime += t_query_end - t_query_start;
     }
+
+    console -> info("Querying completed at the pending list. Disk-read time = {}\tActual query time = {}.",
+                    diskReadTime, queryTime);
 }
 
 #endif
