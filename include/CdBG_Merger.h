@@ -277,8 +277,10 @@ void CdBG_Merger<qf_obj, key_obj>::
 
 	// Calculate the size of and then remove the temporary directory.
 	uint64_t diskSpace = get_intermediate_disk_space();
+
 	std::string sysCommand = "rm -rf " + tempDir;
 	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
+	system(sysCommand.c_str());
 
 	// cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
 	cdbg.bv_buffer = BitVector(cdbg.colorClassPerBuffer * cdbg.num_samples);
@@ -288,8 +290,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
 					kmerCount);
 	build_CQF();
-
-	system(sysCommand.c_str());
 
 
 	auto t_end = time(nullptr);
@@ -312,6 +312,14 @@ void CdBG_Merger<qf_obj, key_obj>::
 	cdbg.dbg.dump_metadata();
 
 	serialize_and_close();
+
+
+	if(removeIndices)
+	{
+		console -> info("Removing the input mantis indices from disk.");
+		ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>::remove_index(cdbg1.prefix, console),
+		ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>::remove_index(cdbg2.prefix, console);
+	}
 }
 
 

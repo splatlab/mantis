@@ -130,13 +130,6 @@ int merge_main(MergeOpts &opt)
 	if(opt.timeLog)
 		merger.print_time_log();
 
-	if(opt.removeIndices)
-	{
-		console -> info("Removing the input mantis indices from disk.");
-		ColoredDbG_t::remove_index(dir1, console),
-		ColoredDbG_t::remove_index(dir2, console);
-	}
-
 	return EXIT_SUCCESS;
 }
 
