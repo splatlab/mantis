@@ -181,7 +181,7 @@ bool MSTMerger::buildEdgeSets() {
     }
     for (auto &t : threads) { t.join(); }
 
-    cqf->free();
+//    cqf->free();
 
     num_colorClasses = maxId + 1;
     logger->info("Put edges in each bucket in a sorted list.");

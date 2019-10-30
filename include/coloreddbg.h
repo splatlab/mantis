@@ -939,6 +939,14 @@ void ColoredDbg<qf_obj, key_obj>::
 		exit(1);
 	}
 
+	if(mantis::fs::FileExists((source + "newID2oldIDs").c_str()) &&
+	   remove((source + "newID2oldIDs").c_str()) != 0)
+	{
+		console -> error("File deletion of {} failed.",
+						 source + "newID2oldIDs");
+		exit(1);
+	}
+
 	if(rmdir(source.c_str()) == -1)
 	{
 		console -> error("Cannot remove directory {}.", source);
