@@ -57,6 +57,7 @@ int compare_indices_main(CompareIndicesOpt &opt);
 int lsmt_initialize_main(LSMT_InitializeOpts &opt);
 int lsmt_update_main(LSMT_UpdateOpts &opt);
 int lsmt_query_main(LSMT_QueryOpts &opt);
+int query_disk_main(QueryOpts& opt);
 
 
 
@@ -69,7 +70,7 @@ int lsmt_query_main(LSMT_QueryOpts &opt);
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
   enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge,
-                  compare_indices, lsmt_init, lsmt_update, lsmt_query, help};
+                  compare_indices, lsmt_init, lsmt_update, lsmt_query, query_disk, help};
   mode selected = mode::help;
 
   auto console = spdlog::stdout_color_mt("mantis_console");
@@ -79,12 +80,15 @@ int main ( int argc, char *argv[] ) {
   ValidateOpts vopt;
   MSTValidateOpts mvopt;
   StatsOpts sopt;
+
   MergeOpts mopt;
   ValidateMergeOpts vmopt;
   CompareIndicesOpt ciopt;
   LSMT_InitializeOpts lsmtiopt;
   LSMT_UpdateOpts lsmtuopt;
   LSMT_QueryOpts lsmtqopt;
+  QueryOpts qdopt;
+
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
@@ -96,6 +100,7 @@ int main ( int argc, char *argv[] ) {
   lsmtiopt.console = console;
   lsmtuopt.console = console;
   lsmtqopt.console = console;
+  qdopt.console = console;
 
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
@@ -225,11 +230,24 @@ int main ( int argc, char *argv[] ) {
                           option("-k", "--kmer-length") & value("kmer-length", lsmtqopt.k) % "length of k-mers"
                         );
 
+  auto query_disk_mode = (
+                          command("query_disk").set(selected, mode::query_disk),
+                          required("-d", "--dir") & value("dir", qdopt.prefix)
+                          % "directory where the Mantis index resides",
+                          required("-q", "--query-file") & value(ensure_file_exists, "query-file", qdopt.query_file)
+                          % "file containing the query transcripts",
+                          required("-o", "--output") & value("query-output", qdopt.output)
+                          % "file containing the query results",
+                          option("-t", "--thread-count") & value("thread-count", qdopt.numThreads)
+                          % "number of threads to use",
+                          option("-k", "--kmer-length") & value("kmer-length", lsmtqopt.k) % "length of k-mers"
+                        );
+
 
   auto cli = (
               (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
               merge_mode | validate_merge_mode | compare_indices_mode |
-              lsmt_init_mode | lsmt_update_mode | lsmt_query_mode |
+              lsmt_init_mode | lsmt_update_mode | lsmt_query_mode | query_disk_mode |
               command("help").set(selected,mode::help) |
                option("-v", "--version").call([]{std::cout << "mantis " << mantis::version << '\n'; std::exit(0);}).doc("show version")
               )
@@ -247,6 +265,7 @@ int main ( int argc, char *argv[] ) {
   assert(lsmt_init_mode.flags_are_prefix_free());
   assert(lsmt_update_mode.flags_are_prefix_free());
   assert(lsmt_query_mode.flags_are_prefix_free());
+  assert(query_disk_mode.flags_are_prefix_free());
 
   decltype(parse(argc, argv, cli)) res;
   try {
@@ -274,6 +293,7 @@ int main ( int argc, char *argv[] ) {
     case mode::lsmt_init: lsmt_initialize_main(lsmtiopt); break;
     case mode::lsmt_update: lsmt_update_main(lsmtuopt); break;
     case mode::lsmt_query: lsmt_query_main(lsmtqopt); break;
+    case mode::query_disk: query_disk_main(qdopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {
@@ -303,6 +323,9 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(lsmt_init_mode, "mantis");
       } else if(b->arg() == "lsmt_query") {
         std::cout << make_man_page(lsmt_query_mode, "mantis");
+      }
+      else if(b->arg()) {
+        std::cout << make_man_page(query_disk_mode, "mantis");
       }
       else {
         std::cout << "There is no command \"" << b->arg() << "\"\n";

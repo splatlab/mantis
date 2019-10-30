@@ -2,7 +2,8 @@
  * ============================================================================
  *
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
- *   Organization:  Stony Brook University
+ *                  Jamshed Khan (), jamshed@umd.edu
+ *   Organization:  Stony Brook University, University of Maryland
  *
  * ============================================================================
  */
@@ -228,3 +229,56 @@ int query_main (QueryOpts& opt)
 
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
+
+
+
+int query_disk_main(QueryOpts &opt)
+{
+  spdlog::logger *console = opt.console.get();
+
+
+	std::string dir = opt.prefix;
+	if(dir.back() != '/')	// Make sure it is a full directory.
+		dir += '/';
+
+	// Make sure the input directory exists.
+	if(!mantis::fs::DirExists(dir.c_str()))
+	{
+		console -> error("Mantis index directory {} does not exist.", dir);
+		exit(1);
+	}
+
+	std::string queryFile = opt.query_file;
+	std::string output = opt.output;
+
+
+  ColoredDbg<SampleObject<CQF<KeyObject>*>, KeyObject> cdbg(dir, MANTIS_DBG_ON_DISK);  
+
+	uint64_t kmerLen = cdbg.get_cqf() -> keybits() / 2;
+	console -> info("Loading query k-mers ({}-mers) from disk.", kmerLen);
+
+	uint32_t seed = 2038074743;
+	uint64_t totalKmers = 0;
+	std::unordered_map<uint64_t, uint64_t> uniqueKmers;
+	std::vector<std::unordered_set<uint64_t>> kmerSets = Kmer::parse_kmers(queryFile.c_str(), kmerLen,
+                                                                        totalKmers, opt.process_in_bulk,
+                                                                        uniqueKmers);
+	console -> info("Total k-mers to query: {}", totalKmers);
+
+  std::ofstream outputFile(output);
+	console -> info("Querying the colored dbg.");
+
+
+  for(auto k = 0; k < kmerSets.size(); ++k)
+  {
+      outputFile << k << "\t" << kmerSets[k].size() << "\n";
+      auto result = cdbg.find_samples(kmerSets[k], opt.numThreads);
+
+      for (auto i = 0; i < result.size(); ++i)
+        if(result[i] > 0)
+          outputFile << cdbg.get_sample(i) << "\t" << result[i] << "\n"; 
+  }
+
+
+  return EXIT_SUCCESS;
+}
