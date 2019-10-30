@@ -197,7 +197,7 @@ bool MSTMerger::buildEdgeSets() {
         std::string filename = prefix + "/tmp" + std::to_string(i);
         std::ifstream tmp;
         tmp.open(filename, std::ios::in | std::ios::binary);
-        uint64_t cnt;
+        uint64_t cnt{0};
         tmp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
 //        logger->info("file {} has {} edges.", i, cnt);
         std::vector<Edge> edgeList;
