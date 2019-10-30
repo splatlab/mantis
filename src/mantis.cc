@@ -174,7 +174,7 @@ int main ( int argc, char *argv[] ) {
                     required("-i1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-i2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
                     required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written",
-                    option("-tl", "--time-log").set(mopt.timeLog) % "write the summary time-log for the algorithm",
+                    option("-l", "--time-log").set(mopt.timeLog) % "write the summary time-log for the algorithm",
                     option("-rm", "--remove-indices").set(mopt.removeIndices) % "remove the input mantis indices from disk"
                     );
 
