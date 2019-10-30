@@ -121,5 +121,6 @@ int validate_mst_main(MSTValidateOpts &opt) {
             std::cerr << "\r" << cntr/1000000 << "M eqs were the same";
         }
     }
-    logger->info("\nWOOOOW! Validation passed\n");
+    if (!failure)
+        logger->info("\nWOOOOW! Validation passed\n");
 }
