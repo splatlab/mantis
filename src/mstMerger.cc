@@ -484,11 +484,11 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         colorMutex.lock();
         if (blockIds.empty()) {
             maxId = localMaxId > maxId ? localMaxId : maxId;
-            std::cerr << "\r";
-            logger->info("Thread {}: added {} edges", threadId, edgeCntr);
             tmpfile.seekp(0);
             tmpfile.write(reinterpret_cast<const char *>(&edgeCntr), sizeof(edgeCntr));
             tmpfile.close();
+            std::cerr << "\r";
+            logger->info("Thread {}: added {} edges", threadId, edgeCntr);
             colorMutex.unlock();
             return;
         }
