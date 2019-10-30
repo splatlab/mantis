@@ -199,7 +199,7 @@ bool MSTMerger::buildEdgeSets() {
         tmp.open(filename, std::ios::in | std::ios::binary);
         uint64_t cnt{0};
         tmp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
-//        logger->info("file {} has {} edges.", i, cnt);
+        logger->info("file {} has {} edges.", i, cnt);
         std::vector<Edge> edgeList;
         edgeList.resize(cnt);
         tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge) * cnt);
@@ -701,7 +701,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                     std::exit(3);
                 }
                 if ((*wItr).first != n2) {
-                    std::cerr << "NOOOOOO! The returned BS value does not match searched for value n2\n";
+                    std::cerr << "NOOOOOO! The returned binary search value does not match searched for value n2\n";
                     std::cerr << "n1=" << n1
                     << " srcStart=" << srcStart << " srcEnd=" << srcEnd
                     << " n2=" << n2 << " BS return val=" << (*wItr).first << "\n";
