@@ -611,17 +611,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
     // call the lambda function per mantis
     edgeSplitter(srcStartIdx1, edge1list, mst1Zero, true);
     edgeSplitter(srcStartIdx2, edge2list, mst2Zero, false);
-/*
-    std::cerr << "\n";
-    for (auto i = 0; i < 10; i++) {
-        std::cerr << i << ":" << srcStartIdx1[i] << "\n";
-        auto j = i == 0? 0 : srcStartIdx1[i-1];
-        while (j < srcStartIdx1[i]) {
-            std::cerr << j << ":" << edge1list[j].first << " ";
-            j++;
-        }
-        std::cerr << "\n";
-    }*/
     logger->info("num of edges in first mantis: {}", edge1list.size());
     logger->info("num of edges in second mantis: {}", edge2list.size());
 
@@ -685,11 +674,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
     //abstract out the part repeated for mst1 and mst2 as a lambda function
     auto findWeight = [=](Edge &edge, std::vector<std::pair<colorIdType, weightType>> &edgeList,
                           std::vector<uint32_t> &srcStartIdx, colorIdType mstZero, bool isFirst) {
-//            std::cerr << edge.n1 << " " << edge.n2 << "\n";
-//            std::cerr << mstZero << "\n";
-        auto n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first : colorPairs[edge.n1].second);
-        auto n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first : colorPairs[edge.n2].second);
-//            std::cerr << n1 << " " << n2 << " ";
+        colorIdType n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first : colorPairs[edge.n1].second);
+        colorIdType n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first : colorPairs[edge.n2].second);
         if (n1 == n2) return static_cast<weightType>(0);
         if (n1 > n2) std::swap(n1, n2);
         weightType w{0};
@@ -715,8 +701,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
                     std::exit(3);
                 }
                 if ((*wItr).first != n2) {
-                    std::cerr << "NOOOOOO!\n";
-                    std::cerr << n1 << " " << srcStart << " " << srcEnd << " " << n2 << " " << (*wItr).first << "\n";
+                    std::cerr << "NOOOOOO! The returned BS value does not match searched for value n2\n";
+                    std::cerr << "n1=" << n1
+                    << " srcStart=" << srcStart << " srcEnd=" << srcEnd
+                    << " n2=" << n2 << " BS return val=" << (*wItr).first << "\n";
                     std::exit(3);
                 }
                 w = (*wItr).second;
@@ -725,6 +713,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
 //        std::cerr << n1 << " " << n2 << " " << w << "\n";
         return w;
     };
+    logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
     for (auto i = 0; i < eqclass_files.size(); i++) {
         for (auto j = i; j < eqclass_files.size(); j++) {
             auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
