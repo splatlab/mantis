@@ -175,13 +175,11 @@ private:
 
     void writePotentialColorIdEdgesInParallel(uint32_t threadId,
                                               CQF<KeyObject> &cqf,
-                                              std::queue<uint64_t> &blockIds,
                                               std::vector<std::ofstream> &blockFiles,
                                               std::vector<uint64_t> &blockCnt);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                            CQF<KeyObject> &cqf,
-                                           std::queue<uint64_t> &blockIds,
                                            std::vector<std::ifstream> &blockFiles,
                                            std::vector<uint64_t> &blockCnt,
                                            uint64_t &maxId);
