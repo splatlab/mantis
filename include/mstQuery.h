@@ -22,6 +22,8 @@ using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
 //using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
+typedef uint32_t colorIdType;
+
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};
     uint64_t totSel{0};
@@ -85,6 +87,14 @@ public:
     sdsl::int_vector<> deltabv;
     sdsl::bit_vector::select_1_type sbbv;
 
+    static colorIdType getNodeCount(std::string &prefix) {
+        static sdsl::int_vector<> parentbv;
+        sdsl::load_from_file(parentbv, prefix + mantis::PARENTBV_FILE);
+        static uint64_t size = parentbv.size();
+        parentbv.resize(0);
+        return size;
+    }
+
     MSTQuery(std::string prefixIn, uint32_t indexKIn, uint32_t queryKIn,
             uint64_t numSamplesIn, spdlog::logger *loggerIn) :
     numSamples(numSamplesIn), indexK(indexKIn), queryK(queryKIn), logger(loggerIn), prefix(prefixIn) {
@@ -111,6 +121,7 @@ public:
 
     void reset();
 
+    void clear();
     void storeStructure() {
         auto rootID = parentbv.size()-1;
         //BFS

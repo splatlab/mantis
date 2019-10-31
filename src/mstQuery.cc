@@ -405,6 +405,13 @@ void MSTQuery::reset() {
     cid2expMap.clear();
 }
 
+void MSTQuery::clear() {
+    reset();
+    parentbv.resize(0);
+    deltabv.resize(0);
+    bbv.resize(0);
+}
+
 mantis::QueryResult MSTQuery::getResultList() {
     mantis::QueryResult res(numSamples, 0);
     for (auto& kv : kmer2cidMap) {

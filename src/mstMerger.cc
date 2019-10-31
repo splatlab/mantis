@@ -19,7 +19,7 @@
 
 #define MAX_ALLOWED_TMP_EDGES 31250000
 
-static constexpr uint64_t MAX_ALLOWED_BLOCK_SIZE{1024};
+static constexpr uint64_t MAX_ALLOWED_BLOCK_SIZE{16*1024};
 static constexpr uint64_t SHIFTBITS {32};
 static constexpr uint64_t HIGHBIT_MASK {(1ULL << 32)-1ULL};
 static constexpr uint64_t LOWBIT_MASK {std::numeric_limits<uint64_t>::max() - HIGHBIT_MASK};
@@ -169,6 +169,7 @@ bool MSTMerger::buildEdgeSets() {
         }
     }
     logger->info("Block counts for next step is {}.", blockIds.size());
+
     for (uint32_t i = 0; i < nThreads; ++i) {
         threads.emplace_back(std::thread(&MSTMerger::buildPairedColorIdEdgesInParallel, this, i,
                                          std::ref(*cqf),
@@ -420,15 +421,16 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
  */
 bool MSTMerger::calculateMSTBasedWeights() {
 
-    mst1 = new MSTQuery(prefix1, k, k, numOfFirstMantisSamples, logger);
-    mst2 = new MSTQuery(prefix2, k, k, secondMantisSamples, logger);
+    colorIdType nodeCnt1 = MSTQuery::getNodeCount(prefix1);
+    colorIdType nodeCnt2 = MSTQuery::getNodeCount(prefix2);
+    colorIdType mst1Zero{nodeCnt1-1}, mst2Zero{nodeCnt2 - 1};
 
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
 
     QueryStats dummyStats1, dummyStats2;
 
-    logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, mst1->parentbv.size(),
-                 mst2->parentbv.size());
+    logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, nodeCnt1,
+                 nodeCnt2);
     std::ifstream cp(prefix + "newID2oldIDs");
     uint64_t cnt, cIdx, c1, c2;
     cp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
@@ -438,8 +440,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
         cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
         cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
         cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
-        c1 = c1 == 0 ? mst1->parentbv.size() - 1 : c1 - 1;
-        c2 = c2 == 0 ? mst2->parentbv.size() - 1 : c2 - 1;
+        c1 = c1 == 0 ? mst1Zero : c1 - 1;
+        c2 = c2 == 0 ? mst2Zero : c2 - 1;
         //std::cerr << cIdx << " " << n1s << " " << n2s << "\n";
         colorPairs[cIdx] = std::make_pair(c1, c2);
     }
@@ -456,10 +458,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
         qf.numSamples = numSamples;
         qf.trySample = true;
     }
-    colorIdType mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
     std::vector<std::pair<colorIdType, weightType>> edge1list;
     std::vector<std::pair<colorIdType, weightType>> edge2list;
-    std::vector<uint32_t> srcStartIdx1(mst1->parentbv.size(), 0), srcStartIdx2(mst2->parentbv.size(), 0);
+    std::vector<uint32_t> srcStartIdx1(nodeCnt1, 0), srcStartIdx2(nodeCnt2, 0);
 
 
     // total merged edges can be a good estimate to reserve a vector per mst
@@ -525,6 +526,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("num of edges in first mantis: {}", edge1list.size());
     logger->info("num of edges in second mantis: {}", edge2list.size());
 
+    mst1 = new MSTQuery(prefix1, k, k, numOfFirstMantisSamples, logger);
     std::vector<colorIdType> colorsInCache;
     planCaching(mst1, edge1list, srcStartIdx1, colorsInCache);
     logger->info("fixed cache size for mst1 is : {}", colorsInCache.size());
@@ -554,9 +556,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
     }
     for (auto &t : threads) { t.join(); }
     threads.clear();
-    logger->info("Done calculating Dist for mst1");
+    mst1->clear();
+    logger->info("Done calculating weights for mst1");
 
-
+    mst2 = new MSTQuery(prefix2, k, k, secondMantisSamples, logger);
     planCaching(mst2, edge2list, srcStartIdx2, colorsInCache);
     logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
     //fillout fixed_cache2
@@ -577,8 +580,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
                                          secondMantisSamples));
     }
     for (auto &t : threads) { t.join(); }
+    threads.clear();
     colorsInCache.clear();
-    logger->info("Done calculating Dist for mst2");
+    mst2->clear();
+    logger->info("Done calculating weights for mst2");
     uint64_t cntr{0};
 
     //abstract out the part repeated for mst1 and mst2 as a lambda function
