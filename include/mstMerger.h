@@ -153,8 +153,6 @@ public:
 private:
     bool buildEdgeSets();
 
-    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
-
     bool calculateMSTBasedWeights();
 
     bool encodeColorClassUsingMST();
@@ -179,9 +177,7 @@ private:
                                               CQF<KeyObject> &cqf,
                                               std::queue<uint64_t> &blockIds,
                                               std::vector<std::ofstream> &blockFiles,
-                                              std::vector<uint64_t> &blockCnt,
-                                              std::vector<uint8_t> &isDone,
-                                              uint64_t &maxDone);
+                                              std::vector<uint64_t> &blockCnt);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                            CQF<KeyObject> &cqf,
@@ -260,6 +256,7 @@ private:
     std::vector<SpinLockT*> blockMutex;
 
     std::unordered_set<uint64_t> test;
+    uint64_t numBlocks;
 
 };
 
