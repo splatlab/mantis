@@ -35,7 +35,7 @@ MSTMerger::MSTMerger(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger
     logger = loggerIn;//.get();
 
 //    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
-//    cqf = new CQF<KeyObject>(cqf_file, CQF_FREAD);
+//    cqf = new CQF<KeyObject>(cqf_file, CQF_MMAP);
 
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
@@ -246,6 +246,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
     for (auto &b : localBlocks) {
         b.resize(maxAllowedElements);
     }
+
     while (true) {
         uint64_t blockId = 0;
         colorMutex.lock();
@@ -772,6 +773,8 @@ bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
     kruskalMSF();
 
+    mst1->loadIdx(prefix1);
+    mst2->loadIdx(prefix2);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");

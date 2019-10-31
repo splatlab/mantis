@@ -90,7 +90,7 @@ public:
     static colorIdType getNodeCount(std::string &prefix) {
         static sdsl::int_vector<> parentbv;
         sdsl::load_from_file(parentbv, prefix + mantis::PARENTBV_FILE);
-        static uint64_t size = parentbv.size();
+        colorIdType size = parentbv.size();
         parentbv.resize(0);
         return size;
     }
