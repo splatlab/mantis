@@ -264,7 +264,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 		exit(1);
 	}
 
-
+	// Phase I
 	
 	sample_color_id_pairs(mantis::SAMPLE_SIZE);
 
@@ -272,8 +272,18 @@ void CdBG_Merger<qf_obj, key_obj>::
 	uint64_t kmerCount = fill_disk_buckets();
 	uint64_t colorClassCount = sampledPairs.size() + filter_disk_buckets();
 
+
+	// Phase 2
+
 	assign_abundant_color_ids();
 	build_MPH_tables();
+
+
+	// cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
+	cdbg.bv_buffer = BitVector(cdbg.colorClassPerBuffer * cdbg.num_samples);
+	build_color_class_table(removeIndices);
+	cdbg.bv_buffer = BitVector(0);
+
 
 	// Calculate the size of and then remove the temporary directory.
 	uint64_t diskSpace = get_intermediate_disk_space();
@@ -282,10 +292,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 	console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
 	system(sysCommand.c_str());
 
-	// cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
-	cdbg.bv_buffer = BitVector(cdbg.colorClassPerBuffer * cdbg.num_samples);
-	build_color_class_table(removeIndices);
-	cdbg.bv_buffer = BitVector(0);
+
+	// Phase 3
 
 	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), 
 					kmerCount);
@@ -979,8 +987,15 @@ void CdBG_Merger<qf_obj, key_obj>::
 				}
 
 
-				std::ifstream input(cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE +
-									"_" + std::to_string(i) + "_" + std::to_string(j));
+				std::string pairsFile = cdbg.prefix + mantis::TEMP_DIR + mantis::EQ_ID_PAIRS_FILE +
+										"_" + std::to_string(i) + "_" + std::to_string(j);
+				std::ifstream input(pairsFile);
+				if(!input.is_open())
+				{
+					console -> error("Cannot read from file {}.", pairsFile);
+					exit(1);
+				}
+				
 				std::pair<uint64_t, uint64_t> idPair;
 
 				// TODO: Add faster file-read mechanism.
