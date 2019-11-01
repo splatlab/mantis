@@ -24,7 +24,7 @@ class CdBG_Merger
 
 		// Sets the number of processor-threads to be used at the intermediate steps of 
 		// unique id-pairs filtering and MPH building.
-		inline void set_thread_count(uint threadNum) { threadCount = threadNum; }
+		inline void set_thread_count(uint32_t threadNum) { threadCount = threadNum; }
 
 		// Merges two Colored dBG 'cdbg1' and 'cdbg2' into the colored dBG 'cdbg'
 		// (all the CdBG's are private members).
@@ -52,7 +52,7 @@ class CdBG_Merger
 		
 		// Number of processor-threads to be used at the intermediate steps of  unique
 		// color-id pairs filtering and MPH's building.
-		uint threadCount = 1;
+		uint32_t threadCount = 1;
 
         // Utility information to display at the result summary.
         uint64_t colorCount1 = 0, colorCount2 = 0;
@@ -660,7 +660,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
 					fileCount2 = cdbg2.get_eq_class_file_count();
 
-	uint maxMemoryForSort = std::max(get_max_sort_memory(), (uint64_t)1);
+	uint32_t maxMemoryForSort = std::max(get_max_sort_memory(), (uint64_t)1);
 	
 	for(int i = 0; i <= fileCount1; ++i)
 		for(int j = 0; j <= fileCount2; ++j)
