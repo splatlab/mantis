@@ -93,7 +93,15 @@ class ColoredDbg {
 		// Query the k-mers from 'kmerSet' using 'threadCount' threads.
 		std::vector<uint64_t> find_samples(std::unordered_set<uint64_t> &kmerSet, uint32_t threadCount);
 
-		std::vector<std::vector<uint64_t>> find_sample_distribution(std::vector<std::unordered_set<uint64_t>> &transcripts, uint32_t threadCount);
+		std::vector<std::vector<mantis::Abundance_t>> find_sample_distribution(std::vector<std::unordered_set<mantis::Kmer_t>> &transcripts, uint32_t threadCount);
+
+		void get_colorId_transcript_distribution(std::vector<std::pair<mantis::Kmer_t, std::vector<mantis::TranscriptId_t>>> &kmers,
+												uint64_t startIdx, uint64_t endIdx,
+												std::map<std::pair<mantis::ColorId_t, mantis::TranscriptId_t>, mantis::Abundance_t> &colorIdFreq);
+
+		void get_transcript_sample_distribution(std::vector<std::pair<mantis::ColorId_t, std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>>>> &colorIds,
+												uint64_t startIdx, uint64_t endIdx,
+												std::map<std::pair<mantis::TranscriptId_t, mantis::SampleId_t>, mantis::Abundance_t> &sampleFreq);
 
 		// Get the color-id distribution of the k-mers at kmers[startIdx: endIdx) from the
 		// underlying CQF, into the hash-map 'freq'.
@@ -913,11 +921,199 @@ void ColoredDbg<qf_obj, key_obj>::
 
 
 template<typename qf_obj, typename key_obj>
-std::vector<std::vector<uint64_t>> ColoredDbg<qf_obj, key_obj>::
-	find_sample_distribution(std::vector<std::unordered_set<uint64_t>> &transcripts, uint32_t threadCount)
+std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
+	find_sample_distribution(std::vector<std::unordered_set<mantis::Kmer_t>> &transcripts, uint32_t threadCount)
 {
+	mantis::TranscriptId_t transcriptCount = transcripts.size();
+	std::vector<std::thread> T;
+
+	T.reserve(threadCount);
+
+
+	// Gather the transcript list for each k-mer throughout the whole transcript collection,
+	// in a sorted order of the k-mers.
+	console -> info("Gathering all unique k-mers of the {} transcripts into a bulk-set. Time-stamp = {}",
+					transcriptCount, time(nullptr));
+
+	std::map<mantis::Kmer_t, std::vector<mantis::TranscriptId_t>> kmerTranscripts;
+
+	for(mantis::TranscriptId_t i = 0; i < transcriptCount; ++i)	
+		for(auto &kmer: transcripts[i])
+		{
+			if(kmerTranscripts.find(kmer) == kmerTranscripts.end())
+				kmerTranscripts[kmer] = std::vector<mantis::TranscriptId_t>();
+
+			kmerTranscripts[kmer].push_back(i);
+		}
+
+	std::vector<std::pair<mantis::Kmer_t, std::vector<mantis::TranscriptId_t>>>
+		kmers(kmerTranscripts.begin(), kmerTranscripts.end());
+
+	console -> info("Gathered {} unique k-mers. Time-stamp = {}.", kmers.size(), time(nullptr));
+	
+
+	// Distribute the k-mers to the threads for point-query.
+
+	std::vector<std::map<std::pair<mantis::ColorId_t, mantis::TranscriptId_t>, mantis::Abundance_t>> colorIdTransFreqs;
+	colorIdTransFreqs.resize(threadCount);
+
+	uint64_t perThreadTask = kmers.size() / threadCount;
+
+	console -> info("Distributing {} kmers to each thread for point-query into the CQF. Time-stamp = {}.",
+					perThreadTask, time(nullptr));
+
+	for(uint32_t t = 0; t < threadCount; ++t)
+		T.emplace_back(&ColoredDbg<qf_obj, key_obj>:: get_colorId_transcript_distribution, this,
+						std::ref(kmers), t * perThreadTask,
+						t < threadCount - 1 ? (t + 1) * perThreadTask : kmers.size(),
+						std::ref(colorIdTransFreqs[t]));
+
+
+	// Aggregate the (colorId, transcript) pair abundance.
+
+	std::map<std::pair<mantis::ColorId_t, mantis::TranscriptId_t>, mantis::Abundance_t> aggregateColorIdTransFreq;
+	for(uint32_t t = 0; t < threadCount; ++t)
+	{
+		T[t].join();
+		for(auto p = colorIdTransFreqs[t].begin(); p != colorIdTransFreqs[t].end(); ++p)
+			aggregateColorIdTransFreq[p -> first] += p -> second;
+	}
+
+	console -> info("All the threads completed their point-queries. Time-stamp = {}.", time(nullptr));
+
+	T.clear();
+
+
+	// Gather the (colorId, transcript) abundance distribution in a sorted order of the colorIds;
+	// namely, gather the distribution in this form: <colorId, list(<transcriptId, abundance>)>
+	console -> info("Gathering containing transcripts and corresponding abundance information for each unique color-id. Time-stamp = {}.",
+					time(nullptr));
+
+	std::map<mantis::ColorId_t, std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>>> colorIdDist;
+	
+	for(auto p = aggregateColorIdTransFreq.begin(); p != aggregateColorIdTransFreq.end(); ++p)
+	{
+		mantis::ColorId_t colorId = p -> first.first;
+		mantis::TranscriptId_t transcriptId = p -> first.second;
+		mantis::Abundance_t abundance = p -> second;
+
+		if(colorIdDist.find(colorId) == colorIdDist.end())
+			colorIdDist[colorId] = std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>>();
+
+		colorIdDist[colorId].emplace_back(transcriptId, abundance);
+	}
+
+	std::vector<std::pair<mantis::ColorId_t, std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>>>>
+		colorIds(colorIdDist.begin(), colorIdDist.end());
+
+	console -> info("Gathered information for {} unique color-ids. Time-stamp = {}.",
+					colorIds.size(), time(nullptr));
+
+	
+	// Distribute the color-ids to threads for color-class decoding.
+	console -> info("Distributing {} color-ids to each thread for color-class decoding from the bitvector files. Time-stamp = {}.",
+					perThreadTask, time(nullptr));
+
+	std::vector<std::map<std::pair<mantis::TranscriptId_t, mantis::SampleId_t>, mantis::Abundance_t>> transSampleFreqs;
+	transSampleFreqs.resize(threadCount);
+
+	perThreadTask = colorIds.size() / threadCount;
+
+	for(uint32_t t = 0; t < threadCount; ++t)
+		T.emplace_back(&ColoredDbg<qf_obj, key_obj>:: get_transcript_sample_distribution, this,
+						std::ref(colorIds), t * perThreadTask,
+						t < threadCount - 1 ? (t + 1) * perThreadTask : colorIds.size(),
+						std::ref(transSampleFreqs[t]));
+
+
+	// Aggregate the (transcriptId, sampleId) abundance information.
+
+	std::vector<std::vector<mantis::Abundance_t>> queryResult(transcriptCount, std::vector<mantis::Abundance_t>(num_samples, 0));
+	for(uint32_t t = 0; t < threadCount; ++t)
+	{
+		T[t].join();
+		for(auto p = transSampleFreqs[t].begin(); p != transSampleFreqs[t].end(); ++p)
+		{
+			mantis::TranscriptId_t transcriptId = p -> first.first;
+			mantis::SampleId_t sampleId = p -> first.second;
+			mantis::Abundance_t abundance = p -> second;
+
+			queryResult[transcriptId][sampleId] = p -> second;
+		}
+	}
+
+	console -> info("All the threads completed their color-class decoding. Time-stamp = {}.", time(nullptr));
+
+	T.clear();
+
+	return queryResult;
 }
 
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	get_colorId_transcript_distribution(std::vector<std::pair<mantis::Kmer_t, std::vector<mantis::TranscriptId_t>>> &kmers,
+										uint64_t startIdx, uint64_t endIdx,
+										std::map<std::pair<mantis::ColorId_t, mantis::TranscriptId_t>, mantis::Abundance_t> &colorIdTransFreq)
+{
+	for(uint64_t i = startIdx; i < endIdx; ++i)
+	{
+		mantis::Kmer_t &kmer = kmers[i].first;
+		std::vector<mantis::TranscriptId_t> &transcripts = kmers[i].second;
+
+		key_obj key(kmer, 0, 0);
+		uint64_t colorId = dbg.query(key, 0);
+		if(colorId)
+			for(mantis::TranscriptId_t transcript: transcripts)
+				colorIdTransFreq[std::make_pair(colorId, transcript)]++;
+	}
+}
+
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::
+	get_transcript_sample_distribution(std::vector<std::pair<mantis::ColorId_t, std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>>>> &colorIds,
+										uint64_t startIdx, uint64_t endIdx,
+										std::map<std::pair<mantis::TranscriptId_t, mantis::SampleId_t>, mantis::Abundance_t> &transSampleFreq)
+{
+	BitVectorRRR bitVec;
+	uint64_t currBucket = std::numeric_limits<uint64_t>::max();
+
+	for(uint64_t i = startIdx; i < endIdx; ++i)
+	{
+		mantis::ColorId_t colorId = colorIds[i].first;
+		std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>> &dist = colorIds[i].second;
+
+		uint64_t reqBucket = (colorId - 1) / colorClassPerBuffer;
+		if(currBucket != reqBucket)
+		{
+			sdsl::load_from_file(bitVec, get_eq_class_files()[reqBucket]);
+			currBucket = reqBucket;
+		}
+
+
+		const uint64_t wordLen = 64;
+		uint64_t offset = ((colorId - 1) % colorClassPerBuffer) * num_samples;
+		for(uint32_t w = 0; w <= num_samples / wordLen; ++w)
+		{
+			uint64_t len = std::min((uint64_t)wordLen, num_samples - w * wordLen);
+			uint64_t word = bitVec.get_int(offset, len);
+			
+			for(uint32_t idx = 0, sampleNum = w * wordLen; idx < len; ++idx, ++sampleNum)
+				if((word >> idx) & 0x01)
+					for(auto &p: dist)
+					{
+						mantis::TranscriptId_t &transcriptId = p.first;
+						mantis::Abundance_t &abundance = p.second;
+						transSampleFreq[std::make_pair(transcriptId, sampleNum)] += abundance;
+					}
+
+			offset += len;
+		}
+	}
+}
 
 
 template<typename qf_obj, typename key_obj>

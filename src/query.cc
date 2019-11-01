@@ -272,23 +272,38 @@ int query_disk_main(QueryOpts &opt)
 	std::vector<std::unordered_set<uint64_t>> kmerSets = Kmer::parse_kmers(queryFile.c_str(), kmerLen,
                                                                         totalKmers, opt.process_in_bulk,
                                                                         uniqueKmers);
-	console -> info("Total k-mers to query: {}. Number of reads = {}.", totalKmers, kmerSets.size());
+	console -> info("Total k-mers to query: {}. Number of transcript = {}.", totalKmers, kmerSets.size());
 
   std::ofstream outputFile(output);
+  if(!outputFile.is_open())
+  {
+    console -> error("Can not write to output file {}.", output);
+    exit(1);
+  }
+
 	console -> info("Querying the colored dbg from disk with {} threads.", opt.numThreads);
 
-
-  for(auto k = 0; k < kmerSets.size(); ++k)
+  std::vector<std::vector<mantis::Abundance_t>> queryResult = cdbg.find_sample_distribution(kmerSets, opt.numThreads);
+  for(auto transcriptId = 0; transcriptId < queryResult.size(); ++transcriptId)
   {
-    console -> info("Querying read {}.", k);
-    
-    outputFile << k << "\t" << kmerSets[k].size() << "\n";
-    auto result = cdbg.find_samples(kmerSets[k], opt.numThreads);
-
-    for (auto i = 0; i < result.size(); ++i)
-      if(result[i] > 0)
-        outputFile << cdbg.get_sample(i) << "\t" << result[i] << "\n"; 
+    outputFile << transcriptId << "\t" << kmerSets[transcriptId].size() << "\n";
+    for(auto sampleId = 0; sampleId < queryResult[sampleId].size(); ++sampleId)
+      if(queryResult[transcriptId][sampleId])
+        outputFile << cdbg.get_sample(sampleId) << "\t" << queryResult[transcriptId][sampleId] << "\n";
   }
+
+
+  // for(auto k = 0; k < kmerSets.size(); ++k)
+  // {
+  //   console -> info("Querying read {}.", k);
+    
+  //   outputFile << k << "\t" << kmerSets[k].size() << "\n";
+  //   auto result = cdbg.find_samples(kmerSets[k], opt.numThreads);
+
+  //   for (auto i = 0; i < result.size(); ++i)
+  //     if(result[i] > 0)
+  //       outputFile << cdbg.get_sample(i) << "\t" << result[i] << "\n"; 
+  // }
 
   outputFile.flush();
   outputFile.close();

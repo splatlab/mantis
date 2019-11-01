@@ -20,6 +20,17 @@ namespace mantis {
 
   using QueryResult = std::vector<uint64_t>;//std::unordered_map<uint64_t, uint64_t>;
   using QueryResults = std::vector<QueryResult>;
+
+
+  using Kmer_t = uint64_t;
+  using ColorId_t = uint64_t;
+  using TranscriptId_t = uint32_t;
+  using Abundance_t = uint64_t;
+  using SampleId_t = uint64_t;
+  // using TranscriptList_t = std::vector<TranscriptId_t>;
+  // using KmerTranscriptList_t = std::pair<Kmer_t, TranscriptList_t>;
+  // using ColorTranscriptPair_t = std::pair<ColorId_t, TranscriptId_t>;
+  // using TranscriptSampleDist_t = std::vector<std::vector<Abundance_t>>;
 }
 
 #endif //__MANTIS_COMMON_TYPES__
