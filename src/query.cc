@@ -287,7 +287,7 @@ int query_disk_main(QueryOpts &opt)
   for(auto transcriptId = 0; transcriptId < queryResult.size(); ++transcriptId)
   {
     outputFile << transcriptId << "\t" << kmerSets[transcriptId].size() << "\n";
-    for(auto sampleId = 0; sampleId < queryResult[sampleId].size(); ++sampleId)
+    for(auto sampleId = 0; sampleId < queryResult[transcriptId].size(); ++sampleId)
       if(queryResult[transcriptId][sampleId])
         outputFile << cdbg.get_sample(sampleId) << "\t" << queryResult[transcriptId][sampleId] << "\n";
   }

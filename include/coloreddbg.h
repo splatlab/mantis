@@ -933,7 +933,7 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 	// Gather the transcript list for each k-mer throughout the whole transcript collection,
 	// in a sorted order of the k-mers.
 	console -> info("Gathering all unique k-mers of the {} transcripts into a bulk-set. Time-stamp = {}",
-					transcriptCount, time(nullptr));
+					transcriptCount, time(nullptr) - start_time_);
 
 	std::map<mantis::Kmer_t, std::vector<mantis::TranscriptId_t>> kmerTranscripts;
 
@@ -949,7 +949,7 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 	std::vector<std::pair<mantis::Kmer_t, std::vector<mantis::TranscriptId_t>>>
 		kmers(kmerTranscripts.begin(), kmerTranscripts.end());
 
-	console -> info("Gathered {} unique k-mers. Time-stamp = {}.", kmers.size(), time(nullptr));
+	console -> info("Gathered {} unique k-mers. Time-stamp = {}.", kmers.size(), time(nullptr) - start_time_);
 	
 
 	// Distribute the k-mers to the threads for point-query.
@@ -960,7 +960,7 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 	uint64_t perThreadTask = kmers.size() / threadCount;
 
 	console -> info("Distributing {} kmers to each thread for point-query into the CQF. Time-stamp = {}.",
-					perThreadTask, time(nullptr));
+					perThreadTask, time(nullptr) - start_time_);
 
 	for(uint32_t t = 0; t < threadCount; ++t)
 		T.emplace_back(&ColoredDbg<qf_obj, key_obj>:: get_colorId_transcript_distribution, this,
@@ -979,7 +979,8 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 			aggregateColorIdTransFreq[p -> first] += p -> second;
 	}
 
-	console -> info("All the threads completed their point-queries. Time-stamp = {}.", time(nullptr));
+	console -> info("All the threads completed their point-queries. Time-stamp = {}.",
+					time(nullptr) - start_time_);
 
 	T.clear();
 
@@ -987,7 +988,7 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 	// Gather the (colorId, transcript) abundance distribution in a sorted order of the colorIds;
 	// namely, gather the distribution in this form: <colorId, list(<transcriptId, abundance>)>
 	console -> info("Gathering containing transcripts and corresponding abundance information for each unique color-id. Time-stamp = {}.",
-					time(nullptr));
+					time(nullptr) - start_time_);
 
 	std::map<mantis::ColorId_t, std::vector<std::pair<mantis::TranscriptId_t, mantis::Abundance_t>>> colorIdDist;
 	
@@ -1007,17 +1008,17 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 		colorIds(colorIdDist.begin(), colorIdDist.end());
 
 	console -> info("Gathered information for {} unique color-ids. Time-stamp = {}.",
-					colorIds.size(), time(nullptr));
-
+					colorIds.size(), time(nullptr) - start_time_);
 	
 	// Distribute the color-ids to threads for color-class decoding.
-	console -> info("Distributing {} color-ids to each thread for color-class decoding from the bitvector files. Time-stamp = {}.",
-					perThreadTask, time(nullptr));
 
 	std::vector<std::map<std::pair<mantis::TranscriptId_t, mantis::SampleId_t>, mantis::Abundance_t>> transSampleFreqs;
 	transSampleFreqs.resize(threadCount);
 
 	perThreadTask = colorIds.size() / threadCount;
+
+	console -> info("Distributing {} color-ids to each thread for color-class decoding from the bitvector files. Time-stamp = {}.",
+					perThreadTask, time(nullptr) - start_time_);
 
 	for(uint32_t t = 0; t < threadCount; ++t)
 		T.emplace_back(&ColoredDbg<qf_obj, key_obj>:: get_transcript_sample_distribution, this,
@@ -1038,11 +1039,12 @@ std::vector<std::vector<mantis::Abundance_t>> ColoredDbg<qf_obj, key_obj>::
 			mantis::SampleId_t sampleId = p -> first.second;
 			mantis::Abundance_t abundance = p -> second;
 
-			queryResult[transcriptId][sampleId] = p -> second;
+			queryResult[transcriptId][sampleId] += abundance;
 		}
 	}
 
-	console -> info("All the threads completed their color-class decoding. Time-stamp = {}.", time(nullptr));
+	console -> info("All the threads completed their color-class decoding. Time-stamp = {}.",
+					time(nullptr) - start_time_);
 
 	T.clear();
 
