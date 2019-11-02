@@ -27,15 +27,15 @@ static constexpr uint64_t CONSTNUMBlocks{1 << 16};
 
 MSTMerger::MSTMerger(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
                      std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-/*cqf(cqfIn),*/ prefix(std::move(prefixIn)),
+                cqf(cqfIn), prefix(std::move(prefixIn)),
                 prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
                 nThreads(numThreads),
                 num_of_ccBuffers(numColorBuffersIn), numBlocks(CONSTNUMBlocks) {
     eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
-    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
-    cqf = new CQF<KeyObject>(cqf_file, CQF_MMAP);
+//    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
+//    cqf = new CQF<KeyObject>(cqf_file, CQF_MMAP);
 
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
