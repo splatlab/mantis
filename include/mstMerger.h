@@ -25,35 +25,13 @@
 
 #include "lru/lru.hpp"
 #include "mstQuery.h"
-//#include "BooPHF.h"
-//#include "bf/all.hpp"
 
-
-/*
-class BitMask {
-public:
-    static uint64_t value;
-};
-
-template <typename BitmaskVal>
-class SpecialKeyObjectHasher : boomphf::HashFunctors<KeyObject> {
-public:
-    uint64_t operator () (const KeyObject& key, uint64_t seed) {
-        return hash_64(key.key, BitmaskVal::value);
-    }
-
-};
-
-using boophf_t = boomphf::mphf<KeyObject, SpecialKeyObjectHasher<BitMask>>;
-*/
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
 //using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
 using SpinLockT = std::mutex;
-
-//using FilterType = bf::basic_bloom_filter;
 
 using FilterType = CQF<KeyObject>;
 
