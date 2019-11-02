@@ -4,6 +4,8 @@
 #
 
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+include(ExternalProject)
+
 project(mantis VERSION 0.2 LANGUAGES C CXX)
 if (NOT CMAKE_BUILD_TYPE)
    set (CMAKE_BUILD_TYPE "Release")
@@ -39,6 +41,31 @@ if (SDSL_INSTALL_PATH)
    list(APPEND MANTIS_CXX_FLAGS "-I${SDSL_INSTALL_PATH}/include")
    list(APPEND MANTIS_CXX_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
 endif()
+#[[
+ExternalProject_Add(libbf
+        GIT_REPOSITORY https://github.com/mavam/libbf.git
+        GIT_TAG        master
+        UPDATE_COMMAND ""
+        UPDATE_DISCONNECTED 1
+        BUILD_IN_SOURCE TRUE
+        DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/libbf
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/libbf
+        INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/install
+        CONFIGURE_COMMAND ./configure
+        BUILD_COMMAND     make
+#        CXXFLAGS='-std=c++14'
+        INSTALL_COMMAND   mkdir -p <INSTALL_DIR>/lib && mkdir -p <INSTALL_DIR>/include &&
+        cp build/lib/libbf.so <INSTALL_DIR>/lib &&
+        cp -r bf <INSTALL_DIR>/include
+        )
+]]
+
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/libbf)
+#set(LIB_FLAGS "-L ${CMAKE_CURRENT_SOURCE_DIR}/external/lib")
+set(LIB_FLAGS "")
+include_directories(include #[[${CMAKE_CURRENT_SOURCE_DIR}/external/install/include]])
+link_directories(lib #[[${CMAKE_CURRENT_SOURCE_DIR}/external/install/lib]])
+
 
 include(GNUInstallDirs)
 

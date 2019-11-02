@@ -15,10 +15,10 @@
 #include "mstMerger.h"
 #include "ProgOpts.h"
 
+
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
-#define MAX_ALLOWED_TMP_EDGES 31250000
-
+static constexpr uint64_t MAX_ALLOWED_TMP_EDGES{31250000};
 static constexpr uint64_t MAX_ALLOWED_BLOCK_SIZE{1024};
 static constexpr uint64_t SHIFTBITS{32};
 static constexpr uint64_t HIGHBIT_MASK{(1ULL << 32) - 1ULL};
@@ -27,15 +27,15 @@ static constexpr uint64_t CONSTNUMBlocks{1 << 16};
 
 MSTMerger::MSTMerger(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
                      std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-        cqf(cqfIn), prefix(std::move(prefixIn)),
-        prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
-        nThreads(numThreads),
-        num_of_ccBuffers(numColorBuffersIn), numBlocks(CONSTNUMBlocks) {
+/*cqf(cqfIn),*/ prefix(std::move(prefixIn)),
+                prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
+                nThreads(numThreads),
+                num_of_ccBuffers(numColorBuffersIn), numBlocks(CONSTNUMBlocks) {
     eqclass_files.resize(num_of_ccBuffers);
     logger = loggerIn;//.get();
 
-//    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
-//    cqf = new CQF<KeyObject>(cqf_file, CQF_MMAP);
+    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
+    cqf = new CQF<KeyObject>(cqf_file, CQF_MMAP);
 
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
@@ -129,12 +129,51 @@ bool MSTMerger::buildEdgeSets() {
     }
     logger->info("Done opening the block files.");
     logger->info("Iterating over cqf & building edgeSet ...");
+
+
+/*
+    BitMask::value = BITMASK(cqf->keybits());
+    // Build the mphf.
+    boophf_t* bphf =
+            new boophf_t(cqf->dist_elts(), cqf->begin(true), nThreads, 3.5);
+    logger->info("mphf size = {} MB", (bphf->totalBitSize() / 8) / std::pow(2, 20));
+
+*/
+
+   /* FilterType bf(0.05, cqf->dist_elts());
+    auto it = cqf->begin(true);
+    while (!it.done()) {
+        bf.add((*it).key);
+        ++it;
+    }*/
+   auto FPRate = 0.05;
+   //FPR ~= n/2^p;
+   auto keybits = static_cast<uint64_t>(std::ceil(log2(cqf->dist_elts()/FPRate)));
+   auto quotient = static_cast<uint64_t >(ceil(log2(cqf->dist_elts())));
+   auto shiftVal = cqf->keybits()-keybits;
+   std::cerr << "cqf key count: " << cqf->dist_elts() << " qf keybits: " << keybits << " qf quotient: " << quotient << " shiftVal: " << shiftVal  << "\n";
+   FilterType qf(quotient, keybits, qf_hashmode::QF_HASH_NONE, cqf->seed());
+   auto it = cqf->begin(true);
+   auto cntr{0};
+   while (!it.done()) {
+       auto qfHash = it.get_cur_hash().key >> shiftVal;
+       qf.insert(KeyObject(qfHash, 0, 1), QF_NO_LOCK);
+       ++it;
+       cntr++;
+       if (cntr % 10000000 == 0) {
+           std::cerr << "\r" << cntr/1000000 << "M";
+       }
+   }
+    logger->info("BF created!");
+//    std::exit(5);
+
     std::vector<std::thread> threads;
     for (uint32_t i = 0; i < nThreads; ++i) {
         threads.emplace_back(std::thread(&MSTMerger::writePotentialColorIdEdgesInParallel, this, i,
                                          std::ref(*cqf),
                                          std::ref(blockFiles),
-                                         std::ref(blockCnt)));
+                                         std::ref(blockCnt),
+                                         std::ref(qf)));
     }
     for (auto &t : threads) { t.join(); }
     logger->info("Done with writing down the block files.");
@@ -167,7 +206,7 @@ bool MSTMerger::buildEdgeSets() {
                                          std::ref(maxId)));
     }
     for (auto &t : threads) { t.join(); }
-
+//    std::exit(5);
 //    cqf->free();
 
     num_colorClasses = maxId + 1;
@@ -224,8 +263,12 @@ bool MSTMerger::buildEdgeSets() {
 void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                                                      CQF<KeyObject> &cqf,
                                                      std::vector<std::ofstream> &blockFiles,
-                                                     std::vector<uint64_t> &blockCnt) {
-    logger->info("writePotentialColorIdEdgesInParallel {}", threadId);
+                                                     std::vector<uint64_t> &blockCnt,
+                                                     FilterType &filter) {
+
+    auto shiftVal = cqf.keybits()-filter.keybits();
+
+    logger->info("writePotentialColorIdEdgesInParallel {} : {}", threadId, shiftVal);
     auto maxAllowedElements = static_cast<uint32_t>(MAX_ALLOWED_BLOCK_SIZE /
                                                     sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type));
     std::vector<uint32_t> localBlocCntr(numBlocks, 0);
@@ -235,19 +278,21 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
         b.resize(maxAllowedElements);
     }
 
+    uint64_t cntr{0}, notfound{0};
 // threadId * (threadId-1) / 2
 // to cover all blocks, and have uniform distribution of I/O across threads,
 // we distribute blocks in the following manner
 // give 1 unit to the first thread, 2 units to the second, and so on ..
 // total number of units will be (1 + 2 + 3 + .. + nThreads) = nThreads * (nThreads + 1) / 2
 
-//    auto startBlockId = (numBlocks * threadId * (threadId + 1)) / (nThreads * (nThreads + 1));
-//    auto endBlockId = (numBlocks * (threadId + 1) * (threadId + 2)) / (nThreads * (nThreads + 1));
-    auto startBlockId = (numBlocks * threadId) / nThreads;
-    auto endBlockId = (numBlocks * (threadId+1)) / nThreads;
+    auto startBlockId = (numBlocks * threadId * (threadId + 1)) / (nThreads * (nThreads + 1));
+    auto endBlockId = (numBlocks * (threadId + 1) * (threadId + 2)) / (nThreads * (nThreads + 1));
+//    auto startBlockId = (numBlocks * threadId) / nThreads;
+//    auto endBlockId = (numBlocks * (threadId+1)) / nThreads;
 
     auto shiftedBlockId = startBlockId << SHIFTBITS;
     endBlockId <<= SHIFTBITS;
+
 
     __uint128_t startPoint = cqf.range() < shiftedBlockId ? cqf.range() : shiftedBlockId;
     __uint128_t endPoint = cqf.range() < endBlockId ? cqf.range() : endBlockId;
@@ -262,36 +307,52 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
             dna::canonical_kmer newNode = n << b;
             uint64_t hashVal = hash_64(newNode.val, BITMASK(cqf.keybits()));
             if (hashVal > keyHash) {
-                uint64_t idx = (hashVal & LOWBIT_MASK) >> SHIFTBITS;
-                auto neighborKey = static_cast<uint32_t >(hashVal & HIGHBIT_MASK);
-                localBlocks[idx][localBlocCntr[idx]] = std::make_pair(curEqId, neighborKey);
-                localBlocCntr[idx]++;
-                if (localBlocCntr[idx] == maxAllowedElements) {
-                    blockMutex[idx]->lock();
-                    blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                          (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
-                                          localBlocCntr[idx]);
-                    blockCnt[idx] += localBlocCntr[idx];
-                    blockMutex[idx]->unlock();
-                    localBlocCntr[idx] = 0;
+                cntr++;
+//                KeyObject k(newNode.val, 0, 0);
+//                if (bphf->lookup(k) != ULLONG_MAX) {
+//                if (bf.lookup(newNode.val) == 1) {
+                if (filter.query(KeyObject(hashVal >> shiftVal, 0, 0), QF_NO_LOCK)) {
+                    uint64_t idx = (hashVal & LOWBIT_MASK) >> SHIFTBITS;
+                    auto neighborKey = static_cast<uint32_t >(hashVal & HIGHBIT_MASK);
+                    localBlocks[idx][localBlocCntr[idx]] = std::make_pair(curEqId, neighborKey);
+                    localBlocCntr[idx]++;
+                    if (localBlocCntr[idx] == maxAllowedElements) {
+                        blockMutex[idx]->lock();
+                        blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
+                                              (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
+                                              localBlocCntr[idx]);
+                        blockCnt[idx] += localBlocCntr[idx];
+                        blockMutex[idx]->unlock();
+                        localBlocCntr[idx] = 0;
+                    }
+                } else {
+                    notfound++;
                 }
             }
 
             newNode = b >> n;
             hashVal = hash_64(newNode.val, BITMASK(cqf.keybits()));
             if (hashVal > keyHash) {
-                uint64_t idx = (hashVal & LOWBIT_MASK) >> SHIFTBITS;
-                auto neighborKey = static_cast<uint32_t >(hashVal & HIGHBIT_MASK);
-                localBlocks[idx][localBlocCntr[idx]] = std::make_pair(curEqId, neighborKey);
-                localBlocCntr[idx]++;
-                if (localBlocCntr[idx] == maxAllowedElements) {
-                    blockMutex[idx]->lock();
-                    blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                          (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
-                                          localBlocCntr[idx]);
-                    blockCnt[idx] += localBlocCntr[idx];
-                    blockMutex[idx]->unlock();
-                    localBlocCntr[idx] = 0;
+                cntr++;
+//                KeyObject k(newNode.val, 0, 0);
+//                if (bphf->lookup(k) != ULLONG_MAX) {
+//                if (bf.lookup(newNode.val) == 1) {
+                if (filter.query(KeyObject(hashVal >> shiftVal, 0, 0), QF_NO_LOCK)) {
+                    uint64_t idx = (hashVal & LOWBIT_MASK) >> SHIFTBITS;
+                    auto neighborKey = static_cast<uint32_t >(hashVal & HIGHBIT_MASK);
+                    localBlocks[idx][localBlocCntr[idx]] = std::make_pair(curEqId, neighborKey);
+                    localBlocCntr[idx]++;
+                    if (localBlocCntr[idx] == maxAllowedElements) {
+                        blockMutex[idx]->lock();
+                        blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
+                                              (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
+                                              localBlocCntr[idx]);
+                        blockCnt[idx] += localBlocCntr[idx];
+                        blockMutex[idx]->unlock();
+                        localBlocCntr[idx] = 0;
+                    }
+                } else {
+                    notfound++;
                 }
             }
         }
@@ -313,6 +374,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
         localBlocks[idx].clear();
     }
     std::cerr << "\r";
+    logger->info("Thread {}: {} of {} was not written for memory qf", threadId, (double)notfound/(double)cntr, cntr);
 }
 
 void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
@@ -322,12 +384,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                                   uint64_t &maxId) {
 
     logger->info("buildPairedColorIdEdgesInParallel {}", threadId);
-//    auto startBlockId = (numBlocks * ((nThreads * (nThreads + 1) - ((threadId + 1) * (threadId + 2))))) /
-//                        (nThreads * (nThreads + 1));
-//    auto endBlockId = (numBlocks * ((nThreads * (nThreads + 1) - (threadId * (threadId + 1))))) /
-//                      (nThreads * (nThreads + 1));
-    auto startBlockId = (numBlocks * threadId) / nThreads;
-    auto endBlockId = (numBlocks * (threadId + 1)) / nThreads;
+    auto startBlockId = (numBlocks * ((nThreads * (nThreads + 1) - ((threadId + 1) * (threadId + 2))))) /
+                        (nThreads * (nThreads + 1));
+    auto endBlockId = (numBlocks * ((nThreads * (nThreads + 1) - (threadId * (threadId + 1))))) /
+                      (nThreads * (nThreads + 1));
+//    auto startBlockId = (numBlocks * threadId) / nThreads;
+//    auto endBlockId = (numBlocks * (threadId + 1)) / nThreads;
 
     uint64_t edgeCntr{0};
     colorIdType localMaxId{0};
@@ -358,6 +420,8 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                       }), blockBuffer.end());
         auto shiftedBlockId = blockId << SHIFTBITS;
         colorIdType blockColorId{0}, cqfColorId{0};
+        if (blockId % 2000 == 0)
+            std::cerr << "\r" << threadId << ":" << blockId;
         for (auto &b : blockBuffer) {
             blockColorId = b.first;
             KeyObject k((b.second | shiftedBlockId), 0, 0);
@@ -375,9 +439,6 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                     localMaxId = std::max(std::max(cqfColorId, localMaxId), blockColorId);
                 }
             }
-        }
-        if (blockId % 1000 == 0) {
-            std::cerr << "\r" << blockId;
         }
     }
 

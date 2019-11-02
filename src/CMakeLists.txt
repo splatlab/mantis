@@ -22,9 +22,9 @@ add_library(mantis_core STATIC
   		gqf/hashutil.c)
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
-set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")
+set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};${LIB_FLAGS};-g")
 set(MANTIS_RELEASE_CFLAGS "${MANTIS_C_FLAGS};-O3")
-set(MANTIS_RELEASE_CXXFLAGS "${MANTIS_CXX_FLAGS};-O3")
+set(MANTIS_RELEASE_CXXFLAGS "${MANTIS_CXX_FLAGS};${LIB_FLAGS};-O3")
 
 target_include_directories(mantis_core PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")
@@ -40,6 +40,7 @@ target_link_libraries(mantis_core
   z
   rt
   sdsl)
+#  bf)
 
 # The driver program is `mantis`, which is a front-end
 # with the relevant sub-commands
