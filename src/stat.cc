@@ -164,8 +164,8 @@ int stats_main(StatsOpts &sopt) {
     spdlog::logger *logger = sopt.console.get();
     std::string cqf_file = sopt.prefix + mantis::CQF_FILE;
     CQF<KeyObject> cqf(cqf_file, readmode::CQF_FREAD);
-    Stat stats(cqf, sopt.numSamples, logger);
     if (sopt.type == "mono") {
+        Stat stats(cqf, sopt.numSamples, logger);
         std::unordered_map<uint64_t, std::vector<uint64_t>> mcc_freq;
         while (!stats.done()) {
             auto res = *stats;
@@ -196,6 +196,7 @@ int stats_main(StatsOpts &sopt) {
         mcc_file.close();
     }
     if (sopt.type == "color_dist") {
+        Stat stats(cqf, sopt.numSamples, logger);
         std::unordered_map<uint64_t, uint64_t> colors;
         while(!stats.done()) {
             if (colors.find(stats.getColor()) == colors.end())
@@ -229,6 +230,7 @@ int stats_main(StatsOpts &sopt) {
         }
     }
     if (sopt.type == "jmerkmer") {
+        Stat stats(cqf, sopt.numSamples, logger);
         uint32_t k = cqf.keybits() / 2;
         logger->info("k is {}", k);
         std::unordered_set<uint64_t> jmerMap;
@@ -294,5 +296,35 @@ int stats_main(StatsOpts &sopt) {
         logger->info("total kmers observed: {}", kmerCntr);
         logger->info("total confused kmers: {}", kmerMap.size());
         logger->info("total non-confusing jmers: {}", jmerMap.size());
+    }
+
+
+    if (sopt.type == "randMinimizerDist") {
+        uint32_t k = cqf.keybits();
+        logger->info("k is {}", k);
+        int j = (int) sopt.j * 2;
+        logger->info("m size is {}", j);
+        std::cerr << "Total number of kmers: " << cqf.dist_elts() << "\n";
+        uint64_t jmask = BITMASK(j), kmerCntr{0};
+        std::vector<uint64_t> minimizerCntr(1ULL << 16);
+        auto it = cqf.begin();
+        while (!it.done()) {
+            auto key = (*it).key;
+            uint64_t min = std::numeric_limits<uint64_t>::max();
+            for (uint64_t s = 0; s <= k - j; s+=2) {
+//                auto h = hash_64(key >> s, jmask);
+                auto h = (key >> s) & jmask;
+                min = min <= h ? min : h;
+            }
+            minimizerCntr[min]++;
+            ++it;
+            if (++kmerCntr % 100000000 == 0)
+                std::cerr << "\r" << kmerCntr/1000000 << "M";
+        }
+        std::cerr << "\n";
+        logger->info("total kmers observed: {}", kmerCntr);
+        for (auto v : minimizerCntr) {
+            std::cout << v << "\n";
+        }
     }
 }
