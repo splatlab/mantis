@@ -308,15 +308,27 @@ int stats_main(StatsOpts &sopt) {
         uint64_t jmask = BITMASK(j), kmerCntr{0};
         std::vector<uint64_t> minimizerCntr(1ULL << 16);
         auto it = cqf.begin();
+        uint64_t first, last, second_min;
         while (!it.done()) {
             auto key = (*it).key;
             uint64_t min = std::numeric_limits<uint64_t>::max();
+            first = min; last = min; second_min = min;
             for (uint64_t s = 0; s <= k - j; s+=2) {
 //                auto h = hash_64(key >> s, jmask);
                 auto h = (key >> s) & jmask;
+                second_min = (h < second_min and h > min) ? h : second_min;
                 min = min <= h ? min : h;
+                if (s == 0) {
+                    first = h;
+                }
+                else if (s == k-j) {
+                    last = h;
+                }
             }
             minimizerCntr[min]++;
+            if ((min == first or min == last) and second_min != std::numeric_limits<uint64_t>::max()) {
+                minimizerCntr[second_min]++;
+            }
             ++it;
             if (++kmerCntr % 100000000 == 0)
                 std::cerr << "\r" << kmerCntr/1000000 << "M";
@@ -326,5 +338,53 @@ int stats_main(StatsOpts &sopt) {
         for (auto v : minimizerCntr) {
             std::cout << v << "\n";
         }
+    }
+
+
+    if (sopt.type == "splitCQF") {
+        uint32_t k = cqf.keybits();
+        uint64_t m{sopt.j}, n{cqf.dist_elts()};
+        uint64_t bucketSize{n/m}, kmerCntr{0}, bucketCntr{0};
+
+        logger->info("k is {}", k);
+        logger->info("Total number of kmers is {}", n);
+        logger->info("m is {}", m);
+        logger->info("bucketSize is {}", bucketSize);
+        auto it = cqf.begin();
+        CQF<KeyObject> *cqf1;
+        // Get floor(log2(kmerCount))
+        uint32_t qbits;
+        for(qbits = 0; (bucketSize >> qbits) != (uint64_t)1; qbits++);
+
+        // Get ceil(log2(kmerCount))
+        if(bucketSize & (bucketSize - 1))	// if kmerCount is not a power of 2
+            qbits++;
+
+        qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
+        logger->info("qbits is {}", qbits);
+//        std::exit(2);
+        cqf1 = new CQF<KeyObject>(qbits,
+                cqf.keybits(),
+                cqf.hash_mode(),
+                cqf.seed());
+        cqf1->set_auto_resize();
+        while (!it.done()) {
+            cqf1->insert(*it, 0);
+            ++it;
+            ++kmerCntr;
+            if (kmerCntr % bucketSize == 0) {
+                std::cerr << "\nbucket " << bucketSize << "\n";
+                cqf1->dump_metadata();
+                delete cqf1;
+                cqf1 = new CQF<KeyObject>(qbits,
+                                          cqf.keybits(),
+                                          cqf.hash_mode(),
+                                          cqf.seed());
+                cqf1->set_auto_resize();
+            }
+        }
+        cqf1->dump_metadata();
+        std::cout << bucketCntr << "\n";
+        logger->info("total kmers observed: {}", kmerCntr);
     }
 }
