@@ -345,9 +345,9 @@ int stats_main(StatsOpts &sopt) {
         uint32_t k = cqf.keybits();
         uint64_t m{sopt.j}, n{cqf.dist_elts()};
         uint64_t bucketSize{n/m}, kmerCntr{0}, bucketCntr{0};
-
+        cqf.dump_metadata();
         logger->info("k is {}", k);
-        logger->info("Total number of kmers is {}", n);
+        logger->info("Total number of distinct kmers is {}", n);
         logger->info("m is {}", m);
         logger->info("bucketSize is {}", bucketSize);
         auto it = cqf.begin();
@@ -360,7 +360,7 @@ int stats_main(StatsOpts &sopt) {
         if(bucketSize & (bucketSize - 1))	// if kmerCount is not a power of 2
             qbits++;
 
-        qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
+//        qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
         logger->info("qbits is {}", qbits);
 //        std::exit(2);
         cqf1 = new CQF<KeyObject>(qbits,
@@ -369,11 +369,29 @@ int stats_main(StatsOpts &sopt) {
                 cqf.seed());
         cqf1->set_auto_resize();
         while (!it.done()) {
-            cqf1->insert(*it, 0);
+            //// reversing the key
+           /* uint64_t num = (*it).key;
+            uint64_t count = sizeof(num) * 8 - 1;
+            uint64_t reverse_num = num;
+            num >>= 1;
+            while(num)
+            {
+                reverse_num <<= 1;
+                reverse_num |= num & 1;
+                num >>= 1;
+                count--;
+            }
+            reverse_num <<= count;*/
+//            std::cerr << reverse_num << "\n";
+//            uint64_t num = hash_64((*it).key, BITMASK(cqf.keybits()));
+            uint64_t reverse_num = (*it).key * 2253424367ULL + 87236827421ULL;
+            KeyObject keyObject(reverse_num, (*it).value, (*it).count);
+            ////
+            cqf1->insert(keyObject, 0);
             ++it;
             ++kmerCntr;
             if (kmerCntr % bucketSize == 0) {
-                std::cerr << "\nbucket " << bucketSize << "\n";
+                std::cerr << "\nbucket " << ++bucketCntr << "\n";
                 cqf1->dump_metadata();
                 delete cqf1;
                 cqf1 = new CQF<KeyObject>(qbits,
