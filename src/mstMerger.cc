@@ -164,7 +164,7 @@ bool MSTMerger::buildEdgeSets() {
            std::cerr << "\r" << cntr/1000000 << "M";
        }
    }
-    logger->info("BF created!");
+    logger->info("BF created. numKeys: {}", qf.dist_elts());
 //    std::exit(5);
 
     std::vector<std::thread> threads;
