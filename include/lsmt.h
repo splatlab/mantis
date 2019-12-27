@@ -13,8 +13,8 @@
 #include "CdBG_Merger.h"
 
 
-
-int build_main (BuildOpts& opt);
+int build_blockedCQF_main(BuildOpts& opt);
+//int build_main (BuildOpts& opt);
 int merge_main(MergeOpts &opt);
 int build_mst_main(QueryOpts &opt);
 
@@ -289,7 +289,8 @@ void LSMT<qf_obj, key_obj>::
     buildOpts.out = outDir;
     buildOpts.console = sharedConsole;
 
-    build_main(buildOpts);
+    build_blockedCQF_main(buildOpts);
+//    build_main(buildOpts);
 }
 
 
