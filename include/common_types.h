@@ -2,6 +2,7 @@
 #define __MANTIS_COMMON_TYPES__
 
 #include <unordered_set>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -9,6 +10,7 @@ namespace mantis {
   using KmerHash = uint64_t;
   using ExperimentID = uint64_t;
   using QuerySet = std::unordered_set<KmerHash>;
+//  using QuerySet = std::set<KmerHash>;
   using QuerySets = std::vector<QuerySet>;
   using QueryMap = std::unordered_map<KmerHash, uint64_t>;
   using EqMap = std::unordered_map<KmerHash, std::vector<ExperimentID>>;

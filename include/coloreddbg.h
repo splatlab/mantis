@@ -522,11 +522,31 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
+    uint64_t curBlock{0}, ksize{dbgs[0]->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
+    CQF<key_obj> *curDbg;
+    std::vector<std::vector<mantis::QuerySet::value_type>> blockKmers(numBlocks);
+    // split kmers based on minimizers into blocks
+//    std::cerr << "Split kmers based on the minimizers into blocks\n";
     for (auto k : kmers) {
-        key_obj key(k, 0, 0);
-        uint64_t eqclass = dbg.query(key, 0);
-        if (eqclass)
-            query_eqclass_map[eqclass] += 1;
+        auto minimizers = findMinimizer(k, ksize);
+        blockKmers[minimizerCntr[minimizers.first]].push_back(k);
+        // TODO do we need the second minimizer here??
+        /*if (minimizers.second != invalid and minimizerCntr[minimizers.first] != minimizerCntr[minimizers.second]) {
+            blockKmers[minimizerCntr[minimizers.second]] = k;
+        }*/
+    }
+
+    // go block by block and query kmers
+//    std::cerr << "Go block by block and query kmers\n";
+    for (auto blockId = 0; blockId < numBlocks; blockId++) {
+        curDbg = dbgs[blockId];
+        for (auto k : blockKmers[blockId]) {
+            key_obj key(k, 0, 0);
+            uint64_t eqclass = curDbg->query(key, 0);
+//            std::cerr << eqclass << "\n";
+            if (eqclass)
+                query_eqclass_map[eqclass] += 1;
+        }
     }
 
     std::vector<uint64_t> sample_map(num_samples, 0);
@@ -535,6 +555,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         auto eqclass_id = it->first;
         auto count = it->second;
         // counter starts from 1.
+//        std::cerr << eqclass_id << "\n";
         uint64_t start_idx = (eqclass_id - 1);
         // uint64_t bucket_idx = start_idx / mantis::NUM_BV_BUFFER;
         uint64_t bucket_idx = start_idx / colorClassPerBuffer;
@@ -941,9 +962,32 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     std::string cqfFile(dir + mantis::CQF_FILE);
     std::string sampleListFile(dir + mantis::SAMPLEID_FILE);
     std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE);
+    std::string minimizersFile(dir + mantis::MINIMIZER_BOUNDARY);
+    minimizerCntr.resize(1ULL << (minlen * 2));
 
+    std::cerr << "Loading minimizer blocks\n";
+    std::ifstream minimizerBlocks(minimizersFile);
+    minimizerBlocks.read(reinterpret_cast<char *>(minimizerCntr.data()), minimizerCntr.size()*sizeof(typename decltype(minimizerCntr)::value_type));
+    minimizerBlocks.close();
 
-    // Load the CQF
+    std::cerr << "Loading cqfs\n";
+    uint64_t numOfBlocks = minimizerCntr[minimizerCntr.size()-1] + 1;
+    dbgs.resize(numOfBlocks);
+    for (uint64_t i = 0; i < numOfBlocks; i++) {
+        // Load the CQF
+        std::string blockCqfFile = cqfFile + std::to_string(i);
+        if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
+//            CQF<key_obj> cqf(blockCqfFile, CQF_FREAD);
+            dbgs[i] = new CQF<key_obj>(blockCqfFile, CQF_FREAD);
+        } else if (dbg_alloc_flag == MANTIS_DBG_ON_DISK) {
+//            CQF<key_obj> cqf(blockCqfFile, CQF_MMAP);
+            dbgs[i] = new CQF<key_obj>(blockCqfFile, CQF_MMAP);
+        } else {
+            ERROR("Wrong Mantis alloc mode.");
+            exit(EXIT_FAILURE);
+        }
+    }
+    /*// Load the CQF
     if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
         CQF<key_obj> cqf(cqfFile, CQF_FREAD);
         dbg = cqf;
@@ -953,10 +997,27 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     } else {
         ERROR("Wrong Mantis alloc mode.");
         exit(EXIT_FAILURE);
+    }*/
+
+    // Load the sample / experiment names.
+    std::cerr << "Loading the colorClass file\n";
+    std::map<int, std::string> sorted_files;
+    for (std::string file : colorClassFiles) {
+        int id = std::stoi(first_part(last_part(file, '/'), '_'));
+        sorted_files[id] = file;
+    }
+
+    eqclasses.reserve(sorted_files.size());
+    BitVectorRRR bv;
+    for (auto file : sorted_files) {
+        sdsl::load_from_file(bv, file.second);
+        eqclasses.push_back(bv);
+        num_serializations++;
     }
 
 
     // Load the sample / experiment names.
+    std::cerr << "Loading the sampleList file\n";
     std::ifstream sampleList(sampleListFile.c_str());
     std::string sampleName;
     uint32_t sampleID;
