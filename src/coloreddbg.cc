@@ -353,19 +353,25 @@ int build_blockedCQF_main(BuildOpts &opt) {
     console->info("Number of eq classes found after sampling {}",
                   unsorted_map.size());
 
+    auto blockKmerCount = cdbg.divideKmersIntoBlocks();
     // TODO how to decide on qbits
-    uint32_t qbits;
-    for(qbits = 0; (block_kmer_threshold >> qbits) != (uint64_t)1; qbits++);
-    qbits++;
-    qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
-    console->info("Chosen log(slots) is {}", qbits);
 
-    uint64_t blockCount = cdbg.divideKmersIntoBlocks();
-    cdbg.initializeCQFs(prefix, qbits,
+    std::vector<uint32_t> qbitsList;
+    uint64_t bc{0};
+    for (auto b : blockKmerCount) {
+        uint32_t qbits{0};
+        for(qbits = 0; (b >> qbits) != (uint64_t)1; qbits++);
+        qbits++;
+//    qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
+        console->info("Chosen log(slots) for block {} is {}", bc++, qbits);
+        qbitsList.push_back(qbits);
+    }
+
+    cdbg.initializeCQFs(prefix, qbitsList,
                         inobjects[0].obj->keybits(),
                         cqfs[0].hash_mode(),
                         inobjects[0].obj->seed(),
-                        blockCount, MANTIS_DBG_ON_DISK);
+                        blockKmerCount.size(), MANTIS_DBG_ON_DISK);
 
     // Sort equivalence classes based on their abundances.
     std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
@@ -395,7 +401,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
                   cdbg.get_cqf()->dist_elts(), cdbg.get_num_eqclasses());
 
     console->info("Serializing CQF and eq classes in {}", prefix);
-    cdbg.serialize();
+    cdbg.serializeBlockedCQF();
     console->info("Serialization done.");
 
     {

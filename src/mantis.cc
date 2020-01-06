@@ -44,6 +44,7 @@ void explore_options_verbose(T& res) {
 
 //int query_main (QueryOpts& opt);
 int build_main (BuildOpts& opt);
+int build_blockedCQF_main (BuildOpts& opt);
 int validate_main (ValidateOpts& opt);
 int build_mst_main (QueryOpts& opt);
 int mst_query_main(QueryOpts &opt);
@@ -262,7 +263,7 @@ int main ( int argc, char *argv[] ) {
 
   if(res) {
     switch(selected) {
-    case mode::build: build_main(bopt);  break;
+    case mode::build: build_blockedCQF_main(bopt); break;//build_main(bopt);  break;
     case mode::build_mst: build_mst_main(qopt); break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
