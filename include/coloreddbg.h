@@ -37,7 +37,7 @@ typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 constexpr static uint64_t invalid = std::numeric_limits<uint64_t>::max();
-constexpr static uint64_t block_kmer_threshold = 10000000;
+constexpr static uint64_t block_kmer_threshold = 100000000;
 
 struct hash128 {
     uint64_t operator()(const __uint128_t &val128) const {
