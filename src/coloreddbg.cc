@@ -343,15 +343,14 @@ int build_blockedCQF_main(BuildOpts &opt) {
 
     cdbg.build_sampleid_map(inobjects.data());
 
-    console->info("Sampling eq classes based on {} kmers", mantis::SAMPLE_SIZE);
+    console->info("Enumerating the minimizer counts and counting total number of eqs");
     // First construct the colored dbg on initial SAMPLE_SIZE k-mers.
     default_cdbg_bv_map_t unsorted_map;
 
     unsorted_map = cdbg.enumerate_minimizers(inobjects.data());
 //    unsorted_map = cdbg.construct(inobjects.data(), mantis::SAMPLE_SIZE);
 
-    console->info("Number of eq classes found after sampling {}",
-                  unsorted_map.size());
+    console->info("Number of eq classes found {}", unsorted_map.size());
 
     auto blockKmerCount = cdbg.divideKmersIntoBlocks();
     // TODO how to decide on qbits
@@ -360,6 +359,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
     uint64_t bc{0};
     for (auto b : blockKmerCount) {
         uint32_t qbits{0};
+        std::cerr << b << "\n";
         for(qbits = 0; (b >> qbits) != (uint64_t)1; qbits++);
         qbits++;
 //    qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
@@ -367,6 +367,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
         qbitsList.push_back(qbits);
     }
 
+    console->info("Initializing the CQFs");
     cdbg.initializeCQFs(prefix, qbitsList,
                         inobjects[0].obj->keybits(),
                         cqfs[0].hash_mode(),

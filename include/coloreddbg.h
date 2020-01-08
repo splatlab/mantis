@@ -28,6 +28,7 @@
 #include "gqf/hashutil.h"
 #include "common_types.h"
 #include "mantisconfig.hpp"
+#include "canonicalKmer.h"
 
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
@@ -36,7 +37,7 @@ typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 constexpr static uint64_t invalid = std::numeric_limits<uint64_t>::max();
-constexpr static uint64_t block_kmer_threshold = 100000000;
+constexpr static uint64_t block_kmer_threshold = 10000000;
 
 struct hash128 {
     uint64_t operator()(const __uint128_t &val128) const {
@@ -216,6 +217,9 @@ public:
     void constructBlockedCQF(qf_obj *incqfs);
     void serializeBlockedCQF();
 
+    bool add_colorBV(uint64_t &eq_id, const BitVector &vector);
+
+    bool add_colorId(uint64_t &eq_id, const BitVector &vector);
 
 private:
     // returns true if adding this k-mer increased the number of equivalence
@@ -366,6 +370,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
                       get_num_eqclasses());
         bv_buffer_serialize();
     }*/
+//    reshuffle_bit_vectors(map);
     eqclass_map = map;
 }
 
@@ -387,6 +392,49 @@ bool ColoredDbg<qf_obj, key_obj>::add_colorClass(uint64_t &eq_id, const BitVecto
                             std::forward_as_tuple(vec_hash),
                             std::forward_as_tuple(eq_id, 1));
         add_bitvector(vector, eq_id - 1);
+        added_eq_class = true;
+    } else { // eq class is seen before so increment the abundance.
+        eq_id = it->second.first;
+        // with standard map
+        it->second.second += 1; // update the abundance.
+    }
+    return added_eq_class;
+}
+
+template<class qf_obj, class key_obj>
+bool ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const BitVector &vector) {
+    __uint128_t vec_hash = MurmurHash128A((void *) vector.data(),
+                                          vector.capacity() / 8, 2038074743,
+                                          2038074751);
+
+    auto it = eqclass_map.find(vec_hash);
+    if (it == eqclass_map.end()) {
+       return false;
+    } else { // eq class is seen before so increment the abundance.
+        eq_id = it->second.first;
+        add_bitvector(vector, eq_id - 1);
+    }
+    return true;
+}
+
+template<class qf_obj, class key_obj>
+bool ColoredDbg<qf_obj, key_obj>::add_colorId(uint64_t &eq_id, const BitVector &vector) {
+    __uint128_t vec_hash = MurmurHash128A((void *) vector.data(),
+                                          vector.capacity() / 8, 2038074743,
+                                          2038074751);
+
+    auto it = eqclass_map.find(vec_hash);
+    bool added_eq_class{false};
+    // Find if the eqclass of the kmer is already there.
+    // If it is there then increment the abundance.
+    // Else create a new eq class.
+    if (it == eqclass_map.end()) {
+        // eq class is seen for the first time.
+        eq_id = get_next_available_id();
+        eqclass_map.emplace(std::piecewise_construct,
+                            std::forward_as_tuple(vec_hash),
+                            std::forward_as_tuple(eq_id, 1));
+//        add_bitvector(vector, eq_id - 1);
         added_eq_class = true;
     } else { // eq class is seen before so increment the abundance.
         eq_id = it->second.first;
@@ -522,13 +570,17 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
-    uint64_t curBlock{0}, ksize{dbgs[0]->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
+    uint64_t ksize{dbgs[0]->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
     CQF<key_obj> *curDbg;
     std::vector<std::vector<mantis::QuerySet::value_type>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
 //    std::cerr << "Split kmers based on the minimizers into blocks\n";
     for (auto k : kmers) {
         auto minimizers = findMinimizer(k, ksize);
+        key_obj key(k, 0, 0);
+//        dna::canonical_kmer ck(ksize/2, k);
+//        std::cerr << std::string(ck) << " minimizer: " << minimizers.first
+//                    << " block: " << minimizerCntr[minimizers.first] << "\n";
         blockKmers[minimizerCntr[minimizers.first]].push_back(k);
         // TODO do we need the second minimizer here??
         /*if (minimizers.second != invalid and minimizerCntr[minimizers.first] != minimizerCntr[minimizers.second]) {
@@ -542,16 +594,18 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         curDbg = dbgs[blockId];
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
+            dna::canonical_kmer ck(ksize/2, k);
             uint64_t eqclass = curDbg->query(key, 0);
-//            std::cerr << eqclass << "\n";
-            if (eqclass)
+            if (eqclass) {
+//                std::cerr << "findSample: " << std::string(ck) << " " << eqclass << "\n";
                 query_eqclass_map[eqclass] += 1;
+            }
         }
     }
 
+//    std::cerr << "equivalence classes\n";
     std::vector<uint64_t> sample_map(num_samples, 0);
-    for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
-         ++it) {
+    for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first;
         auto count = it->second;
         // counter starts from 1.
@@ -561,14 +615,19 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         uint64_t bucket_idx = start_idx / colorClassPerBuffer;
         // uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
         uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
+//        std::cerr << "eqId=" << eqclass_id << ": ";
         for (uint32_t w = 0; w <= num_samples / 64; w++) {
             uint64_t len = std::min((uint64_t) 64, num_samples - w * 64);
             uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
-            for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++)
-                if ((wrd >> i) & 0x01)
+            for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++) {
+                if ((wrd >> i) & 0x01) {
+//                    std::cerr << sCntr << " ";
                     sample_map[sCntr] += count;
+                }
+            }
             bucket_offset += len;
         }
+//        std::cerr << "\n";
     }
     return sample_map;
 }
@@ -579,18 +638,37 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
     std::unordered_map<uint64_t, std::vector<uint64_t>> query_eqclass_map;
+    uint64_t ksize{dbgs[0]->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
+    CQF<key_obj> *curDbg;
+    std::vector<std::unordered_map<mantis::KmerHash, uint64_t>> blockKmers(numBlocks);
+    // split kmers based on minimizers into blocks
+//    std::cerr << "Split kmers based on the minimizers into blocks\n";
     for (auto kv : uniqueKmers) {
-        key_obj key(kv.first, 0, 0);
-        uint64_t eqclass = dbg.query(key, 0);
-        if (eqclass) {
-            kv.second = eqclass;
-            query_eqclass_map[eqclass] = std::vector<uint64_t>();
+        auto minimizers = findMinimizer(kv.first, ksize); //assuming not hashed
+        blockKmers[minimizerCntr[minimizers.first]].insert(kv);
+        // TODO do we need the second minimizer here??
+        /*if (minimizers.second != invalid and minimizerCntr[minimizers.first] != minimizerCntr[minimizers.second]) {
+            blockKmers[minimizerCntr[minimizers.second]] = k;
+        }*/
+    }
+
+    // go block by block and query kmers
+//    std::cerr << "Go block by block and query kmers\n";
+    for (auto blockId = 0; blockId < numBlocks; blockId++) {
+        curDbg = dbgs[blockId];
+        for (auto kv : blockKmers[blockId]) {
+            key_obj key(kv.first, 0, 0);
+            uint64_t eqclass = curDbg->query(key, 0);
+//            std::cerr << eqclass << "\n";
+            if (eqclass) {
+                kv.second = eqclass;
+                query_eqclass_map[eqclass] = std::vector<uint64_t>();
+            }
         }
     }
 
     std::vector<uint64_t> sample_map(num_samples, 0);
-    for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end();
-         ++it) {
+    for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first;
         auto &vec = it->second;
         // counter starts from 1.
@@ -684,7 +762,7 @@ template<class qf_obj, class key_obj>
 std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, uint64_t k) {
 //    uint64_t k = dbgs[0]->keybits();
     uint64_t j = minlen * 2;
-    uint64_t jmask = (1 << j) - 1;
+    uint64_t jmask = (1ULL << j) - 1;
     uint64_t min = invalid;
     uint64_t first{min}, last{min}, second_min{min};
     for (uint64_t s = 0; s <= k - j; s += 2) {
@@ -715,6 +793,7 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
     Minheap_PQ<key_obj> minheap;
 
     uint64_t k = incqfs[0].obj->get_cqf()->metadata->key_bits;
+    uint64_t mask = (1ULL << k) - 1;
     for (uint32_t i = 0; i < num_samples; i++) {
         Iterator<key_obj> qfi(i, incqfs[i].obj->get_cqf(), true);
         if (qfi.end()) continue;
@@ -734,18 +813,23 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
             else
                 minheap.pop();
         } while (!minheap.empty() && last_key == minheap.top().key());
-        auto first_second_minimizers = findMinimizer(last_key, k);
+        auto hash_inverse = hash_64i(last_key, mask);
+//        std::cerr << last_key << ":" << hash_inverse << " ";
+        auto first_second_minimizers = findMinimizer(hash_inverse, k);
         if (first_second_minimizers.first == invalid) {
             console->error("K-mer and therefore the minimizer of the k-mer are invalid.");
             std::exit(3);
         }
+//        std::cerr << first_second_minimizers.first << " ";
         minimizerCntr[first_second_minimizers.first]++;
-        if (first_second_minimizers.second != invalid) {
+        if (first_second_minimizers.second != invalid
+            and first_second_minimizers.first != first_second_minimizers.second) {
             minimizerCntr[first_second_minimizers.second]++;
         }
         // main functionality --> add colorClass
+        //  eqclass_map is filled up here
         uint64_t eq_id{0};
-        bool added_eq_class = add_colorClass(eq_id, eq_class);
+        add_colorId(eq_id, eq_class);
         ++counter;
 
         // ?
@@ -755,17 +839,20 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
             ++walk_behind_iterator;
         }
         // Progress tracker
-        if (counter % 10000000 == 0) {
+        if (counter % block_kmer_threshold == 0) {
             console->info("Kmers enumerated: {} Total time: {}",
                           counter, time(nullptr) - start_time_);
         }
 
         // Check if the bit vector buffer is full and needs to be serialized.
-        if (added_eq_class and (get_num_eqclasses() % colorClassPerBuffer == 0)) {
+        /*if (added_eq_class and (get_num_eqclasses() % colorClassPerBuffer == 0)) {
             console->info("Serializing bit vector with {} eq classes.", get_num_eqclasses());
             bv_buffer_serialize();
-        }
+        }*/
     }
+    console->info("Total number of kmers enumerated: {} Total time: {}",
+                  counter, time(nullptr) - start_time_);
+
     return eqclass_map;
 }
 
@@ -776,14 +863,18 @@ std::vector<uint64_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
     for (auto i = 1; i < minimizerCntr.size(); i++) {
         minimizerCntr[i - 1] = block;
         if ((blockCnt + minimizerCntr[i]) > block_kmer_threshold) {
+//            std::cerr << "minimizer " << i-1 << " block " << block << "\n";
             block++;
             blockKmerCount.push_back(blockCnt);
             blockCnt = 0;
         }
         blockCnt += minimizerCntr[i];
     }
-    blockKmerCount.push_back(blockCnt);
     minimizerCntr[minimizerCntr.size() - 1] = block;
+    if (blockCnt != 0) {
+        blockKmerCount.push_back(blockCnt);
+    }
+//    std::cerr << "minimizer " << minimizerCntr.size() - 1 << " block " << block << "\n";
     return blockKmerCount;
 }
 
@@ -792,8 +883,9 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
     uint64_t counter = 0;
     Minheap_PQ<key_obj> minheap;
     std::cerr << "# of dbgs: " << dbgs.size() << "\n";
-    uint64_t k = incqfs[0].obj->get_cqf()->metadata->key_bits;
-    std::cerr << "k: " << k << "\n";
+    uint64_t keyBits = incqfs[0].obj->get_cqf()->metadata->key_bits;
+    std::cerr << "k: " << keyBits << "\n";
+    uint64_t mask = (1ULL << keyBits) - 1;
     for (uint32_t i = 0; i < num_samples; i++) {
         Iterator<key_obj> qfi(i, incqfs[i].obj->get_cqf(), true);
         if (qfi.end()) continue;
@@ -813,12 +905,32 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
                 minheap.pop();
         } while (!minheap.empty() && last_key == minheap.top().key());
 
-        auto minimizerPair = findMinimizer(last_key, k);
+        auto hash_inverse = hash_64i(last_key, mask);
+        dna::canonical_kmer ck(keyBits/2, hash_inverse);
+        dna::canonical_kmer hashedck(keyBits/2, last_key);
+        auto minimizerPair = findMinimizer(hash_inverse, keyBits);
         auto minimizer = minimizerPair.first;
         auto secondMinimizer = minimizerPair.second;
         uint64_t eq_id{0};
-        bool added_eq_class = add_colorClass(eq_id, eq_class);
+        bool added_eq_class = add_colorBV(eq_id, eq_class);
+        if (std::string(ck) == "ATGGCGTTGGAAAGCTTGGGGCG" or std::string(hashedck) == "ATGGCGTTGGAAAGCTTGGGGCG") {
+            std::cerr << "lalalala " << std::string(ck) << " " << std::string(hashedck) << " eqClass: " << eq_id << " ";
+            for (auto i = 0; i < eq_class.size(); i++) {
+                std::cerr << eq_class[i];
+            }
+            std::cerr << "\n";
+        }
+
         if (added_eq_class) {
+            // Check if the bit vector buffer is full and needs to be serialized.
+            // if (added_eq_class and (get_num_eqclasses() % mantis::NUM_BV_BUFFER == 0))
+            if (get_num_eqclasses() % colorClassPerBuffer == 0) {
+                // The bit vector buffer is full.
+                console->info("Serializing bit vector with {} eq classes.",
+                              get_num_eqclasses());
+                bv_buffer_serialize();
+            }
+        } else {
             console->error("Found a new color class in the second round.");
             std::exit(1);
         }
@@ -1083,7 +1195,6 @@ void ColoredDbg<qf_obj, key_obj>::initializeCQFs(std::string &prefixIn, std::vec
             dbgs[i] = new CQF<key_obj>(qbits[i], key_bits, hashmode, seed);
             dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
         } else if (flag == MANTIS_DBG_ON_DISK) {
-            std::cerr << "qbits: " << qbits[i] << "\n";
             dbgs[i] = new CQF<key_obj>(qbits[i], key_bits, hashmode, seed, prefix + mantis::CQF_FILE + std::to_string(i));
             dbg_alloc_flag = MANTIS_DBG_ON_DISK;
         } else {

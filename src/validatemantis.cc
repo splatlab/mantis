@@ -88,9 +88,9 @@ validate_main(ValidateOpts &opt) {
                            squeakr::INDEX_VERSION, config.version);
             exit(1);
         }
-        if (cqfs.size() == 0)
+        if (cqfs.size() == 0) {
             kmer_size = config.kmer_size;
-        else {
+        } else {
             if (kmer_size != config.kmer_size) {
                 console->error("Squeakr file {} has a different k-mer size. Expected: {} Available: {}",
                                squeakr_file, kmer_size, config.kmer_size);
@@ -157,14 +157,20 @@ validate_main(ValidateOpts &opt) {
     std::vector<std::unordered_map<uint64_t, float>> ground_truth;
     std::vector<std::vector<uint64_t>> cdbg_output;
     bool fail{false};
+    std::cerr << "kmer_size: " << kmer_size << "\n";
     for (auto kmers : multi_kmers) {
         std::unordered_map<uint64_t, float> fraction_present;
+//        std::cerr << "\n";
         for (uint64_t i = 0; i < nqf; i++) {
             for (auto kmer : kmers) {
                 KeyObject k(kmer, 0, 0);
                 uint64_t count = cqfs[i].query(k, 0);
-                if (count > 0)
+                if (count > 0) {
+                    dna::canonical_kmer ck(kmer_size, kmer);
+//                    std::cerr << "kmer: " << kmer << " " << ck.val << " " << std::string(ck) << ": " << i << ","
+//                                << inobjects[i].id << "\n";
                     fraction_present[inobjects[i].id] += 1;
+                }
             }
         }
         // Query kmers in the cdbg
@@ -173,8 +179,8 @@ validate_main(ValidateOpts &opt) {
         // Validate the cdbg output
         for (uint64_t i = 0; i < nqf; i++)
             if (fraction_present[i] != result[i]) {
-                console->info("Failed for sample: {} original CQF {} cdbg {}",
-                              inobjects[i].sample_id, fraction_present[i], result[i]);
+                console->info("Failed for sample: {},{} original CQF {} cdbg {}",
+                              i, inobjects[i].sample_id, fraction_present[i], result[i]);
                 fail = true;
                 //abort();
             }
