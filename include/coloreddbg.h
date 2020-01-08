@@ -98,6 +98,12 @@ class ColoredDbg {
 
 		std::unordered_map<uint64_t, std::string> sampleid_map;
 		// bit_vector --> <eq_class_id, abundance>
+		// LH: eqclasses ("color class table") is the color class table of bit vectors compressed in RRR.
+		// LH: bool ColoredDbg<qf_obj, key_obj>::add_kmer is called to build eqclass_map, which calls ::add_bitvector
+		// LH: to add a new row to eqclasses
+		// LH: eqclass_map ("CQF") maps each kmer (in bit vector encoding) to the color class (equivalence class) and abundance
+		// LH: dbg is the de Bruijn graph
+		// LH: sampleid_map takes in an integer ID and returns the SampleObject::sample_id (???)
 		cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> eqclass_map;
 		CQF<key_obj> dbg;
 		BitVector bv_buffer;
@@ -137,7 +143,7 @@ template <class qf_obj, class key_obj>
 inline uint64_t ColoredDbg<qf_obj, key_obj>::get_next_available_id(void) {
 	return get_num_eqclasses() + 1;
 }
-
+// LH: Find sample object by id and returning the SampleObject::sample_id (???)
 template <class qf_obj, class key_obj>
 std::string ColoredDbg<qf_obj, key_obj>::get_sample(uint32_t id) const {
 	auto it = sampleid_map.find(id);
@@ -202,7 +208,9 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	}
 	eqclass_map = map;
 }
-
+// LH: key is the kmer (DNA string). vector is a bit encoding of the key.
+// LH: vec_hash is the hashed version of vector. search in eqclass_map for vec_hash.
+// LH: If present, increment count. Otherwise add to eqclass_map
 template <class qf_obj, class key_obj>
 bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 																					 key, const BitVector& vector) {
@@ -221,6 +229,9 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 	if (it == eqclass_map.end()) {
 		// eq class is seen for the first time.
 		eq_id = get_next_available_id();
+		// LH: Piecewise_construct splits tuples into individual arguments. Eg. (int, float) becomes int, float.
+		// LH: Mapping vec_hash to (eq_id, 1). 1 is the abundance count of the kmer.
+		// LH: Abundance is the number of times the kmer occrs
 		eqclass_map.emplace(std::piecewise_construct,
 												std::forward_as_tuple(vec_hash),
 												std::forward_as_tuple(eq_id, 1));
@@ -431,6 +442,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 			std::pop_heap(c.begin(), c.end(), std::greater<Iterator>());
 			c.pop_back();
 		}
+		// LH: constant time copy and delete (aka cut). Moves obj from top to bottom and then pops from top (??)
 		void replace_top(const Iterator& obj) {
 			c.emplace_back(obj);
 			pop();
@@ -449,6 +461,13 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>>& ColoredDbg<qf_obj,
 	}
 
 	while (!minheap.empty()) {
+		// LH: Goal is to create the equivalence class for one kmer
+		// LH: eq_class is a bit vector. Each position represents a sample.
+		// LH: A 1 at that sample means that the kmer is present in the sample
+		// LH: Iterate through the CQF (minheap) and get the key (kmer)
+		// LH: Loop through do while loop for each kmer (row in CQF).
+		// LH: Pop when there are no more kmers left
+		// LH: cur is an iterator over the kmers (vertically)
 		BitVector eq_class(num_samples);
 		KeyObject::kmer_t last_key;
 		do {
