@@ -180,10 +180,14 @@ int query_main(QueryOpts &opt) {
     std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(),
                                                                      mantis::EQCLASS_FILE);
 
+    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(prefix, MANTIS_DBG_IN_MEMORY);
+/*
+
     ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(dbg_file,
                                                                eqclass_files,
                                                                sample_file,
                                                                MANTIS_DBG_IN_MEMORY);
+*/
     uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
     console->info("Read colored dbg with {} k-mers and {} color classes",
                   cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());

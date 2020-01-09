@@ -221,6 +221,8 @@ public:
 
     bool add_colorId(uint64_t &eq_id, const BitVector &vector);
 
+    CQF<key_obj>* replaceCQFInMemory(uint64_t i);
+
 private:
     // returns true if adding this k-mer increased the number of equivalence
     // classes
@@ -591,7 +593,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // go block by block and query kmers
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
-        curDbg = dbgs[blockId];
+        curDbg = replaceCQFInMemory(blockId);//dbgs[blockId];
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
             dna::canonical_kmer ck(ksize/2, k);
@@ -655,7 +657,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
     // go block by block and query kmers
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
-        curDbg = dbgs[blockId];
+        curDbg = replaceCQFInMemory(blockId);//dbgs[blockId];
         for (auto kv : blockKmers[blockId]) {
             key_obj key(kv.first, 0, 0);
             uint64_t eqclass = curDbg->query(key, 0);
@@ -1062,6 +1064,31 @@ sample_file, int flag) : bv_buffer(),
     sampleid.close();
 }
 
+template<typename qf_obj, typename key_obj>
+CQF<key_obj>* ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
+//    std::cerr << "\n\nIn replaceCQFInMemory: " << i << " out of " << dbgs.size() << "\n" ;
+    if (dbgs[i] != nullptr) {
+        return dbgs[i];
+    }
+    if (i > 0) {
+        if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
+            dbgs[i - 1]->free();
+        }
+        delete dbgs[i - 1];
+    }
+    std::string blockCqfFile = prefix + mantis::CQF_FILE + std::to_string(i);
+    if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
+    //            CQF<key_obj> cqf(blockCqfFile, CQF_FREAD);
+    dbgs[i] = new CQF<key_obj>(blockCqfFile, CQF_FREAD);
+    } else if (dbg_alloc_flag == MANTIS_DBG_ON_DISK) {
+    //            CQF<key_obj> cqf(blockCqfFile, CQF_MMAP);
+    dbgs[i] = new CQF<key_obj>(blockCqfFile, CQF_MMAP);
+    } else {
+        ERROR("Wrong Mantis alloc mode.");
+        exit(EXIT_FAILURE);
+    }
+    return dbgs[i];
+}
 
 template<typename qf_obj, typename key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
@@ -1085,8 +1112,10 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     std::cerr << "Loading cqfs\n";
     uint64_t numOfBlocks = minimizerCntr[minimizerCntr.size()-1] + 1;
     dbgs.resize(numOfBlocks);
-    for (uint64_t i = 0; i < numOfBlocks; i++) {
+    replaceCQFInMemory(0);
+    /*for (uint64_t i = 0; i < numOfBlocks; i++) {
         // Load the CQF
+//        uint64_t i{0};
         std::string blockCqfFile = cqfFile + std::to_string(i);
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
 //            CQF<key_obj> cqf(blockCqfFile, CQF_FREAD);
@@ -1098,17 +1127,6 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
             ERROR("Wrong Mantis alloc mode.");
             exit(EXIT_FAILURE);
         }
-    }
-    /*// Load the CQF
-    if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
-        CQF<key_obj> cqf(cqfFile, CQF_FREAD);
-        dbg = cqf;
-    } else if (dbg_alloc_flag == MANTIS_DBG_ON_DISK) {
-        CQF<key_obj> cqf(cqfFile, CQF_MMAP);
-        dbg = cqf;
-    } else {
-        ERROR("Wrong Mantis alloc mode.");
-        exit(EXIT_FAILURE);
     }*/
 
     // Load the sample / experiment names.
