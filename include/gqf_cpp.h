@@ -49,12 +49,14 @@ class CQF {
 			memcpy(reinterpret_cast<void*>(&cqf),
 				   reinterpret_cast<void*>(const_cast<quotient_filter*>(&copy_cqf.cqf)), sizeof(QF));
 			is_filebased = copy_cqf.is_filebased;
+			inMem = copy_cqf.inMem;
 		}
 
 		CQF(CQF<key_obj>&& other) {
 			memcpy(reinterpret_cast<void*>(&cqf),
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
+			inMem = other.inMem;
 			other.cqf.runtimedata = nullptr;
 			other.cqf.metadata = nullptr;
 			other.cqf.blocks = nullptr;
@@ -67,6 +69,7 @@ class CQF {
 			memcpy(reinterpret_cast<void*>(&cqf),
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
+			inMem = other.inMem;
 			other.cqf.runtimedata = nullptr;
 			other.cqf.metadata = nullptr;
 			other.cqf.blocks = nullptr;
@@ -87,7 +90,7 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
-		void free() { std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
+		void free() { if (inMem) std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() { if (is_filebased) qf_closefile(&cqf); }
 		void delete_file() { if (is_filebased) qf_deletefile(&cqf); }
 
@@ -145,6 +148,7 @@ class CQF {
 	private:
 		QF cqf;
 		bool is_filebased{false};
+		bool inMem{false};
 		//std::unordered_set<uint64_t> set;
 };
 
@@ -181,6 +185,7 @@ CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
 		ERROR("Can't allocate the CQF");
 		exit(EXIT_FAILURE);
 	}
+	inMem = true;
 }
 
 template <class key_obj>
@@ -192,15 +197,20 @@ CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
 		exit(EXIT_FAILURE);
 	}
 	is_filebased = true;
+	inMem = false;
 }
 
 template <class key_obj>
 CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 	uint64_t size = 0;
-	if (flag == CQF_MMAP)
-	 size = qf_usefile(&cqf, filename.c_str(), QF_USEFILE_READ_ONLY);
-	else if (flag == CQF_FREAD)
+	if (flag == CQF_MMAP) {
+		size = qf_usefile(&cqf, filename.c_str(), QF_USEFILE_READ_ONLY);
+		inMem = false;
+	}
+	else if (flag == CQF_FREAD) {
 		size = qf_deserialize(&cqf, filename.c_str());
+		inMem = true;
+	}
 	else {
 		ERROR("Wrong CQF read mode.");
 		exit(EXIT_FAILURE);
@@ -214,8 +224,7 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 }
 
 template <class key_obj> CQF<key_obj>::~CQF() {
-	if (is_filebased)
-		close();
+	close();
 	free();
 }
 

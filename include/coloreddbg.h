@@ -312,7 +312,7 @@ private:
     uint64_t notSorted_eq_id{colorClassPerBuffer};
     uint64_t numEqClassBVs{colorClassPerBuffer};
     std::unique_ptr<CQF<key_obj>> curDbg;
-    uint64_t currentBlock{0};
+    uint64_t currentBlock{invalid};
     std::vector<std::unique_ptr<CQF<key_obj>>> dbgs;
 
     // Additional private members required for mantii merge.
@@ -666,8 +666,12 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
     std::cerr << "\n\n\nhereeeekmers\n\n";
+    if (not curDbg) {
+        console->error("No dbg has been loaded into memory.");
+        std::exit(3);
+    }
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
-    uint64_t ksize{dbgs[0]->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
+    uint64_t ksize{curDbg->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
     std::vector<std::vector<mantis::QuerySet::value_type>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
 //    std::cerr << "Split kmers based on the minimizers into blocks\n";
@@ -699,6 +703,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
             }
         }
     }
+    replaceCQFInMemory(0);
 
 //    std::cerr << "equivalence classes\n";
     std::vector<uint64_t> sample_map(num_samples, 0);
@@ -735,8 +740,12 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
     std::cerr << "\n\n\nhereeee\n\n";
+    if (not curDbg) {
+        console->error("No dbg has been loaded into memory.");
+        std::exit(3);
+    }
     std::unordered_map<uint64_t, std::vector<uint64_t>> query_eqclass_map;
-    uint64_t ksize{dbgs[0]->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
+    uint64_t ksize{curDbg->keybits()}, numBlocks{minimizerCntr[minimizerCntr.size()-1]+1};
     std::vector<std::unordered_map<mantis::KmerHash, uint64_t>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
 //    std::cerr << "Split kmers based on the minimizers into blocks\n";
@@ -763,6 +772,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
             }
         }
     }
+    replaceCQFInMemory(0);
 
     std::vector<uint64_t> sample_map(num_samples, 0);
     for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
@@ -1157,7 +1167,11 @@ sample_file, int flag) : bv_buffer(),
 
 template<typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
-//    std::cerr << "\n\nIn replaceCQFInMemory: " << i << " out of " << dbgs.size() << "\n" ;
+    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
+    if (i == invalid) {
+        curDbg.reset(nullptr);
+        return;
+    }
     if (currentBlock == i) {
         std::cerr  << "replaceCQFInMemory case1\n";
         return;
