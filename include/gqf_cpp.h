@@ -91,7 +91,7 @@ class CQF {
 		}
 
 		void free() { if (inMem) std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
-		void close() { if (is_filebased) qf_closefile(&cqf); }
+		void close() { if (is_filebased and not inMem) qf_closefile(&cqf); }
 		void delete_file() { if (is_filebased) qf_deletefile(&cqf); }
 
 		void set_auto_resize(void) { qf_set_auto_resize(&cqf, true); }
@@ -224,8 +224,8 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 }
 
 template <class key_obj> CQF<key_obj>::~CQF() {
-	close();
 	free();
+	close();
 }
 
 template <class key_obj>
