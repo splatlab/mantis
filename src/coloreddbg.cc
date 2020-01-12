@@ -398,8 +398,8 @@ int build_blockedCQF_main(BuildOpts &opt) {
     // Construct the colored dbg using the new set of equivalence classes.
     cdbg.constructBlockedCQF(inobjects.data());
 
-    console->info("Final colored dBG has {} k-mers and {} equivalence classes",
-                  cdbg.get_cqf()->dist_elts(), cdbg.get_num_eqclasses());
+//    console->info("Final colored dBG has {} k-mers and {} equivalence classes",
+//                  cdbg.get_cqf()->dist_elts(), cdbg.get_num_eqclasses());
 
     console->info("Serializing CQF and eq classes in {}", prefix);
     cdbg.serializeBlockedCQF();

@@ -36,8 +36,8 @@ namespace mantis{
     constexpr char TEMP_BUILD_IDX_DIR[] = "temp-build-idx/";
     constexpr char TEMP_MERGE_IDX_DIR[] = "temp-merge-idx/";
 
-    constexpr const uint64_t NUM_BV_BUFFER{20000000};
-    constexpr const uint64_t BV_BUF_LEN{(uint64_t)20000000000};
+    constexpr const uint64_t NUM_BV_BUFFER{200};//{20000000};
+    constexpr const uint64_t BV_BUF_LEN{(uint64_t)2000};//{(uint64_t)20000000000};
     constexpr const uint64_t INITIAL_EQ_CLASSES{10000};
     constexpr const uint64_t SAMPLE_SIZE{(1ULL << 26)};
 
