@@ -262,7 +262,11 @@ public:
         curDbg.reset(new CQF<key_obj>(*other.curDbg));
 //        curDbg(std::move(other.curDbg));
         currentBlock = other.currentBlock;
-        dbgs = other.dbgs;
+        dbgs.resize(other.dbgs.size());
+        for (auto i = 0; i < other.dbgs.size(); i++) {
+            dbgs[i].reset(new CQF<key_obj>(*other.curDbg));
+        }
+//        dbgs.data() = other.dbgs.data();
         return *this;
     }
 
