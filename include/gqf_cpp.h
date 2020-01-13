@@ -24,6 +24,7 @@
 #include "gqf/gqf_int.h"
 #include "gqf/gqf_file.h"
 #include "util.h"
+#include "canonicalKmer.h"
 
 #define NUM_HASH_BITS 14
 #define NUM_Q_BITS 6
@@ -32,6 +33,23 @@
 enum readmode {
 	CQF_MMAP,
 	CQF_FREAD
+};
+
+class KeyObject {
+public:
+	KeyObject() : key(0), value(0), count(0) {};
+
+	KeyObject(uint64_t k, uint64_t v, uint64_t c) : key(k),
+													value(v), count(c) {};
+
+	KeyObject(const KeyObject& k) : key(k.key), value(k.value), count(k.count) {};
+
+	bool operator==(KeyObject k) { return key == k.key; }
+
+	typedef uint64_t kmer_t;
+	kmer_t key;
+	uint64_t value;
+	uint64_t count;
 };
 
 template <class key_obj>
@@ -90,8 +108,23 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
-		void free() { if (inMem) qf_free(&cqf);}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
-		void close() { if (is_filebased and not inMem) qf_closefile(&cqf); }
+		void free() {
+			if (inMem) {
+				std::cerr << "In memory. Freeing ..\n";
+				qf_free(&cqf);
+			}
+		}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
+		void close() {
+			if (is_filebased and not inMem) {
+				std::cerr << "Mmapped. Closing the file ..\n";
+				std::string s = "TGACCAACGTGGTGAAACCCCGT";
+				dna::canonical_kmer ck(s);
+
+				auto eq = query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
+				std::cerr << "eq " << eq << "\n";
+				qf_closefile(&cqf);
+			}
+		}
 		void delete_file() { if (is_filebased) qf_deletefile(&cqf); }
 
 		void set_auto_resize(void) { qf_set_auto_resize(&cqf, true); }
@@ -152,22 +185,7 @@ class CQF {
 		//std::unordered_set<uint64_t> set;
 };
 
-class KeyObject {
-	public:
-		KeyObject() : key(0), value(0), count(0) {};
 
-		KeyObject(uint64_t k, uint64_t v, uint64_t c) : key(k),
-		value(v), count(c) {};
-
-		KeyObject(const KeyObject& k) : key(k.key), value(k.value), count(k.count) {};
-
-		bool operator==(KeyObject k) { return key == k.key; }
-
-		typedef uint64_t kmer_t;
-		kmer_t key;
-		uint64_t value;
-		uint64_t count;
-};
 
 template <class key_obj>
 CQF<key_obj>::CQF() {

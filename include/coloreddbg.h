@@ -233,7 +233,7 @@ public:
     void constructBlockedCQF(qf_obj *incqfs);
     void serializeBlockedCQF();
 
-    ColorBVResType add_colorBV(uint64_t &eq_id, const BitVector &vector);
+    ColorBVResType add_colorBV(uint64_t &eq_id, const BitVector &vector, bool verbose=false);
 
     bool add_colorId(uint64_t &eq_id, const BitVector &vector);
 
@@ -326,6 +326,8 @@ private:
     // Concatenates the sample-id mappings of the CdBG's 'cdbg1' and 'cdbg2' into
     // the sample-id list of this CdBG, in order.
     void concat_sample_id_maps(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+    __uint128_t tmphash{0};
 };
 
 template<class T>
@@ -456,16 +458,24 @@ bool ColoredDbg<qf_obj, key_obj>::add_colorClass(uint64_t &eq_id, const BitVecto
 }
 
 template<class qf_obj, class key_obj>
-ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const BitVector &vector) {
+ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const BitVector &vector, bool verbose) {
     __uint128_t vec_hash = MurmurHash128A((void *) vector.data(),
                                           vector.capacity() / 8, 2038074743,
                                           2038074751);
 
     auto it = eqclass_map.find(vec_hash);
     if (it == eqclass_map.end()) {
+        if (verbose) {
+            std::cerr << "not found\n";
+        }
        return ColorBVResType::notFound;
     } else if (it->second.second) { //already added
         eq_id = it->second.first;
+        if (verbose) {
+            tmphash = vec_hash;
+            std::cerr << "already added " << static_cast<uint64_t >(vec_hash >> 64)
+            << static_cast<uint64_t >(vec_hash) << " " << eq_id << "\n";
+        }
         return ColorBVResType::notAdded;
     } else { // eq class is seen before so increment the abundance.
         eq_id = it->second.first;
@@ -476,6 +486,10 @@ ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const B
             it->second.first = eq_id;
         }
         it->second.second++; // change this from 0 to 1 for later kmers from this eq so that the EQ BV is not added anymore
+        if (verbose) {
+            std::cerr << "the rest " << eq_id << "\n";
+        }
+
         bool isFirst = add_block_bitvector(vector, eq_id-1);
         if (isFirst)
             return ColorBVResType::added2FirstBuffer;
@@ -641,6 +655,12 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
         bv_buffer_serialize();
 
     BitVectorRRR first_rrr_bv(first_bv_buffer);
+
+    uint64_t start_idx = (3302114 % colorClassPerBuffer) * num_samples;
+
+    auto val = first_bv_buffer.get_int(start_idx + num_samples / 64 * 64,
+                      num_samples % 64);
+    std::cerr << "\n\n\n"<< 3302115 << " " << start_idx << " " << val << "\n\n\n";
 //    std::cerr << prefix + std::to_string(0) + "_" + mantis::EQCLASS_FILE << "\n";
     std::string bv_file(prefix + std::to_string(0) + "_" + mantis::EQCLASS_FILE);
     sdsl::store_to_file(first_rrr_bv, bv_file);
@@ -694,13 +714,13 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
         replaceCQFInMemory(blockId);//dbgs[blockId];
-//        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
+        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
-//            dna::canonical_kmer ck(ksize/2, k);
             uint64_t eqclass = curDbg->query(key, 0);
+            dna::canonical_kmer ck(ksize/2, k);
+            std::cerr << "findSample: " << std::string(ck) << " " << eqclass << "\n";
             if (eqclass) {
-//                std::cerr << "findSample: " << std::string(ck) << " " << eqclass << "\n";
                 query_eqclass_map[eqclass] += 1;
             }
         }
@@ -719,19 +739,23 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         uint64_t bucket_idx = start_idx / colorClassPerBuffer;
         // uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
         uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
-//        std::cerr << "bucket=" << bucket_idx << " eqId=" << eqclass_id << ": ";
+        std::cerr << "bucket=" << bucket_idx << " eqId=" << eqclass_id
+        << " numSamples=" << num_samples << " colorClassPerBuffer=" << colorClassPerBuffer
+        << " mod=" << (start_idx % colorClassPerBuffer) << " "
+        << " offset=" << bucket_offset << ": ";
         for (uint32_t w = 0; w <= num_samples / 64; w++) {
             uint64_t len = std::min((uint64_t) 64, num_samples - w * 64);
             uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
+            std::cerr << wrd << " ";
             for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++) {
                 if ((wrd >> i) & 0x01) {
-//                    std::cerr << sCntr << " ";
+                    std::cerr << sCntr << " ";
                     sample_map[sCntr] += count;
                 }
             }
             bucket_offset += len;
         }
-//        std::cerr << "\n";
+        std::cerr << "\n";
     }
     return sample_map;
 }
@@ -1016,13 +1040,24 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         } while (!minheap.empty() && last_key == minheap.top().key());
 
         auto hash_inverse = hash_64i(last_key, mask);
-//        dna::canonical_kmer ck(keyBits/2, hash_inverse);
 //        dna::canonical_kmer hashedck(keyBits/2, last_key);
         auto minimizerPair = findMinimizer(hash_inverse, keyBits);
         auto minimizer = minimizerPair.first;
         auto secondMinimizer = minimizerPair.second;
         uint64_t eq_id{0};
-        ColorBVResType res = add_colorBV(eq_id, eq_class);
+        dna::canonical_kmer ck(keyBits/2, hash_inverse);
+        ColorBVResType res = add_colorBV(eq_id, eq_class, (std::string(ck) == "TGACCAACGTGGTGAAACCCCGT"));
+        if (std::string(ck) == "TGACCAACGTGGTGAAACCCCGT") {
+            std::cerr << "\n\n\nfound it\n\n\n";
+            std::cerr << std::string(ck) << " " << minimizer << ":" << minimizerCntr[minimizer] <<
+            " , " << eq_id << " " << res << "\n";
+            for (auto i = 0; i < eq_class.size(); i++) {
+                if (eq_class[i]) {
+                    std::cerr << i << " ";
+                }
+            }
+            std::cerr << "\n\n\n";
+        }
         if (res == ColorBVResType::added2OtherthanFirstBuffer) {
 //            std::cerr << numEqClassBVs << "\n";
             numEqClassBVs++;
@@ -1038,6 +1073,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
             console->error("Found a new color class in the second round.");
             std::exit(1);
         }
+
         // check: the k-mer should not already be present.
         uint64_t count = dbgs[minimizerCntr[minimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                              QF_KEY_IS_HASH);
@@ -1169,13 +1205,29 @@ sample_file, int flag) : bv_buffer(),
 
 template<typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
-//    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
+    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
+    if (i == 0 and curDbg) {
+        std::string s = "TGACCAACGTGGTGAAACCCCGT";
+        dna::canonical_kmer ck(s);
+
+        auto eq = curDbg->query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
+        std::cerr << "Before reloading\n\n" << eq << "\n";
+    }
+
     if (i == invalid) {
         curDbg.reset(nullptr);
         return;
     }
     if (currentBlock == i) {
-//        std::cerr  << "replaceCQFInMemory case1\n";
+        std::cerr  << "replaceCQFInMemory case1\n";
+        if (i == 0) {
+            std::string s = "TGACCAACGTGGTGAAACCCCGT";
+            dna::canonical_kmer ck(s);
+
+            auto eq = curDbg->query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
+            std::cerr << "Before reloading\n\n" << eq << "\n";
+        }
+
         return;
     }
 
@@ -1192,7 +1244,15 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
             exit(EXIT_FAILURE);
         }
         currentBlock = i;
-//        std::cerr << "replaceCQFInMemory case2\n";
+        std::cerr << "replaceCQFInMemory case2\n";
+    if (i == 0 and curDbg) {
+        std::string s = "TGACCAACGTGGTGAAACCCCGT";
+        dna::canonical_kmer ck(s);
+
+        auto eq = curDbg->query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
+        std::cerr << "Before reloading\n\n" << eq << "\n";
+    }
+
 //    }
 }
 
@@ -1219,6 +1279,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     uint64_t numOfBlocks = minimizerCntr[minimizerCntr.size()-1] + 1;
 //    dbgs.resize(numOfBlocks);
     replaceCQFInMemory(0);
+
     /*for (uint64_t i = 0; i < numOfBlocks; i++) {
         // Load the CQF
 //        uint64_t i{0};
