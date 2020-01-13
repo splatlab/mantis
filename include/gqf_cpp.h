@@ -90,7 +90,7 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
-		void free() { if (inMem) std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
+		void free() { if (inMem) qf_free(&cqf);}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() { if (is_filebased and not inMem) qf_closefile(&cqf); }
 		void delete_file() { if (is_filebased) qf_deletefile(&cqf); }
 

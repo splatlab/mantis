@@ -628,8 +628,10 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
         // serialize the CQF
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
             dbgs[i]->serialize(prefix + mantis::CQF_FILE + std::to_string(i));
-        else
-            dbgs[i]->close();
+        // No need
+        // CQF has a destructor now that calls close(). The unique_ptr calls the destructor at the end of the program
+//        else
+//            dbgs[i]->close();
     }
     std::ofstream minfile(prefix + mantis::MINIMIZER_BOUNDARY, std::ios::binary);
     minfile.write(reinterpret_cast<char *>(minimizerCntr.data()), minimizerCntr.size()*sizeof(typename decltype(minimizerCntr)::value_type));
@@ -665,7 +667,7 @@ std::vector<uint64_t>
 ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
-    std::cerr << "\n\n\nhereeeekmers\n\n";
+//    std::cerr << "\n\n\nhereeeekmers\n\n";
     if (not curDbg) {
         console->error("No dbg has been loaded into memory.");
         std::exit(3);
@@ -692,7 +694,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
         replaceCQFInMemory(blockId);//dbgs[blockId];
-        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
+//        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
 //            dna::canonical_kmer ck(ksize/2, k);
@@ -717,19 +719,19 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         uint64_t bucket_idx = start_idx / colorClassPerBuffer;
         // uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
         uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
-        std::cerr << "bucket=" << bucket_idx << " eqId=" << eqclass_id << ": ";
+//        std::cerr << "bucket=" << bucket_idx << " eqId=" << eqclass_id << ": ";
         for (uint32_t w = 0; w <= num_samples / 64; w++) {
             uint64_t len = std::min((uint64_t) 64, num_samples - w * 64);
             uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
             for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++) {
                 if ((wrd >> i) & 0x01) {
-                    std::cerr << sCntr << " ";
+//                    std::cerr << sCntr << " ";
                     sample_map[sCntr] += count;
                 }
             }
             bucket_offset += len;
         }
-        std::cerr << "\n";
+//        std::cerr << "\n";
     }
     return sample_map;
 }
@@ -739,7 +741,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>
 ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
-    std::cerr << "\n\n\nhereeee\n\n";
+//    std::cerr << "\n\n\nhereeee\n\n";
     if (not curDbg) {
         console->error("No dbg has been loaded into memory.");
         std::exit(3);
@@ -1167,13 +1169,13 @@ sample_file, int flag) : bv_buffer(),
 
 template<typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
-    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
+//    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
     if (i == invalid) {
         curDbg.reset(nullptr);
         return;
     }
     if (currentBlock == i) {
-        std::cerr  << "replaceCQFInMemory case1\n";
+//        std::cerr  << "replaceCQFInMemory case1\n";
         return;
     }
 
@@ -1190,7 +1192,7 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
             exit(EXIT_FAILURE);
         }
         currentBlock = i;
-        std::cerr << "replaceCQFInMemory case2\n";
+//        std::cerr << "replaceCQFInMemory case2\n";
 //    }
 }
 
