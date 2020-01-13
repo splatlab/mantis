@@ -473,8 +473,6 @@ ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const B
         eq_id = it->second.first;
         if (verbose) {
             tmphash = vec_hash;
-            std::cerr << "already added " << static_cast<uint64_t >(vec_hash >> 64)
-            << static_cast<uint64_t >(vec_hash) << " " << eq_id << "\n";
         }
         return ColorBVResType::notAdded;
     } else { // eq class is seen before so increment the abundance.
@@ -486,6 +484,13 @@ ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const B
             it->second.first = eq_id;
         }
         it->second.second++; // change this from 0 to 1 for later kmers from this eq so that the EQ BV is not added anymore
+        if (eq_id == 3302115) {
+            std::cerr << "\n\n\nAAAAAA "
+            << static_cast<uint64_t >(vec_hash >> 64)
+                      << static_cast<uint64_t >(vec_hash) << " "
+            << it->second.first << " " << colorClassPerBuffer << " " << notSorted_eq_id <<
+             " " << it->second.second << "\n\n";
+        }
         if (verbose) {
             std::cerr << "the rest " << eq_id << "\n";
         }
@@ -556,12 +561,18 @@ bool ColoredDbg<qf_obj, key_obj>::add_block_bitvector(const BitVector &vector, u
     // uint64_t start_idx = (eq_id  % mantis::NUM_BV_BUFFER) * num_samples;
     if (eq_id < colorClassPerBuffer) {
         uint64_t start_idx = eq_id * num_samples;
+        uint64_t before = first_bv_buffer.get_int(165105700, 50);
         for (uint32_t i = 0; i < num_samples / 64 * 64; i += 64)
             first_bv_buffer.set_int(start_idx + i, vector.get_int(i, 64), 64);
         if (num_samples % 64)
             first_bv_buffer.set_int(start_idx + num_samples / 64 * 64,
                               vector.get_int(num_samples / 64 * 64, num_samples % 64),
                               num_samples % 64);
+        uint64_t after = first_bv_buffer.get_int(165105700, 50);
+        if (before != after) {
+            std::cerr << "\n\nDIFFERENT " << eq_id << "\n";
+            std::cerr << before << " " << after << "\n";
+        }
         return true;
     } else {
         uint64_t start_idx = (eq_id % colorClassPerBuffer) * num_samples;
@@ -714,12 +725,12 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
         replaceCQFInMemory(blockId);//dbgs[blockId];
-        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
+//        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
             uint64_t eqclass = curDbg->query(key, 0);
             dna::canonical_kmer ck(ksize/2, k);
-            std::cerr << "findSample: " << std::string(ck) << " " << eqclass << "\n";
+//            std::cerr << "findSample: " << std::string(ck) << " " << eqclass << "\n";
             if (eqclass) {
                 query_eqclass_map[eqclass] += 1;
             }
@@ -739,23 +750,23 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         uint64_t bucket_idx = start_idx / colorClassPerBuffer;
         // uint64_t bucket_offset = (start_idx % mantis::NUM_BV_BUFFER) * num_samples;
         uint64_t bucket_offset = (start_idx % colorClassPerBuffer) * num_samples;
-        std::cerr << "bucket=" << bucket_idx << " eqId=" << eqclass_id
-        << " numSamples=" << num_samples << " colorClassPerBuffer=" << colorClassPerBuffer
-        << " mod=" << (start_idx % colorClassPerBuffer) << " "
-        << " offset=" << bucket_offset << ": ";
+//        std::cerr << "bucket=" << bucket_idx << " eqId=" << eqclass_id
+//        << " numSamples=" << num_samples << " colorClassPerBuffer=" << colorClassPerBuffer
+//        << " mod=" << (start_idx % colorClassPerBuffer) << " "
+//        << " offset=" << bucket_offset << ": ";
         for (uint32_t w = 0; w <= num_samples / 64; w++) {
             uint64_t len = std::min((uint64_t) 64, num_samples - w * 64);
             uint64_t wrd = eqclasses[bucket_idx].get_int(bucket_offset, len);
-            std::cerr << wrd << " ";
+//            std::cerr << wrd << " ";
             for (uint32_t i = 0, sCntr = w * 64; i < len; i++, sCntr++) {
                 if ((wrd >> i) & 0x01) {
-                    std::cerr << sCntr << " ";
+//                    std::cerr << sCntr << " ";
                     sample_map[sCntr] += count;
                 }
             }
             bucket_offset += len;
         }
-        std::cerr << "\n";
+//        std::cerr << "\n";
     }
     return sample_map;
 }
@@ -1134,6 +1145,8 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
 // num_serializations(0), start_time_(std::time(nullptr)) {
         prefix(prefix), num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
     colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+    notSorted_eq_id = colorClassPerBuffer;
+    numEqClassBVs = colorClassPerBuffer;
     bv_buffer = BitVector(colorClassPerBuffer * num_samples);
     first_bv_buffer = BitVector(colorClassPerBuffer * num_samples);
 
@@ -1199,34 +1212,36 @@ sample_file, int flag) : bv_buffer(),
     }
 
     colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+    notSorted_eq_id = colorClassPerBuffer;
+    numEqClassBVs = colorClassPerBuffer;
 
     sampleid.close();
 }
 
 template<typename qf_obj, typename key_obj>
 void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
-    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
-    if (i == 0 and curDbg) {
+//    std::cerr << "\n\nIn replaceCQFInMemory: " << i << "\n" ;
+    /*if (i == 0 and curDbg) {
         std::string s = "TGACCAACGTGGTGAAACCCCGT";
         dna::canonical_kmer ck(s);
 
         auto eq = curDbg->query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
         std::cerr << "Before reloading\n\n" << eq << "\n";
-    }
+    }*/
 
     if (i == invalid) {
         curDbg.reset(nullptr);
         return;
     }
     if (currentBlock == i) {
-        std::cerr  << "replaceCQFInMemory case1\n";
-        if (i == 0) {
+//        std::cerr  << "replaceCQFInMemory case1\n";
+        /*if (i == 0) {
             std::string s = "TGACCAACGTGGTGAAACCCCGT";
             dna::canonical_kmer ck(s);
 
             auto eq = curDbg->query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
             std::cerr << "Before reloading\n\n" << eq << "\n";
-        }
+        }*/
 
         return;
     }
@@ -1244,14 +1259,14 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
             exit(EXIT_FAILURE);
         }
         currentBlock = i;
-        std::cerr << "replaceCQFInMemory case2\n";
-    if (i == 0 and curDbg) {
+//        std::cerr << "replaceCQFInMemory case2\n";
+    /*if (i == 0 and curDbg) {
         std::string s = "TGACCAACGTGGTGAAACCCCGT";
         dna::canonical_kmer ck(s);
 
         auto eq = curDbg->query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
         std::cerr << "Before reloading\n\n" << eq << "\n";
-    }
+    }*/
 
 //    }
 }
@@ -1325,6 +1340,8 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     }
 
     colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+    notSorted_eq_id = colorClassPerBuffer;
+    numEqClassBVs = colorClassPerBuffer;
 
     sampleList.close();
 
@@ -1357,6 +1374,8 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
         dbg_alloc_flag(flag),
         start_time_(std::time(nullptr)) {
     colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+    notSorted_eq_id = colorClassPerBuffer;
+    numEqClassBVs = colorClassPerBuffer;
 
     // Construct the sample-id list.
     concat_sample_id_maps(cdbg1, cdbg2);
@@ -1366,6 +1385,9 @@ template<class qf_obj, class key_obj>
 ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t nqf) :
         num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
     colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
+    notSorted_eq_id = colorClassPerBuffer;
+    numEqClassBVs = colorClassPerBuffer;
+
     bv_buffer = BitVector(colorClassPerBuffer * num_samples);
     first_bv_buffer = BitVector(colorClassPerBuffer * num_samples);
 }

@@ -110,18 +110,18 @@ class CQF {
 
 		void free() {
 			if (inMem) {
-				std::cerr << "In memory. Freeing ..\n";
+//				std::cerr << "In memory. Freeing ..\n";
 				qf_free(&cqf);
 			}
 		}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() {
 			if (is_filebased and not inMem) {
-				std::cerr << "Mmapped. Closing the file ..\n";
-				std::string s = "TGACCAACGTGGTGAAACCCCGT";
-				dna::canonical_kmer ck(s);
+//				std::cerr << "Mmapped. Closing the file ..\n";
+//				std::string s = "TGACCAACGTGGTGAAACCCCGT";
+//				dna::canonical_kmer ck(s);
 
-				auto eq = query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
-				std::cerr << "eq " << eq << "\n";
+//				auto eq = query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
+//				std::cerr << "eq " << eq << "\n";
 				qf_closefile(&cqf);
 			}
 		}
