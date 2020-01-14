@@ -81,7 +81,10 @@ class CQF {
 			other.is_filebased = false;
 		}
 
-		~CQF();
+		~CQF() {
+			free();
+			close();
+		}
 
 		CQF& operator=(CQF<key_obj>& other) {
 			memcpy(reinterpret_cast<void*>(&cqf),
@@ -94,8 +97,6 @@ class CQF {
 			other.is_filebased = false;
 			return *this;
 		}
-
-		//~CQF();
 
 		int insert(const key_obj& k, uint8_t flags);
 
@@ -110,18 +111,11 @@ class CQF {
 
 		void free() {
 			if (inMem) {
-//				std::cerr << "In memory. Freeing ..\n";
 				qf_free(&cqf);
 			}
 		}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() {
 			if (is_filebased and not inMem) {
-//				std::cerr << "Mmapped. Closing the file ..\n";
-//				std::string s = "TGACCAACGTGGTGAAACCCCGT";
-//				dna::canonical_kmer ck(s);
-
-//				auto eq = query(KeyObject(ck.val, 0, 0), QF_NO_LOCK );
-//				std::cerr << "eq " << eq << "\n";
 				qf_closefile(&cqf);
 			}
 		}
@@ -239,11 +233,6 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 		exit(EXIT_FAILURE);
 	}
 	is_filebased = true;
-}
-
-template <class key_obj> CQF<key_obj>::~CQF() {
-	free();
-	close();
 }
 
 template <class key_obj>
