@@ -71,36 +71,54 @@ void MST::buildMST() {
     logger->info("# of times the node was found in the cache: {}", gcntr);
 }
 
+uint64_t MST::buildMultiEdgesFromCQFs() {
+    std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
+    edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
+
+    for (uint32_t i = 0; i < nThreads; ++i) {
+        std::ofstream ofs;
+        ofs.open("tmp"+std::to_string(i), std::ofstream::out | std::ofstream::trunc);
+        ofs.close();
+    }
+    sdsl::bit_vector nodes((1 + (num_of_ccBuffers * mantis::NUM_BV_BUFFER) / 64) * 64, 0);
+    uint64_t maxId{0}, numOfKmers{0};
+
+    std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
+
+    for (uint64_t c = 0; c < colorClassFiles.size(); c++) {
+        logger->info("Reading colored dbg from disk...");
+        std::cerr << colorClassFiles[c] << "\n";
+        std::string cqf_file(colorClassFiles[c]);
+        CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
+        k = cqf.keybits() / 2;
+        logger->info("Done loading cdbg. k is {}", k);
+        logger->info("Iterating over cqf & building edgeSet ...");
+        // max possible value and divisible by 64
+
+        // build color class edges in a multi-threaded manner
+        std::vector<std::thread> threads;
+        for (uint32_t i = 0; i < nThreads; ++i) {
+            threads.emplace_back(std::thread(&MST::buildPairedColorIdEdgesInParallel, this, i,
+                                             std::ref(cqf), std::ref(edgesetList),
+                                             std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
+        }
+        for (auto &t : threads) { t.join(); }
+//        cqf.~CQF();
+    }
+    logger->info("Total number of kmers observed: {}", numOfKmers);
+    return maxId;
+}
+
 /**
  * iterates over all elements of CQF,
  * find all the existing neighbors, and build a color graph based on that
  * @return true if the color graph build was successful
  */
 bool MST::buildEdgeSets() {
-    std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
     edgeBucketList.resize(num_of_ccBuffers * num_of_ccBuffers);
-    edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
 
-    logger->info("Reading colored dbg from disk.");
-    std::string cqf_file(prefix + mantis::CQF_FILE);
-    CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
-    k = cqf.keybits() / 2;
-    logger->info("Done loading cdbg. k is {}", k);
-    logger->info("Iterating over cqf & building edgeSet ...");
-    // max possible value and divisible by 64
-    sdsl::bit_vector nodes((1 + (num_of_ccBuffers * mantis::NUM_BV_BUFFER) / 64) * 64, 0);
-    uint64_t maxId{0}, numOfKmers{0};
+    auto maxId = buildMultiEdgesFromCQFs();
 
-    // build color class edges in a multi-threaded manner
-    std::vector<std::thread> threads;
-    for (uint32_t i = 0; i < nThreads; ++i) {
-        threads.emplace_back(std::thread(&MST::buildPairedColorIdEdgesInParallel, this, i,
-                                         std::ref(cqf), std::ref(edgesetList),
-                                         std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
-    }
-    for (auto &t : threads) { t.join(); }
-    cqf.free();
-    logger->info("Total number of kmers observed: {}", numOfKmers);
 //    logger->info("Total number of edges observed: {}", num_edges);
 
 
@@ -191,7 +209,7 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     std::string filename("tmp"+std::to_string(threadId));
     uint64_t cnt = 0;
     std::ofstream tmpfile;
-    tmpfile.open(filename, std::ios::out | std::ios::binary);
+    tmpfile.open(filename, std::ios::out | std::ios::app | std::ios::binary);
     tmpfile.write(reinterpret_cast<const char *>(&cnt), sizeof(cnt));
     while (!it.reachedHashLimit()) {
         KeyObject keyObject = *it;

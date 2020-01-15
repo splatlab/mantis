@@ -135,6 +135,9 @@ public:
     void buildMST();
 
 private:
+
+    uint64_t buildMultiEdgesFromCQFs();
+
     bool buildEdgeSets();
 
     void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);

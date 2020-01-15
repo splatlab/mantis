@@ -627,7 +627,7 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
     for (auto i = 0; i < dbgs.size(); i++) {
         // serialize the CQF
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
-            dbgs[i]->serialize(prefix + mantis::CQF_FILE + std::to_string(i));
+            dbgs[i]->serialize(prefix + std::to_string(i) + "_" + mantis::CQF_FILE);
         // No need
         // CQF has a destructor now that calls close(). The unique_ptr calls the destructor at the end of the program
 //        else
@@ -1187,7 +1187,7 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
         return;
     }
 
-    std::string blockCqfFile = prefix + mantis::CQF_FILE + std::to_string(i);
+    std::string blockCqfFile = prefix + std::to_string(i) + "_" + mantis::CQF_FILE;
 //    if (curDbg) {
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
             //            CQF<key_obj> cqf(blockCqfFile, CQF_FREAD);
