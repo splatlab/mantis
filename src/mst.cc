@@ -77,7 +77,7 @@ uint64_t MST::buildMultiEdgesFromCQFs() {
 
     for (uint32_t i = 0; i < nThreads; ++i) {
         std::ofstream ofs;
-        ofs.open("tmp"+std::to_string(i), std::ofstream::out | std::ofstream::trunc);
+        ofs.open(prefix+ "tmp"+std::to_string(i), std::ofstream::out | std::ofstream::trunc);
         ofs.close();
     }
     sdsl::bit_vector nodes((1 + (num_of_ccBuffers * mantis::NUM_BV_BUFFER) / 64) * 64, 0);
@@ -136,7 +136,7 @@ bool MST::buildEdgeSets() {
     num_colorClasses = maxId + 1;
     logger->info("Put edges in each bucket in a sorted list.");
     for (uint32_t i = 0; i < nThreads; ++i) {
-        std::string filename = "tmp"+std::to_string(i);
+        std::string filename = prefix + "tmp"+std::to_string(i);
         std::ifstream tmp;
         tmp.open(filename, std::ios::in | std::ios::binary);
         uint64_t cnt;
