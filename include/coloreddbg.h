@@ -880,7 +880,7 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
     for (uint64_t s = 0; s <= k - j; s += 2) {
 //                auto h = hash_64(key >> s, jmask);
         auto h = (key >> s) & jmask;
-        second_min = (h < second_min and h > min) ? h : second_min;
+        second_min = (h < min) ? min : second_min;
         min = min <= h ? min : h;
         if (s == 0) {
             first = h;
@@ -899,6 +899,7 @@ cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> &
 ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
     typename CQF<key_obj>::Iterator walk_behind_iterator;
 
+    uint64_t duplicated_kmers{0};
     minimizerCntr.resize(1ULL << (minlen * 2)); // does it also zero out the cells?
 
     uint64_t counter = 0;
@@ -936,6 +937,7 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
         minimizerCntr[first_second_minimizers.first]++;
         if (first_second_minimizers.second != invalid
             and first_second_minimizers.first != first_second_minimizers.second) {
+            duplicated_kmers++;
             minimizerCntr[first_second_minimizers.second]++;
         }
         // main functionality --> add colorClass
@@ -962,8 +964,8 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
             bv_buffer_serialize();
         }*/
     }
-    console->info("Total number of kmers enumerated: {} Total time: {}",
-                  counter, time(nullptr) - start_time_);
+    console->info("Total number of kmers enumerated: {} , duplicated kmers: {} Total time: {}",
+                  counter, duplicated_kmers, time(nullptr) - start_time_);
 
     return eqclass_map;
 }
@@ -994,6 +996,7 @@ template<class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
     num_serializations = 1; // pass bv0, because we're gonna store it at the very end
     uint64_t counter = 0;
+    uint64_t double_inserted_kmers{0};
     Minheap_PQ<key_obj> minheap;
     std::cerr << "# of dbgs: " << dbgs.size() << "\n";
     uint64_t keyBits = incqfs[0].obj->get_cqf()->metadata->key_bits;
@@ -1059,7 +1062,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         }
 
         if (secondMinimizer != invalid and minimizerCntr[secondMinimizer] != minimizerCntr[minimizer]) {
-
+            double_inserted_kmers++;
             uint64_t count = dbgs[minimizerCntr[secondMinimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                  QF_KEY_IS_HASH);
             if (count > 0) {
@@ -1084,6 +1087,8 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
                           counter, time(nullptr) - start_time_);
         }
     }
+    console->info("Kmers merged: {} , double inserted kmer: {} , Total time: {}",
+                  counter, double_inserted_kmers, time(nullptr) - start_time_);
 }
 
 template<class qf_obj, class key_obj>
