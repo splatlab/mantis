@@ -1318,7 +1318,7 @@ void ColoredDbg<qf_obj, key_obj>::initializeCQFs(std::string &prefixIn, std::vec
             dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
         } else if (flag == MANTIS_DBG_ON_DISK) {
             dbgs.push_back(std::unique_ptr<CQF<key_obj>>(new CQF<key_obj>(qbits[i], key_bits, hashmode, seed,
-                    prefix + mantis::CQF_FILE + std::to_string(i))));
+                    prefix + std::to_string(i) + "_" + mantis::CQF_FILE)));
             dbg_alloc_flag = MANTIS_DBG_ON_DISK;
         } else {
             ERROR("Wrong Mantis alloc mode.");
