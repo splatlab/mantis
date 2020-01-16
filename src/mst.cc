@@ -53,6 +53,7 @@ MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_
         numSamples++;
     }
     sampleid.close();
+    numCCPerBuffer = mantis::BV_BUF_LEN / numSamples;
     logger->info("# of experiments: {}", numSamples);
 }
 
@@ -72,23 +73,23 @@ void MST::buildMST() {
 }
 
 uint64_t MST::buildMultiEdgesFromCQFs() {
-    std::vector<spp::sparse_hash_set<Edge, edge_hash>> edgesetList;
-    edgesetList.resize(num_of_ccBuffers * num_of_ccBuffers);
 
+    std::vector<uint64_t> cnts(nThreads, 0);
     for (uint32_t i = 0; i < nThreads; ++i) {
         std::ofstream ofs;
         ofs.open(prefix+ "tmp"+std::to_string(i), std::ofstream::out | std::ofstream::trunc);
+        ofs.write(reinterpret_cast<const char *>(&cnts[i]), sizeof(cnts[i]));
         ofs.close();
     }
-    sdsl::bit_vector nodes((1 + (num_of_ccBuffers * mantis::NUM_BV_BUFFER) / 64) * 64, 0);
+    sdsl::bit_vector nodes((1 + (num_of_ccBuffers * numCCPerBuffer) / 64) * 64, 0);
     uint64_t maxId{0}, numOfKmers{0};
 
-    std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
+    std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
 
-    for (uint64_t c = 0; c < colorClassFiles.size(); c++) {
+    for (uint64_t c = 0; c < cqfBlocks.size(); c++) {
         logger->info("Reading colored dbg from disk...");
-        std::cerr << colorClassFiles[c] << "\n";
-        std::string cqf_file(colorClassFiles[c]);
+        std::cerr << cqfBlocks[c] << "\n";
+        std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
         k = cqf.keybits() / 2;
         logger->info("Done loading cdbg. k is {}", k);
@@ -99,11 +100,18 @@ uint64_t MST::buildMultiEdgesFromCQFs() {
         std::vector<std::thread> threads;
         for (uint32_t i = 0; i < nThreads; ++i) {
             threads.emplace_back(std::thread(&MST::buildPairedColorIdEdgesInParallel, this, i,
-                                             std::ref(cqf), std::ref(edgesetList),
+                                             std::ref(cqf), std::ref(cnts[i]),
                                              std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
         }
         for (auto &t : threads) { t.join(); }
-//        cqf.~CQF();
+    }
+    for (uint32_t i = 0; i < nThreads; ++i) {
+        std::ofstream ofs;
+        ofs.open(prefix+ "tmp"+std::to_string(i), std::ofstream::out | std::ofstream::in);
+//        std::cerr << "edge count=" << cnts[i] << "\n";
+        ofs.seekp(0);
+        ofs.write(reinterpret_cast<const char *>(&cnts[i]), sizeof(cnts[i]));
+        ofs.close();
     }
     logger->info("Total number of kmers observed: {}", numOfKmers);
     return maxId;
@@ -137,15 +145,18 @@ bool MST::buildEdgeSets() {
     logger->info("Put edges in each bucket in a sorted list.");
     for (uint32_t i = 0; i < nThreads; ++i) {
         std::string filename = prefix + "tmp"+std::to_string(i);
+//        std::cerr << filename << "\n";
         std::ifstream tmp;
         tmp.open(filename, std::ios::in | std::ios::binary);
         uint64_t cnt;
         tmp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
+//        std::cerr << "count=" << cnt << "\n";
         std::vector<Edge> edgeList;
         edgeList.resize(cnt);
         tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
         tmp.close();
         std::remove(filename.c_str());
+//        std::cerr << "Done reading file " << i << "\n";
         std::sort(edgeList.begin(), edgeList.end(),
                   [](Edge &e1, Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
@@ -155,6 +166,7 @@ bool MST::buildEdgeSets() {
                     return e1.n1 == e2.n1 and e1.n2 == e2.n2;
                 }), edgeList.end());
         for (auto &edge: edgeList) {
+//            std::cerr << edge.n1 << " " << edge.n2 << " " << getBucketId(edge.n1, edge.n2) << " " << edgeBucketList.size() << "\n";
             edgeBucketList[getBucketId(edge.n1, edge.n2)].push_back(edge);
         }
     }
@@ -190,7 +202,7 @@ bool MST::buildEdgeSets() {
 
 void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                             CQF<KeyObject> &cqf,
-                                            std::vector<spp::sparse_hash_set<Edge, edge_hash>> &edgesetList,
+                                            std::uint64_t& cnt,
                                             sdsl::bit_vector &nodes,
                                             uint64_t &maxId, uint64_t &numOfKmers) {
     //std::cout << "THREAD ..... " << threadId << " " << cqf.range() << "\n";
@@ -207,7 +219,6 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     edgeList.reserve(tmpEdgeListSize);
     auto it = cqf.setIteratorLimits(startPoint, endPoint);
     std::string filename(prefix+"tmp"+std::to_string(threadId));
-    uint64_t cnt = 0;
     std::ofstream tmpfile;
     tmpfile.open(filename, std::ios::out | std::ios::app | std::ios::binary);
     while (!it.reachedHashLimit()) {
@@ -237,8 +248,6 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, cnt/*num_edges*/);
     colorMutex.unlock();
     //}
-    tmpfile.seekp(0);
-    tmpfile.write(reinterpret_cast<const char *>(&cnt), sizeof(cnt));
     tmpfile.close();
 }
 
@@ -652,7 +661,7 @@ void MST::buildColor(std::vector<uint64_t> &eq, uint64_t eqid, BitVectorRRR *bv)
      }
      colorMutex.unlock();*/
     uint64_t i{0}, bitcnt{0}, wrdcnt{0};
-    uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
+    uint64_t offset = eqid % numCCPerBuffer;//mantis::NUM_BV_BUFFER;
     while (i < numSamples) {
         bitcnt = std::min(numSamples - i, (uint64_t) 64);
         uint64_t wrd = bv->get_int(offset * numSamples + i, bitcnt);
@@ -674,8 +683,8 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
     if (c1 == zero or c1 > c2) {
         std::swap(c1, c2);
     }
-    uint64_t cb1 = c1 / mantis::NUM_BV_BUFFER;
-    uint64_t cb2 = c2 / mantis::NUM_BV_BUFFER;
+    uint64_t cb1 = c1 / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
+    uint64_t cb2 = c2 / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
     if (c2 == zero) // return the corresponding buffer for the non-zero colorId
         return cb1 * num_of_ccBuffers + cb1;
     return cb1 * num_of_ccBuffers + cb2;

@@ -162,7 +162,7 @@ private:
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
-                                           std::vector<spp::sparse_hash_set<Edge, edge_hash>> &edgesetList,
+                                           uint64_t &cnt,
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
 
     void calcHammingDistInParallel(uint32_t i, std::vector<Edge> &edgeList);
@@ -175,6 +175,7 @@ private:
     uint32_t numSamples = 0;
     uint64_t k;
     uint64_t num_of_ccBuffers;
+    uint64_t numCCPerBuffer;
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
