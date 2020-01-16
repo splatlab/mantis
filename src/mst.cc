@@ -206,11 +206,10 @@ void MST::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     std::vector<Edge> edgeList;
     edgeList.reserve(tmpEdgeListSize);
     auto it = cqf.setIteratorLimits(startPoint, endPoint);
-    std::string filename("tmp"+std::to_string(threadId));
+    std::string filename(prefix+"tmp"+std::to_string(threadId));
     uint64_t cnt = 0;
     std::ofstream tmpfile;
     tmpfile.open(filename, std::ios::out | std::ios::app | std::ios::binary);
-    tmpfile.write(reinterpret_cast<const char *>(&cnt), sizeof(cnt));
     while (!it.reachedHashLimit()) {
         KeyObject keyObject = *it;
         uint64_t curEqId = keyObject.count - 1;
