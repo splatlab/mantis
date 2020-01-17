@@ -384,6 +384,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
     uint64_t i = 1;
     for (auto &it : sorted) {
         //DEBUG_CDBG(it.first << " " << it.second.data());
+//        std::cerr << "mp" << i << " " << it.first << " " << static_cast<uint64_t >(it.second >> 64) << static_cast<uint64_t >(it.second) << "\n";
         std::pair<uint64_t, uint64_t> val(i, 0);
         std::pair<__uint128_t, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
         sorted_map.insert(keyval);

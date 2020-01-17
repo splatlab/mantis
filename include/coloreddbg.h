@@ -37,7 +37,7 @@ typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 constexpr static uint64_t invalid = std::numeric_limits<uint64_t>::max();
-constexpr static uint64_t block_kmer_threshold = 100000000;
+constexpr static uint64_t block_kmer_threshold = 80000000;
 
 struct hash128 {
     uint64_t operator()(const __uint128_t &val128) const {
@@ -426,6 +426,9 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
     }*/
 //    reshuffle_bit_vectors(map);
     eqclass_map = map;
+    for (auto &kv : eqclass_map) {
+        std::cerr << "nmp" << kv.second.first << " " << static_cast<uint64_t >(kv.first >> 64) << static_cast<uint64_t >(kv.first) << "\n";
+    }
 }
 
 template<class qf_obj, class key_obj>
@@ -471,6 +474,7 @@ ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const B
         eq_id = it->second.first;
 //        std::cerr << eq_id << " " << colorClassPerBuffer << "\n";
         if (eq_id > colorClassPerBuffer) {
+            std::cerr << "NONONONONO " << eq_id << " " << colorClassPerBuffer << "\n";
             eq_id = notSorted_eq_id+1;
             notSorted_eq_id++;
             it->second.first = eq_id;
@@ -548,6 +552,7 @@ bool ColoredDbg<qf_obj, key_obj>::add_block_bitvector(const BitVector &vector, u
             first_bv_buffer.set_int(start_idx + num_samples / 64 * 64,
                               vector.get_int(num_samples / 64 * 64, num_samples % 64),
                               num_samples % 64);
+//        std::cerr << "eq" << eq_id << " " << vector.get_int(num_samples / 64 * 64, num_samples % 64) << "\n";
         return true;
     } else {
         uint64_t start_idx = (eq_id % colorClassPerBuffer) * num_samples;
@@ -875,29 +880,33 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
 //    uint64_t k = dbgs[0]->keybits();
     uint64_t j = minlen * 2;
     uint64_t jmask = (1ULL << j) - 1;
-    uint64_t min = invalid;
-    uint64_t first{min}, last{min}, second_min{min};
+    // find the minimizer for the k-1 canonicalized prefix
+    auto prefix = dna::canonical_kmer(k-1, key >> 2);
+    auto prefVal = prefix.val;
+    uint64_t prefixMin = invalid;
     for (uint64_t s = 0; s <= k - j; s += 2) {
-//                auto h = hash_64(key >> s, jmask);
-        auto h = (key >> s) & jmask;
-        second_min = (h < min) ? min : second_min;
-        min = min <= h ? min : h;
-        if (s == 0) {
-            first = h;
-        } else if (s == k - j) {
-            last = h;
-        }
+        auto h = (prefVal >> s) & jmask;
+        prefixMin = prefixMin <= h ? prefixMin : h;
     }
-    if (min != first and min != last) {
-        second_min = invalid;
+    // find the minimizer for the k-1 canonicalized suffix
+    auto suffix = dna::canonical_kmer(k-1, key);
+    auto sufVal = suffix.val;
+    uint64_t suffixMin = invalid;
+    for (uint64_t s = 0; s <= k - j; s += 2) {
+        auto h = (sufVal >> s) & jmask;
+        suffixMin = suffixMin <= h ? suffixMin : h;
     }
-    return std::make_pair(min, second_min);
+
+    if (suffixMin == prefixMin) {
+        suffixMin = invalid;
+    }
+    return std::make_pair(prefixMin, suffixMin);
 }
 
 template<class qf_obj, class key_obj>
 cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> &
 ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
-    typename CQF<key_obj>::Iterator walk_behind_iterator;
+//    typename CQF<key_obj>::Iterator walk_behind_iterator;
 
     uint64_t duplicated_kmers{0};
     minimizerCntr.resize(1ULL << (minlen * 2)); // does it also zero out the cells?
@@ -947,11 +956,11 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
         ++counter;
 
         // ?
-        if (counter == 4096) {
+        /*if (counter == 4096) {
             walk_behind_iterator = dbg.begin(true);
         } else if (counter > 4096) {
             ++walk_behind_iterator;
-        }
+        }*/
         // Progress tracker
         if (counter % block_kmer_threshold == 0) {
             console->info("Kmers enumerated: {} Total time: {}",
@@ -1027,7 +1036,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         auto minimizer = minimizerPair.first;
         auto secondMinimizer = minimizerPair.second;
         uint64_t eq_id{0};
-        dna::canonical_kmer ck(keyBits/2, hash_inverse);
+//        dna::canonical_kmer ck(keyBits/2, hash_inverse);
         ColorBVResType res = add_colorBV(eq_id, eq_class);
 
         if (res == ColorBVResType::added2OtherthanFirstBuffer) {

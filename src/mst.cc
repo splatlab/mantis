@@ -88,9 +88,13 @@ uint64_t MST::buildMultiEdgesFromCQFs() {
 
     for (uint64_t c = 0; c < cqfBlocks.size(); c++) {
         logger->info("Reading colored dbg from disk...");
-        std::cerr << cqfBlocks[c] << "\n";
+//        std::cerr << cqfBlocks[c] << "\n";
         std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
+        std::cerr << "\n\ncqf" << c << "\n";
+        cqf.dump_metadata();
+        std::cerr << "\n\n";
+
         k = cqf.keybits() / 2;
         logger->info("Done loading cdbg. k is {}", k);
         logger->info("Iterating over cqf & building edgeSet ...");
@@ -182,6 +186,11 @@ bool MST::buildEdgeSets() {
                                    }), bucket.end());
         std::cerr << "after: " << bucket.size() << "\n";
     }
+    /*for (auto &bucket: edgeBucketList) {
+        for (auto &e: bucket) {
+            std::cerr << "edge=" << e.n1 << " " << e.n2 << "\n";
+        }
+    }*/
     logger->info("Done sorting the edges.");
 
     // Add an edge between each color class ID and node zero
