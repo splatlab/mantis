@@ -426,9 +426,6 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
     }*/
 //    reshuffle_bit_vectors(map);
     eqclass_map = map;
-    for (auto &kv : eqclass_map) {
-        std::cerr << "nmp" << kv.second.first << " " << static_cast<uint64_t >(kv.first >> 64) << static_cast<uint64_t >(kv.first) << "\n";
-    }
 }
 
 template<class qf_obj, class key_obj>
@@ -881,18 +878,21 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
     uint64_t j = minlen * 2;
     uint64_t jmask = (1ULL << j) - 1;
     // find the minimizer for the k-1 canonicalized prefix
-    auto prefix = dna::canonical_kmer(k-1, key >> 2);
+    auto prefix = dna::canonical_kmer((k-2)/2, key >> 2);
     auto prefVal = prefix.val;
+//    std::cerr << prefVal << "\n";
     uint64_t prefixMin = invalid;
-    for (uint64_t s = 0; s <= k - j; s += 2) {
+    for (uint64_t s = 0; s < k - j; s += 2) {
         auto h = (prefVal >> s) & jmask;
+//        std::cerr << prefVal << " " << s << " " << h << " -- ";
         prefixMin = prefixMin <= h ? prefixMin : h;
     }
+//    std::cerr << "\n";
     // find the minimizer for the k-1 canonicalized suffix
-    auto suffix = dna::canonical_kmer(k-1, key);
+    auto suffix = dna::canonical_kmer((k-2)/2, key);
     auto sufVal = suffix.val;
     uint64_t suffixMin = invalid;
-    for (uint64_t s = 0; s <= k - j; s += 2) {
+    for (uint64_t s = 0; s < k - j; s += 2) {
         auto h = (sufVal >> s) & jmask;
         suffixMin = suffixMin <= h ? suffixMin : h;
     }
@@ -900,6 +900,7 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
     if (suffixMin == prefixMin) {
         suffixMin = invalid;
     }
+//    std::cerr << prefixMin << " " << suffixMin << "\n";
     return std::make_pair(prefixMin, suffixMin);
 }
 
