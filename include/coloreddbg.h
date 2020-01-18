@@ -326,6 +326,19 @@ private:
     // Concatenates the sample-id mappings of the CdBG's 'cdbg1' and 'cdbg2' into
     // the sample-id list of this CdBG, in order.
     void concat_sample_id_maps(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2);
+
+    uint64_t reverse_complement(uint64_t x, int k)
+    {
+        x = (x << 32)                        | (x >> 32);
+        x = ((x << 16) & 0xffff0000ffff0000) | ((x >> 16) & 0x0000ffff0000ffff);
+        x = ((x <<  8) & 0xff00ff00ff00ff00) | ((x >>  8) & 0x00ff00ff00ff00ff);
+        x = ((x <<  4) & 0xf0f0f0f0f0f0f0f0) | ((x >>  4) & 0x0f0f0f0f0f0f0f0f);
+        x = ((x <<  2) & 0xcccccccccccccccc) | ((x >>  2) & 0x3333333333333333);
+        //     0123456789abcdef
+        x ^= 0x5555555555555555;
+        x >>= (64-2*k);
+        return x;
+    }
 };
 
 template<class T>
@@ -877,8 +890,45 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
 //    uint64_t k = dbgs[0]->keybits();
     uint64_t j = minlen * 2;
     uint64_t jmask = (1ULL << j) - 1;
+    uint64_t minim{invalid};
+
     // find the minimizer for the k-1 canonicalized prefix
-    auto prefix = dna::canonical_kmer((k-2)/2, key >> 2);
+    for (uint64_t s = 2; s < k - j; s += 2) {
+        auto h = (key >> s) & jmask;
+//        std::cerr << prefVal << " " << s << " " << h << " -- ";
+        minim = minim <= h ? minim : h;
+    }
+//    auto keyrc2 = reverse_complement(key, k/2);
+//    dna::kmer k2(k/2, keyrc2);
+    dna::kmer kkk(k/2, key);
+    auto kkkrc = -kkk;
+    auto keyrc = kkkrc.val;
+//    std::cerr << std::string(kkk) << " " << std::string(-kkk) << " " <<  std::string(k2) << "\n";
+    for (uint64_t s = 2; s < k - j; s += 2) {
+        auto h = (keyrc >> s) & jmask;
+//        std::cerr << prefVal << " " << s << " " << h << " -- ";
+        minim = minim <= h ? minim : h;
+    }
+    auto last = key & jmask;
+    auto lastrc = (keyrc >> (k-j)) & jmask;
+    last = last <= lastrc ? last : lastrc;
+    auto first = (key >> (k-j)) & jmask;
+    auto firstrc = keyrc & jmask;
+    first = first <= firstrc ? first : firstrc;
+
+//    std::cerr << first << " " << last << " " << minim << "\n";
+    if (minim <= first and minim <= last) {
+        return std::make_pair(minim, invalid);
+    } else if ( first < minim and last < minim) {
+        return std::make_pair(first, last);
+    } else if (first < minim) {
+        return std::make_pair(first, minim);
+    } else if (last < minim) {
+        return std::make_pair(minim, last);
+    }
+
+
+    /*auto prefix = dna::canonical_kmer((k-2)/2, key >> 2);
     auto prefVal = prefix.val;
 //    std::cerr << prefVal << "\n";
     uint64_t prefixMin = invalid;
@@ -901,7 +951,7 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
         suffixMin = invalid;
     }
 //    std::cerr << prefixMin << " " << suffixMin << "\n";
-    return std::make_pair(prefixMin, suffixMin);
+    return std::make_pair(prefixMin, suffixMin);*/
 }
 
 template<class qf_obj, class key_obj>
