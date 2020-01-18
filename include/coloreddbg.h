@@ -887,7 +887,6 @@ ColoredDbg<qf_obj, key_obj>::construct(qf_obj *incqfs, uint64_t num_kmers) {
 
 template<class qf_obj, class key_obj>
 std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, uint64_t k) {
-//    uint64_t k = dbgs[0]->keybits();
     uint64_t j = minlen * 2;
     uint64_t jmask = (1ULL << j) - 1;
     uint64_t minim{invalid};
@@ -895,18 +894,15 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
     // find the minimizer for the k-1 canonicalized prefix
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (key >> s) & jmask;
-//        std::cerr << prefVal << " " << s << " " << h << " -- ";
         minim = minim <= h ? minim : h;
     }
 //    auto keyrc2 = reverse_complement(key, k/2);
 //    dna::kmer k2(k/2, keyrc2);
-    dna::kmer kkk(k/2, key);
-    auto kkkrc = -kkk;
-    auto keyrc = kkkrc.val;
-//    std::cerr << std::string(kkk) << " " << std::string(-kkk) << " " <<  std::string(k2) << "\n";
+    dna::kmer kmer(k/2, key);
+    auto kmerrc = -kmer;
+    auto keyrc = kmerrc.val;
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (keyrc >> s) & jmask;
-//        std::cerr << prefVal << " " << s << " " << h << " -- ";
         minim = minim <= h ? minim : h;
     }
     auto last = key & jmask;
@@ -916,7 +912,6 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
     auto firstrc = keyrc & jmask;
     first = first <= firstrc ? first : firstrc;
 
-//    std::cerr << first << " " << last << " " << minim << "\n";
     if (minim <= first and minim <= last) {
         return std::make_pair(minim, invalid);
     } else if ( first < minim and last < minim) {
@@ -926,32 +921,6 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
     } else if (last < minim) {
         return std::make_pair(minim, last);
     }
-
-
-    /*auto prefix = dna::canonical_kmer((k-2)/2, key >> 2);
-    auto prefVal = prefix.val;
-//    std::cerr << prefVal << "\n";
-    uint64_t prefixMin = invalid;
-    for (uint64_t s = 0; s < k - j; s += 2) {
-        auto h = (prefVal >> s) & jmask;
-//        std::cerr << prefVal << " " << s << " " << h << " -- ";
-        prefixMin = prefixMin <= h ? prefixMin : h;
-    }
-//    std::cerr << "\n";
-    // find the minimizer for the k-1 canonicalized suffix
-    auto suffix = dna::canonical_kmer((k-2)/2, key);
-    auto sufVal = suffix.val;
-    uint64_t suffixMin = invalid;
-    for (uint64_t s = 0; s < k - j; s += 2) {
-        auto h = (sufVal >> s) & jmask;
-        suffixMin = suffixMin <= h ? suffixMin : h;
-    }
-
-    if (suffixMin == prefixMin) {
-        suffixMin = invalid;
-    }
-//    std::cerr << prefixMin << " " << suffixMin << "\n";
-    return std::make_pair(prefixMin, suffixMin);*/
 }
 
 template<class qf_obj, class key_obj>
