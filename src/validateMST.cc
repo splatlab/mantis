@@ -67,8 +67,6 @@ int validate_mst_main(MSTValidateOpts &opt) {
         std::cerr << "Couldn't find the input mantis directory.\n";
         std::exit(3);
     }
-    std::string dbg_file(prefix + mantis::CQF_FILE);
-    std::string sample_file(prefix + mantis::SAMPLEID_FILE);
 
     QueryStats queryStats;
     queryStats.numSamples = opt.numSamples;
