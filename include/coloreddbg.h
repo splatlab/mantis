@@ -484,7 +484,7 @@ ColorBVResType ColoredDbg<qf_obj, key_obj>::add_colorBV(uint64_t &eq_id, const B
         eq_id = it->second.first;
 //        std::cerr << eq_id << " " << colorClassPerBuffer << "\n";
         if (eq_id > colorClassPerBuffer) {
-            std::cerr << "NONONONONO " << eq_id << " " << colorClassPerBuffer << "\n";
+//            std::cerr << "NONONONONO " << eq_id << " " << colorClassPerBuffer << "\n";
             eq_id = notSorted_eq_id+1;
             notSorted_eq_id++;
             it->second.first = eq_id;
