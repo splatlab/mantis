@@ -154,6 +154,9 @@ public:
     void mergeMSTs();
 
 private:
+
+    uint64_t buildMultiEdgesFromCQFs();
+
     bool buildEdgeSets();
 
     bool calculateMSTBasedWeights();
@@ -182,20 +185,21 @@ private:
                                               std::vector<uint64_t> &blockCnt,
                                               FilterType &filter);
 
-    void buildPairedColorIdEdgesInParallel(uint32_t threadId,
-                                           CQF<KeyObject> &cqf,
-                                           std::vector<std::ifstream> &blockFiles,
-                                           std::vector<uint64_t> &blockCnt,
-                                           uint64_t &maxId);
+    void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
+                                           uint64_t &cnt,
+                                           sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
+
+
+    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
 
     void calcMSTHammingDistInParallel(uint32_t i,
-                                      std::vector<std::pair<colorIdType, weightType>> &edgeList,
-                                      std::vector<uint32_t> &srcStarts,
-                                      MSTQuery *mst,
-                                      std::vector<LRUCacheMap> &lru_cache,
-                                      std::vector<QueryStats> &queryStats,
-                                      std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
-                                      uint32_t numSamples);
+                                  std::vector<std::pair<colorIdType, weightType>> &edgeList,
+                                  std::vector<uint32_t> &srcStarts,
+                                  MSTQuery *mst,
+                                  std::vector<LRUCacheMap> &lru_cache,
+                                  std::vector<QueryStats> &queryStats,
+                                  std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
+                                  uint32_t numSamples);
 
     void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
                               sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
@@ -227,6 +231,7 @@ private:
     uint32_t secondMantisSamples = 0;
     uint64_t k;
     uint64_t num_of_ccBuffers = 1;
+    uint64_t numCCPerBuffer;
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;

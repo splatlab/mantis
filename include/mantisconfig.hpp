@@ -41,7 +41,8 @@ namespace mantis{
     constexpr const uint64_t INITIAL_EQ_CLASSES{10000};
     constexpr const uint64_t SAMPLE_SIZE{(1ULL << 26)};
 
-    constexpr const char MINIMIZER_BOUNDARY[] = "minimizers.bin";
+    constexpr const char MINIMIZER_FREQ[] = "minimizerFreq.bin";
+    constexpr const char MINIMIZER_BOUNDARY[] = "minimizerBoundary.bin";
 } // namespace mantis
 
 #endif // __MANTIS_CONFIG_HPP__

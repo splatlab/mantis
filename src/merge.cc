@@ -46,7 +46,7 @@
 
 bool data_exists(std::string &dir, spdlog::logger *console)
 {
-	if(!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str()))
+	if(mantis::fs::GetFilesExt(dir.c_str(), mantis::CQF_FILE).empty())
 	{
 		console -> error("CQF file {} does not exist in input directory {}.", mantis::CQF_FILE, dir);
 		return false;
