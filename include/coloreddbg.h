@@ -1238,7 +1238,7 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
         return;
     }
 
-    if (i < minimizerBorder[minimizerBorder.size()-1]) {
+    if (i <= minimizerBorder[minimizerBorder.size()-1]) {
         std::string blockCqfFile = prefix + std::to_string(i) + "_" + mantis::CQF_FILE;
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
             curDbg.reset(new CQF<key_obj>(blockCqfFile, CQF_FREAD));
