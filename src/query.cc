@@ -50,6 +50,8 @@ void output_results(mantis::QuerySets& multi_kmers,
 										cdbg, std::ofstream& opfile, bool is_bulk,
                     std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
   mantis::QueryResults qres;
+  // LH: `cnt` is a counter for the number of queries completed. 
+  // LH: Max value is the number of lines in the query file.
 	uint32_t cnt= 0;
   {
     CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
@@ -205,8 +207,11 @@ int query_main (QueryOpts& opt)
 
 	console->info("Reading query kmers from disk.");
 	uint32_t seed = 2038074743;
+  // LH: `total_kmers` is the sum of kmers to query across all queries
 	uint64_t total_kmers = 0;
     std::unordered_map<mantis::KmerHash, uint64_t> uniqueKmers;
+  // LH: `multi_kmers` is a list of list. There are {number of lines in query file} lists.
+  // LH: Each list contains the kmers for a query.
 	mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
 																										kmer_size,
 																										total_kmers,

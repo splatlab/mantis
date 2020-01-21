@@ -1100,7 +1100,9 @@ static inline uint64_t *encode_counter(QF *qf, uint64_t remainder, uint64_t
 
 	return p;
 }
-
+/** LH:
+ * @brief Reads the count of the kmer that corresponds to the index and remainder
+ */ 
 /* Returns the length of the encoding. 
 REQUIRES: index points to first slot of a counter. */
 static inline uint64_t decode_counter(const QF *qf, uint64_t index, uint64_t

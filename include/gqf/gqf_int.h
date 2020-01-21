@@ -80,7 +80,19 @@ extern "C" {
 	} quotient_filter_runtime_data;
 
 	typedef quotient_filter_runtime_data qfruntime;
-
+	/**
+	 * LH:
+	 * Quotient Filter Metadata
+	 * nslots              total slots
+	 * key_bits            bits for quotient h_0(x) part of kmer.
+	 *                     2 * log(number of slots in the output CQF)
+	 * value_bits          bits for eqclass id
+	 * key_remainder_bits  bits for remainder h_1(x) part of kmer
+	 * bits_per_slot       sum of value_bits and key_remainder_bits (?)
+	 * nelts               number of kmer elements
+	 * ndistinct_elts      number of distinct kmer elements
+	 * noccupied_slots     number of slots occupied
+	*/
 	typedef struct quotient_filter_metadata {
 		uint64_t magic_endian_number;
 		enum qf_hashmode hash_mode;

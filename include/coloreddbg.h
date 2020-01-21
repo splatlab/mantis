@@ -66,13 +66,40 @@ class ColoredDbg {
 
 		void set_console(spdlog::logger* c) { console = c; }
 		const CQF<key_obj> *get_cqf(void) const { return &dbg; }
+		/** LH: @brief returns number of equivalence classes */
 		uint64_t get_num_bitvectors(void) const;
 		uint64_t get_num_eqclasses(void) const { return eqclass_map.size(); }
 		uint64_t get_num_samples(void) const { return num_samples; }
 		std::string get_sample(uint32_t id) const;
 		uint32_t seed(void) const { return dbg.seed(); }
 		uint64_t range(void) const { return dbg.range(); }
-
+		/**
+		 * LH:
+	 	 * @brief Returns a list of sample ids and the number of kmers from the
+		 * query found in each sample
+		 *
+	     * `query_eqclass_map` is a map between eq class id and number of kmers
+		 * shared by the eq class
+		 *
+		 * Example:
+		 * query_eqclass_map:
+		 * eqclass_id | kmer count
+		 * 1 | 504
+		 * 2 | 3
+		 * 3 | 86
+		 *
+		 * 1 is the class 01 (only sample 0),
+		 * 2 is the class 10 (only sample 1),
+		 * 3 is the class 11 (sample 0 and sample 1)
+		 *
+		 * sample_map:
+		 * sample_id | kmer count
+		 * 0 | 590 (= 504 + 86)
+		 * 1 | 89 (= 3 + 86)
+		 * @param kmers set of kmers to query for
+		 * @return sample_map
+		 *
+		 *******************************************************************/
 		std::vector<uint64_t>
 			find_samples(const mantis::QuerySet& kmers);
 
@@ -84,9 +111,16 @@ class ColoredDbg {
 		void set_flush_eqclass_dist(void) { flush_eqclass_dis = true; }
 
 	private:
-		// returns true if adding this k-mer increased the number of equivalence
-		// classes
-		// and false otherwise.
+		/**
+		 * LH:
+		 * @brief Add kmer to eqclass_map. If kmer is already present, increment count. 
+		 * Otherwise add new element to eqclass_map
+		 * @param hash kmer to be added
+		 * @param vector bit encoding of the equivalence class
+		 * @return
+		 *   true if adding this k-mer increased the number of equivalence classes
+		 *   false otherwise
+		 */
 		bool add_kmer(const typename key_obj::kmer_t& hash, const BitVector&
 									vector);
 		void add_bitvector(const BitVector& vector, uint64_t eq_id);
@@ -102,8 +136,8 @@ class ColoredDbg {
 		// LH: bool ColoredDbg<qf_obj, key_obj>::add_kmer is called to build eqclass_map, which calls ::add_bitvector
 		// LH: to add a new row to eqclasses
 		// LH: eqclass_map ("CQF") maps each kmer (in bit vector encoding) to the color class (equivalence class) and abundance
-		// LH: dbg is the de Bruijn graph
-		// LH: sampleid_map takes in an integer ID and returns the SampleObject::sample_id (???)
+		// LH: dbg is the de Bruijn graph represented by a CQF
+		// LH: sampleid_map maps an integer ID to an input Squeakr file name (string)
 		cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> eqclass_map;
 		CQF<key_obj> dbg;
 		BitVector bv_buffer;
@@ -208,9 +242,7 @@ void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
 	}
 	eqclass_map = map;
 }
-// LH: key is the kmer (DNA string). vector is a bit encoding of the key.
-// LH: vec_hash is the hashed version of vector. search in eqclass_map for vec_hash.
-// LH: If present, increment count. Otherwise add to eqclass_map
+
 template <class qf_obj, class key_obj>
 bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t&
 																					 key, const BitVector& vector) {
