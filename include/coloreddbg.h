@@ -238,13 +238,16 @@ public:
 
     void constructBlockedCQF(qf_obj *incqfs);
     void serializeBlockedCQF();
-
+    void serializeCurrentCQF();
     ColorBVResType add_colorBV(uint64_t &eq_id, const BitVector &vector);
 
     bool add_colorId(uint64_t &eq_id, const BitVector &vector);
 
+    void add_kmer2CurDbg(key_obj &keyObj, int flags);
+
     void replaceCQFInMemory(uint64_t i);
 
+    void initializeNewCQFBlock(uint64_t i, uint64_t key_bits, qf_hashmode hashmode, uint32_t seed);
     ColoredDbg& operator=(ColoredDbg& other) {
         sampleid_map = other.sampleid_map;
         eqclass_map = other.eqclass_map;
@@ -266,14 +269,15 @@ public:
         colorClassPerBuffer = other.colorClassPerBuffer;
         notSorted_eq_id = other.notSorted_eq_id;
         numEqClassBVs = other.numEqClassBVs;
-        curDbg.reset(new CQF<key_obj>(*other.curDbg));
-//        curDbg(std::move(other.curDbg));
+        eqClsFiles = other.eqClsFiles;
+        if (other.curDbg.get() != nullptr) {
+            curDbg.reset(new CQF<key_obj>(*other.curDbg));
+        }
         currentBlock = other.currentBlock;
         dbgs.resize(other.dbgs.size());
         for (auto i = 0; i < other.dbgs.size(); i++) {
-            dbgs[i].reset(new CQF<key_obj>(*other.curDbg));
+            dbgs[i].reset(new CQF<key_obj>(*other.dbgs[i]));
         }
-//        dbgs.data() = other.dbgs.data();
         return *this;
     }
 
@@ -536,6 +540,25 @@ bool ColoredDbg<qf_obj, key_obj>::add_colorId(uint64_t &eq_id, const BitVector &
 }
 
 template<class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, int flags) {
+    // check: the k-mer should not already be present.
+   /* uint64_t count = curDbg->query(keyObj, flags);
+    if (count > 0) {
+        console->error("K-mer was already present. kmer: {} colorID: {}", keyObj.key, keyObj.count);
+        exit(1);
+    }*/
+
+    // we use the count to store the eqclass ids
+    int ret = curDbg->insert(keyObj, flags);
+    if (ret == QF_NO_SPACE) {
+        // This means that auto_resize failed.
+        console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
+        exit(1);
+    }
+
+}
+
+template<class qf_obj, class key_obj>
 bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t &key, const BitVector &vector) {
     // A kmer (hash) is seen only once during the merge process.
     // So we insert every kmer in the dbg
@@ -648,6 +671,16 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 }
 
 template<class qf_obj, class key_obj>
+void ColoredDbg<qf_obj, key_obj>::serializeCurrentCQF() {
+    if (curDbg.get() == nullptr) {
+        console->error("Current DBG is null.");
+        std::exit(3);
+    }
+    if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
+        curDbg->serialize(prefix + std::to_string(currentBlock) + "_" + mantis::CQF_FILE);
+}
+
+template<class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
     for (auto i = 0; i < dbgs.size(); i++) {
         // serialize the CQF
@@ -723,7 +756,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // go block by block and query kmers
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
-        replaceCQFInMemory(blockId);//dbgs[blockId];
+        replaceCQFInMemory(blockId);
 //        std::cerr << "block " << blockId << " : " << blockKmers[blockId].size() << "\n";
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
@@ -797,7 +830,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
     // go block by block and query kmers
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
-        replaceCQFInMemory(blockId);//dbgs[blockId];
+        replaceCQFInMemory(blockId);
         for (auto kv : blockKmers[blockId]) {
             key_obj key(kv.first, 0, 0);
             uint64_t eqclass = curDbg->query(key, 0);
@@ -1228,13 +1261,40 @@ sample_file, int flag) : bv_buffer(),
 }
 
 template<typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
+void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key_bits,
+                                                        qf_hashmode hashmode, uint32_t seed) {
 
     if (i == invalid) {
         curDbg.reset(nullptr);
         return;
     }
     if (currentBlock == i) {
+        return;
+    }
+
+    uint32_t qbits{0};
+    for(qbits = 0; (block_kmer_threshold >> qbits) != (uint64_t)1; qbits++);
+    qbits++;
+
+    if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
+        curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed));
+    } else if (dbg_alloc_flag == MANTIS_DBG_ON_DISK) {
+        curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed,
+                                                                      prefix + std::to_string(i) + "_" + mantis::CQF_FILE));
+    }
+    curDbg->set_auto_resize();
+    currentBlock = i;
+}
+
+
+template<typename qf_obj, typename key_obj>
+void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
+
+    if (i == invalid) {
+        curDbg.reset(nullptr);
+        return;
+    }
+    if (currentBlock == i and curDbg) {
         return;
     }
 
@@ -1277,25 +1337,8 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     minimizerBlocks.read(reinterpret_cast<char *>(minimizerBorder.data()), minimizerBorder.size()*sizeof(typename decltype(minimizerBorder)::value_type));
     minimizerBlocks.close();
 
-    std::cerr << "Loading cqfs\n";
-    uint64_t numOfBlocks = minimizerBorder[minimizerBorder.size()-1] + 1;
+    std::cerr << "Loading first CQF block\n";
     replaceCQFInMemory(0);
-    // Load the sample / experiment names.
-    std::cerr << "Loading the colorClass file\n";
-    std::map<int, std::string> sorted_files;
-    for (std::string file : colorClassFiles) {
-        int id = std::stoi(first_part(last_part(file, '/'), '_'));
-        sorted_files[id] = file;
-    }
-
-    eqclasses.reserve(sorted_files.size());
-    BitVectorRRR bv;
-    for (auto file : sorted_files) {
-        sdsl::load_from_file(bv, file.second);
-        eqclasses.push_back(bv);
-        num_serializations++;
-    }
-
 
     // Load the sample / experiment names.
     std::cerr << "Loading the sampleList file\n";
@@ -1314,21 +1357,43 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
 
     sampleList.close();
 
+    if (not colorClassFiles.empty()) {
 
-    // Load the color-class bitvector file names only.
-    std::map<uint, std::string> sortedFiles;
-    for (std::string file : colorClassFiles) {
-        uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
-        sortedFiles[fileID] = file;
+        std::cerr << "Loading the colorClass files\n";
+        std::map<int, std::string> sorted_files;
+        for (std::string file : colorClassFiles) {
+            int id = std::stoi(first_part(last_part(file, '/'), '_'));
+            sorted_files[id] = file;
+        }
+
+        eqclasses.reserve(sorted_files.size());
+        BitVectorRRR bv;
+        for (auto file : sorted_files) {
+            sdsl::load_from_file(bv, file.second);
+            eqclasses.push_back(bv);
+            num_serializations++;
+        }
+        // Load the color-class bitvector file names only.
+        std::map<uint, std::string> sortedFiles;
+        for (std::string file : colorClassFiles) {
+            uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
+            sortedFiles[fileID] = file;
+        }
+        // Store the color-class files names in sorted order (based on their sequence).
+        eqClsFiles.reserve(colorClassFiles.size());
+        for (auto idFilePair : sortedFiles)
+            eqClsFiles.push_back(idFilePair.second);
+    } else if (mantis::fs::FileExists((dir + mantis::BOUNDARYBV_FILE).c_str())) {
+        sdsl::bit_vector bbv;
+        sdsl::load_from_file(bbv, dir + mantis::BOUNDARYBV_FILE);
+        eqClsFiles.resize(static_cast<uint64_t >(std::ceil(static_cast<double>(bbv.size())/static_cast<double>(colorClassPerBuffer))));
+        bbv.resize(0);
+    } else {
+        console->error("NO color class files or MST files available for colors.");
+        std::exit(3);
     }
-
-
-    // Store the color-class files names in sorted order (based on their sequence).
-    eqClsFiles.reserve(colorClassFiles.size());
-    for (auto idFilePair : sortedFiles)
-        eqClsFiles.push_back(idFilePair.second);
-
     num_serializations = eqClsFiles.size();
+
 }
 
 
