@@ -124,7 +124,7 @@ int merge_main(MergeOpts &opt)
 	
 	console -> info("Loading metadata for the first input colored dBG from disk.");
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(dir1, MANTIS_DBG_ON_DISK);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(dir1, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console -> info("Read colored dBG over {} samples, with {} cqf files and {} color-class files.",
 					cdbg1.get_num_samples(), cdbg1.get_numBlocks(), cdbg1.get_eq_class_file_count());
@@ -132,7 +132,7 @@ int merge_main(MergeOpts &opt)
 
 	console -> info("Loading metadata for the second input colored dBG from disk.");
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(dir2, MANTIS_DBG_ON_DISK);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(dir2, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console -> info("Read colored dBG over {} samples, with {} cqf files and {} color-class files.",
 					cdbg2.get_num_samples(), cdbg2.get_numBlocks(), cdbg2.get_eq_class_file_count());
@@ -153,13 +153,14 @@ int merge_main(MergeOpts &opt)
 	}
 
 	console -> info("Initializing the merged Mantis.");
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_ON_DISK);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console->info("Initializing the merger.");
 	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG);
 	merger.set_console(console);
 	merger.set_thread_count(opt.threadCount);
 
+//	merger.divide_minimizers_into_blocks();
 	merger.merge();
 
 	return EXIT_SUCCESS;

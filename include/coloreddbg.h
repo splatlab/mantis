@@ -158,7 +158,7 @@ public:
 
     const CQF<key_obj>* get_current_cqf(void) const { return curDbg.get(); }
 
-    const uint64_t get_numBlocks(void) const { return minimizerBorder[minimizerBorder.size()-1]+1; }
+    const uint64_t get_numBlocks(void) const { return minmaxMinimizer.size(); }
 
     const uint64_t get_currentBlock(void) const { return currentBlock; }
 
@@ -1349,15 +1349,20 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     minimizerBlocks.close();
 
     uint64_t curBlock = 0;
-    uint64_t min = 0, lastExistingMin{0};
+    uint64_t min = 0, lastExistingMin{invalid};
     for (uint64_t i = 0; i < minimizerBorder.size(); i++) {
         if (curBlock != minimizerBorder[i]) {
             minmaxMinimizer.push_back(std::make_pair(min, i-1));
             min = i;
+            curBlock = minimizerBorder[i];
         }
         if (minimizerCntr[i]) {
             lastExistingMin = i;
         }
+    }
+    if (lastExistingMin == invalid) {
+        std::cerr << "Either the CQF blocks are empty or the minimizer counts are not filled properly.\n";
+        std::exit(3);
     }
     minmaxMinimizer.push_back(std::make_pair(min, lastExistingMin));
     std::cerr << "Loading first CQF block\n";

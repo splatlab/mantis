@@ -148,7 +148,7 @@ struct DisjointSets {
 
 class MSTMerger {
 public:
-    MSTMerger(CQF<KeyObject> *cqf, std::string prefix, spdlog::logger *logger, uint32_t numThreads, std::string prefix1,
+    MSTMerger(/*CQF<KeyObject> *cqf, */std::string prefix, spdlog::logger *logger, uint32_t numThreads, std::string prefix1,
               std::string prefix2, uint64_t numColorBuffers = 1);
 
     void mergeMSTs();
@@ -179,12 +179,12 @@ private:
 
     inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
 
-    void writePotentialColorIdEdgesInParallel(uint32_t threadId,
+    /*void writePotentialColorIdEdgesInParallel(uint32_t threadId,
                                               CQF<KeyObject> &cqf,
                                               std::vector<std::ofstream> &blockFiles,
                                               std::vector<uint64_t> &blockCnt,
                                               FilterType &filter);
-
+*/
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
                                            uint64_t &cnt,
                                            sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);

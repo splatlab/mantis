@@ -119,7 +119,7 @@ class CdBG_Merger
 		// MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
 		std::vector<std::vector<boophf_t *>> MPH;
 
-
+		uint64_t numCCPerBuffer{0};
 
         // Advances the CQF iterator 'it', with keeping track of the 'step' count; and
 		// fetches the next CQF-entry into 'cqfEntry' if the iterator 'it' is advanced
@@ -176,21 +176,21 @@ class CdBG_Merger
 
         // Builds the output color-class bitvectors for the color-id pairs
 		// that are not sampled on abundance, i,e. those that are written to disk.
-		void build_color_class_table();
+//		void build_color_class_table();
 
         // Builds the output color-class bitvectors for the abundant (sampled)
 		// color-id pairs.
-		void build_abundant_color_classes();
+//		void build_abundant_color_classes();
 
 		// Concatenates the color-classes (BitVector objects) corresponding to the
 		// color-IDs 'colorID1' and 'colorID2' respectively, from two CdBGs of sample
 		// sizes 'colCount1' and 'colCount2' each. The partial BitVectorRRR objects
 		// containing the BitVectors for the two color-IDs are 'bv1' and 'bv2'
 		// respectively. The concatenated result BitVector is stored in 'resultVec'.
-		void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t colorID1,
+		/*void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t colorID1,
 					const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t colorID2,
 					BitVector &resultVec);
-
+*/
 		// Serialize the bitvector buffer to disk, when the current constructed class
 		// count is 'colorClsCount'.
 		void bv_buffer_serialize(uint64_t colorClsCount);
@@ -240,6 +240,8 @@ CdBG_Merger<qf_obj, key_obj>::
 	}
 	
     cdbg = cdbgOut;
+
+	numCCPerBuffer = mantis::BV_BUF_LEN / (cdbg1.num_samples + cdbg2.num_samples);
 }
 
 
@@ -480,7 +482,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}", startingBlock);
 
 //	std::cerr << "\n\n\nMINIMIZER MAP SIZE= " << minimizerMap.size() << "\n\n\n";
-	for (auto & m : minimizerMap) m.clear();
+// definitely this should not be cleaned .. BE SO careful about this. Very tricky!!!
+//	for (auto & m : minimizerMap) m.clear();
 
 	auto kmerMask = (1ULL << kbits) - 1;
 
@@ -624,8 +627,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 {
 	// TODO: Add faster file-write mechanism.
 
-	const uint64_t row = (colorID1 ? (colorID1 - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-					col = (colorID2 ? (colorID2 - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+	const uint64_t row = (colorID1 ? (colorID1 - 1) / numCCPerBuffer + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
+					col = (colorID2 ? (colorID2 - 1) / numCCPerBuffer + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
 	diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
 }
@@ -842,6 +845,7 @@ void CdBG_Merger<qf_obj, key_obj>::
 }
 
 
+/*
 
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj> ::
@@ -1013,9 +1017,11 @@ void CdBG_Merger<qf_obj, key_obj>::
 	auto t_end = time(nullptr);
 	console -> info("Color-class building phase took time {} seconds.", t_end - t_start);
 }
+*/
 
 
 
+/*
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::
 	build_abundant_color_classes()
@@ -1038,17 +1044,21 @@ void CdBG_Merger<qf_obj, key_obj>::
 			return lhs.second < rhs.second;
 		});
 
-	/*for (auto fs : idPairs) {
+	*/
+/*for (auto fs : idPairs) {
 		std::cerr << fs.first << " " << fs.second << "\n";
-	}*/
+	}*//*
+
 	uint64_t currBucket1{std::numeric_limits<uint64_t>::max()}, currBucket2{std::numeric_limits<uint64_t>::max()};
 
 	for(auto fs : idPairs)
 	{
-		uint64_t reqBucket1 = fs.first / mantis::NUM_BV_BUFFER,
-					reqBucket2 = fs.second / mantis::NUM_BV_BUFFER;
+		uint64_t reqBucket1 = fs.first / numCCPerBuffer,// mantis::NUM_BV_BUFFER,
+					reqBucket2 = fs.second / numCCPerBuffer;// mantis::NUM_BV_BUFFER;
 
-		if(/*reqBucket1 && */reqBucket1 != currBucket1)
+		if(*/
+/*reqBucket1 && *//*
+reqBucket1 != currBucket1)
 		{
 			sdsl::load_from_file(bitVec1, cdbg1.get_eq_class_files()[reqBucket1]);
 			currBucket1 = reqBucket1;
@@ -1057,7 +1067,9 @@ void CdBG_Merger<qf_obj, key_obj>::
 							cdbg1.get_eq_class_files()[currBucket1], time(nullptr) - start_time_);
 		}
 
-		if(/*reqBucket2 && */reqBucket2 != currBucket2)
+		if(*/
+/*reqBucket2 && *//*
+reqBucket2 != currBucket2)
 		{
 			sdsl::load_from_file(bitVec2, cdbg2.get_eq_class_files()[reqBucket2]);
 			currBucket2 = reqBucket2;
@@ -1073,13 +1085,16 @@ void CdBG_Merger<qf_obj, key_obj>::
 				bitVec2, cdbg2.get_num_samples(), fs.second, colorClass);
 //		std::cerr << colorID << "\n";
 		cdbg.add_bitvector(colorClass, colorID-1);
-		/*
+		*/
+/*
 			No bitvector-buffer serialization required, as the number of sampled pairs'
 			count (SAMPLE_PAIR_COUNT) is defined as less than or equal to the bitvector-buffer size.
 			(Check its declaration)
-		*/
+		*//*
+
 	}
 }
+*/
 
 
 
@@ -1190,7 +1205,7 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 				++it1;
                 cntr++;
                 if (cntr % 10000000 == 0) {
-                    std::cerr << "\r" << cntr << " out of " << count;
+                    std::cerr << "\rFirst mantis " << cntr << " out of " << count;
                 }
 			}
 		}
@@ -1225,7 +1240,7 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 				++it2;
                 cntr++;
                 if (cntr % 10000000 == 0) {
-                    std::cerr << "\r" << cntr << " out of " << count;
+                    std::cerr << "\rSecond mantis " << cntr << " out of " << count;
                 }
             }
 		}
@@ -1286,8 +1301,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 	if(it != sampledPairs.end())
 		return it -> second;
 
-	const uint64_t row = (idPair.first ? (idPair.first - 1) / mantis::NUM_BV_BUFFER + 1 : 0),
-					col = (idPair.second ? (idPair.second - 1) / mantis::NUM_BV_BUFFER + 1 : 0);
+	const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
+					col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
 
 	return cumulativeBucketSize[row][col] + MPH[row][col] -> lookup(idPair) + 1;
@@ -1427,6 +1442,7 @@ template <typename qf_obj, typename key_obj>
 uint64_t CdBG_Merger<qf_obj, key_obj>::
 store_abundant_color_pairs(std::ofstream& output)
 {
+	console->info("# of abundant color IDs: {}", sampledPairs.size());
 	for (auto &idpair : sampledPairs) {
 		uint64_t colorID = idpair.second-1;
 		auto fs = idpair.first;
@@ -1488,7 +1504,7 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
 	output.seekp(0, std::ios::beg);
 	output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
 	output.close();
-	numColorBuffers = writtenPairsCount/mantis::NUM_BV_BUFFER + 1;
+	numColorBuffers = writtenPairsCount/numCCPerBuffer + 1;//mantis::NUM_BV_BUFFER + 1;
 
 	auto t_end = time(nullptr);
 	console -> info("Writing {} color pairs took time {} seconds.", writtenPairsCount, t_end - t_start);
@@ -1543,6 +1559,7 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 	//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
+	console->info("# of color buffers is {}", num_colorBuffers);
 
 //	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), kmerCount);
 	build_CQF();
@@ -1574,14 +1591,9 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 
 	console->info("Done with cqf merge");
-//    uint64_t num_colorBuffers = 4;
-//    MSTQuery mst1(cdbg1.prefix, 23, 23, 10, console);
-//    MSTQuery mst2(cdbg2.prefix, 23, 23, 10, console);
-
-//    mst1.storeStructure();
-//    mst2.storeStructure();
+//    uint64_t num_colorBuffers = 2;
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
-	MSTMerger mst(&cdbg.dbg, cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
+	MSTMerger mst(/*&cdbg.dbg, */cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");
 	mst.mergeMSTs();
 	serialize_cqf_and_sampleid_list();

@@ -25,9 +25,9 @@ static constexpr uint64_t HIGHBIT_MASK{(1ULL << 32) - 1ULL};
 static constexpr uint64_t LOWBIT_MASK{std::numeric_limits<uint64_t>::max() - HIGHBIT_MASK};
 static constexpr uint64_t CONSTNUMBlocks{1 << 16};
 
-MSTMerger::MSTMerger(CQF<KeyObject> *cqfIn, std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
+MSTMerger::MSTMerger(/*CQF<KeyObject> *cqfIn, */std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
                      std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-                cqf(cqfIn), prefix(std::move(prefixIn)),
+                /*cqf(cqfIn), */prefix(std::move(prefixIn)),
                 prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
                 nThreads(numThreads),
                 num_of_ccBuffers(numColorBuffersIn), numBlocks(CONSTNUMBlocks) {
@@ -400,6 +400,7 @@ bool MSTMerger::buildEdgeSets() {
     return true;
 }
 
+/*
 void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
                                                      CQF<KeyObject> &cqf,
                                                      std::vector<std::ofstream> &blockFiles,
@@ -516,6 +517,7 @@ void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
     std::cerr << "\r";
     logger->info("Thread {}: {} of {} was not written for memory qf", threadId, (double)notfound/(double)cntr, cntr);
 }
+*/
 
 void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                             CQF<KeyObject> &cqf,
@@ -592,6 +594,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     uint64_t cnt, cIdx, c1, c2;
     cp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
     logger->info("# of color classes based on count of colorPairs: {}", cnt);
+    logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
     colorPairs.resize(cnt);
     for (auto i = 0; i < cnt; i++) {
         cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
@@ -642,6 +645,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
             for (auto j = i; j < eqclass_files.size(); j++) {
                 auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
                 for (auto &edge : edgeBucket) {
+                    if (edge.n1 >= colorPairs.size() or edge.n2 >= colorPairs.size()) {
+                        std::cerr <<" Should not happen " << edge.n1 << " " << edge.n2 << " " << colorPairs.size() << "\n";
+                        std::exit(3);
+                    }
                     auto n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first
                                                                    : colorPairs[edge.n1].second);
                     auto n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first
@@ -1225,8 +1232,8 @@ inline uint64_t MSTMerger::getBucketId(uint64_t c1, uint64_t c2) {
     if (c1 == zero or c1 > c2) {
         std::swap(c1, c2);
     }
-    uint64_t cb1 = c1 / mantis::NUM_BV_BUFFER;
-    uint64_t cb2 = c2 / mantis::NUM_BV_BUFFER;
+    uint64_t cb1 = c1 / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
+    uint64_t cb2 = c2 / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
     if (c2 == zero) // return the corresponding buffer for the non-zero colorId
         return cb1 * num_of_ccBuffers + cb1;
     return cb1 * num_of_ccBuffers + cb2;
@@ -1244,6 +1251,10 @@ void MSTMerger::planCaching(MSTQuery *mst,
     for (auto &edge: edges) {
         if (edgeCntr == outDegrees[src]) {
             src++;
+        }
+        if (src >= mstCost.size() or edge.first >= mstCost.size()) {
+            std::cerr << "PlanCaching. Shouldn't happen: " << src << " " << edge.first << " " << mstCost.size() << "\n";
+            std::exit(3);
         }
         mstCost[src].numQueries++;
         mstCost[edge.first].numQueries++;
