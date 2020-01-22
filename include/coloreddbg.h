@@ -247,6 +247,15 @@ public:
 
     void replaceCQFInMemory(uint64_t i);
 
+    std::pair<uint64_t, uint64_t> getMinMaxMinimizer(uint64_t blockId) {
+        if (blockId >= minmaxMinimizer.size()) {
+            std::cerr << "Requesting for the minimizer of a blockID greater than total number of blocks. "
+                         << blockId << ", " << minmaxMinimizer.size() << "\n";
+            std::exit(3);
+        }
+        return minmaxMinimizer[blockId];
+    }
+
     void initializeNewCQFBlock(uint64_t i, uint64_t key_bits, qf_hashmode hashmode, uint32_t seed);
     ColoredDbg& operator=(ColoredDbg& other) {
         sampleid_map = other.sampleid_map;
@@ -270,6 +279,7 @@ public:
         notSorted_eq_id = other.notSorted_eq_id;
         numEqClassBVs = other.numEqClassBVs;
         eqClsFiles = other.eqClsFiles;
+        minmaxMinimizer = other.minmaxMinimizer;
         if (other.curDbg.get() != nullptr) {
             curDbg.reset(new CQF<key_obj>(*other.curDbg));
         }
@@ -328,6 +338,7 @@ private:
     std::unique_ptr<CQF<key_obj>> curDbg;
     uint64_t currentBlock{invalid};
     std::vector<std::unique_ptr<CQF<key_obj>>> dbgs;
+    std::vector<std::pair<uint64_t, uint64_t>> minmaxMinimizer;
 
     // Additional private members required for mantii merge.
 
@@ -1337,6 +1348,18 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     minimizerBlocks.read(reinterpret_cast<char *>(minimizerBorder.data()), minimizerBorder.size()*sizeof(typename decltype(minimizerBorder)::value_type));
     minimizerBlocks.close();
 
+    uint64_t curBlock = 0;
+    uint64_t min = 0, lastExistingMin{0};
+    for (uint64_t i = 0; i < minimizerBorder.size(); i++) {
+        if (curBlock != minimizerBorder[i]) {
+            minmaxMinimizer.push_back(std::make_pair(min, i-1));
+            min = i;
+        }
+        if (minimizerCntr[i]) {
+            lastExistingMin = i;
+        }
+    }
+    minmaxMinimizer.push_back(std::make_pair(min, lastExistingMin));
     std::cerr << "Loading first CQF block\n";
     replaceCQFInMemory(0);
 
