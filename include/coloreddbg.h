@@ -243,7 +243,7 @@ public:
 
     bool add_colorId(uint64_t &eq_id, const BitVector &vector);
 
-    void add_kmer2CurDbg(key_obj &keyObj, int flags);
+    void add_kmer2CurDbg(key_obj &keyObj, uint8_t flags);
 
     void replaceCQFInMemory(uint64_t i);
 
@@ -551,20 +551,27 @@ bool ColoredDbg<qf_obj, key_obj>::add_colorId(uint64_t &eq_id, const BitVector &
 }
 
 template<class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, int flags) {
+void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, uint8_t flags) {
     // check: the k-mer should not already be present.
-   /* uint64_t count = curDbg->query(keyObj, flags);
+    uint64_t count = curDbg->query(keyObj, flags);
     if (count > 0) {
-        console->error("K-mer was already present. kmer: {} colorID: {}", keyObj.key, keyObj.count);
-        exit(1);
-    }*/
-
-    // we use the count to store the eqclass ids
-    int ret = curDbg->insert(keyObj, flags);
-    if (ret == QF_NO_SPACE) {
-        // This means that auto_resize failed.
-        console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
-        exit(1);
+        if (count != keyObj.count) {
+            if (keyObj.key == 29278210497246)
+//            console->error("K-mer was already present. kmer: {} colorID: {}, old colorId: {}", keyObj.key, keyObj.count,
+//                           count);
+            std::cerr << "K-mer was already present. kmer: " << keyObj.key <<
+            " colorID: " << keyObj.count << ", old colorId: " << count << "\n";
+//            std::exit(3);
+        }
+    }
+    else {
+        // we use the count to store the eqclass ids
+        int ret = curDbg->insert(keyObj, flags);
+        if (ret == QF_NO_SPACE) {
+            // This means that auto_resize failed.
+            console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
+            exit(1);
+        }
     }
 
 }
@@ -1277,6 +1284,7 @@ void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key
 
     if (i == invalid) {
         curDbg.reset(nullptr);
+        currentBlock = invalid;
         return;
     }
     if (currentBlock == i) {
@@ -1291,7 +1299,7 @@ void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key
         curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed));
     } else if (dbg_alloc_flag == MANTIS_DBG_ON_DISK) {
         curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed,
-                                                                      prefix + std::to_string(i) + "_" + mantis::CQF_FILE));
+                                      prefix + std::to_string(i) + "_" + mantis::CQF_FILE));
     }
     curDbg->set_auto_resize();
     currentBlock = i;
@@ -1303,6 +1311,7 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
 
     if (i == invalid) {
         curDbg.reset(nullptr);
+        currentBlock = invalid;
         return;
     }
     if (currentBlock == i and curDbg) {

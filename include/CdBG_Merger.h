@@ -79,6 +79,7 @@ class CdBG_Merger
 		std::vector<uint64_t> minimizerBlocks;
 		std::vector<std::unordered_map<uint64_t, std::pair<colorIdType , colorIdType>>> minimizerMap;
 		uint64_t kbits;
+		uint64_t kmerMask;
 
 
 	// Required to hash colo-id pair objects. Resorted to boost::hash_combine
@@ -219,6 +220,8 @@ class CdBG_Merger
 	void calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string& dir1, std::string& dir2);
 
 	void divide_minimizers_into_blocks(std::vector<uint64_t> &min1, std::vector<uint64_t> &min2);
+
+	std::pair<uint64_t, uint64_t> walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bool isFirst);
 };
 
 
@@ -242,6 +245,8 @@ CdBG_Merger<qf_obj, key_obj>::
     cdbg = cdbgOut;
 
 	numCCPerBuffer = mantis::BV_BUF_LEN / (cdbg1.num_samples + cdbg2.num_samples);
+	kbits = cdbg1.get_current_cqf()->keybits();
+	kmerMask = (1ULL << kbits) - 1;
 }
 
 
@@ -258,6 +263,63 @@ inline void CdBG_Merger <qf_obj, key_obj> ::
 		walkBehindIterator = cqf -> begin(true);
 	else if(step > ITERATOR_WINDOW_SIZE)
 		++walkBehindIterator;
+}
+
+template <typename qf_obj, typename key_obj>
+std::pair<uint64_t, uint64_t> CdBG_Merger<qf_obj, key_obj>::
+        walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bool isFirst) {
+        	uint64_t minMinimizer1{invalid}, maxMinimizer1{invalid};
+	curCdbg.replaceCQFInMemory(curBlock);
+
+	if (curBlock < curCdbg.get_numBlocks()) {
+		const CQF<key_obj> *cqf1 = curCdbg.get_current_cqf();
+		typename CQF<key_obj>::Iterator it1 = cqf1->begin();
+		uint64_t cntr{0}, count{cqf1->dist_elts()};
+		auto minmax = curCdbg.getMinMaxMinimizer(curBlock);
+		minMinimizer1 = minmax.first;
+		maxMinimizer1 = minmax.second;
+		while (!it1.done()) {
+			auto keyval = it1.get_cur_hash();
+			auto key = hash_64i(keyval.key, kmerMask);
+			auto minimizerPair = curCdbg.findMinimizer(key, kbits);
+			if (minimizerPair.first == minimizerPair.second) {
+				minimizerPair.second = invalid;
+			}
+			std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
+			for (auto minimizer : pairs) {
+				if (minimizer != invalid and minimizer >= minMinimizer1 and minimizer <= maxMinimizer1) {
+					auto &map = minimizerMap[minimizer];
+					if (isFirst) {
+						if (map.find(keyval.key) == map.end()) {
+							cdbg.minimizerCntr[minimizer]++;
+							map[keyval.key] = std::make_pair(keyval.count, 0);
+						} else if (map[keyval.key].first and map[keyval.key].first != keyval.count) {
+							console->error("found a key with different color class in the second cqf.");
+							std::exit(3);
+						} else if (not map[keyval.key].first) {
+							map[keyval.key].first = keyval.count;
+						}
+					} else {
+						if (map.find(keyval.key) == map.end()) {
+							cdbg.minimizerCntr[minimizer]++;
+							map[keyval.key] = std::make_pair(0, keyval.count);
+						} else if (map[keyval.key].second and map[keyval.key].second != keyval.count) {
+							console->error("found a key with different color class in the first cqf.");
+							std::exit(3);
+						} else if (not map[keyval.key].second) {
+							map[keyval.key].second = keyval.count;
+						}
+					}
+				}
+			}
+			++it1;
+			cntr++;
+			if (cntr % 10000000 == 0) {
+				std::cerr << "\r" << (isFirst?"First ":"Second ") << cntr << " out of " << count;
+			}
+		}
+	}
+	return std::make_pair(minMinimizer1, maxMinimizer1);
 }
 
 template <typename qf_obj, typename key_obj>
@@ -290,93 +352,25 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	uint64_t sampleCount = SAMPLE_PAIR_COUNT;
 	console -> info("Sampling {} most-abundant color-id pairs from the first {} kmers. Time-stamp = {}.",
 					sampleCount, sampleKmerCount, time(nullptr) - start_time_);
-	
+
+	// force currentCQFBlock to get loaded into memory
+	cdbg1.replaceCQFInMemory(invalid);
+	cdbg2.replaceCQFInMemory(invalid);
 
 	uint64_t kmerCount = 0;
 	idPairMap_t pairCount;
-
-	kbits = cdbg1.get_current_cqf()->keybits();
-
-	auto kmerMask = (1ULL << kbits) - 1;
 
 	uint64_t curBlock{0};
 	console->info("cdbg1.numBlocks={}, cdbg2.numBlocks={}", cdbg1.get_numBlocks(), cdbg2.get_numBlocks());
 	uint64_t maxMinimizer{0}, minMinimizer{invalid};
 	while(kmerCount < sampleKmerCount and
             (curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks())) {
-	    std::cerr << "Current Block="<<curBlock << "\n";
+	    std::cerr << "Current Block="<< curBlock << "\n";
 		uint64_t maxMinimizer1{0}, minMinimizer1{invalid},
 		maxMinimizer2{0}, minMinimizer2{invalid};
 
-		cdbg1.replaceCQFInMemory(curBlock);
-		if (curBlock < cdbg1.get_numBlocks()) {
-            const CQF<key_obj> *cqf1 = cdbg1.get_current_cqf();
-            typename CQF<key_obj>::Iterator it1 = cqf1->begin();
-            uint64_t cntr{0};
-            uint64_t count{cqf1->dist_elts()};
-			auto minmax = cdbg1.getMinMaxMinimizer(curBlock);
-			minMinimizer1 = minmax.first;
-			maxMinimizer1 = minmax.second;
-			while (!it1.done()) {
-				auto keyval = it1.get_cur_hash();
-				auto key = hash_64i(keyval.key, kmerMask);
-				auto minimizerPair = cdbg1.findMinimizer(key, kbits);
-				std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-				for (auto minimizer : pairs) {
-					if (minimizer != invalid and minimizer >= minMinimizer1 and minimizer <= maxMinimizer1) {
-						auto &map = minimizerMap[minimizer];
-						if (map.find(keyval.key) == map.end()) {
-							map[keyval.key] = std::make_pair(keyval.count, 0);
-						} else if (map[keyval.key].first and map[keyval.key].first != keyval.count) {
-							console->error("found a key with different color class in the second cqf.");
-							std::exit(3);
-						} else if (not map[keyval.key].first) {
-							map[keyval.key].first = keyval.count;
-						}
-					}
-				}
-                ++it1;
-                cntr++;
-                if (cntr % 10000000 == 0) {
-                    std::cerr << "\rFirst mantis: " << cntr << " out of " << count;
-                }
-            }
-        }
-
-		cdbg2.replaceCQFInMemory(curBlock);
-		if (curBlock < cdbg2.get_numBlocks()) {
-            const CQF<key_obj> *cqf2 = cdbg2.get_current_cqf();
-            typename CQF<key_obj>::Iterator it2 = cqf2->begin();
-            uint64_t cntr{0};
-            uint64_t count{cqf2->dist_elts()};
-			auto minmax = cdbg2.getMinMaxMinimizer(curBlock);
-			minMinimizer2 = minmax.first;
-			maxMinimizer2 = minmax.second;
-			while (!it2.done()) {
-				auto keyval = it2.get_cur_hash();
-				auto key = hash_64i(keyval.key, kmerMask);
-				auto minimizerPair = cdbg2.findMinimizer(key, kbits);
-				std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-				for (auto minimizer : pairs) {
-					if (minimizer != invalid and minimizer >= minMinimizer2 and minimizer <= maxMinimizer2) {
-						auto &map = minimizerMap[minimizer];
-						if (map.find(keyval.key) == map.end()) {
-							map[keyval.key] = std::make_pair(0, keyval.count);
-						} else if (map[keyval.key].second and map[keyval.key].second != keyval.count) {
-							console->error("found a key with different color class in the second cqf.");
-							std::exit(3);
-						} else if (not map[keyval.key].second) {
-							map[keyval.key].second = keyval.count;
-						}
-					}
-				}
-                ++it2;
-                cntr++;
-                if (cntr % 10000000 == 0) {
-                    std::cerr << "\rSecond mantis: " << cntr << " out of " << count;
-                }
-            }
-        }
+		std::tie(minMinimizer1, maxMinimizer1) = walkBlockedCQF(cdbg1, curBlock, true);
+		std::tie(minMinimizer2, maxMinimizer2) = walkBlockedCQF(cdbg2, curBlock, false);
 
 		minMinimizer = curBlock >= cdbg1.get_numBlocks() ? minMinimizer2 :
 					   curBlock >= cdbg2.get_numBlocks() ? minMinimizer1 : std::min(minMinimizer1, minMinimizer2);
@@ -397,7 +391,6 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 			b++;
 		}
 		std::cerr << "\r";
-		minMinimizer = maxMinimizer + 1;
 	}
 	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}.",
 					kmerCount, pairCount.size(), time(nullptr) - start_time_);
@@ -405,14 +398,15 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	typedef std::pair<uint64_t, std::pair<uint64_t, uint64_t>> CountAndIdPair;
 	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<CountAndIdPair>> minPQ;
 
-	for(auto p = pairCount.begin(); p != pairCount.end(); ++p)
-		if(minPQ.size() < SAMPLE_PAIR_COUNT)
-			minPQ.push(std::make_pair(p -> second, p -> first));
-		else if(minPQ.top().first < p -> second)
-		{
-			minPQ.pop();
-			minPQ.push(std::make_pair(p -> second, p -> first));
-		}
+	for(auto p = pairCount.begin(); p != pairCount.end(); ++p) {
+		//		if(minPQ.size() < SAMPLE_PAIR_COUNT)
+		minPQ.push(std::make_pair(p->second, p->first));
+//		else if(minPQ.top().first < p -> second)
+//		{
+//			minPQ.pop();
+//			minPQ.push(std::make_pair(p -> second, p -> first));
+//		}
+	}
 	
 	while(!minPQ.empty())
 	{
@@ -485,7 +479,9 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 // definitely this should not be cleaned .. BE SO careful about this. Very tricky!!!
 //	for (auto & m : minimizerMap) m.clear();
 
-	auto kmerMask = (1ULL << kbits) - 1;
+	// force currentCQFBlock to get loaded into memory
+	cdbg1.replaceCQFInMemory(invalid);
+	cdbg2.replaceCQFInMemory(invalid);
 
 	uint64_t curBlock{startingBlock}, kmerCount{0};
 	cdbg1.replaceCQFInMemory(curBlock);
@@ -496,78 +492,9 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 		uint64_t maxMinimizer1{0}, minMinimizer1{invalid},
 				maxMinimizer2{0}, minMinimizer2{invalid};
 
-		cdbg1.replaceCQFInMemory(curBlock);
-		if (curBlock < cdbg1.get_numBlocks()) {
-			const CQF<key_obj> *cqf1 = cdbg1.get_current_cqf();
-			if (cqf1 == nullptr) {
-				std::cerr << "CQF1 is null for block " << curBlock << " while it shouldn't\n";
-				std::exit(3);
-			}
-			typename CQF<key_obj>::Iterator it1 = cqf1->begin();
-			uint64_t cntr{0};
-			uint64_t count{cqf1->dist_elts()};
-			auto minmax = cdbg1.getMinMaxMinimizer(curBlock);
-			minMinimizer1 = minmax.first;
-			maxMinimizer1 = minmax.second;
-			while (!it1.done()) {
-				auto keyval = it1.get_cur_hash();
-				auto key = hash_64i(keyval.key, kmerMask);
-				auto minimizerPair = cdbg1.findMinimizer(key, kbits);
-				std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-				for (auto minimizer : pairs) {
-					if (minimizer != invalid and minimizer >= minMinimizer1 and minimizer <= maxMinimizer1) {
-						auto &map = minimizerMap[minimizer];
-						if (map.find(keyval.key) == map.end()) {
-							map[keyval.key] = std::make_pair(keyval.count, 0);
-						} else if (map[keyval.key].first and map[keyval.key].first != keyval.count) {
-							console->error("found a key with different color class in the second cqf.");
-							std::exit(3);
-						} else if (not map[keyval.key].first) {
-							map[keyval.key].first = keyval.count;
-						}
-					}
-				}
-				++it1;
-				cntr++;
-				if (cntr % PROGRESS_STEP == 0) {
-					std::cerr << "\rFirst mantis: " << cntr << " out of " << count;
-				}
-			}
-		}
-		cdbg2.replaceCQFInMemory(curBlock);
-		if (curBlock < cdbg2.get_numBlocks()) {
-			const CQF<key_obj> *cqf2 = cdbg2.get_current_cqf();
-			typename CQF<key_obj>::Iterator it2 = cqf2->begin();
-			uint64_t cntr{0};
-			uint64_t count{cqf2->dist_elts()};
-			auto minmax = cdbg2.getMinMaxMinimizer(curBlock);
-			minMinimizer2 = minmax.first;
-			maxMinimizer2 = minmax.second;
-			while (!it2.done()) {
-				auto keyval = it2.get_cur_hash();
-				auto key = hash_64i(keyval.key, kmerMask);
-				auto minimizerPair = cdbg2.findMinimizer(key, kbits);
-				std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-				for (auto minimizer : pairs) {
-					if (minimizer != invalid and minimizer >= minMinimizer2 and minimizer <= maxMinimizer2) {
-						auto &map = minimizerMap[minimizer];
-						if (map.find(keyval.key) == map.end()) {
-							map[keyval.key] = std::make_pair(0, keyval.count);
-						} else if (map[keyval.key].second and map[keyval.key].second != keyval.count) {
-							console->error("found a key with different color class in the second cqf.");
-							std::exit(3);
-						} else if (not map[keyval.key].second) {
-							map[keyval.key].second = keyval.count;
-						}
-					}
-				}
-				++it2;
-				cntr++;
-				if (cntr % PROGRESS_STEP == 0) {
-					std::cerr << "\rSecond mantis: " << cntr << " out of " << count;
-				}
-			}
-		}
+		std::tie(minMinimizer1, maxMinimizer1) = walkBlockedCQF(cdbg1, curBlock, true);
+		std::tie(minMinimizer2, maxMinimizer2) = walkBlockedCQF(cdbg2, curBlock, false);
+
 		minMinimizer = curBlock >= cdbg1.get_numBlocks() ? minMinimizer2 :
 				curBlock >= cdbg2.get_numBlocks() ? minMinimizer1 : std::min(minMinimizer1, minMinimizer2);
 		maxMinimizer = curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 :
@@ -1161,89 +1088,25 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 	cdbg2.replaceCQFInMemory(0);
 
 
-	auto kmerMask = (1ULL << kbits) - 1;
-
 	uint64_t curBlock{0}, outputCQFBlockId{0}, blockKmerCnt{0};
 	for (auto &m : cdbg.minimizerCntr) m = 0;
+	for (auto &m :  minimizerMap) m.clear();
 
 	auto hash_mode = cdbg1.get_current_cqf()->hash_mode();
 	auto seed = cdbg1.get_current_cqf()->seed();
+	cdbg.initializeNewCQFBlock(invalid, kbits, hash_mode, seed);
 	cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hash_mode, seed);
+	std::cerr << "\n\n\n1new cqf for block " << outputCQFBlockId << "\n";
+	cdbg.get_current_cqf()->dump_metadata();
+	std::cerr << "\n\n\n";
 	uint64_t maxMinimizer{0}, minMinimizer{invalid};
 	while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
 		std::cerr << "Current block=" << curBlock << "\n";
 		uint64_t maxMinimizer1{0}, minMinimizer1{invalid},
 				maxMinimizer2{0}, minMinimizer2{invalid};
+		std::tie(minMinimizer1, maxMinimizer1) = walkBlockedCQF(cdbg1, curBlock, true);
+		std::tie(minMinimizer2, maxMinimizer2) = walkBlockedCQF(cdbg2, curBlock, false);
 
-		cdbg1.replaceCQFInMemory(curBlock);
-		if (curBlock < cdbg1.get_numBlocks()) {
-			const CQF<key_obj> *cqf1 = cdbg1.get_current_cqf();
-			typename CQF<key_obj>::Iterator it1 = cqf1->begin();
-            uint64_t cntr{0}, count{cqf1->dist_elts()};
-			auto minmax = cdbg1.getMinMaxMinimizer(curBlock);
-			minMinimizer1 = minmax.first;
-			maxMinimizer1 = minmax.second;
-			while (!it1.done()) {
-				auto keyval = it1.get_cur_hash();
-				auto key = hash_64i(keyval.key, kmerMask);
-				auto minimizerPair = cdbg1.findMinimizer(key, kbits);
-				std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-				for (auto minimizer : pairs) {
-					if (minimizer != invalid and minimizer >= minMinimizer1 and minimizer <= maxMinimizer1) {
-						auto &map = minimizerMap[minimizer];
-						if (map.find(keyval.key) == map.end()) {
-							cdbg.minimizerCntr[minimizer]++;
-							map[keyval.key] = std::make_pair(keyval.count, 0);
-						} else if (map[keyval.key].first and map[keyval.key].first != keyval.count) {
-							console->error("found a key with different color class in the second cqf.");
-							std::exit(3);
-						} else if (not map[keyval.key].first) {
-							map[keyval.key].first = keyval.count;
-						}
-					}
-				}
-				++it1;
-                cntr++;
-                if (cntr % 10000000 == 0) {
-                    std::cerr << "\rFirst mantis " << cntr << " out of " << count;
-                }
-			}
-		}
-
-		cdbg2.replaceCQFInMemory(curBlock);
-		if (curBlock < cdbg2.get_numBlocks()) {
-			const CQF<key_obj> *cqf2 = cdbg2.get_current_cqf();
-			typename CQF<key_obj>::Iterator it2 = cqf2->begin();
-            uint64_t cntr{0}, count{cqf2->dist_elts()};
-			auto minmax = cdbg2.getMinMaxMinimizer(curBlock);
-			minMinimizer2 = minmax.first;
-			maxMinimizer2 = minmax.second;
-			while (!it2.done()) {
-				auto keyval = it2.get_cur_hash();
-				auto key = hash_64i(keyval.key, kmerMask);
-				auto minimizerPair = cdbg2.findMinimizer(key, kbits);
-				std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-				for (auto minimizer : pairs) {
-					if (minimizer != invalid and minimizer >= minMinimizer2 and minimizer <= maxMinimizer2) {
-						auto &map = minimizerMap[minimizer];
-						if (map.find(keyval.key) == map.end()) {
-							cdbg.minimizerCntr[minimizer]++;
-							map[keyval.key] = std::make_pair(0, keyval.count);
-						} else if (map[keyval.key].second and map[keyval.key].second != keyval.count) {
-							console->error("found a key with different color class in the second cqf.");
-							std::exit(3);
-						} else if (not map[keyval.key].second) {
-							map[keyval.key].second = keyval.count;
-						}
-					}
-				}
-				++it2;
-                cntr++;
-                if (cntr % 10000000 == 0) {
-                    std::cerr << "\rSecond mantis " << cntr << " out of " << count;
-                }
-            }
-		}
 		minMinimizer = curBlock >= cdbg1.get_numBlocks() ? minMinimizer2 :
 					   curBlock >= cdbg2.get_numBlocks() ? minMinimizer1 : std::min(minMinimizer1, minMinimizer2);
 		maxMinimizer = curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 :
@@ -1252,9 +1115,15 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 		curBlock++;
 
         uint64_t m = minMinimizer;
+        std::cerr << "\n\n\nnew cqf for block " << outputCQFBlockId << "\n";
+        cdbg.get_current_cqf()->dump_metadata();
+        std::cerr << "\n\n\n";
+//        blockKmerCnt = 0; shouldn't zero out here!!
+//        The output block kmer count should be left for the next set of input blocks
         while (m <= maxMinimizer) {
             if (not minimizerMap[m].empty()) {
-				if (m > 0 and blockKmerCnt + minimizerMap[m].size() > block_kmer_threshold) {
+				if (blockKmerCnt and (blockKmerCnt + minimizerMap[m].size()) > block_kmer_threshold) {
+					std::cerr << "\n\n\n# of kmers in the cqf " << outputCQFBlockId << " is " << blockKmerCnt << "\n";
 					blockKmerCnt = 0;
 					cdbg.serializeCurrentCQF();
 					outputCQFBlockId++;
@@ -1264,6 +1133,17 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 				for (auto &kv : minimizerMap[m]) {
                     uint64_t colorId = get_color_id(kv.second);
 					auto keyObj = KeyObject(kv.first, 0, colorId);
+					if (colorId > 84954) {
+						std::cerr << "\n\n well! " << colorId << " " << kv.second.first << " " << kv.second.second
+						<< " " << kv.first << " " << outputCQFBlockId << " " << kmerCount << " " << sampledPairs.size() << "\n";
+						std::exit(3);
+					}
+					if (keyObj.key == 29278210497246) {
+						std::cerr << "\nfound it " << keyObj.key << " "
+								  << keyObj.count << " " << kv.second.first << " "
+								  << kv.second.second
+								  << " " << kv.first << " " << outputCQFBlockId << " " << kmerCount << "\n";
+					}
 					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
                     kmerCount++;
 
@@ -1281,6 +1161,7 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
         }
         std::cerr << "\r";
 	}
+	std::cerr << "\n\n\n# of kmers in the cqf " << outputCQFBlockId << " is " << blockKmerCnt << "\n";
 	cdbg.serializeCurrentCQF();
 
 	console -> info("Total kmers merged: {}. Time-stamp: {}.", kmerCount, time(nullptr) - start_time_);
@@ -1305,7 +1186,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 					col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
 
-	return cumulativeBucketSize[row][col] + MPH[row][col] -> lookup(idPair) + 1;
+	return cumulativeBucketSize[row][col] + MPH[row][col]->lookup(idPair) + 1;
 }
 
 template <typename qf_obj, typename key_obj>
@@ -1591,7 +1472,7 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 
 	console->info("Done with cqf merge");
-//    uint64_t num_colorBuffers = 2;
+//    uint64_t num_colorBuffers = 1;
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
 	MSTMerger mst(/*&cdbg.dbg, */cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");
