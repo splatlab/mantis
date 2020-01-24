@@ -1655,7 +1655,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	if (buffer == NULL || total_num_bytes > buffer_len)
 		return total_num_bytes;
 
-	// memset(buffer, 0, total_num_bytes);
+	memset(buffer, 0, total_num_bytes);
 	qf->metadata = (qfmetadata *)(buffer);
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
