@@ -265,6 +265,9 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 		perror("Error opening file for serializing.");
 		exit(EXIT_FAILURE);
 	}
+	if (qf->metadata != NULL) {
+		perror("\n\n\n\nMetadata is not null and is being serialized!!\n\n\n\n");
+	}
 	fwrite(qf->metadata, sizeof(qfmetadata), 1, fout);
 	fwrite(qf->blocks, qf->metadata->total_size_in_bytes, 1, fout);
 	fclose(fout);
@@ -274,6 +277,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 
 uint64_t qf_deserialize(QF *qf, const char *filename)
 {
+	perror("\n\n\nDESERIALIZING\n\n\n");
 	FILE *fin;
 	fin = fopen(filename, "rb");
 	if (fin == NULL) {

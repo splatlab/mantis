@@ -188,6 +188,7 @@ CQF<key_obj>::CQF() {
 		ERROR("Can't allocate the CQF");
 		exit(EXIT_FAILURE);
 	}
+	inMem = true;
 }
 
 template <class key_obj>
@@ -220,6 +221,7 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 		inMem = false;
 	}
 	else if (flag == CQF_FREAD) {
+		std::cerr << filename.c_str() << "\n";
 		size = qf_deserialize(&cqf, filename.c_str());
 		inMem = true;
 	}

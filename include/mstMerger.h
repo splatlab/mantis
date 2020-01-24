@@ -216,7 +216,7 @@ private:
 
     void planCaching(MSTQuery *mst,
                      std::vector<std::pair<colorIdType, weightType>> &edges,
-                     std::vector<uint32_t> &outDegrees,
+                     std::vector<uint32_t> &srcStartIdx,
                      std::vector<colorIdType> &colorsInCache);
 
     void planRecursively(uint64_t nodeId,

@@ -556,12 +556,9 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, uint8_t flags
     uint64_t count = curDbg->query(keyObj, flags);
     if (count > 0) {
         if (count != keyObj.count) {
-            if (keyObj.key == 29278210497246)
-//            console->error("K-mer was already present. kmer: {} colorID: {}, old colorId: {}", keyObj.key, keyObj.count,
-//                           count);
-            std::cerr << "K-mer was already present. kmer: " << keyObj.key <<
-            " colorID: " << keyObj.count << ", old colorId: " << count << "\n";
-//            std::exit(3);
+            console->error("K-mer was already present. kmer: {} colorID: {}, old colorId: {}", keyObj.key, keyObj.count,
+                           count);
+            std::exit(3);
         }
     }
     else {
@@ -754,7 +751,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         std::exit(3);
     }
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
-    uint64_t ksize{curDbg->keybits()}, numBlocks{minimizerBorder[minimizerBorder.size()-1]+1};
+    uint64_t ksize{curDbg->keybits()}, numBlocks{minmaxMinimizer.size()};
     std::vector<std::vector<mantis::QuerySet::value_type>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
 //    std::cerr << "Split kmers based on the minimizers into blocks\n";
@@ -764,6 +761,11 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
 //        dna::canonical_kmer ck(ksize/2, k);
 //        std::cerr << std::string(ck) << " minimizer: " << minimizers.first
 //                    << " block: " << minimizerCntr[minimizers.first] << "\n";
+        if (minimizers.first > minimizerBorder.size()) {
+            std::cerr << "\n\ncase1 " << minimizers.first << " " << minimizerBorder.size() << "\n\n";
+        } else if (minimizerBorder[minimizers.first] > blockKmers.size()) {
+            std::cerr << "\n\ncase2 " << minimizers.first << " " << minimizerBorder.size() << " " << minimizerBorder[minimizers.first] << " " << blockKmers.size() << "\n\n";
+        }
         blockKmers[minimizerBorder[minimizers.first]].push_back(k);
         // TODO do we need the second minimizer here??
         /*if (minimizers.second != invalid and minimizerCntr[minimizers.first] != minimizerCntr[minimizers.second]) {
@@ -832,7 +834,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
         std::exit(3);
     }
     std::unordered_map<uint64_t, std::vector<uint64_t>> query_eqclass_map;
-    uint64_t ksize{curDbg->keybits()}, numBlocks{minimizerBorder[minimizerBorder.size()-1]+1};
+    uint64_t ksize{curDbg->keybits()}, numBlocks{minmaxMinimizer.size()};
     std::vector<std::unordered_map<mantis::KmerHash, uint64_t>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
 //    std::cerr << "Split kmers based on the minimizers into blocks\n";
@@ -1287,7 +1289,7 @@ void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key
         currentBlock = invalid;
         return;
     }
-    if (currentBlock == i) {
+    if (currentBlock == i and curDbg) {
         return;
     }
 
@@ -1318,7 +1320,7 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
         return;
     }
 
-    if (i <= minimizerBorder[minimizerBorder.size()-1]) {
+    if (i < minmaxMinimizer.size()) {
         std::string blockCqfFile = prefix + std::to_string(i) + "_" + mantis::CQF_FILE;
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
             curDbg.reset(new CQF<key_obj>(blockCqfFile, CQF_FREAD));
@@ -1374,6 +1376,8 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
         std::exit(3);
     }
     minmaxMinimizer.push_back(std::make_pair(min, lastExistingMin));
+    std::cerr << "Total # of blocks: " << minmaxMinimizer.size() << "\n";
+    replaceCQFInMemory(invalid); // just to force the first CQF to definitely be loaded into memory
     std::cerr << "Loading first CQF block\n";
     replaceCQFInMemory(0);
 
