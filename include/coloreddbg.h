@@ -356,16 +356,17 @@ private:
 
     uint64_t reverse_complement(uint64_t x, int k)
     {
-        x = (x << 32)                        | (x >> 32);
+        x =  (x << 32)                       |  (x >> 32);
         x = ((x << 16) & 0xffff0000ffff0000) | ((x >> 16) & 0x0000ffff0000ffff);
         x = ((x <<  8) & 0xff00ff00ff00ff00) | ((x >>  8) & 0x00ff00ff00ff00ff);
         x = ((x <<  4) & 0xf0f0f0f0f0f0f0f0) | ((x >>  4) & 0x0f0f0f0f0f0f0f0f);
         x = ((x <<  2) & 0xcccccccccccccccc) | ((x >>  2) & 0x3333333333333333);
         //     0123456789abcdef
-        x ^= 0x5555555555555555;
+        x = ~x;
         x >>= (64-2*k);
         return x;
     }
+
 };
 
 template<class T>
@@ -975,11 +976,10 @@ std::pair<uint64_t, uint64_t> ColoredDbg<qf_obj, key_obj>::findMinimizer(const t
         auto h = (key >> s) & jmask;
         minim = minim <= h ? minim : h;
     }
-//    auto keyrc2 = reverse_complement(key, k/2);
-//    dna::kmer k2(k/2, keyrc2);
-    dna::kmer kmer(k/2, key);
-    auto kmerrc = -kmer;
-    auto keyrc = kmerrc.val;
+//    dna::kmer kmer(k/2, key);
+//    auto kmerrc = -kmer;
+//    auto keyrc = kmerrc.val;
+    auto keyrc = reverse_complement(key, k/2);
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (keyrc >> s) & jmask;
         minim = minim <= h ? minim : h;
