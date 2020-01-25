@@ -5,6 +5,8 @@
 #ifndef MANTIS_MSTQUERY_H
 #define MANTIS_MSTQUERY_H
 
+#include <sparsepp/spp.h>
+
 #include "spdlog/spdlog.h"
 #include "sdsl/bit_vectors.hpp"
 #include "mantisconfig.hpp"
@@ -14,6 +16,8 @@
 #include "tsl/hopscotch_map.h"
 #include "nonstd/optional.hpp"
 #include <mutex>
+#include "MantisFS.h"
+#include "coloreddbg.h"
 
 //#include "concurrentlru/concurrent-scalable-cache.h"
 
@@ -111,7 +115,7 @@ public:
                                      );
 
     void parseKmers(std::string read, uint64_t kmer_size);
-    void findSamples(CQF<KeyObject> &dbg,
+    void findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> &cdbg,
                                         LRUCacheMap &lru_cache,
                                         RankScores *rs,
                                         QueryStats &queryStats);

@@ -277,7 +277,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 
 uint64_t qf_deserialize(QF *qf, const char *filename)
 {
-	perror("\n\n\nDESERIALIZING\n\n\n");
+//	perror("\n\n\nDESERIALIZING\n\n\n");
 	FILE *fin;
 	fin = fopen(filename, "rb");
 	if (fin == NULL) {

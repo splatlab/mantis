@@ -5,7 +5,6 @@
 #include <vector>
 #include <CLI/Timer.hpp>
 #include <canonicalKmer.h>
-#include <sparsepp/spp.h>
 
 #include "ProgOpts.h"
 #include "kmer.h"
@@ -137,22 +136,35 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
     return eq;
 }
 
-void MSTQuery::findSamples(CQF<KeyObject> &dbg,
+void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> &cdbg,
                            LRUCacheMap &lru_cache,
                            RankScores *rs,
                            QueryStats &queryStats) {
-    mantis::EqMap query_eqclass_map;
+//    mantis::EqMap query_eqclass_map;
     std::unordered_set<uint64_t> query_eqclass_set;
-//    std::cerr << "\n\nkmer2cidMap size: " << kmer2cidMap.size() << "\n\n";
-    for (auto &kv : kmer2cidMap) {
-        KeyObject key(kv.first, 0, 0);
-//        std::cerr << std::string(dna::canonical_kmer(dbg.keybits()/2, key.key)) << "\n";
-        uint64_t eqclass = dbg.query(key, 0);
-        if (eqclass) {
-            kv.second = eqclass - 1;
-            query_eqclass_set.insert(eqclass - 1);
+    uint64_t ksize{cdbg.get_current_cqf()->keybits()}, numBlocks{cdbg.get_numBlocks()};
+    std::vector<std::unordered_map<mantis::KmerHash, uint64_t>> blockKmers(numBlocks);
+    // split kmers based on minimizers into blocks
+    for (auto kv : kmer2cidMap) {
+        auto minimizers = cdbg.findMinimizer(kv.first, ksize); //assuming not hashed
+        blockKmers[cdbg.minimizerBorder[minimizers.first]].insert(kv);
+    }
+
+    // go block by block and query kmers
+//    std::cerr << "Go block by block and query kmers\n";
+    for (auto blockId = 0; blockId < numBlocks; blockId++) {
+        cdbg.replaceCQFInMemory(blockId);
+        for (auto kv : blockKmers[blockId]) {
+            KeyObject key(kv.first, 0, 0);
+            uint64_t eqclass = cdbg.query_kmerInCurDbg(key, 0);
+            if (eqclass) {
+                kv.second = eqclass - 1;
+                query_eqclass_set.insert(eqclass - 1);
+            }
         }
     }
+    cdbg.replaceCQFInMemory(invalid);
+
 
     mantis::QueryResult sample_map(queryStats.numSamples, 0);
     nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
@@ -531,20 +543,25 @@ int mst_query_main(QueryOpts &opt) {
     QueryStats queryStats;
 
     spdlog::logger *logger = opt.console.get();
-    std::string dbg_file(opt.prefix + mantis::CQF_FILE);
     std::string sample_file(opt.prefix + mantis::SAMPLEID_FILE);
 
     std::vector<std::string> sampleNames = loadSampleFile(sample_file);
     queryStats.numSamples = sampleNames.size();
     logger->info("Number of experiments: {}", queryStats.numSamples);
 
-    logger->info("Loading cqf...");
-    CQF<KeyObject> cqf(dbg_file, CQF_FREAD);
-    auto indexK = cqf.keybits() / 2;
+    logger->info("Loading the first cdbg and the first CQF...");
+    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(opt.prefix, MANTIS_DBG_IN_MEMORY);
+    auto curDbg = cdbg.get_current_cqf();
+    if (not curDbg) {
+        logger->error("No dbg has been loaded into memory.");
+        std::exit(3);
+    }
+    auto indexK = curDbg->keybits() / 2;
     if (queryK == 0) queryK = indexK;
     logger->info("Done loading cqf. k is {}", indexK);
 
-    logger->info("Loading color classes...");
+
+    logger->info("Loading color classes in the MST form...");
     MSTQuery mstQuery(opt.prefix, indexK, queryK, queryStats.numSamples, logger);
     logger->info("Done Loading color classes. Total # of color classes is {}",
                  mstQuery.parentbv.size() - 1);
@@ -562,7 +579,7 @@ int mst_query_main(QueryOpts &opt) {
             mstQuery.parseKmers(read, indexK);
             numOfQueries++;
         }
-        mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
+        mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
         ipfile.clear();
         ipfile.seekg(0, ios::beg);
         if (opt.use_json) {
@@ -582,7 +599,7 @@ int mst_query_main(QueryOpts &opt) {
             while (ipfile >> read) {
                 mstQuery.reset();
                 mstQuery.parseKmers(read, indexK);
-                mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
+                mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
                 if (mstQuery.indexK == mstQuery.queryK)
                     output_results_json(mstQuery, opfile, sampleNames, queryStats, numOfQueries);
                 else
@@ -594,7 +611,7 @@ int mst_query_main(QueryOpts &opt) {
             while (ipfile >> read) {
                 mstQuery.reset();
                 mstQuery.parseKmers(read, indexK);
-                mstQuery.findSamples(cqf, cache_lru, &rs, queryStats);
+                mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
                 if (mstQuery.indexK == mstQuery.queryK)
                     output_results(mstQuery, opfile, sampleNames, queryStats);
                 else

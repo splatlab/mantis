@@ -245,6 +245,8 @@ public:
 
     void add_kmer2CurDbg(key_obj &keyObj, uint8_t flags);
 
+    uint64_t query_kmerInCurDbg(key_obj &keyObj, uint8_t flags);
+
     void replaceCQFInMemory(uint64_t i);
 
     std::pair<uint64_t, uint64_t> getMinMaxMinimizer(uint64_t blockId) {
@@ -548,6 +550,11 @@ bool ColoredDbg<qf_obj, key_obj>::add_colorId(uint64_t &eq_id, const BitVector &
         it->second.second += 1; // update the abundance.
     }
     return added_eq_class;
+}
+
+template<class qf_obj, class key_obj>
+uint64_t ColoredDbg<qf_obj, key_obj>::query_kmerInCurDbg(key_obj &keyObj, uint8_t flags) {
+    return curDbg->query(keyObj, flags);
 }
 
 template<class qf_obj, class key_obj>

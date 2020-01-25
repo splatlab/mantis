@@ -9,10 +9,11 @@
 #include <unordered_set>
 #include <queue>
 
+#include "mstQuery.h"
+
 #include "gqf_cpp.h"
 #include "lru/lru.hpp"
 #include "canonicalKmer.h"
-#include "mstQuery.h"
 #include "gqf/hashutil.h"
 
 typedef uint32_t colorIdType;
