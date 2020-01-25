@@ -726,6 +726,9 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
     if (get_num_eqclasses() % colorClassPerBuffer > 0)
         bv_buffer_serialize();
 
+    if ( eqclass_map.size() * num_samples < first_bv_buffer.size()) {
+        first_bv_buffer.resize(eqclass_map.size() * num_samples);
+    }
     BitVectorRRR first_rrr_bv(first_bv_buffer);
     std::string bv_file(prefix + std::to_string(0) + "_" + mantis::EQCLASS_FILE);
     sdsl::store_to_file(first_rrr_bv, bv_file);
