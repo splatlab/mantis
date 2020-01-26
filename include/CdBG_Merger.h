@@ -1123,7 +1123,7 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
         while (m <= maxMinimizer) {
             if (not minimizerMap[m].empty()) {
 				if (blockKmerCnt and (blockKmerCnt + minimizerMap[m].size()) > block_kmer_threshold) {
-					std::cerr << "\n\n\n# of kmers in the cqf " << outputCQFBlockId << " is " << blockKmerCnt << "\n";
+//					std::cerr << "\n# of kmers in cqf " << outputCQFBlockId << " is " << blockKmerCnt << "\n";
 					blockKmerCnt = 0;
 					cdbg.serializeCurrentCQF();
 					outputCQFBlockId++;
@@ -1161,7 +1161,7 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 	for (uint64_t m = maxMinimizer+1; m < cdbg.minimizerBorder.size(); m++) {
 		cdbg.minimizerBorder[m] = outputCQFBlockId;
 	}
-	std::cerr << "\n\n\n# of kmers in the cqf " << outputCQFBlockId << " is " << blockKmerCnt << "\n";
+//	std::cerr << "\n\n\n# of kmers in the cqf " << outputCQFBlockId << " is " << blockKmerCnt << "\n";
 	cdbg.serializeCurrentCQF();
 
 	console -> info("Total kmers merged: {}. Time-stamp: {}.", kmerCount, time(nullptr) - start_time_);
