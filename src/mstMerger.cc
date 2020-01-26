@@ -387,12 +387,6 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject, edgeList);
         if (edgeList.size() >= tmpEdgeListSize/* and colorMutex.try_lock()*/) {
-            for (auto &e : edgeList) {
-                if (e.n1 > 84954 or e.n2 > 84954) {
-                    std::cerr << "\n\n well! buildPairedColorIdEdgesInParallel " << e.n1 << " " << e.n2 << "\n";
-                    std::exit(3);
-                }
-            }
             tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
             cnt+=edgeList.size();
             edgeList.clear();
@@ -401,12 +395,6 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         kmerCntr++;
         if (kmerCntr % 10000000 == 0) {
             std::cerr << "\rthread " << threadId << ": Observed " << (numOfKmers + kmerCntr) / 1000000 << "M kmers and " << cnt << " edges";
-        }
-    }
-    for (auto &e : edgeList) {
-        if (e.n1 > 84954 or e.n2 > 84954) {
-            std::cerr << "\n\n well! buildPairedColorIdEdgesInParallel " << e.n1 << " " << e.n2 << "\n";
-            std::exit(3);
         }
     }
     tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
