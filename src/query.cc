@@ -53,14 +53,24 @@ void output_results(mantis::QuerySets &multi_kmers,
     uint32_t cnt = 0;
     {
         CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
+        std::cerr << "AAAA\n" << is_bulk << "\n";
         if (is_bulk) {
+            std::cerr << "\n" << uniqueKmers.size() << " " << multi_kmers.size() << " " << multi_kmers[0].size() << "\n\n\n\n\n";
             std::unordered_map<uint64_t, std::vector<uint64_t>> result = cdbg.find_samples(uniqueKmers);
+            for (auto &kv: result) {
+                if (not kv.second.empty()) {
+                    std::cerr << kv.first << "\n";
+                    std::cerr << "\n\n\nNOT EMPTY\n\n";
+                }
+            }
             for (auto &kmers : multi_kmers) {
                 opfile << cnt++ << '\t' << kmers.size() << '\n';
                 std::vector<uint64_t> kmerCnt(cdbg.get_num_samples());
                 for (auto &k : kmers) {
+                    std::cerr << "k" << k << "\n";
                     if (uniqueKmers[k]) {
-                        for (auto experimentId : result[k]) {
+                        for (auto experimentId : result[uniqueKmers[k]]) {
+                            std::cerr <<" \nIn here\n";
                             kmerCnt[experimentId]++;
                         }
                     }
@@ -188,7 +198,7 @@ int query_main(QueryOpts &opt) {
                                                                sample_file,
                                                                MANTIS_DBG_IN_MEMORY);
 */
-    uint64_t kmer_size = cdbg.get_cqf()->keybits() / 2;
+    uint64_t kmer_size = cdbg.get_current_cqf()->keybits() / 2;
     console->info("Read colored dbg with {} k-mers and {} color classes",
                   cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
 

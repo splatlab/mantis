@@ -177,13 +177,14 @@ validate_main(ValidateOpts &opt) {
         std::vector<uint64_t> result = cdbg.find_samples(kmers);
 
         // Validate the cdbg output
-        for (uint64_t i = 0; i < nqf; i++)
+        for (uint64_t i = 0; i < nqf; i++) {
             if (fraction_present[i] != result[i]) {
                 console->info("Failed for sample: {},{} original CQF {} cdbg {}",
                               i, inobjects[i].sample_id, fraction_present[i], result[i]);
                 fail = true;
                 //abort();
             }
+        }
         ground_truth.push_back(fraction_present);
         cdbg_output.push_back(result);
     }

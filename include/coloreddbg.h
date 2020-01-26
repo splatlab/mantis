@@ -180,7 +180,7 @@ public:
     find_samples(const mantis::QuerySet &kmers);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>
-    find_samples(const std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers);
+    find_samples(std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers);
 
     void serialize();
 
@@ -792,7 +792,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
             uint64_t eqclass = curDbg->query(key, 0);
-            dna::canonical_kmer ck(ksize/2, k);
+//            dna::canonical_kmer ck(ksize/2, k);
 //            std::cerr << "findSample: " << std::string(ck) << " " << eqclass << "\n";
             if (eqclass) {
                 query_eqclass_map[eqclass] += 1;
@@ -836,7 +836,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
 
 template<class qf_obj, class key_obj>
 std::unordered_map<uint64_t, std::vector<uint64_t>>
-ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
+ColoredDbg<qf_obj, key_obj>::find_samples(std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers) {
     // Find a list of eq classes and the number of kmers that belong those eq
     // classes.
 //    std::cerr << "\n\n\nhereeee\n\n";
@@ -849,7 +849,9 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
     std::vector<std::unordered_map<mantis::KmerHash, uint64_t>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
 //    std::cerr << "Split kmers based on the minimizers into blocks\n";
-    for (auto kv : uniqueKmers) {
+//    std::cerr << "\nsiize== " << uniqueKmers.size() << "\n";
+    for (auto &kv : uniqueKmers) {
+//        std::cerr << "k" << kv.first << "\n";
         auto minimizers = findMinimizer(kv.first, ksize); //assuming not hashed
         blockKmers[minimizerBorder[minimizers.first]].insert(kv);
         // TODO do we need the second minimizer here??
@@ -862,19 +864,21 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const std::unordered_map<mantis::KmerH
 //    std::cerr << "Go block by block and query kmers\n";
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
         replaceCQFInMemory(blockId);
-        for (auto kv : blockKmers[blockId]) {
+//        std::cerr << "blockId=" << blockId << " size()=" << blockKmers[blockId].size() << "\n";
+        for (auto &kv : blockKmers[blockId]) {
             key_obj key(kv.first, 0, 0);
             uint64_t eqclass = curDbg->query(key, 0);
 //            std::cerr << eqclass << "\n";
             if (eqclass) {
                 kv.second = eqclass;
+                uniqueKmers[kv.first] = eqclass;
                 query_eqclass_map[eqclass] = std::vector<uint64_t>();
             }
         }
     }
-    replaceCQFInMemory(0);
+    replaceCQFInMemory(invalid);
 
-    std::vector<uint64_t> sample_map(num_samples, 0);
+//    std::cerr << " EQCLASS size()=" << query_eqclass_map.size() << "\n";
     for (auto it = query_eqclass_map.begin(); it != query_eqclass_map.end(); ++it) {
         auto eqclass_id = it->first;
         auto &vec = it->second;
