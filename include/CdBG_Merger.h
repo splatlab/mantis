@@ -583,7 +583,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
 					fileCount2 = cdbg2.get_eq_class_file_count();
 
-	uint maxMemoryForSort = std::max(get_max_sort_memory(), (uint64_t)1);
+	//TODO In dire need of Jamshed's help
+	uint maxMemoryForSort = 20;//std::max(get_max_sort_memory(), (uint64_t)1);
 	
 	for(int i = 0; i <= fileCount1; ++i)
 		for(int j = 0; j <= fileCount2; ++j)

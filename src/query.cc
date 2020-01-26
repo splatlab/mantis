@@ -53,24 +53,14 @@ void output_results(mantis::QuerySets &multi_kmers,
     uint32_t cnt = 0;
     {
         CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
-        std::cerr << "AAAA\n" << is_bulk << "\n";
         if (is_bulk) {
-            std::cerr << "\n" << uniqueKmers.size() << " " << multi_kmers.size() << " " << multi_kmers[0].size() << "\n\n\n\n\n";
             std::unordered_map<uint64_t, std::vector<uint64_t>> result = cdbg.find_samples(uniqueKmers);
-            for (auto &kv: result) {
-                if (not kv.second.empty()) {
-                    std::cerr << kv.first << "\n";
-                    std::cerr << "\n\n\nNOT EMPTY\n\n";
-                }
-            }
             for (auto &kmers : multi_kmers) {
                 opfile << cnt++ << '\t' << kmers.size() << '\n';
                 std::vector<uint64_t> kmerCnt(cdbg.get_num_samples());
                 for (auto &k : kmers) {
-                    std::cerr << "k" << k << "\n";
                     if (uniqueKmers[k]) {
                         for (auto experimentId : result[uniqueKmers[k]]) {
-                            std::cerr <<" \nIn here\n";
                             kmerCnt[experimentId]++;
                         }
                     }
@@ -202,21 +192,8 @@ int query_main(QueryOpts &opt) {
     console->info("Read colored dbg with {} k-mers and {} color classes",
                   cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());
 
-    //cdbg.get_cqf()->dump_metadata();
-    //CQF<KeyObject> cqf(query_file, false);
-    //CQF<KeyObject>::Iterator it = cqf.begin(1);
-    //mantis::QuerySet input_kmers;
-    //do {
-    //KeyObject k = *it;
-    //input_kmers.insert(k.key);
-    //++it;
-    //} while (!it.done());
-
-    //mantis::QuerySets multi_kmers;
-    //multi_kmers.push_back(input_kmers);
-
     console->info("Reading query kmers from disk.");
-    uint32_t seed = 2038074743;
+//    uint32_t seed = 2038074743;
     uint64_t total_kmers = 0;
     std::unordered_map<mantis::KmerHash, uint64_t> uniqueKmers;
     mantis::QuerySets multi_kmers = Kmer::parse_kmers(query_file.c_str(),
