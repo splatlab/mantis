@@ -345,8 +345,6 @@ private:
     std::vector<std::unique_ptr<CQF<key_obj>>> dbgs;
     std::vector<std::pair<uint64_t, uint64_t>> minmaxMinimizer;
 
-    // Additional private members required for mantii merge.
-
     // Color-class bitvector file names for this CdBG.
     std::vector<std::string> eqClsFiles;
 
@@ -941,6 +939,7 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     uint64_t minim{invalid};
 
     // find the minimizer for the k-1 canonicalized prefix
+/*
     auto h = (key >> 2) & jmask;
     minim = minim <= h ? minim : h;
     h = (key >> 4) & jmask;
@@ -967,17 +966,16 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     minim = minim <= h ? minim : h;
     h = (key >> 28) & jmask;
     minim = minim <= h ? minim : h;
-/*
+*/
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (key >> s) & jmask;
         minim = minim <= h ? minim : h;
     }
-*/
 //    dna::kmer kmer(k/2, key);
 //    auto kmerrc = -kmer;
 //    auto keyrc = kmerrc.val;
     auto keyrc = reverse_complement(key, k / 2);
-    h = (keyrc >> 2) & jmask;
+/*    h = (keyrc >> 2) & jmask;
     minim = minim <= h ? minim : h;
     h = (keyrc >> 4) & jmask;
     minim = minim <= h ? minim : h;
@@ -1002,14 +1000,12 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     h = (keyrc >> 26) & jmask;
     minim = minim <= h ? minim : h;
     h = (keyrc >> 28) & jmask;
-    minim = minim <= h ? minim : h;
+    minim = minim <= h ? minim : h;*/
 
-/*
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (keyrc >> s) & jmask;
         minim = minim <= h ? minim : h;
     }
-*/
     auto last = key & jmask;
     auto lastrc = (keyrc >> (k - j)) & jmask;
     last = last <= lastrc ? last : lastrc;

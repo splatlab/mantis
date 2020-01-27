@@ -81,9 +81,7 @@ private:
     spdlog::logger *logger{nullptr};
     mantis::QueryMap kmer2cidMap;
     mantis::EqMap cid2expMap;
-//    uint64_t fixed_size{0};
     std::string prefix;
-
 public:
     uint32_t queryK;
     uint32_t indexK;
@@ -114,14 +112,12 @@ public:
                                      nonstd::optional<uint64_t>& toDecode // output param.  Also decode these
                                      );
 
-    void parseKmers(std::string read, uint64_t kmer_size);
+    void parseKmers(uint32_t readId, std::string read, uint64_t kmer_size);
     void findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> &cdbg,
                                         LRUCacheMap &lru_cache,
                                         RankScores *rs,
                                         QueryStats &queryStats);
-    mantis::QueryResult convertIndexK2QueryK(std::string &read);
-
-    mantis::QueryResult getResultList();
+    mantis::QueryResults getResultList(uint64_t numQueries);
 
     void reset();
 
