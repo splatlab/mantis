@@ -387,7 +387,9 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 					kmerCount++;
 				}
 			}
-			minimizerMap[b].clear();
+			//minimizerMap[b].clear();
+			std::unordered_map<uint64_t, std::pair<colorIdType , colorIdType>> foo;
+			std::swap(foo, minimizerMap[b]);
 			b++;
 		}
 		std::cerr << "\r";
@@ -520,7 +522,9 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 						<< ". Time-stamp = " << time(nullptr) - start_time_ << ".";
 				}
 			}
-			minimizerMap[b].clear();
+//			minimizerMap[b].clear();
+			std::unordered_map<uint64_t, std::pair<colorIdType , colorIdType>> foo;
+			std::swap(foo, minimizerMap[b]);
 			b++;
 		}
 		std::cerr << "\r";
@@ -1154,8 +1158,10 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
                 }
             }
             cdbg.minimizerBorder[m] = outputCQFBlockId;
-            minimizerMap[m].clear();
-            m++;
+//            minimizerMap[m].clear();
+			std::unordered_map<uint64_t, std::pair<colorIdType , colorIdType>> foo;
+			std::swap(foo, minimizerMap[m]);
+			m++;
         }
         std::cerr << "\r";
 	}
@@ -1398,6 +1404,7 @@ template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::merge()
 {
 
+/*
     auto t_start = time(nullptr);
     console -> info ("Splitting output minimizers into blocks based on sum of the two input minimizers");
 //    divide_minimizers_into_blocks(cdbg1.minimizerCntr, cdbg2.minimizerCntr);
@@ -1471,9 +1478,10 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 //	console -> info("Merged CQF metadata:");
 //	cdbg.dbg.dump_metadata();
 
+*/
 
 	console->info("Done with cqf merge");
-//    uint64_t num_colorBuffers = 1;
+    uint64_t num_colorBuffers = 1;
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
 	MSTMerger mst(/*&cdbg.dbg, */cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");
