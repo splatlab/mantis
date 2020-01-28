@@ -213,7 +213,7 @@ namespace boomphf {
 
 
 
-	template <typename Item> class HashFunctors
+	 template <typename Item> class HashFunctors
 	{
 	public:
 

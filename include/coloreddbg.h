@@ -564,6 +564,9 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, uint8_t flags
     uint64_t count = curDbg->query(keyObj, flags);
     if (count > 0) {
         if (count != keyObj.count) {
+            std::cerr << "\nError. Kmer was already present. kmer: "
+                         << keyObj.key << " colorID: " << keyObj.count
+                         << ", old colorId: " << count << "\n";
             console->error("K-mer was already present. kmer: {} colorID: {}, old colorId: {}", keyObj.key, keyObj.count,
                            count);
             std::exit(3);
@@ -695,7 +698,7 @@ void ColoredDbg<qf_obj, key_obj>::serialize() {
 template<class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serializeCurrentCQF() {
     if (curDbg.get() == nullptr) {
-        console->error("Current DBG is null.");
+        std::cerr << "Current DBG is null.\n";
         std::exit(3);
     }
     if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
@@ -1010,11 +1013,15 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     if (minim <= first and minim <= last) {
         return std::make_pair(minim, invalid);
     } else if (first < minim and last < minim) {
-        return std::make_pair(first, last);
+        if (first < last)
+            return std::make_pair(first, last);
+        if (last < first)
+            return std::make_pair(last, first);
+        return std::make_pair(first, invalid); // first == last
     } else if (first < minim) {
         return std::make_pair(first, minim);
     } else if (last < minim) {
-        return std::make_pair(minim, last);
+        return std::make_pair(last, minim);
     }
 }
 
@@ -1178,6 +1185,11 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
             exit(1);
         }
         // we use the count to store the eqclass ids
+        /*if (last_key == 18695468993164) {
+            std::cerr << "\n\n\n\nfound it: min " << minimizer  << ", " << secondMinimizer << " block " << minimizerBlock[minimizer]
+            << " eq " << eq_id << "\n\n";
+        }*/
+
         int ret = dbgs[minimizerBlock[minimizer]]->insert(KeyObject(last_key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
         if (ret == QF_NO_SPACE) {
             // This means that auto_resize failed.
@@ -1194,6 +1206,10 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
                 exit(1);
             }
             // we use the count to store the eqclass ids
+            /*if (last_key == 18695468993164) {
+                std::cerr << "\n\n\n\nfound it: min " << secondMinimizer << " block " << minimizerBlock[secondMinimizer]
+                          << " eq " << eq_id << "\n\n";
+            }*/
             int ret = dbgs[minimizerBlock[secondMinimizer]]->insert(KeyObject(last_key, 0, eq_id),
                                                                      QF_NO_LOCK | QF_KEY_IS_HASH);
             if (ret == QF_NO_SPACE) {
