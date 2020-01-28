@@ -372,7 +372,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
                         inobjects[0].obj->keybits(),
                         cqfs[0].hash_mode(),
                         inobjects[0].obj->seed(),
-                        blockKmerCount.size(), MANTIS_DBG_ON_DISK);
+                        blockKmerCount.size(), MANTIS_DBG_IN_MEMORY);
 
     // Sort equivalence classes based on their abundances.
     std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;

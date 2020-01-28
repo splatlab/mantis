@@ -279,7 +279,7 @@ public:
 
         minlen = other.minlen;
         minimizerCntr = other.minimizerCntr;
-        minimizerBorder = other.minimizerBorder;
+        minimizerBlock = other.minimizerBlock;
         colorClassPerBuffer = other.colorClassPerBuffer;
         notSorted_eq_id = other.notSorted_eq_id;
         numEqClassBVs = other.numEqClassBVs;
@@ -297,7 +297,7 @@ public:
     }
 
     std::vector<uint64_t> minimizerCntr;
-    std::vector<uint64_t> minimizerBorder;
+    std::vector<uint64_t> minimizerBlock;
 
 private:
     // returns true if adding this k-mer increased the number of equivalence
@@ -719,8 +719,8 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
     minfile.close();
 
     minfile.open(prefix + mantis::MINIMIZER_BOUNDARY, std::ios::binary);
-    minfile.write(reinterpret_cast<char *>(minimizerBorder.data()),
-                  minimizerBorder.size() * sizeof(typename decltype(minimizerBorder)::value_type));
+    minfile.write(reinterpret_cast<char *>(minimizerBlock.data()),
+                  minimizerBlock.size() * sizeof(typename decltype(minimizerBlock)::value_type));
     minfile.close();
     // serialize the bv buffer last time if needed
     // if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
@@ -765,13 +765,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // split kmers based on minimizers into blocks
     for (auto k : kmers) {
         auto minimizers = findMinimizer(k, ksize);
-        if (minimizers.first > minimizerBorder.size()) {
-            std::cerr << "\n\ncase1 " << minimizers.first << " " << minimizerBorder.size() << "\n\n";
-        } else if (minimizerBorder[minimizers.first] > blockKmers.size()) {
-            std::cerr << "\n\ncase2 " << minimizers.first << " " << minimizerBorder.size() << " "
-                      << minimizerBorder[minimizers.first] << " " << blockKmers.size() << "\n\n";
-        }
-        blockKmers[minimizerBorder[minimizers.first]].push_back(k);
+        blockKmers[minimizerBlock[minimizers.first]].push_back(k);
     }
 
     // go block by block and query kmers
@@ -823,7 +817,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(std::unordered_map<mantis::KmerHash, u
     // split kmers based on minimizers into blocks
     for (auto &kv : uniqueKmers) {
         auto minimizers = findMinimizer(kv.first, ksize); //assuming not hashed
-        blockKmers[minimizerBorder[minimizers.first]].insert(kv);
+        blockKmers[minimizerBlock[minimizers.first]].insert(kv);
     }
 
     // go block by block and query kmers
@@ -1030,9 +1024,8 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
 //    typename CQF<key_obj>::Iterator walk_behind_iterator;
 
     uint64_t duplicated_kmers{0};
-    minimizerCntr.resize(1ULL << (minlen * 2)); // does it also zero out the cells?
-    minimizerBorder.resize(1ULL << (minlen * 2)); // does it also zero out the cells?
-
+    minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+    minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
     uint64_t counter = 0;
     Minheap_PQ<key_obj> minheap;
 
@@ -1106,7 +1099,7 @@ std::vector<uint64_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
     uint64_t blockCnt{minimizerCntr[0]}, block{0};
     std::vector<uint64_t> blockKmerCount;
     for (auto i = 1; i < minimizerCntr.size(); i++) {
-        minimizerBorder[i - 1] = block;
+        minimizerBlock[i - 1] = block;
         if ((blockCnt + minimizerCntr[i]) > block_kmer_threshold) {
 //            std::cerr << "minimizer " << i-1 << " block " << block << "\n";
             block++;
@@ -1115,7 +1108,7 @@ std::vector<uint64_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
         }
         blockCnt += minimizerCntr[i];
     }
-    minimizerBorder[minimizerBorder.size() - 1] = block;
+    minimizerBlock[minimizerBlock.size() - 1] = block;
     if (blockCnt != 0) {
         blockKmerCount.push_back(blockCnt);
     }
@@ -1178,30 +1171,30 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         }
 
         // check: the k-mer should not already be present.
-        uint64_t count = dbgs[minimizerBorder[minimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
+        uint64_t count = dbgs[minimizerBlock[minimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                 QF_KEY_IS_HASH);
         if (count > 0) {
             console->error("K-mer was already present. kmer: {} colorID: {}", last_key, count);
             exit(1);
         }
         // we use the count to store the eqclass ids
-        int ret = dbgs[minimizerBorder[minimizer]]->insert(KeyObject(last_key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
+        int ret = dbgs[minimizerBlock[minimizer]]->insert(KeyObject(last_key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
         if (ret == QF_NO_SPACE) {
             // This means that auto_resize failed.
             console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
             exit(1);
         }
 
-        if (secondMinimizer != invalid and minimizerBorder[secondMinimizer] != minimizerBorder[minimizer]) {
+        if (secondMinimizer != invalid and minimizerBlock[secondMinimizer] != minimizerBlock[minimizer]) {
             double_inserted_kmers++;
-            uint64_t count = dbgs[minimizerBorder[secondMinimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
+            uint64_t count = dbgs[minimizerBlock[secondMinimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                           QF_KEY_IS_HASH);
             if (count > 0) {
                 console->error("K-mer was already present. kmer: {} colorID: {}", last_key, count);
                 exit(1);
             }
             // we use the count to store the eqclass ids
-            int ret = dbgs[minimizerBorder[secondMinimizer]]->insert(KeyObject(last_key, 0, eq_id),
+            int ret = dbgs[minimizerBlock[secondMinimizer]]->insert(KeyObject(last_key, 0, eq_id),
                                                                      QF_NO_LOCK | QF_KEY_IS_HASH);
             if (ret == QF_NO_SPACE) {
                 // This means that auto_resize failed.
@@ -1259,6 +1252,10 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
         exit(EXIT_FAILURE);
     }
     dbg.set_auto_resize();
+
+    minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+    minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+
 }
 
 template<class qf_obj, class key_obj>
@@ -1311,6 +1308,10 @@ sample_file, int flag) : bv_buffer(),
     numEqClassBVs = colorClassPerBuffer;
 
     sampleid.close();
+
+    minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+    minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+
 }
 
 template<typename qf_obj, typename key_obj>
@@ -1381,7 +1382,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     std::string sampleListFile(dir + mantis::SAMPLEID_FILE);
     std::string minimizersFile(dir + mantis::MINIMIZER_FREQ);
     minimizerCntr.resize(1ULL << (minlen * 2));
-    minimizerBorder.resize(1ULL << (minlen * 2));
+    minimizerBlock.resize(1ULL << (minlen * 2));
 
     std::cerr << "Loading minimizer blocks\n";
     std::ifstream minimizerBlocks(minimizersFile);
@@ -1389,17 +1390,17 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
                          minimizerCntr.size() * sizeof(typename decltype(minimizerCntr)::value_type));
     minimizerBlocks.close();
     minimizerBlocks.open(dir + mantis::MINIMIZER_BOUNDARY);
-    minimizerBlocks.read(reinterpret_cast<char *>(minimizerBorder.data()),
-                         minimizerBorder.size() * sizeof(typename decltype(minimizerBorder)::value_type));
+    minimizerBlocks.read(reinterpret_cast<char *>(minimizerBlock.data()),
+                         minimizerBlock.size() * sizeof(typename decltype(minimizerBlock)::value_type));
     minimizerBlocks.close();
 
     uint64_t curBlock = 0;
     uint64_t min = 0, lastExistingMin{invalid};
-    for (uint64_t i = 0; i < minimizerBorder.size(); i++) {
-        if (curBlock != minimizerBorder[i]) {
+    for (uint64_t i = 0; i < minimizerBlock.size(); i++) {
+        if (curBlock != minimizerBlock[i]) {
             minmaxMinimizer.push_back(std::make_pair(min, i - 1));
             min = i;
-            curBlock = minimizerBorder[i];
+            curBlock = minimizerBlock[i];
         }
         if (minimizerCntr[i]) {
             lastExistingMin = i;
@@ -1489,6 +1490,9 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
     notSorted_eq_id = colorClassPerBuffer;
     numEqClassBVs = colorClassPerBuffer;
 
+    minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+    minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+
     // Construct the sample-id list.
     concat_sample_id_maps(cdbg1, cdbg2);
 }
@@ -1502,6 +1506,10 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t nqf) :
 
     bv_buffer = BitVector(colorClassPerBuffer * num_samples);
     first_bv_buffer = BitVector(colorClassPerBuffer * num_samples);
+
+    minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+    minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
+
 }
 
 template<class qf_obj, class key_obj>

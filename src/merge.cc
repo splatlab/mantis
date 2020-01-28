@@ -160,7 +160,6 @@ int merge_main(MergeOpts &opt)
 	merger.set_console(console);
 	merger.set_thread_count(opt.threadCount);
 
-//	merger.divide_minimizers_into_blocks();
 	merger.merge();
 
 	return EXIT_SUCCESS;

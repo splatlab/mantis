@@ -131,7 +131,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     // split kmers based on minimizers into blocks
     for (auto kv : kmer2cidMap) {
         auto minimizers = cdbg.findMinimizer(kv.first, ksize); //assuming not hashed
-        blockKmers[cdbg.minimizerBorder[minimizers.first]].insert(kv.first);
+        blockKmers[cdbg.minimizerBlock[minimizers.first]].insert(kv.first);
     }
 
     // go block by block and query kmers
