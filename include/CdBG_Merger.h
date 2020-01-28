@@ -41,7 +41,7 @@ class CdBG_Merger
 		const static uint64_t ITERATOR_WINDOW_SIZE = 4096;
 
 		// Count of popular color-id pairs to be sampled
-		const static uint64_t SAMPLE_PAIR_COUNT = std::min((uint64_t)1000000, mantis::NUM_BV_BUFFER);
+//		const static uint64_t SAMPLE_PAIR_COUNT = std::min((uint64_t)1000000, mantis::NUM_BV_BUFFER);
 
 		// Name of the temporary working directory at disk; will be present
 		// temporarily inside the output directory.
@@ -349,9 +349,11 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 {
 	auto t_start = time(nullptr);
 
-	uint64_t sampleCount = SAMPLE_PAIR_COUNT;
-	console -> info("Sampling {} most-abundant color-id pairs from the first {} kmers. Time-stamp = {}.",
-					sampleCount, sampleKmerCount, time(nullptr) - start_time_);
+//	uint64_t sampleCount = SAMPLE_PAIR_COUNT;
+	console -> info("Sampling most-abundant color-id pairs from kmers in the blocks of CQF "
+				 "so that we see at least {} kmers. "
+				 "Time-stamp = {}.",
+					sampleKmerCount, time(nullptr) - start_time_);
 
 	// force currentCQFBlock to get loaded into memory
 	cdbg1.replaceCQFInMemory(invalid);
@@ -638,7 +640,7 @@ template <typename qf_obj, typename key_obj>
 uint64_t CdBG_Merger<qf_obj, key_obj>::
 	get_max_sort_memory()
 {
-	uint64_t bvBuffMemory = mantis::NUM_BV_BUFFER * cdbg.num_samples / 8;
+	uint64_t bvBuffMemory = mantis::BV_BUF_LEN;// * cdbg.num_samples / 8;
 	uint64_t maxRRR1size = 0, maxRRR2size = 0;
 
 	// File-size calculation reference:
@@ -1033,8 +1035,8 @@ reqBucket2 != currBucket2)
 template <class qf_obj, class key_obj>
 void CdBG_Merger<qf_obj, key_obj>:: bv_buffer_serialize(uint64_t colorClsCount)
 {
-	if (colorClsCount % mantis::NUM_BV_BUFFER > 0)
-		cdbg.bv_buffer.resize((colorClsCount % mantis::NUM_BV_BUFFER) * cdbg.num_samples);
+	if (colorClsCount % numCCPerBuffer > 0)
+		cdbg.bv_buffer.resize((colorClsCount % numCCPerBuffer) * cdbg.num_samples);
 	
 	BitVectorRRR final_com_bv(cdbg.bv_buffer);
 	std::string bv_file(cdbg.prefix + std::to_string(cdbg.num_serializations) + "_" + mantis::EQCLASS_FILE);
@@ -1404,7 +1406,6 @@ template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>::merge()
 {
 
-/*
     auto t_start = time(nullptr);
     console -> info ("Splitting output minimizers into blocks based on sum of the two input minimizers");
 //    divide_minimizers_into_blocks(cdbg1.minimizerCntr, cdbg2.minimizerCntr);
@@ -1478,10 +1479,9 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 //	console -> info("Merged CQF metadata:");
 //	cdbg.dbg.dump_metadata();
 
-*/
 
 	console->info("Done with cqf merge");
-    uint64_t num_colorBuffers = 1;
+//    uint64_t num_colorBuffers = 1;
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
 	MSTMerger mst(/*&cdbg.dbg, */cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");

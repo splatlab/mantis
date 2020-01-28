@@ -250,10 +250,11 @@ int validate_merge_main(ValidateMergeOpts &opt)
 
 
 		uint64_t sampleCount = mergedCdBG.get_num_samples();
+		uint64_t numCCPerBuffer = mantis::BV_BUF_LEN / sampleCount;
 	
 		// Fetch the set of samples in the merged CdBG containing the k-mer of this iteration (entry_m.key).
-		uint64_t bucketIdx_m = (eqID_m - 1) / mantis::NUM_BV_BUFFER;
-		uint64_t offset_m = ((eqID_m - 1) % mantis::NUM_BV_BUFFER) * sampleCount;
+		uint64_t bucketIdx_m = (eqID_m - 1) / numCCPerBuffer;
+		uint64_t offset_m = ((eqID_m - 1) % numCCPerBuffer) * sampleCount;
 
 		for(uint32_t wordCount = 0; wordCount <= sampleCount / wordLen; ++wordCount)
 		{
@@ -269,8 +270,8 @@ int validate_merge_main(ValidateMergeOpts &opt)
 
 
 		// Fetch the set of samples in the correct CdBG containing the k-mer of this iteration (entry_c.key).
-		uint64_t bucketIdx_c = (eqID_c - 1) / mantis::NUM_BV_BUFFER;
-		uint64_t offset_c = ((eqID_c - 1) % mantis::NUM_BV_BUFFER) * sampleCount;
+		uint64_t bucketIdx_c = (eqID_c - 1) / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
+		uint64_t offset_c = ((eqID_c - 1) % numCCPerBuffer) * sampleCount;
 
 		for(uint32_t wordCount = 0; wordCount <= sampleCount / wordLen; ++wordCount)
 		{

@@ -80,7 +80,7 @@ MSTMerger::MSTMerger(/*CQF<KeyObject> *cqfIn, */std::string prefixIn, spdlog::lo
     secondMantisSamples = numSamples - numOfFirstMantisSamples;
     sampleid.close();
 
-    numCCPerBuffer = mantis::NUM_BV_BUFFER / numSamples;
+    numCCPerBuffer = mantis::BV_BUF_LEN / numSamples;
 
     logger->info("# of experiments: {}", numSamples);
     logger->info("# of threads={}, # of cc buffers={}, # of ccs per buffer={}, # of edges={}",
@@ -200,7 +200,11 @@ bool MSTMerger::buildEdgeSets() {
                                        return e1.n1 == e2.n1 and e1.n2 == e2.n2;
                                    }), edgeList.end());
         for (auto &edge: edgeList) {
-//            std::cerr << edge.n1 << " " << edge.n2 << " " << getBucketId(edge.n1, edge.n2) << " " << edgeBucketList.size() << "\n";
+            if (getBucketId(edge.n1, edge.n2) >= edgeBucketList.size()) {
+                std::cerr << edge.n1 << " " << edge.n2 << " " << getBucketId(edge.n1, edge.n2) << " "
+                          << edgeBucketList.size() << "\n";
+                std::exit(3);
+            }
             edgeBucketList[getBucketId(edge.n1, edge.n2)].push_back(edge);
         }
     }

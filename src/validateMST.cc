@@ -40,8 +40,9 @@ std::vector<uint64_t> buildColor(eqvec &bvs,
     std::vector<uint64_t> eq;
     eq.reserve(num_samples);
     uint64_t i{0}, bitcnt{0};
-    uint64_t idx = eqid / mantis::NUM_BV_BUFFER;
-    uint64_t offset = eqid % mantis::NUM_BV_BUFFER;
+    uint64_t numCCPerBuffer = mantis::BV_BUF_LEN / num_samples;
+    uint64_t idx = eqid / numCCPerBuffer;
+    uint64_t offset = eqid % numCCPerBuffer;
 //std::cerr << eqid << " " << num_samples << " " << idx << " " << offset << "\n";
     while (i<num_samples) {
         bitcnt = std::min(num_samples - i, (uint64_t) 64);

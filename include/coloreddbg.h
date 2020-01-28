@@ -337,9 +337,9 @@ private:
     uint64_t minlen{8};
 
     // Maximum number of color-class bitvectors that can be present at the bitvector buffer.
-    uint64_t colorClassPerBuffer{mantis::NUM_BV_BUFFER};
-    uint64_t notSorted_eq_id{colorClassPerBuffer};
-    uint64_t numEqClassBVs{colorClassPerBuffer};
+    uint64_t colorClassPerBuffer{0};
+    uint64_t notSorted_eq_id{0};
+    uint64_t numEqClassBVs{0};
     std::unique_ptr<CQF<key_obj>> curDbg;
     uint64_t currentBlock{invalid};
     std::vector<std::unique_ptr<CQF<key_obj>>> dbgs;
