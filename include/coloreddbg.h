@@ -1481,11 +1481,16 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
         for (auto idFilePair : sortedFiles)
             eqClsFiles.push_back(idFilePair.second);
     } else { // since it's none we won't load the color info, but still need to get the eqClsFiles count
-        sdsl::bit_vector bbv;
-        sdsl::load_from_file(bbv, dir + mantis::BOUNDARYBV_FILE);
+        sdsl::int_vector<> parentbv;
+        sdsl::load_from_file(parentbv, dir + mantis::PARENTBV_FILE);
         eqClsFiles.resize(static_cast<uint64_t >(std::ceil(
-                static_cast<double>(bbv.size()) / static_cast<double>(colorClassPerBuffer))));
-        bbv.resize(0);
+                static_cast<double>(parentbv.size()) / static_cast<double>(colorClassPerBuffer)) + 1));
+        std::cerr << "Find # of color classes based on the parentbv size.\n"
+                     << "\tfile: " << dir + mantis::PARENTBV_FILE << "\n"
+                     <<"\tparentbv.size=" <<parentbv.size()
+                     <<", colorClassPerBuffer=" << colorClassPerBuffer
+                     << ", eqClsFile count=" << eqClsFiles.size() << "\n";
+        parentbv.resize(0);
     }
     num_serializations = eqClsFiles.size();
 
