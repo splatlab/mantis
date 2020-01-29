@@ -122,6 +122,8 @@ class CdBG_Merger
 		std::vector<std::vector<boophf_t *>> MPH;
 
 		uint64_t numCCPerBuffer{0};
+		uint64_t numCCPerBuffer1{0};
+		uint64_t numCCPerBuffer2{0};
 
         // Advances the CQF iterator 'it', with keeping track of the 'step' count; and
 		// fetches the next CQF-entry into 'cqfEntry' if the iterator 'it' is advanced
@@ -242,7 +244,8 @@ CdBG_Merger<qf_obj, key_obj>::
 	}
 	
     cdbg = cdbgOut;
-
+	numCCPerBuffer1 = mantis::BV_BUF_LEN / cdbg1.num_samples;
+	numCCPerBuffer2 = mantis::BV_BUF_LEN / cdbg2.num_samples;
 	numCCPerBuffer = mantis::BV_BUF_LEN / (cdbg1.num_samples + cdbg2.num_samples);
 	kbits = cdbg1.get_current_cqf()->keybits();
 	kmerMask = (1ULL << kbits) - 1;
@@ -344,14 +347,14 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 		curBlock++;
 		for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
 			// merge the two keys from cqf1 and cqf2
-			std::sort(minimizerKeyColorList[0][b].begin(), minimizerKeyColorList[0][b].end(),
+			/*std::sort(minimizerKeyColorList[0][b].begin(), minimizerKeyColorList[0][b].end(),
 					  [](auto &v1, auto &v2) {
 						  return v1.first < v2.first;
 					  });
 			std::sort(minimizerKeyColorList[1][b].begin(), minimizerKeyColorList[1][b].end(),
 					  [](auto &v1, auto &v2) {
 						  return v1.first < v2.first;
-					  });
+					  });*/
 			auto it0 = minimizerKeyColorList[0][b].begin();
 			auto it1 = minimizerKeyColorList[1][b].begin();
 			if (b % 500 == 0)
@@ -515,14 +518,14 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 //		uint64_t b = minMinimizer;
 		for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
 			// merge the two keys from cqf1 and cqf2
-			std::sort(minimizerKeyColorList[0][b].begin(), minimizerKeyColorList[0][b].end(),
+			/*std::sort(minimizerKeyColorList[0][b].begin(), minimizerKeyColorList[0][b].end(),
 					[](auto &v1, auto &v2) {
 				return v1.first < v2.first;
 			});
 			std::sort(minimizerKeyColorList[1][b].begin(), minimizerKeyColorList[1][b].end(),
 					  [](auto &v1, auto &v2) {
 						  return v1.first < v2.first;
-					  });
+					  });*/
 			auto it0 = minimizerKeyColorList[0][b].begin();
 			auto it1 = minimizerKeyColorList[1][b].begin();
 			if (b % 500 == 0)
@@ -616,8 +619,8 @@ void CdBG_Merger<qf_obj, key_obj>::
 {
 	// TODO: Add faster file-write mechanism.
 
-	const uint64_t row = (colorID1 ? (colorID1 - 1) / numCCPerBuffer + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
-					col = (colorID2 ? (colorID2 - 1) / numCCPerBuffer + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
+	const uint64_t row = (colorID1 ? (colorID1 - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
+					col = (colorID2 ? (colorID2 - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
 	diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
 }
@@ -926,14 +929,14 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 //        The output block kmer count should be left for the next set of input blocks
 		for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
 			// merge the two keys from cqf1 and cqf2
-			std::sort(minimizerKeyColorList[0][b].begin(), minimizerKeyColorList[0][b].end(),
+			/*std::sort(minimizerKeyColorList[0][b].begin(), minimizerKeyColorList[0][b].end(),
 					  [](auto &v1, auto &v2) {
 						  return v1.first < v2.first;
 					  });
 			std::sort(minimizerKeyColorList[1][b].begin(), minimizerKeyColorList[1][b].end(),
 					  [](auto &v1, auto &v2) {
 						  return v1.first < v2.first;
-					  });
+					  });*/
 			auto it0 = minimizerKeyColorList[0][b].begin();
 			auto it1 = minimizerKeyColorList[1][b].begin();
 			if (b % 500 == 0)
@@ -1019,8 +1022,8 @@ uint64_t CdBG_Merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 	if(it != sampledPairs.end())
 		return it -> second;
 
-	const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
-					col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
+	const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
+					col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 	if (row >= MPH.size() or col >= MPH[row].size())
 		std::cerr << row << " " << col << " " << idPair.first << " " << idPair.second << "\n";
 	return cumulativeBucketSize[row][col] + MPH[row][col]->lookup(idPair) + 1;
