@@ -285,13 +285,13 @@ public:
         numEqClassBVs = other.numEqClassBVs;
         eqClsFiles = other.eqClsFiles;
         minmaxMinimizer = other.minmaxMinimizer;
-        if (other.curDbg.get() != nullptr) {
+        if (other.curDbg) {
             curDbg.reset(new CQF<key_obj>(*other.curDbg));
         }
         currentBlock = other.currentBlock;
         dbgs.resize(other.dbgs.size());
         for (auto i = 0; i < other.dbgs.size(); i++) {
-            dbgs[i].reset(new CQF<key_obj>(*other.dbgs[i]));
+            dbgs[i] = other.dbgs[i];
         }
         return *this;
     }
@@ -342,7 +342,7 @@ private:
     uint64_t numEqClassBVs{0};
     std::unique_ptr<CQF<key_obj>> curDbg;
     uint64_t currentBlock{invalid};
-    std::vector<std::unique_ptr<CQF<key_obj>>> dbgs;
+    std::vector<CQF<key_obj>> dbgs;
     std::vector<std::pair<uint64_t, uint64_t>> minmaxMinimizer;
 
     // Color-class bitvector file names for this CdBG.
@@ -710,7 +710,7 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
     for (auto i = 0; i < dbgs.size(); i++) {
         // serialize the CQF
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
-            dbgs[i]->serialize(prefix + std::to_string(i) + "_" + mantis::CQF_FILE);
+            dbgs[i].serialize(prefix + std::to_string(i) + "_" + mantis::CQF_FILE);
         // No need
         // CQF has a destructor now that calls close(). The unique_ptr calls the destructor at the end of the program
 //        else
@@ -1178,7 +1178,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         }
 
         // check: the k-mer should not already be present.
-        uint64_t count = dbgs[minimizerBlock[minimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
+        uint64_t count = dbgs[minimizerBlock[minimizer]].query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                 QF_KEY_IS_HASH);
         if (count > 0) {
             console->error("K-mer was already present. kmer: {} colorID: {}", last_key, count);
@@ -1190,7 +1190,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
             << " eq " << eq_id << "\n\n";
         }*/
 
-        int ret = dbgs[minimizerBlock[minimizer]]->insert(KeyObject(last_key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
+        int ret = dbgs[minimizerBlock[minimizer]].insert(KeyObject(last_key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
         if (ret == QF_NO_SPACE) {
             // This means that auto_resize failed.
             console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
@@ -1199,7 +1199,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
 
         if (secondMinimizer != invalid and minimizerBlock[secondMinimizer] != minimizerBlock[minimizer]) {
             double_inserted_kmers++;
-            uint64_t count = dbgs[minimizerBlock[secondMinimizer]]->query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
+            uint64_t count = dbgs[minimizerBlock[secondMinimizer]].query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                           QF_KEY_IS_HASH);
             if (count > 0) {
                 console->error("K-mer was already present. kmer: {} colorID: {}", last_key, count);
@@ -1210,7 +1210,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
                 std::cerr << "\n\n\n\nfound it: min " << secondMinimizer << " block " << minimizerBlock[secondMinimizer]
                           << " eq " << eq_id << "\n\n";
             }*/
-            int ret = dbgs[minimizerBlock[secondMinimizer]]->insert(KeyObject(last_key, 0, eq_id),
+            int ret = dbgs[minimizerBlock[secondMinimizer]].insert(KeyObject(last_key, 0, eq_id),
                                                                      QF_NO_LOCK | QF_KEY_IS_HASH);
             if (ret == QF_NO_SPACE) {
                 // This means that auto_resize failed.
@@ -1541,18 +1541,18 @@ void ColoredDbg<qf_obj, key_obj>::initializeCQFs(std::string &prefixIn, std::vec
 //    dbgs.resize(cnt);
     for (auto i = 0; i < cnt; i++) {
         if (flag == MANTIS_DBG_IN_MEMORY) {
-            dbgs.push_back(std::unique_ptr<CQF<key_obj>>(new CQF<key_obj>(qbits[i], key_bits, hashmode, seed)));
+            dbgs.emplace_back(qbits[i], key_bits, hashmode, seed);
             dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
         } else if (flag == MANTIS_DBG_ON_DISK) {
-            dbgs.push_back(std::unique_ptr<CQF<key_obj>>(new CQF<key_obj>(qbits[i], key_bits, hashmode, seed,
+            dbgs.emplace_back(qbits[i], key_bits, hashmode, seed,
                                                                           prefix + std::to_string(i) + "_" +
-                                                                          mantis::CQF_FILE)));
+                                                                          mantis::CQF_FILE);
             dbg_alloc_flag = MANTIS_DBG_ON_DISK;
         } else {
             ERROR("Wrong Mantis alloc mode.");
             exit(EXIT_FAILURE);
         }
-        dbgs[i]->set_auto_resize();
+        dbgs[i].set_auto_resize();
     }
 }
 

@@ -82,6 +82,11 @@ class CQF {
 		}
 
 		~CQF() {
+			std::cerr << "destructor\n";
+			std::cerr << std::endl;
+			if (cqf.runtimedata != nullptr and cqf.runtimedata->f_info.filepath != nullptr) {
+				std::cerr << cqf.runtimedata->f_info.filepath << "\n";
+			}
 			free();
 			close();
 		}
@@ -111,11 +116,13 @@ class CQF {
 
 		void free() {
 			if (inMem) {
+				std::cerr << "free\n";
 				qf_free(&cqf);
 			}
 		}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
 		void close() {
 			if (is_filebased and not inMem) {
+				std::cerr << "close\n";
 				qf_closefile(&cqf);
 			}
 		}

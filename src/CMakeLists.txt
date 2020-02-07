@@ -23,8 +23,8 @@ add_library(mantis_core STATIC
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
 set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")
-set(MANTIS_RELEASE_CFLAGS "${MANTIS_C_FLAGS};-O3")
-set(MANTIS_RELEASE_CXXFLAGS "${MANTIS_CXX_FLAGS};-O3;-funroll-loops")
+set(MANTIS_RELEASE_CFLAGS "${MANTIS_C_FLAGS};-O3;-fsanitize=address")
+set(MANTIS_RELEASE_CXXFLAGS "${MANTIS_CXX_FLAGS};-O3;-funroll-loops;-fsanitize=address")
 
 target_include_directories(mantis_core PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_compile_options(mantis_core PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")
@@ -39,6 +39,7 @@ target_link_libraries(mantis_core
   m
   z
   rt
+  asan
   sdsl)
 
 # The driver program is `mantis`, which is a front-end
