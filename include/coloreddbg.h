@@ -1183,7 +1183,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         uint64_t count = dbgs[minimizerBlock[minimizer]].query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                 QF_KEY_IS_HASH);
         if (count > 0) {
-            console->error("K-mer was already present. kmer: {} colorID: {}", last_key, count);
+            console->error("{}th K-mer was already present (first minimizer). kmer: {} colorID: {}", counter, last_key, count, minimizer);
             exit(1);
         }
         // we use the count to store the eqclass ids
@@ -1204,7 +1204,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
             uint64_t count = dbgs[minimizerBlock[secondMinimizer]].query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                           QF_KEY_IS_HASH);
             if (count > 0) {
-                console->error("K-mer was already present. kmer: {} colorID: {}", last_key, count);
+                console->error("{}th K-mer was already present (second minimizer). kmer: {} colorID: {} min: {}", counter, last_key, count, secondMinimizer);
                 exit(1);
             }
             // we use the count to store the eqclass ids
