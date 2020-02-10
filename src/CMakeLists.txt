@@ -21,8 +21,8 @@ add_library(mantis_core STATIC
   		gqf/gqf_file.c
   		gqf/hashutil.c)
 
-set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g")
-set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g")
+set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g;-fsanitize=address")
+set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g;-fsanitize=address")
 set(MANTIS_RELEASE_CFLAGS "${MANTIS_C_FLAGS};-O3;-fsanitize=address")
 set(MANTIS_RELEASE_CXXFLAGS "${MANTIS_CXX_FLAGS};-O3;-funroll-loops;-fsanitize=address")
 

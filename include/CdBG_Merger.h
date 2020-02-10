@@ -21,8 +21,8 @@ template <class qf_obj, class key_obj>
 class CdBG_Merger
 {
 	public:
-        CdBG_Merger(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                    ColoredDbg<qf_obj, key_obj> &cdbgOut);
+        CdBG_Merger(ColoredDbg<qf_obj, key_obj> &&cdbg1, ColoredDbg<qf_obj, key_obj> &&cdbg2,
+                    ColoredDbg<qf_obj, key_obj> &&cdbgOut);
 
         void set_console(spdlog::logger* c) { console = c; }
 
@@ -231,21 +231,21 @@ class CdBG_Merger
 
 template<typename qf_obj, typename key_obj>
 CdBG_Merger<qf_obj, key_obj>::
-    CdBG_Merger(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                ColoredDbg<qf_obj, key_obj> &cdbgOut)
+    CdBG_Merger(ColoredDbg<qf_obj, key_obj> &&cdbg1, ColoredDbg<qf_obj, key_obj> &&cdbg2,
+                ColoredDbg<qf_obj, key_obj> &&cdbgOut)
 {
     start_time_ = std::time(nullptr);
 
 	if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count())
-		this -> cdbg1 = cdbg1, this -> cdbg2 = cdbg2;
+		this -> cdbg1 = std::move(cdbg1), this -> cdbg2 = std::move(cdbg2);
 	else
 	{
-		this -> cdbg1 = cdbg2, this -> cdbg2 = cdbg1;
+		this -> cdbg1 = std::move(cdbg2), this -> cdbg2 = std::move(cdbg1);
 
 //		console -> info("Mantis indices are swapped.");
 	}
 	
-    cdbg = cdbgOut;
+    cdbg = std::move(cdbgOut);
 	numCCPerBuffer1 = mantis::BV_BUF_LEN / cdbg1.num_samples;
 	numCCPerBuffer2 = mantis::BV_BUF_LEN / cdbg2.num_samples;
 	numCCPerBuffer = mantis::BV_BUF_LEN / (cdbg1.num_samples + cdbg2.num_samples);

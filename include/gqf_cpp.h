@@ -63,14 +63,18 @@ class CQF {
 		CQF(std::string& filename, enum readmode flag);
 //		CQF(const CQF<key_obj>& copy_cqf) = delete;
 
-		CQF(const CQF<key_obj>& copy_cqf) {
-			memcpy(reinterpret_cast<void*>(&cqf),
-				   reinterpret_cast<void*>(const_cast<quotient_filter*>(&copy_cqf.cqf)), sizeof(QF));
+		CQF(const CQF<key_obj>& copy_cqf) = delete;
+		/*{
+            std::cerr << "\n\nWe're in copy\n\n";
+            qf_copy(&cqf, &copy_cqf.cqf);
+//            memcpy(reinterpret_cast<void*>(&cqf),
+//				   reinterpret_cast<void*>(const_cast<quotient_filter*>(&copy_cqf.cqf)), sizeof(QF));
 			is_filebased = copy_cqf.is_filebased;
 			inMem = copy_cqf.inMem;
-		}
+		}*/
 
-		CQF(CQF<key_obj>&& other) {
+		CQF(CQF<key_obj>&& other) noexcept {
+		    std::cerr << "\n\nWe're in move\n\n";
 			memcpy(reinterpret_cast<void*>(&cqf),
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
@@ -79,6 +83,7 @@ class CQF {
 			other.cqf.metadata = nullptr;
 			other.cqf.blocks = nullptr;
 			other.is_filebased = false;
+            other.inMem = false;
 		}
 
 		~CQF() {

@@ -373,6 +373,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
                         cqfs[0].hash_mode(),
                         inobjects[0].obj->seed(),
                         blockKmerCount.size(), MANTIS_DBG_IN_MEMORY);
+    console->info("Done initializing CQFs.");
 
     // Sort equivalence classes based on their abundances.
     std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;

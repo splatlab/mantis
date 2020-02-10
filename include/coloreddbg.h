@@ -262,7 +262,7 @@ public:
 
     void initializeNewCQFBlock(uint64_t i, uint64_t key_bits, qf_hashmode hashmode, uint32_t seed);
 
-    ColoredDbg &operator=(ColoredDbg &other) {
+    ColoredDbg &operator=(ColoredDbg &&other) noexcept {
         sampleid_map = other.sampleid_map;
         eqclass_map = other.eqclass_map;
         dbg = other.dbg;
@@ -286,7 +286,7 @@ public:
         eqClsFiles = other.eqClsFiles;
         minmaxMinimizer = other.minmaxMinimizer;
         if (other.curDbg) {
-            curDbg.reset(new CQF<key_obj>(*other.curDbg));
+            curDbg = std::move(other.curDbg);//.reset(new CQF<key_obj>(std::move(*other.curDbg)));
         }
         currentBlock = other.currentBlock;
         dbgs.resize(other.dbgs.size());
@@ -1178,6 +1178,8 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         }
 
         // check: the k-mer should not already be present.
+        if (minimizerBlock[minimizer] >= 1)
+            std::cerr << minimizerBlock[minimizer] << "\n";
         uint64_t count = dbgs[minimizerBlock[minimizer]].query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                 QF_KEY_IS_HASH);
         if (count > 0) {
@@ -1538,9 +1540,11 @@ void ColoredDbg<qf_obj, key_obj>::initializeCQFs(std::string &prefixIn, std::vec
                                                  qf_hashmode hashmode, uint32_t seed,
                                                  uint64_t cnt, int flag) {
     prefix = prefixIn;
+    dbgs.reserve(cnt);
 //    dbgs.resize(cnt);
     for (auto i = 0; i < cnt; i++) {
         if (flag == MANTIS_DBG_IN_MEMORY) {
+            std::cerr << "\n\n\nInfo " << i << " " << qbits[i] << " " << key_bits << " " << hashmode << " " << seed << "\n\n\n";
             dbgs.emplace_back(qbits[i], key_bits, hashmode, seed);
             dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
         } else if (flag == MANTIS_DBG_ON_DISK) {

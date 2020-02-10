@@ -156,7 +156,7 @@ int merge_main(MergeOpts &opt)
 	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console->info("Initializing the merger.");
-	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(cdbg1, cdbg2, mergedCdBG);
+	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(std::move(cdbg1), std::move(cdbg2), std::move(mergedCdBG));
 	merger.set_console(console);
 	merger.set_thread_count(opt.threadCount);
 
