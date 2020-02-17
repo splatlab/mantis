@@ -759,8 +759,9 @@ std::vector<uint64_t>
 ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     // Find a list of eq classes and the number of kmers that belong those eq classes.
     if (not curDbg) {
-        console->error("No dbg has been loaded into memory.");
-        std::exit(3);
+        replaceCQFInMemory(0);
+//        console->error("No dbg has been loaded into memory.");
+//        std::exit(3);
     }
     std::unordered_map<uint64_t, uint64_t> query_eqclass_map;
     uint64_t ksize{curDbg->keybits()}, numBlocks{minmaxMinimizer.size()};
@@ -784,7 +785,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
             }
         }
     }
-    replaceCQFInMemory(invalid);
+//    replaceCQFInMemory(invalid);
 
     std::vector<uint64_t> sample_map(num_samples, 0);
     for (auto &it : query_eqclass_map) {
