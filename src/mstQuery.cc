@@ -92,8 +92,12 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         uint64_t wrd{0};
         auto start = f;
         do {
-            wrd = bbv.get_int(start, 64);
-            for (uint64_t j = 0; j < 64; j++) {
+            /*if (bbv.size()-start < 64) {
+                std::cerr << "\n\nhappened: " << bbv.size() << " " << start << " " << bbv[bbv.size()-1] << "\n";
+            }*/
+            uint64_t wrdLen = std::min(static_cast<uint64_t >(64), bbv.size()-start);
+            wrd = bbv.get_int(start, wrdLen);
+            for (uint64_t j = 0; j < wrdLen; j++) {
                 flips[deltabv[start + j]] ^= 0x01;
                 weight++;
                 if ((wrd >> j) & 0x01) {
@@ -101,7 +105,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
                     break;
                 }
             }
-            start += 64;
+            start += wrdLen;
         } while (!found);
     }
 

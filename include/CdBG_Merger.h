@@ -1005,6 +1005,8 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
 					kmerCount++;
 					it1++;
+					if(colorId <= sampledPairs.size())
+						foundAbundantId++;
 				}
 			} else {
 				while (it0 != minimizerKeyColorList[0][b]->end()) {
@@ -1013,6 +1015,8 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
 					kmerCount++;
 					it0++;
+					if(colorId <= sampledPairs.size())
+						foundAbundantId++;
 				}
 			}
 			cdbg.minimizerBlock[b] = outputCQFBlockId;
@@ -1046,8 +1050,9 @@ template <typename qf_obj, typename key_obj>
 uint64_t CdBG_Merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, uint64_t> &idPair)
 {
 	auto it = sampledPairs.find(idPair);
-	if(it != sampledPairs.end())
-		return it -> second;
+	if(it != sampledPairs.end()) {
+		return it->second;
+	}
 
 	const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
 					col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
@@ -1318,12 +1323,12 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 	console -> info("Merge completed.");
 
-	console -> info("Input colored dBG 1: over {} samples and has {} k-mers and {} color-classes.",
-					cdbg1.get_num_samples(), cdbg1.dbg.dist_elts(), colorCount1);
-	console -> info("Input colored dBG 2: over {} samples and has {} k-mers and {} color-classes.",
-					cdbg2.get_num_samples(), cdbg2.dbg.dist_elts(), colorCount2);
-	console -> info("Merged colored dBG : over {} samples and has {} k-mers and {} color-classes.",
-					cdbg.get_num_samples(), cdbg.dbg.dist_elts(), colorClassCount);
+//	console -> info("Input colored dBG 1: over {} samples and has {} k-mers and {} color-classes.",
+//					cdbg1.get_num_samples(), cdbg1.dbg.dist_elts(), colorCount1);
+//	console -> info("Input colored dBG 2: over {} samples and has {} k-mers and {} color-classes.",
+//					cdbg2.get_num_samples(), cdbg2.dbg.dist_elts(), colorCount2);
+//	console -> info("Merged colored dBG : over {} samples and has {} k-mers and {} color-classes.",
+//					cdbg.get_num_samples(), cdbg.dbg.dist_elts(), colorClassCount);
 
 	console -> info("Total time taken = {} s.", t_end - t_start);
 

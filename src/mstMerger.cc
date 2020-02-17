@@ -391,6 +391,14 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject, edgeList);
         if (edgeList.size() >= tmpEdgeListSize/* and colorMutex.try_lock()*/) {
+            std::sort(edgeList.begin(), edgeList.end(),
+                      [](Edge &e1, Edge &e2) {
+                          return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+                      });
+            edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
+                                       [](Edge &e1, Edge &e2) {
+                                           return e1.n1 == e2.n1 and e1.n2 == e2.n2;
+                                       }), edgeList.end());
             tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
             cnt+=edgeList.size();
             edgeList.clear();
@@ -401,6 +409,14 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
             std::cerr << "\rthread " << threadId << ": Observed " << (numOfKmers + kmerCntr) / 1000000 << "M kmers and " << cnt << " edges";
         }
     }
+    std::sort(edgeList.begin(), edgeList.end(),
+              [](Edge &e1, Edge &e2) {
+                  return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+              });
+    edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
+                               [](Edge &e1, Edge &e2) {
+                                   return e1.n1 == e2.n1 and e1.n2 == e2.n2;
+                               }), edgeList.end());
     tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
     cnt+=edgeList.size();
     colorMutex.lock();
@@ -972,7 +988,7 @@ void MSTMerger::buildMSTBasedColor(uint64_t eqid,
 
 //    auto eq_ptr = lru_cache.lookup_ts(eqid);
 //    if (eq_ptr) {
-    if (fixed_cache.find(eqid) != fixed_cache.end()) {
+    if ((not fixed_cache.empty()) and fixed_cache.find(eqid) != fixed_cache.end()) {
 //        std::cerr << "happens! ";
         eq = fixed_cache[eqid];
         queryStats.cacheCntr++;
