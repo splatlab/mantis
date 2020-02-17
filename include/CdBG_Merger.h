@@ -231,16 +231,16 @@ class CdBG_Merger
 
 template<typename qf_obj, typename key_obj>
 CdBG_Merger<qf_obj, key_obj>::
-    CdBG_Merger(ColoredDbg<qf_obj, key_obj> &&cdbg1, ColoredDbg<qf_obj, key_obj> &&cdbg2,
+    CdBG_Merger(ColoredDbg<qf_obj, key_obj> &&cdbg1in, ColoredDbg<qf_obj, key_obj> &&cdbg2in,
                 ColoredDbg<qf_obj, key_obj> &&cdbgOut)
 {
     start_time_ = std::time(nullptr);
 
 	if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count())
-		this -> cdbg1 = std::move(cdbg1), this -> cdbg2 = std::move(cdbg2);
+		this -> cdbg1 = std::move(cdbg1in), this -> cdbg2 = std::move(cdbg2in);
 	else
 	{
-		this -> cdbg1 = std::move(cdbg2), this -> cdbg2 = std::move(cdbg1);
+		this -> cdbg1 = std::move(cdbg2in), this -> cdbg2 = std::move(cdbg1in);
 
 //		console -> info("Mantis indices are swapped.");
 	}
