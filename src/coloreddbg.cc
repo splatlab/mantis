@@ -363,7 +363,7 @@ int build_blockedCQF_main(BuildOpts &opt) {
         for(qbits = 0; (b >> qbits) != (uint64_t)1; qbits++);
         qbits++;
 //    qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
-        console->info("Chosen log(slots) for block {} is {}", bc++, qbits);
+        console->info("Chosen log(slots) for block {} w. cnt {} is {}", bc++, b, qbits);
         qbitsList.push_back(qbits);
     }
 

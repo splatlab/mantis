@@ -772,7 +772,9 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
     }
 
     // go block by block and query kmers
-    for (auto blockId = 0; blockId < numBlocks; blockId++) {
+    for (uint64_t blockId = 0; blockId < numBlocks; blockId++) {
+        if (blockKmers[blockId].empty())
+            continue;
         replaceCQFInMemory(blockId);
         for (auto k : blockKmers[blockId]) {
             key_obj key(k, 0, 0);
@@ -782,7 +784,7 @@ ColoredDbg<qf_obj, key_obj>::find_samples(const mantis::QuerySet &kmers) {
             }
         }
     }
-    replaceCQFInMemory(0);
+    replaceCQFInMemory(invalid);
 
     std::vector<uint64_t> sample_map(num_samples, 0);
     for (auto &it : query_eqclass_map) {
@@ -1095,7 +1097,7 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
             bv_buffer_serialize();
         }*/
     }
-    console->info("Total number of kmers enumerated: {} , duplicated kmers: {} Total time: {}",
+    console->info("Total number of kmers enumerated: {} plus duplicated kmers: {} Total time: {}",
                   counter, duplicated_kmers, time(nullptr) - start_time_);
 
     return eqclass_map;
@@ -1119,7 +1121,7 @@ std::vector<uint64_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
     if (blockCnt != 0) {
         blockKmerCount.push_back(blockCnt);
     }
-//    std::cerr << "minimizer " << minimizerCntr.size() - 1 << " block " << block << "\n";
+    console->info("Total # of blocks: {}", blockKmerCount.size());
     return blockKmerCount;
 }
 
@@ -1230,7 +1232,7 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
                           counter, time(nullptr) - start_time_);
         }
     }
-    console->info("Kmers merged: {} , double inserted kmer: {} , Total time: {}",
+    console->info("Kmers merged: {} , double inserted kmer into BLOCKS: {} , Total time: {}",
                   counter, double_inserted_kmers, time(nullptr) - start_time_);
 }
 
