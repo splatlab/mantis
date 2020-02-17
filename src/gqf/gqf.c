@@ -1650,10 +1650,8 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 #else
 	size = nblocks * (sizeof(qfblock) + QF_SLOTS_PER_BLOCK * bits_per_slot / 8);
 #endif
-	fprintf(stderr, "size== %d\n", size);
 	total_num_bytes = sizeof(qfmetadata) + size;
 	if (buffer == NULL || total_num_bytes > buffer_len) {
-		fprintf(stderr, "buffer is null. returning %d\n", total_num_bytes);
 		return total_num_bytes;
 	}
 
@@ -2377,15 +2375,13 @@ int qfi_next(QFi *qfi)
 																		rank);
 			if (next_run == 64) {
 				rank = 0;
-				block_index++;
-				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks) {
+				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks-1) {
+					block_index++;
 					next_run = bitselect(get_block(qfi->qf, block_index)->occupieds[0],
 															 rank);
-					block_index++;
-
 				}
 			}
-			if (block_index == qfi->qf->metadata->nblocks) {
+			if (block_index == qfi->qf->metadata->nblocks-1) {
 				/* set the index values to max. */
 				qfi->run = qfi->current = qfi->qf->metadata->xnslots;
 				return QFI_INVALID;
