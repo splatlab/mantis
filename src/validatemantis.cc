@@ -137,6 +137,7 @@ validate_main(ValidateOpts &opt) {
                                                                MANTIS_DBG_IN_MEMORY);*/
 
     ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(prefix, MANTIS_DBG_IN_MEMORY);
+    cdbg.set_console(console);
 
     /*console->info("Read colored dbg with {} k-mers and {} color classes",
                   cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());*/
@@ -166,7 +167,7 @@ validate_main(ValidateOpts &opt) {
                 KeyObject k(kmer, 0, 0);
                 uint64_t count = cqfs[i].query(k, 0);
                 if (count > 0) {
-                    dna::canonical_kmer ck(kmer_size, kmer);
+//                    dna::canonical_kmer ck(kmer_size, kmer);
 //                    std::cerr << "kmer: " << kmer << " " << ck.val << " " << std::string(ck) << ": " << i << ","
 //                                << inobjects[i].id << "\n";
                     fraction_present[inobjects[i].id] += 1;
@@ -185,6 +186,7 @@ validate_main(ValidateOpts &opt) {
                 //abort();
             }
         }
+
         ground_truth.push_back(fraction_present);
         cdbg_output.push_back(result);
     }
