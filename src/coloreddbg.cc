@@ -255,6 +255,11 @@ int build_blockedCQF_main(BuildOpts &opt) {
     // make the output directory if it doesn't exist
     if (!mantis::fs::DirExists(prefix.c_str())) {
         mantis::fs::MakeDir(prefix.c_str());
+    } else {
+        std::string sysCommand = "rm -r " + prefix + "*.ser";// + mantis::CQF_FILE;
+        system(sysCommand.c_str());
+        sysCommand = "rm -r " + prefix + "*.cls";// + mantis::EQCLASS_FILE;
+        system(sysCommand.c_str());
     }
     // check to see if the output dir exists now
     if (!mantis::fs::DirExists(prefix.c_str())) {
@@ -399,9 +404,6 @@ int build_blockedCQF_main(BuildOpts &opt) {
 
     // Construct the colored dbg using the new set of equivalence classes.
     cdbg.constructBlockedCQF(inobjects.data());
-
-//    console->info("Final colored dBG has {} k-mers and {} equivalence classes",
-//                  cdbg.get_cqf()->dist_elts(), cdbg.get_num_eqclasses());
 
     console->info("Serializing CQF and eq classes in {}", prefix);
     cdbg.serializeBlockedCQF();
