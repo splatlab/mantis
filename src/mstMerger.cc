@@ -243,125 +243,6 @@ bool MSTMerger::buildEdgeSets() {
     return true;
 }
 
-/*
-void MSTMerger::writePotentialColorIdEdgesInParallel(uint32_t threadId,
-                                                     CQF<KeyObject> &cqf,
-                                                     std::vector<std::ofstream> &blockFiles,
-                                                     std::vector<uint64_t> &blockCnt,
-                                                     FilterType &filter) {
-
-    auto shiftVal = cqf.keybits()-filter.keybits();
-
-    logger->info("writePotentialColorIdEdgesInParallel {} : {}", threadId, shiftVal);
-    auto maxAllowedElements = static_cast<uint32_t>(MAX_ALLOWED_BLOCK_SIZE /
-                                                    sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type));
-    std::vector<uint32_t> localBlocCntr(numBlocks, 0);
-
-    std::vector<std::vector<std::pair<colorIdType, uint32_t>>> localBlocks(numBlocks);
-    for (auto &b : localBlocks) {
-        b.resize(maxAllowedElements);
-    }
-
-    uint64_t cntr{0}, notfound{0};
-// threadId * (threadId-1) / 2
-// to cover all blocks, and have uniform distribution of I/O across threads,
-// we distribute blocks in the following manner
-// give 1 unit to the first thread, 2 units to the second, and so on ..
-// total number of units will be (1 + 2 + 3 + .. + nThreads) = nThreads * (nThreads + 1) / 2
-
-    auto startBlockId = (numBlocks * threadId * (threadId + 1)) / (nThreads * (nThreads + 1));
-    auto endBlockId = (numBlocks * (threadId + 1) * (threadId + 2)) / (nThreads * (nThreads + 1));
-//    auto startBlockId = (numBlocks * threadId) / nThreads;
-//    auto endBlockId = (numBlocks * (threadId+1)) / nThreads;
-
-    auto shiftedBlockId = startBlockId << SHIFTBITS;
-    endBlockId <<= SHIFTBITS;
-
-
-    __uint128_t startPoint = cqf.range() < shiftedBlockId ? cqf.range() : shiftedBlockId;
-    __uint128_t endPoint = cqf.range() < endBlockId ? cqf.range() : endBlockId;
-    auto it = cqf.setIteratorLimits(startPoint, endPoint, true);
-    while (!it.reachedHashLimit()) {
-        KeyObject keyObject = (*it);
-        uint64_t keyHash = it.get_cur_hash().key;
-        uint64_t curEqId = keyObject.count - 1;
-        dna::canonical_kmer n(static_cast<int>(k), keyObject.key);
-        // Add an edge between the color class and each of its neighbors' colors in dbg
-        for (const auto b : dna::bases) {
-            dna::canonical_kmer newNode = n << b;
-            uint64_t hashVal = hash_64(newNode.val, BITMASK(cqf.keybits()));
-            if (hashVal > keyHash) {
-                cntr++;
-//                KeyObject k(newNode.val, 0, 0);
-//                if (bphf->lookup(k) != ULLONG_MAX) {
-//                if (bf.lookup(newNode.val) == 1) {
-                if (filter.query(KeyObject(hashVal >> shiftVal, 0, 0), QF_NO_LOCK)) {
-                    uint64_t idx = (hashVal & LOWBIT_MASK) >> SHIFTBITS;
-                    auto neighborKey = static_cast<uint32_t >(hashVal & HIGHBIT_MASK);
-                    localBlocks[idx][localBlocCntr[idx]] = std::make_pair(curEqId, neighborKey);
-                    localBlocCntr[idx]++;
-                    if (localBlocCntr[idx] == maxAllowedElements) {
-                        blockMutex[idx]->lock();
-                        blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                              (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
-                                              localBlocCntr[idx]);
-                        blockCnt[idx] += localBlocCntr[idx];
-                        blockMutex[idx]->unlock();
-                        localBlocCntr[idx] = 0;
-                    }
-                } else {
-                    notfound++;
-                }
-            }
-
-            newNode = b >> n;
-            hashVal = hash_64(newNode.val, BITMASK(cqf.keybits()));
-            if (hashVal > keyHash) {
-                cntr++;
-//                KeyObject k(newNode.val, 0, 0);
-//                if (bphf->lookup(k) != ULLONG_MAX) {
-//                if (bf.lookup(newNode.val) == 1) {
-                if (filter.query(KeyObject(hashVal >> shiftVal, 0, 0), QF_NO_LOCK)) {
-                    uint64_t idx = (hashVal & LOWBIT_MASK) >> SHIFTBITS;
-                    auto neighborKey = static_cast<uint32_t >(hashVal & HIGHBIT_MASK);
-                    localBlocks[idx][localBlocCntr[idx]] = std::make_pair(curEqId, neighborKey);
-                    localBlocCntr[idx]++;
-                    if (localBlocCntr[idx] == maxAllowedElements) {
-                        blockMutex[idx]->lock();
-                        blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                              (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
-                                              localBlocCntr[idx]);
-                        blockCnt[idx] += localBlocCntr[idx];
-                        blockMutex[idx]->unlock();
-                        localBlocCntr[idx] = 0;
-                    }
-                } else {
-                    notfound++;
-                }
-            }
-        }
-        ++it;
-        auto blockId = (keyHash & LOWBIT_MASK) >> SHIFTBITS;
-        if (blockId % 1000 == 0) {
-            std::cerr << "\r" << blockId << "  ";
-        }
-    }
-    for (auto idx = 0; idx < localBlocks.size(); idx++) {
-        blockMutex[idx]->lock();
-        if (localBlocCntr[idx]) {
-            blockFiles[idx].write(reinterpret_cast<char *>(localBlocks[idx].data()),
-                                  (sizeof(std::vector<std::pair<colorIdType, uint32_t>>::value_type)) *
-                                  localBlocCntr[idx]);
-            blockCnt[idx] += localBlocCntr[idx];
-        }
-        blockMutex[idx]->unlock();
-        localBlocks[idx].clear();
-    }
-    std::cerr << "\r";
-    logger->info("Thread {}: {} of {} was not written for memory qf", threadId, (double)notfound/(double)cntr, cntr);
-}
-*/
-
 void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                             CQF<KeyObject> &cqf,
                                             std::uint64_t& cnt,
@@ -520,8 +401,16 @@ bool MSTMerger::calculateMSTBasedWeights() {
                                                                    : colorPairs[edge.n1].second);
                     auto n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first
                                                                    : colorPairs[edge.n2].second);
-                    if (n1 != n2)
+                    if (n1 != n2) {
+                        if (n1 > n2) {
+                            std::swap(n1, n2);
+                        }
                         edgeList.emplace_back(n1, n2);
+                    }
+                    if (isFirst and n1 == 14) {
+                        std::cerr << "edge in the original " << edge.n1 << "--" << edge.n2
+                        << " n2:" << n2 << "\n";
+                    }
                 }
                 std::cerr << "\rmantis" << (isFirst ? "1" : "2") << " edgelist for " << i << "," << j << "  ";
             }
@@ -539,22 +428,26 @@ bool MSTMerger::calculateMSTBasedWeights() {
 
         // move all the unique edges for one mantis to the designed low-memory data structure
         destWeightList.resize(edgeList.size());
-        uint64_t destIdx{0}, prevCnt{0};
+        uint64_t destIdx{0};
+        std::cerr << "isFirst?" << static_cast<int>(isFirst) << "\n";
         for (auto &e : edgeList) {
             srcEndIdx[e.n1]++;
             destWeightList[destIdx++] = std::make_pair(e.n2, 0);
+            if (isFirst and e.n1 == 14) {
+                std::cerr <<"e" << destIdx-1 << ":" << e.n2 << "\n";
+            }
         }
         // accumulate the out-degrees per sorted source edges to get to source start index
         // now each value in srcEndIdx is pointing to the start of the next source in the edge-weight vec.
-        for (auto &outCnt : srcEndIdx) {
-            outCnt += prevCnt;
-            prevCnt = outCnt;
+        for (uint64_t i = 1; i < srcEndIdx.size(); i++) {
+            srcEndIdx[i] += srcEndIdx[i-1];
         }
         // having a list of destination of edges and the edge weight for all the source nodes sorted in the
         // order of source node id, srcEndIdx returns the starting index of the destinations and edge weights for that
         // source index in that list
     };
     // call the lambda function per mantis
+    // filling srcEndIndices and edgeLists (given as inputs)
     edgeSplitter(srcEndIdx1, edge1list, mst1Zero, true);
     edgeSplitter(srcEndIdx2, edge2list, mst2Zero, false);
     logger->info("num of edges in first mantis: {}", edge1list.size());
@@ -651,7 +544,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 }
                 if ((*wItr).first != n2) {
                     std::cerr << "NOOOOOO! The returned binary search value does not match searched for value n2\n";
-                    std::cerr << "n1=" << n1
+                    std::cerr << "isFirst?" << static_cast<int>(isFirst) <<
+                    " edge in the mergedCDBG: " << edge.n1 << "--" << edge.n2 << " n1=" << n1
                               << " srcStart=" << srcStart << " srcEnd=" << srcEnd
                               << " n2=" << n2 << " BS return val=" << (*wItr).first << "\n";
                     std::stringstream ss;

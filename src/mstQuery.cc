@@ -59,20 +59,13 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         froms.push_back(from);
 
         if (queryStats.trySample) {
-//            std::lock_guard<std::mutex> m(buildColorMutex);
-//            auto &occ = queryStats.numOcc[iparent];
-//            ++occ;
             if ((!toDecode) and
 //                (occ > 10) and
                 (height > 10)
                 and
                 (lru_cache and
                  !lru_cache->contains(iparent))) {
-//                if (lru_cache) {
-//                    auto eq_ptr = lru_cache->lookup_ts(iparent);
-//                    if (eq_ptr) {
                         toDecode = iparent;
-//                    }
             }
         }
         i = iparent;
@@ -92,9 +85,6 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         uint64_t wrd{0};
         auto start = f;
         do {
-            /*if (bbv.size()-start < 64) {
-                std::cerr << "\n\nhappened: " << bbv.size() << " " << start << " " << bbv[bbv.size()-1] << "\n";
-            }*/
             uint64_t wrdLen = std::min(static_cast<uint64_t >(64), bbv.size()-start);
             wrd = bbv.get_int(start, wrdLen);
             for (uint64_t j = 0; j < wrdLen; j++) {
