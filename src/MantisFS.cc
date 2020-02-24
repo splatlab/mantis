@@ -3,6 +3,7 @@
 #include <iostream>
 #include <algorithm>
 #include <dirent.h>
+#include <memory>
 
 namespace mantis {
   namespace fs {
@@ -42,7 +43,8 @@ namespace mantis {
 		void MakeDir(const char* path) { mkdir(path, ACCESSPERMS); }
 
 		std::vector<std::string> GetFilesExt(const char *dir, const char *ext) {
-			DIR *folder = opendir(dir);
+			auto freeme = [](DIR* f) -> void { free(f);};
+			std::unique_ptr<DIR, decltype(freeme)> folder(opendir(dir), freeme);
 			
 			if (!folder) {
 				std::cerr << "Directory doesn't exist " << dir << std::endl;
@@ -51,7 +53,7 @@ namespace mantis {
 
 			std::vector<std::string> ret;
 			dirent *entry;
-			while((entry = readdir(folder)) != NULL)
+			while((entry = readdir(folder.get())) != NULL)
 			{
 				if(has_suffix(entry->d_name, ext))
 				{
