@@ -1,3 +1,5 @@
+#include <memory>
+
 #include <utility>
 
 //
@@ -407,10 +409,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
                         }
                         edgeList.emplace_back(n1, n2);
                     }
-                    if (isFirst and n1 == 14) {
-                        std::cerr << "edge in the original " << edge.n1 << "--" << edge.n2
-                        << " n2:" << n2 << "\n";
-                    }
                 }
                 std::cerr << "\rmantis" << (isFirst ? "1" : "2") << " edgelist for " << i << "," << j << "  ";
             }
@@ -429,13 +427,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
         // move all the unique edges for one mantis to the designed low-memory data structure
         destWeightList.resize(edgeList.size());
         uint64_t destIdx{0};
-        std::cerr << "isFirst?" << static_cast<int>(isFirst) << "\n";
+//        std::cerr << "isFirst?" << static_cast<int>(isFirst) << "\n";
         for (auto &e : edgeList) {
             srcEndIdx[e.n1]++;
             destWeightList[destIdx++] = std::make_pair(e.n2, 0);
-            if (isFirst and e.n1 == 14) {
-                std::cerr <<"e" << destIdx-1 << ":" << e.n2 << "\n";
-            }
         }
         // accumulate the out-degrees per sorted source edges to get to source start index
         // now each value in srcEndIdx is pointing to the start of the next source in the edge-weight vec.
@@ -453,7 +448,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("num of edges in first mantis: {}", edge1list.size());
     logger->info("num of edges in second mantis: {}", edge2list.size());
 
-    mst1.reset(new MSTQuery(prefix1, k, k, numOfFirstMantisSamples, logger));
+    mst1 = std::make_unique<MSTQuery>(prefix1, k, k, numOfFirstMantisSamples, logger);
     std::vector<colorIdType> colorsInCache;
     planCaching(mst1.get(), edge1list, srcEndIdx1, colorsInCache);
     logger->info("fixed cache size for mst1 is : {}", colorsInCache.size());
@@ -486,7 +481,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     mst1->clear();
     logger->info("Done calculating weights for mst1");
 
-    mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
+    mst2 = std::make_unique<MSTQuery>(prefix2, k, k, secondMantisSamples, logger);
     planCaching(mst2.get(), edge2list, srcEndIdx2, colorsInCache);
     logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
     //fillout fixed_cache2
