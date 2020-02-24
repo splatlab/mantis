@@ -286,18 +286,12 @@ std::pair<uint64_t, uint64_t> CdBG_Merger<qf_obj, key_obj>::
 			auto keyval = it1.get_cur_hash();
 			auto key = hash_64i(keyval.key, kmerMask);
 			auto minimizerPair = curCdbg.findMinimizer(key, kbits);
+//			auto minimizerPair = std::make_pair<uint64_t, uint64_t>(0, 0);
 			if (minimizerPair.first == minimizerPair.second) {
 				minimizerPair.second = invalid;
 			}
 			std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
 			for (auto minimizer : pairs) {
-/*
-				if (keyval.key == 18695468993164) {
-					std::cerr << "\nIn walkBlockedCQF "
-					<< isSecond << " " << keyval.count << " " << minimizerPair.first << " " << minimizerPair.second
-					<< " " << minMinimizer1 << " " << maxMinimizer1 << "\n";
-				}
-*/
 				if (minimizer != invalid and minimizer >= minMinimizer1 and minimizer <= maxMinimizer1) {
 					minimizerKeyColorList[isSecond][minimizer]->emplace_back(keyval.key, keyval.count);
 				}

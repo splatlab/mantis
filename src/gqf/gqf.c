@@ -1965,7 +1965,7 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 	return ret;
 }
 
-int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
+/*int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 								 flags)
 {
 	if (count == 0)
@@ -1983,8 +1983,9 @@ int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 		ret = qf_remove(qf, key, value, labs(delta), flags);
 
 	return ret;
-}
+}*/
 
+/*
 int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 							flags)
 {
@@ -2002,6 +2003,7 @@ int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 																											 BITMASK(qf->metadata->value_bits));
 	return _remove(qf, hash, count, flags);
 }
+*/
 
 int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, uint8_t flags)
 {
