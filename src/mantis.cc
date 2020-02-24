@@ -122,6 +122,7 @@ int main ( int argc, char *argv[] ) {
                      option("-e", "--eqclass_dist").set(bopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
 										 required("-s","--log-slots") & value("log-slots",
 																											 bopt.qbits) % "log of number of slots in the output CQF",
+                     option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
@@ -263,7 +264,11 @@ int main ( int argc, char *argv[] ) {
 
   if(res) {
     switch(selected) {
-    case mode::build: build_blockedCQF_main(bopt); break;//build_main(bopt);  break;
+    case mode::build:
+      build_blockedCQF_main(bopt);
+      qopt.prefix = bopt.out; qopt.numThreads = bopt.numthreads; qopt.remove_colorClasses = true;
+      build_mst_main(qopt);
+      break;//build_main(bopt);  break;
     case mode::build_mst: build_mst_main(qopt); break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;

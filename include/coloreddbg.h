@@ -1181,8 +1181,6 @@ void ColoredDbg<qf_obj, key_obj>::constructBlockedCQF(qf_obj *incqfs) {
         }
 
         // check: the k-mer should not already be present.
-        if (minimizerBlock[minimizer] >= 1)
-            std::cerr << minimizerBlock[minimizer] << "\n";
         uint64_t count = dbgs[minimizerBlock[minimizer]].query(KeyObject(last_key, 0, eq_id), QF_NO_LOCK |
                                                                                                 QF_KEY_IS_HASH);
         if (count > 0) {
@@ -1543,7 +1541,6 @@ void ColoredDbg<qf_obj, key_obj>::initializeCQFs(std::string &prefixIn, std::vec
 //    dbgs.resize(cnt);
     for (auto i = 0; i < cnt; i++) {
         if (flag == MANTIS_DBG_IN_MEMORY) {
-            std::cerr << "\n\n\nInfo " << i << " " << qbits[i] << " " << key_bits << " " << hashmode << " " << seed << "\n\n\n";
             dbgs.emplace_back(qbits[i], key_bits, hashmode, seed);
             dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
         } else if (flag == MANTIS_DBG_ON_DISK) {

@@ -87,13 +87,10 @@ uint64_t MST::buildMultiEdgesFromCQFs() {
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
 
     for (uint64_t c = 0; c < cqfBlocks.size(); c++) {
-        logger->info("Reading colored dbg from disk...");
-//        std::cerr << cqfBlocks[c] << "\n";
+        logger->info("Reading colored dbg {} from disk...", c);
         std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
-        std::cerr << "\n\ncqf" << c << "\n";
         cqf.dump_metadata();
-        std::cerr << "\n\n";
 
         k = cqf.keybits() / 2;
         logger->info("Done loading cdbg. k is {}", k);

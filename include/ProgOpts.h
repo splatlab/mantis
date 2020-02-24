@@ -12,7 +12,7 @@ class BuildOpts {
 	int qbits;
   std::string inlist;
   std::string out;
-	int numthreads{1};
+	uint32_t numthreads{1};
   std::shared_ptr<spdlog::logger> console{nullptr};
 
   nlohmann::json to_json() {

@@ -1056,8 +1056,10 @@ uint64_t CdBG_Merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 
 	const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
 					col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
-	if (row >= MPH.size() or col >= MPH[row].size())
+	if (row >= MPH.size() or col >= MPH[row].size()) {
+		std::cerr << "Shouldn't happen! row or column greater than MPH size\n";
 		std::cerr << row << " " << col << " " << idPair.first << " " << idPair.second << "\n";
+	}
 	return cumulativeBucketSize[row][col] + MPH[row][col]->lookup(idPair) + 1;
 }
 

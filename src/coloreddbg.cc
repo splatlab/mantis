@@ -364,7 +364,6 @@ int build_blockedCQF_main(BuildOpts &opt) {
     uint64_t bc{0};
     for (auto b : blockKmerCount) {
         uint32_t qbits{0};
-        std::cerr << b << "\n";
         for(qbits = 0; (b >> qbits) != (uint64_t)1; qbits++);
         qbits++;
 //    qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
