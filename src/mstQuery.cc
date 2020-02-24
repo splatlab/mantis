@@ -131,6 +131,8 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     // go block by block and query kmers
     std::unordered_set<uint64_t> query_eqclass_set;
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
+        if (blockKmers[blockId].empty())
+            continue;
         cdbg.replaceCQFInMemory(blockId);
         for (auto key : blockKmers[blockId]) {
             KeyObject keyObj(key, 0, 0);
@@ -175,9 +177,26 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     }
 }
 
+uint64_t MSTQuery::parseBulkKmers(std::string &file, u_int64_t kmer_size) {
+    uint64_t numOfQueries{0};
+    std::string read;
+    std::ifstream ipfile(file);
+    while (ipfile >> read) {
+        parseKmers(numOfQueries, read, indexK);
+        numOfQueries++;
+    }
+    ipfile.close();
+    for (auto &kv : kmer2cidMap) {
+        auto &v = kv.second.second;
+        std::sort(v.begin(), v.end());
+        v.erase(std::unique(v.begin(), v.end()), v.end());
+    }
+    return numOfQueries;
+}
 
 void MSTQuery::parseKmers(uint32_t readId, std::string read, uint64_t kmer_size) {
     //CLI::AutoTimer timer{"First round going over the file ", CLI::Timer::Big};
+//    std::cerr << "\r" << readId << " " << read.length() << "   ";
     bool done = false;
     std::vector<uint32_t> emptyVec;
     while (!done and read.length() >= kmer_size) {
@@ -262,14 +281,14 @@ void MSTQuery::clear() {
 mantis::QueryResults MSTQuery::getResultList(uint64_t numQueries) {
     mantis::QueryResults allQueries(numQueries);
     for (auto &r : allQueries) {
-        r.resize(numSamples+1); // last index keeps count of distinct kmers
+        r.resize(numSamples+1, 0); // last index keeps count of distinct kmers
     }
     for (auto& kv : kmer2cidMap) {
         auto &samples = cid2expMap[kv.second.first];
         for (uint64_t q : kv.second.second) { // for all queries that have this kmer
             allQueries[q][numSamples]++; // first increase count of distinct kmer for that query
-            if (kv.second.first != std::numeric_limits<uint64_t>::max()) {
-                q = std::min(q, numQueries-1);
+            if (kv.second.first != std::numeric_limits<uint64_t>::max()) { // if kmer is found
+//                q = std::min(q, numQueries-1);
                 for (auto &c : samples) {
                     allQueries[q][c]++;
                 }
@@ -378,16 +397,10 @@ int mst_query_main(QueryOpts &opt) {
     std::ofstream opfile(opt.output);
     LRUCacheMap cache_lru(100000);
     RankScores rs(1);
-    std::ifstream ipfile(opt.query_file);
-    std::string read;
     uint64_t numOfQueries{0};
     CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
     if (opt.process_in_bulk) {
-        while (ipfile >> read) {
-            mstQuery.parseKmers(numOfQueries, read, indexK);
-            numOfQueries++;
-        }
-        ipfile.close();
+        numOfQueries = mstQuery.parseBulkKmers(opt.query_file, indexK);
         mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
         if (opt.use_json) {
             opfile << "[\n";
@@ -397,6 +410,8 @@ int mst_query_main(QueryOpts &opt) {
             output_results(mstQuery, opfile, sampleNames, queryStats, numOfQueries);
         }
     } else {
+        std::ifstream ipfile(opt.query_file);
+        std::string read;
         if (opt.use_json) {
             bool isFirstQuery = true;
             opfile << "[\n";

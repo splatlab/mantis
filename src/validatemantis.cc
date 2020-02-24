@@ -41,6 +41,7 @@
 #include "squeakrconfig.h"
 
 #include    <stdlib.h>
+#include <mstQuery.h>
 
 /* 
  * ===  FUNCTION  ======================================================================
@@ -153,12 +154,29 @@ validate_main(ValidateOpts &opt) {
                                                       _dummy_uniqueKmers);
     console->info("Total k-mers to query: {}", total_kmers);
 
+
+    console->info("Query all as a bulk query from MST");
+    MSTQuery mstQuery(prefix, kmer_size, kmer_size, cdbg.get_num_samples(), console);
+    console->info("Done Loading data structure. Total # of color classes is {}",
+                  mstQuery.parentbv.size() - 1);
+    console->info("Start querying Mantis.");
+    LRUCacheMap cache_lru(100000);
+    RankScores rs(1);
+    QueryStats queryStats;
+    queryStats.numSamples = cdbg.get_num_samples();
+    uint64_t numOfQueries = mstQuery.parseBulkKmers(query_file, kmer_size);
+    console->info("Done reading {} input queries and parsing the kmers.", numOfQueries);
+    mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
+    mantis::QueryResults result = mstQuery.getResultList(numOfQueries);
+    console->info("Done querying the Mantis index.");
+
     // Query kmers in each experiment CQF
     // Maintain the fraction of kmers present in each experiment CQF.
     std::vector<std::unordered_map<uint64_t, float>> ground_truth;
     std::vector<std::vector<uint64_t>> cdbg_output;
     bool fail{false};
-    std::cerr << "kmer_size: " << kmer_size << "\n";
+//    std::cerr << "kmer_size: " << kmer_size << "\n";
+    uint64_t queryCntr{0};
     for (auto kmers : multi_kmers) {
         std::unordered_map<uint64_t, float> fraction_present;
 //        std::cerr << "\n";
@@ -175,20 +193,23 @@ validate_main(ValidateOpts &opt) {
             }
         }
         // Query kmers in the cdbg
-        std::vector<uint64_t> result = cdbg.find_samples(kmers);
+//        std::vector<uint64_t> result = cdbg.find_samples(kmers);
+
 
         // Validate the cdbg output
         for (uint64_t i = 0; i < nqf; i++) {
-            if (fraction_present[i] != result[i]) {
-                console->info("Failed for sample: {},{} original CQF {} cdbg {}",
-                              i, inobjects[i].sample_id, fraction_present[i], result[i]);
+            if (fraction_present[i] != result[queryCntr][i]) {
+                console->info("Failed for sample: {},{}: original CQF {}, cdbg {} out of {}",
+                              i, inobjects[i].sample_id, fraction_present[i], result[queryCntr][i], kmers.size());
                 fail = true;
                 //abort();
-            }
+            }/* else if (fraction_present[i] > 0 ) {
+                console->info("{}:{} out of {}", i,fraction_present[i], kmers.size());
+            }*/
         }
-
-        ground_truth.push_back(fraction_present);
-        cdbg_output.push_back(result);
+        queryCntr++;
+//        ground_truth.push_back(fraction_present);
+//        cdbg_output.push_back(result);
     }
     if (fail)
         console->info("Mantis validation failed!");
