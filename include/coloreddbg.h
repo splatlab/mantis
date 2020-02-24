@@ -153,7 +153,7 @@ public:
 
     void set_console(spdlog::logger *c) { console = c; }
 
-    const CQF<key_obj> *get_cqf(void) const { return &dbg; }
+    const CQF<key_obj> *get_cqf(void) const { return curDbg.get(); }//&dbg; }
 
     const CQF<key_obj> *get_current_cqf(void) const { return curDbg.get(); }
 
@@ -169,9 +169,9 @@ public:
 
     std::string get_sample(uint32_t id) const;
 
-    uint32_t seed(void) const { return dbg.seed(); }
+    uint32_t seed(void) const { return curDbg.seed(); }
 
-    uint64_t range(void) const { return dbg.range(); }
+    uint64_t range(void) const { return curDbg.range(); }
 
     inline uint64_t get_color_class_per_buffer(void) const { return colorClassPerBuffer; }
 
@@ -265,7 +265,7 @@ public:
     ColoredDbg &operator=(ColoredDbg &&other) noexcept {
         sampleid_map = other.sampleid_map;
         eqclass_map = other.eqclass_map;
-        dbg = other.dbg;
+//        dbg = other.dbg;
         bv_buffer = other.bv_buffer;
         first_bv_buffer = other.first_bv_buffer;
         eqclasses = other.eqclasses;
@@ -322,7 +322,7 @@ private:
     std::unordered_map<uint64_t, std::string> sampleid_map;
     // bit_vector --> <eq_class_id, abundance>
     cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> eqclass_map;
-    CQF<key_obj> dbg;
+//    CQF<key_obj> dbg;
     BitVector bv_buffer;
     BitVector first_bv_buffer;
     std::vector<BitVectorRRR> eqclasses;
@@ -591,7 +591,7 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t &key, 
     bool added_eq_class = add_colorClass(eq_id, vector);
 
     // check: the k-mer should not already be present.
-    uint64_t count = dbg.query(KeyObject(key, 0, eq_id), QF_NO_LOCK |
+    uint64_t count = curDbg->query(KeyObject(key, 0, eq_id), QF_NO_LOCK |
                                                          QF_KEY_IS_HASH);
     if (count > 0) {
         console->error("K-mer was already present. kmer: {} colorID: {}", key, count);
@@ -599,7 +599,7 @@ bool ColoredDbg<qf_obj, key_obj>::add_kmer(const typename key_obj::kmer_t &key, 
     }
 
     // we use the count to store the eqclass ids
-    int ret = dbg.insert(KeyObject(key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
+    int ret = curDbg->insert(KeyObject(key, 0, eq_id), QF_NO_LOCK | QF_KEY_IS_HASH);
     if (ret == QF_NO_SPACE) {
         // This means that auto_resize failed.
         console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
@@ -670,9 +670,9 @@ template<class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serialize() {
     // serialize the CQF
     if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
-        dbg.serialize(prefix + mantis::CQF_FILE);
+        curDbg->serialize(prefix + mantis::CQF_FILE);
     else
-        dbg.close();
+        curDbg->close();
 
     // serialize the bv buffer last time if needed
     // if (get_num_eqclasses() % mantis::NUM_BV_BUFFER > 0)
@@ -894,18 +894,18 @@ ColoredDbg<qf_obj, key_obj>::construct(qf_obj *incqfs, uint64_t num_kmers) {
         ++counter;
 
         if (counter == 4096) {
-            walk_behind_iterator = dbg.begin(true);
+            walk_behind_iterator = curDbg->begin(true);
         } else if (counter > 4096) {
             ++walk_behind_iterator;
         }
 
         // Progress tracker
         static uint64_t last_size = 0;
-        if (dbg.dist_elts() % 10000000 == 0 &&
-            dbg.dist_elts() != last_size) {
-            last_size = dbg.dist_elts();
+        if (curDbg->dist_elts() % 10000000 == 0 &&
+                curDbg->dist_elts() != last_size) {
+            last_size = curDbg->dist_elts();
             console->info("Kmers merged: {}  Num eq classes: {}  Total time: {}",
-                          dbg.dist_elts(), get_num_eqclasses(), time(nullptr) -
+                          curDbg->dist_elts(), get_num_eqclasses(), time(nullptr) -
                                                                 start_time_);
         }
 
@@ -1260,19 +1260,17 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t qbits, uint64_t key_bits,
     first_bv_buffer = BitVector(colorClassPerBuffer * num_samples);
 
     if (flag == MANTIS_DBG_IN_MEMORY) {
-        CQF<key_obj> cqf(qbits, key_bits, hashmode, seed);
-        dbg = cqf;
+        curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed));
         dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
     } else if (flag == MANTIS_DBG_ON_DISK) {
-        CQF<key_obj> cqf(qbits, key_bits, hashmode, seed, prefix +
-                                                          mantis::CQF_FILE);
-        dbg = cqf;
+        curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed, prefix +
+                                                                                    mantis::CQF_FILE));
         dbg_alloc_flag = MANTIS_DBG_ON_DISK;
     } else {
         ERROR("Wrong Mantis alloc mode.");
         exit(EXIT_FAILURE);
     }
-    dbg.set_auto_resize();
+    curDbg->set_auto_resize();
 
     minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
     minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
@@ -1289,12 +1287,10 @@ sample_file, int flag) : bv_buffer(),
     num_serializations = 0;
 
     if (flag == MANTIS_DBG_IN_MEMORY) {
-        CQF<key_obj> cqf(cqf_file, CQF_FREAD);
-        dbg = cqf;
+        curDbg.reset(new CQF<key_obj>(cqf_file, CQF_FREAD));
         dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;
     } else if (flag == MANTIS_DBG_ON_DISK) {
-        CQF<key_obj> cqf(cqf_file, CQF_MMAP);
-        dbg = cqf;
+        curDbg.reset(new CQF<key_obj>(cqf_file, CQF_MMAP));
         dbg_alloc_flag = MANTIS_DBG_ON_DISK;
     } else {
         ERROR("Wrong Mantis alloc mode.");
