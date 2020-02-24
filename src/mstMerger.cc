@@ -453,9 +453,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("num of edges in first mantis: {}", edge1list.size());
     logger->info("num of edges in second mantis: {}", edge2list.size());
 
-    mst1 = new MSTQuery(prefix1, k, k, numOfFirstMantisSamples, logger);
+    mst1.reset(new MSTQuery(prefix1, k, k, numOfFirstMantisSamples, logger));
     std::vector<colorIdType> colorsInCache;
-    planCaching(mst1, edge1list, srcEndIdx1, colorsInCache);
+    planCaching(mst1.get(), edge1list, srcEndIdx1, colorsInCache);
     logger->info("fixed cache size for mst1 is : {}", colorsInCache.size());
     // fillout fixed_cache1
     // walking in reverse order on colorsInCache is intentional
@@ -475,7 +475,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         threads.emplace_back(std::thread(&MSTMerger::calcMSTHammingDistInParallel, this, t,
                                          std::ref(edge1list),
                                          std::ref(srcEndIdx1),
-                                         mst1,
+                                         mst1.get(),
                                          std::ref(lru_cache1),
                                          std::ref(queryStats1),
                                          std::ref(fixed_cache1),
@@ -486,8 +486,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
     mst1->clear();
     logger->info("Done calculating weights for mst1");
 
-    mst2 = new MSTQuery(prefix2, k, k, secondMantisSamples, logger);
-    planCaching(mst2, edge2list, srcEndIdx2, colorsInCache);
+    mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
+    planCaching(mst2.get(), edge2list, srcEndIdx2, colorsInCache);
     logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
     //fillout fixed_cache2
     for (int64_t idx = colorsInCache.size() - 1; idx >= 0; idx--) {
@@ -500,7 +500,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         threads.emplace_back(std::thread(&MSTMerger::calcMSTHammingDistInParallel, this, t,
                                          std::ref(edge2list),
                                          std::ref(srcEndIdx2),
-                                         mst2,
+                                         mst2.get(),
                                          std::ref(lru_cache2),
                                          std::ref(queryStats2),
                                          std::ref(fixed_cache2),
@@ -953,11 +953,11 @@ std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t e
     if (eqid1 == eqid2) return res;
     std::vector<uint64_t> eq1, eq2;
     if (isFirst) {
-        buildMSTBasedColor(eqid1, mst1, lru_cache, eq1, queryStats, fixed_cache1);
-        buildMSTBasedColor(eqid2, mst1, lru_cache, eq2, queryStats, fixed_cache1);
+        buildMSTBasedColor(eqid1, mst1.get(), lru_cache, eq1, queryStats, fixed_cache1);
+        buildMSTBasedColor(eqid2, mst1.get(), lru_cache, eq2, queryStats, fixed_cache1);
     } else {
-        buildMSTBasedColor(eqid1, mst2, lru_cache, eq1, queryStats, fixed_cache2);
-        buildMSTBasedColor(eqid2, mst2, lru_cache, eq2, queryStats, fixed_cache2);
+        buildMSTBasedColor(eqid1, mst2.get(), lru_cache, eq1, queryStats, fixed_cache2);
+        buildMSTBasedColor(eqid2, mst2.get(), lru_cache, eq2, queryStats, fixed_cache2);
     }
     /// calc delta
     auto i{0}, j{0};
