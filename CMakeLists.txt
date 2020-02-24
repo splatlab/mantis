@@ -30,10 +30,26 @@ else()
    set(ARCH_DEFS "-D__SSE4_2_")
 endif()
 
+###
+# Sanitizers BEGIN
+###
+if (ASAN_BUILD)
+   list(APPEND PF_CPP_FLAGS "-fsanitize=address")
+   #list(APPEND PF_CPP_FLAGS "-fsanitize=undefined")
+   #set(CMAKE_LINK_FLAGS "-fsanitize=address")
+   #list(APPEND CMAKE_LINK_FLAGS "-fsanitize=undefined")
+   set(ASAN_LIB "asan")
+else()
+   set(ASAN_LIB "")
+endif()
+###
+# Sanitizers END
+###
+
 set(MANTIS_C_WARN "-Wno-unused-result;-Wno-strict-aliasing;-Wno-unused-function;-Wno-sign-compare;-Wno-implicit-function-declaration")
 set(MANTIS_CXX_WARN "-Wno-unused-result;-Wno-strict-aliasing;-Wno-unused-function;-Wno-sign-compare")
-set(MANTIS_C_FLAGS "${ARCH_DEFS};${MANTIS_C_WARN}")
-set(MANTIS_CXX_FLAGS "${ARCH_DEFS};${MANTIS_CXX_WARN}")
+set(MANTIS_C_FLAGS "${ARCH_DEFS};${MANTIS_C_WARN};${PF_CPP_FLAGS};")
+set(MANTIS_CXX_FLAGS "${ARCH_DEFS};${MANTIS_CXX_WARN};${PF_CPP_FLAGS};")
 
 if (SDSL_INSTALL_PATH)
    message("Adding ${SDSL_INSTALL_PATH}/include to the include path")
