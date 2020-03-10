@@ -37,7 +37,7 @@ typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
 
 constexpr static uint64_t invalid = std::numeric_limits<uint64_t>::max();
-constexpr static uint64_t block_kmer_threshold = 80000000;
+constexpr static uint64_t block_kmer_threshold = 160000000;
 
 struct hash128 {
     uint64_t operator()(const __uint128_t &val128) const {
@@ -1344,7 +1344,7 @@ void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key
 
     uint32_t qbits{0};
     for (qbits = 0; (block_kmer_threshold >> qbits) != (uint64_t) 1; qbits++);
-    qbits++;
+    qbits+=2;
 
     if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
         curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed));

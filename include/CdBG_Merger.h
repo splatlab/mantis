@@ -900,6 +900,8 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 
 	console -> info("At CQFs merging phase. Time-stamp = {}.\n", time(nullptr) - start_time_);
 
+	std::vector<std::pair<uint64_t, uint64_t>> tmp_kmers;
+	tmp_kmers.reserve(block_kmer_threshold);
 
 	uint64_t kmerCount{0}, foundAbundantId{0};
     cdbg1.replaceCQFInMemory(invalid);
@@ -919,7 +921,7 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 	cdbg.initializeNewCQFBlock(invalid, kbits, hash_mode, seed);
 	cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hash_mode, seed);
 	uint64_t maxMinimizer{0}, minMinimizer{invalid};
-	uint64_t colorId = 0;
+	uint64_t colorId{0}, epsilon{100};
 	KeyObject keyObj;
 	while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
 		console->info("Current block={}", curBlock);
@@ -947,28 +949,11 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 //        The output block kmer count should be left for the next set of input blocks
 		for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
 			// merge the two keys from cqf1 and cqf2
-			/*std::sort(minimizerKeyColorList[0][b]->begin(), minimizerKeyColorList[0][b]->end(),
-					  [](auto &v1, auto &v2) {
-						  return v1.first < v2.first;
-					  });
-			std::sort(minimizerKeyColorList[1][b]->begin(), minimizerKeyColorList[1][b]->end(),
-					  [](auto &v1, auto &v2) {
-						  return v1.first < v2.first;
-					  });*/
 			auto it0 = minimizerKeyColorList[0][b]->begin();
 			auto it1 = minimizerKeyColorList[1][b]->begin();
 			if (b % 500 == 0)
 				std::cerr << "\rminimizer " << b
 						  << " size=" << minimizerKeyColorList[0][b]->size() << "," << minimizerKeyColorList[1][b]->size() << "     ";
-            if (blockKmerCnt and (blockKmerCnt + cdbg.minimizerCntr[b]) > block_kmer_threshold) {
-            	std::cerr << "Serialize cqf " << outputCQFBlockId << " with " << blockKmerCnt
-            	<< " kmers after seeing minimizer " << b << "\n";
-                blockKmerCnt = 0;
-                cdbg.serializeCurrentCQF();
-                outputCQFBlockId++;
-                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hash_mode, seed);
-            }
-            blockKmerCnt += cdbg.minimizerCntr[b];
 			while (it0 != minimizerKeyColorList[0][b]->end() and it1 != minimizerKeyColorList[1][b]->end()) {
 				if (it0->first < it1->first) {
 					colorId = get_color_id(std::make_pair(it0->second, 0));
@@ -984,11 +969,9 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 					it0++;
 					it1++;
 				}
-				/*if (keyObj.key == 18695468993164) {
-					std::cerr << "inserting " << keyObj.count << "\n";
-				}*/
-				cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-                kmerCount++;
+//				cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
+                tmp_kmers.emplace_back(keyObj.key, keyObj.count);
+                blockKmerCnt++;
 				if(colorId <= sampledPairs.size())
 					foundAbundantId++;
 			}
@@ -996,8 +979,9 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 				while (it1 != minimizerKeyColorList[1][b]->end()) {
 					colorId = get_color_id(std::make_pair(0, it1->second));
 					keyObj = KeyObject(it1->first, 0, colorId);
-					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-					kmerCount++;
+//					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
+                    tmp_kmers.emplace_back(keyObj.key, keyObj.count);
+                    blockKmerCnt++;
 					it1++;
 					if(colorId <= sampledPairs.size())
 						foundAbundantId++;
@@ -1006,8 +990,9 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 				while (it0 != minimizerKeyColorList[0][b]->end()) {
 					colorId = get_color_id(std::make_pair(it0->second, 0));
 					keyObj = KeyObject(it0->first, 0, colorId);
-					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-					kmerCount++;
+//					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
+                    tmp_kmers.emplace_back(keyObj.key, keyObj.count);
+                    blockKmerCnt++;
 					it0++;
 					if(colorId <= sampledPairs.size())
 						foundAbundantId++;
@@ -1016,18 +1001,48 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 			cdbg.minimizerBlock[b] = outputCQFBlockId;
             minimizerKeyColorList[0][b].reset(nullptr);
             minimizerKeyColorList[1][b].reset(nullptr);
-
-//			minimizerKeyColorList[0][b]->clear();
-//			minimizerKeyColorList[0][b]->shrink_to_fit();
-//			minimizerKeyColorList[1][b]->clear();
-//			minimizerKeyColorList[1][b]->shrink_to_fit();
+            if (blockKmerCnt and blockKmerCnt > block_kmer_threshold - epsilon) {
+                std::cerr << "\n---> Fill and Serialize cqf " << outputCQFBlockId << " with " << blockKmerCnt
+                          << " kmers after seeing minimizer " << b << "\n";
+                kmerCount += blockKmerCnt;
+                blockKmerCnt = 0;
+                std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2){
+                    return kv1.first < kv2.first;
+                });
+                for (auto &kv : tmp_kmers) {
+                    keyObj = KeyObject(kv.first, 0, kv.second);
+                    cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
+                }
+                cdbg.serializeCurrentCQF();
+                tmp_kmers.clear();
+                outputCQFBlockId++;
+                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hash_mode, seed);
+            }
 		}
 		std::cerr << "\r";
 	}
+
+	// fill and serialize last cqf block
+	if (!tmp_kmers.empty()) {
+        std::cerr << "\n---> Fill and Serialize cqf " << outputCQFBlockId << " with " << blockKmerCnt
+                  << " kmers as the last cqf block\n";
+        kmerCount += blockKmerCnt;
+        blockKmerCnt = 0;
+        std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+            return kv1.first < kv2.first;
+        });
+        for (auto &kv : tmp_kmers) {
+            keyObj = KeyObject(kv.first, 0, kv.second);
+            cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
+        }
+        cdbg.serializeCurrentCQF();
+        tmp_kmers.clear();
+    }
+
+
 	for (uint64_t m = maxMinimizer+1; m < cdbg.minimizerBlock.size(); m++) {
 		cdbg.minimizerBlock[m] = outputCQFBlockId;
 	}
-	cdbg.serializeCurrentCQF();
 
 	console -> info("Total kmers merged: {}. Time-stamp: {}.", kmerCount, time(nullptr) - start_time_);
 
