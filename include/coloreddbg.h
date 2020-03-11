@@ -1,3 +1,5 @@
+#include <random>
+
 /*
  * ============================================================================
  *
@@ -29,6 +31,10 @@
 #include "common_types.h"
 #include "mantisconfig.hpp"
 #include "canonicalKmer.h"
+#include "minimizerRandomOrder.h"
+
+#include <cstdlib>
+#include <random>
 
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
@@ -334,7 +340,7 @@ private:
     std::time_t start_time_;
     spdlog::logger *console;
 
-    uint64_t minlen{8};
+    uint64_t minlen{MINLEN};
 
     // Maximum number of color-class bitvectors that can be present at the bitvector buffer.
     uint64_t colorClassPerBuffer{0};
@@ -717,6 +723,12 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
 //            dbgs[i]->close();
     }
     std::ofstream minfile(prefix + mantis::MINIMIZER_FREQ, std::ios::binary);
+    std::cerr << " \n\nFrom here\n";
+    for (auto i = 0; i < minimizerCntr.size(); i++) {
+        if (minimizerCntr[i] != 0) {
+            std::cout << i << ":" << minimizerCntr[i] << "\n";
+        }
+    }
     minfile.write(reinterpret_cast<char *>(minimizerCntr.data()),
                   minimizerCntr.size() * sizeof(typename decltype(minimizerCntr)::value_type));
     minfile.close();
@@ -970,6 +982,7 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (key >> s) & jmask;
         minim = minim <= h ? minim : h;
+//        minim = minimizerOrder[minim] <= minimizerOrder[h] ? minim : h;
     }
 //    dna::kmer kmer(k/2, key);
 //    auto kmerrc = -kmer;
@@ -1005,21 +1018,28 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     for (uint64_t s = 2; s < k - j; s += 2) {
         auto h = (keyrc >> s) & jmask;
         minim = minim <= h ? minim : h;
+//        minim = minimizerOrder[minim] <= minimizerOrder[h] ? minim : h;
     }
     auto last = key & jmask;
     auto lastrc = (keyrc >> (k - j)) & jmask;
     last = last <= lastrc ? last : lastrc;
+//    last = minimizerOrder[last] <= minimizerOrder[lastrc] ? last : lastrc;
     auto first = (key >> (k - j)) & jmask;
     auto firstrc = keyrc & jmask;
     first = first <= firstrc ? first : firstrc;
+//    first = minimizerOrder[first] <= minimizerOrder[firstrc] ? first : firstrc;
 
+//    if (minimizerOrder[minim] <= minimizerOrder[first] and minimizerOrder[minim] <= minimizerOrder[last]) {
     if (minim <= first and minim <= last) {
         return std::make_pair(minim, invalid);
     } else if (first < minim and last < minim) {
-        if (first < last)
+//    else if (minimizerOrder[first] < minimizerOrder[minim] and minimizerOrder[last] < minimizerOrder[minim]) {
+        if (first < last) {
             return std::make_pair(first, last);
-        if (last < first)
+        }
+        if (last < first) {
             return std::make_pair(last, first);
+        }
         return std::make_pair(first, invalid); // first == last
     } else if (first < minim) {
         return std::make_pair(first, minim);
