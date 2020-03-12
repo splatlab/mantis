@@ -381,16 +381,18 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}.",
 					kmerCount, sampledPairs.size(), time(nullptr) - start_time_);
 	typedef std::pair<uint64_t, std::pair<uint64_t, uint64_t>> CountAndIdPair;
-	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<>> minPQ;
+	// By default a max heap is created ordered
+	// by first element of pair.
+	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>> maxPQ;
 	for(auto p = sampledPairs.begin(); p != sampledPairs.end(); ++p) {
-		minPQ.push(std::make_pair(p->second, p->first));
+		maxPQ.push(std::make_pair(p->second, p->first));
 	}
 
-	uint64_t cntr = 0;
-	while(!minPQ.empty())
+	uint64_t cntr = 1;
+	while(!maxPQ.empty())
 	{
-		sampledPairs[minPQ.top().second] = cntr;
-		minPQ.pop();
+		sampledPairs[maxPQ.top().second] = cntr;
+		maxPQ.pop();
 		cntr++;
 	}
 
@@ -765,8 +767,9 @@ void CdBG_Merger<qf_obj, key_obj> ::
 	// Get ceil(log2(kmerCount))
 	if(kmerCount & (kmerCount - 1))	// if kmerCount is not a power of 2
 		qbits++;
-	
-	qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
+
+	qbits++;
+//	qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
 
 	
 	if(cdbg.dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
@@ -874,9 +877,9 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 			if (it0 == minimizerKeyColorList[0][b]->end()) {
 				while (it1 != minimizerKeyColorList[1][b]->end()) {
 					colorId = get_color_id(std::make_pair(0, it1->second));
-					keyObj = KeyObject(it1->first, 0, colorId);
+//					keyObj = KeyObject(it1->first, 0, colorId);
 //					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-                    tmp_kmers.emplace_back(keyObj.key, keyObj.count);
+                    tmp_kmers.emplace_back(it1->first, colorId);
                     blockKmerCnt++;
 					it1++;
 					if(colorId <= sampledPairs.size())
@@ -885,9 +888,9 @@ void CdBG_Merger<qf_obj, key_obj>::build_CQF()
 			} else {
 				while (it0 != minimizerKeyColorList[0][b]->end()) {
 					colorId = get_color_id(std::make_pair(it0->second, 0));
-					keyObj = KeyObject(it0->first, 0, colorId);
+//					keyObj = KeyObject(it0->first, 0, colorId);
 //					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-                    tmp_kmers.emplace_back(keyObj.key, keyObj.count);
+                    tmp_kmers.emplace_back(it0->first, colorId);
                     blockKmerCnt++;
 					it0++;
 					if(colorId <= sampledPairs.size())
