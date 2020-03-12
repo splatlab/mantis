@@ -315,6 +315,9 @@ public:
 
     std::vector<uint64_t> minimizerCntr;
     std::vector<uint64_t> minimizerBlock;
+    uint64_t num_samples;
+    std::string prefix;
+    std::unordered_map<uint64_t, std::string> sampleid_map;
 
 private:
     // returns true if adding this k-mer increased the number of equivalence
@@ -336,15 +339,12 @@ private:
     void reshuffle_bit_vectors(cdbg_bv_map_t<__uint128_t, std::pair<uint64_t,
             uint64_t>> &map);
 
-    std::unordered_map<uint64_t, std::string> sampleid_map;
     // bit_vector --> <eq_class_id, abundance>
     cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> eqclass_map;
 //    CQF<key_obj> dbg;
     BitVector bv_buffer;
     BitVector first_bv_buffer;
     std::vector<BitVectorRRR> eqclasses;
-    std::string prefix;
-    uint64_t num_samples;
     uint64_t num_serializations;
     int dbg_alloc_flag;
     bool flush_eqclass_dis{false};

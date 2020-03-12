@@ -10,7 +10,7 @@
 #ifndef _LSMT_H_
 #define _LSMT_H_
 
-#include "CdBG_Merger.h"
+#include "cdBG_merger.h"
 
 
 int build_blockedCQF_main(BuildOpts& opt);

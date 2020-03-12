@@ -39,7 +39,7 @@
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
-#include "CdBG_Merger.h"
+#include "cdBG_merger.h"
 #include "squeakrconfig.h"
 #include "mantisconfig.hpp"
 
@@ -136,7 +136,7 @@ int merge_main(MergeOpts &opt)
 	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, opt.out, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console->info("Initializing the merger.");
-	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(std::move(cdbg1), std::move(cdbg2), std::move(mergedCdBG));
+	CdBG_merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(std::move(cdbg1), std::move(cdbg2), std::move(mergedCdBG));
 	merger.set_console(console);
 	merger.set_thread_count(opt.threadCount);
 

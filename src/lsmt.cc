@@ -39,7 +39,7 @@
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
-#include "CdBG_Merger.h"
+#include "cdBG_merger.h"
 #include "squeakrconfig.h"
 #include "mantisconfig.hpp"
 #include "lsmt.h"
