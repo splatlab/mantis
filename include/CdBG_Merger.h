@@ -127,14 +127,6 @@ class CdBG_Merger
 		uint64_t numCCPerBuffer1{0};
 		uint64_t numCCPerBuffer2{0};
 
-        // Advances the CQF iterator 'it', with keeping track of the 'step' count; and
-		// fetches the next CQF-entry into 'cqfEntry' if the iterator 'it' is advanced
-		// into a non-end position. Also, advances or initializes the iterator
-		// 'walkBehindIterator' that trails 'it' by ITERATOR_WINDOW_SIZE.
-		static void advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &step, key_obj &cqfEntry,
-											typename CQF<key_obj>::Iterator &walkBehindIterator,
-											const CQF<key_obj> *cqf);
-
         // Samples 'SAMPLE_PAIR_COUNT' number of most abundant color-id pairs from the
 		// first 'sampleKmerCount' distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
 		// into the map 'sampledPairs', which is of the format (pair -> abundance).
@@ -167,16 +159,6 @@ class CdBG_Merger
 		// Returns the count of unique color-id pairs.
 		uint64_t filter_disk_buckets();
 
-		// Returns the maximum amount of memory (in GB) to use at the color-id pairs
-		// filtering phase, specifically, in the 'sort -u' system command.
-		uint64_t get_max_sort_memory();
-
-		// Assign color-ids to the abudant color-id pairs present at the hash-map
-		// 'sampledPairs' (of the form (pair -> abundance)), based on their abundance.
-		// The hash-map 'sampledPairs' will contain the assigned color-ids for the
-		// pairs after execution of this method, losing the abundance information.
-		void assign_abundant_color_ids();
-
 		// Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
 		void build_MPH_tables();
 
@@ -187,19 +169,6 @@ class CdBG_Merger
         // Builds the output color-class bitvectors for the abundant (sampled)
 		// color-id pairs.
 //		void build_abundant_color_classes();
-
-		// Concatenates the color-classes (BitVector objects) corresponding to the
-		// color-IDs 'colorID1' and 'colorID2' respectively, from two CdBGs of sample
-		// sizes 'colCount1' and 'colCount2' each. The partial BitVectorRRR objects
-		// containing the BitVectors for the two color-IDs are 'bv1' and 'bv2'
-		// respectively. The concatenated result BitVector is stored in 'resultVec'.
-		/*void concat(const BitVectorRRR &bv1, const uint64_t colCount1, const uint64_t colorID1,
-					const BitVectorRRR &bv2, const uint64_t colCount2, const uint64_t colorID2,
-					BitVector &resultVec);
-*/
-		// Serialize the bitvector buffer to disk, when the current constructed class
-		// count is 'colorClsCount'.
-		void bv_buffer_serialize(uint64_t colorClsCount);
 
 		// Initializes the CQF that will contain 'kmerCount' number of k-mers after
 		// mantii merge.
@@ -388,12 +357,12 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 		maxPQ.push(std::make_pair(p->second, p->first));
 	}
 
-	uint64_t cntr = 1;
+	uint64_t colorId = 1;
 	while(!maxPQ.empty())
 	{
-		sampledPairs[maxPQ.top().second] = cntr;
+		sampledPairs[maxPQ.top().second] = colorId;
 		maxPQ.pop();
-		cntr++;
+		colorId++;
 	}
 
 	console -> info("Sampled {} color-id pairs. Time-stamp = {}.", sampledPairs.size(),
@@ -402,7 +371,6 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 
 	auto t_end = time(nullptr);
 	console -> info("Sampling abundant color-id pairs took time {} seconds.", t_end - t_start);
-//    std::exit(3);
 	return curBlock;
 }
 
@@ -655,32 +623,6 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	console -> info("Filtering the unique color-id pairs took time {} seconds.", t_end - t_start);
 
 	return colorClassCount;
-}
-
-template <typename qf_obj, typename key_obj>
-void CdBG_Merger<qf_obj, key_obj>:: assign_abundant_color_ids()
-{
-	auto t_start = time(nullptr);
-
-	console -> info("Assigning color-ids to the {} sampled (on abundance) color-id pairs. Time-stamp = {}.",
-					sampledPairs.size(), time(nullptr) - start_time_);
-
-
-	std::vector<std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> idPairs;
-	idPairs.reserve(sampledPairs.size());
-
-	for(auto it = sampledPairs.begin(); it != sampledPairs.end(); ++it)
-		idPairs.emplace_back(it -> second, it -> first);
-
-	sort(idPairs.begin(), idPairs.end(), std::greater<std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>());
-	
-	uint64_t colorId = 0;
-	for(auto it = idPairs.begin(); it != idPairs.end(); ++it)
-		sampledPairs[it -> second] = ++colorId;
-
-
-	auto t_end = time(nullptr);
-	console -> info("Assigning color-ids to the sampled pairs. Took time {} seconds.", t_end - t_start);
 }
 
 
@@ -1204,7 +1146,6 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	uint64_t kmerCount = fill_disk_buckets(tillBlock);
 	uint64_t colorClassCount = sampledPairs.size() + filter_disk_buckets();
 
-	assign_abundant_color_ids();
 	build_MPH_tables();
 
 	uint64_t num_colorBuffers = 1;
