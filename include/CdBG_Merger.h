@@ -1143,7 +1143,7 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
 
 	init_disk_buckets();
-	uint64_t kmerCount = fill_disk_buckets(tillBlock);
+	fill_disk_buckets(tillBlock);
 	uint64_t colorClassCount = sampledPairs.size() + filter_disk_buckets();
 
 	build_MPH_tables();
@@ -1153,7 +1153,6 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
 	console->info("# of color buffers is {}", num_colorBuffers);
 
-//	initialize_CQF(cdbg1.get_cqf() -> keybits(), cdbg1.get_cqf() -> hash_mode(), cdbg1.get_cqf() -> seed(), kmerCount);
 	build_CQF();
 
 
@@ -1166,30 +1165,19 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 
 	auto t_end = time(nullptr);
 
-	console -> info("Merge completed.");
+	console -> info("CQF merge completed in {} s.", t_end - t_start);
 
-//	console -> info("Input colored dBG 1: over {} samples and has {} k-mers and {} color-classes.",
-//					cdbg1.get_num_samples(), cdbg1.dbg.dist_elts(), colorCount1);
-//	console -> info("Input colored dBG 2: over {} samples and has {} k-mers and {} color-classes.",
-//					cdbg2.get_num_samples(), cdbg2.dbg.dist_elts(), colorCount2);
-//	console -> info("Merged colored dBG : over {} samples and has {} k-mers and {} color-classes.",
-//					cdbg.get_num_samples(), cdbg.dbg.dist_elts(), colorClassCount);
-
-	console -> info("Total time taken = {} s.", t_end - t_start);
-
-// TODO what the hell should we do
-//	console -> info("Merged CQF metadata:");
-//	cdbg.dbg.dump_metadata();
-
-
-	console->info("Done with cqf merge");
+	auto t_mst_start = time(nullptr);
 //    uint64_t num_colorBuffers = 1;
 	console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
-	MSTMerger mst(/*&cdbg.dbg, */cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
+	MSTMerger mst(cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
 	console->info("MST Initiated. Now merging the two MSTs..");
 	mst.mergeMSTs();
+	t_end = time(nullptr);
+	console->info("MST merge completed in {} s.", t_end - t_mst_start);
 	serialize_cqf_and_sampleid_list();
-
+	t_end = time(nullptr);
+    console->info("Total time is {} s", t_end - t_start);
 
 }
 
