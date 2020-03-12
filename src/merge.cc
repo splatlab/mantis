@@ -80,7 +80,6 @@ int merge_main(MergeOpts &opt)
 	std::string dir1 = opt.dir1;
 	if(dir1.back() != '/')	// Make sure it is a full directory.
 		dir1 += '/';
-
 	// Make sure if the first input directory exists.
 	if(!mantis::fs::DirExists(dir1.c_str()))
 	{
@@ -92,30 +91,12 @@ int merge_main(MergeOpts &opt)
 	std::string dir2 = opt.dir2;
 	if(dir2.back() != '/')	// Make sure it is a full directory.
 		dir2 += '/';
-
-	// Check to see if the second input directory exists.
+	// Make sure if the second input directory exists.
 	if(!mantis::fs::DirExists(dir2.c_str()))
 	{
 		console -> error("Input directory {} does not exist.", dir2);
 		exit(1);
 	}
-
-	
-	std::string outDir = opt.out;
-	if(outDir.back() != '/')	// Make sure it is a full directory.
-		outDir += '/';
-
-	// Make the output directory if it doesn't exist.
-	if(!mantis::fs::DirExists(outDir.c_str()))
-		mantis::fs::MakeDir(outDir.c_str());
-	
-	// Check to see if the output dir exists now.
-	if(!mantis::fs::DirExists(outDir.c_str()))
-	{
-		console -> error("Output dir {} could not be created.", outDir);
-		exit(1);
-	}
-
 
 	// Check if all the required data exist in the input directories.
 	if(!data_exists(dir1, console) || !data_exists(dir2, console))
@@ -139,11 +120,11 @@ int merge_main(MergeOpts &opt)
 
 
 	if (cdbg1.get_current_cqf() == nullptr) {
-		console -> error("First cqf is null.");
+		console -> error("The first blocked cqf for first input mantis is null.");
 		std::exit(3);
 	}
 	if (cdbg2.get_current_cqf() == nullptr) {
-		console -> error("Second cqf is null.");
+		console -> error("The first blocked cqf for second input mantis is null.");
 		std::exit(3);
 	}
 	if(!cdbg1.get_current_cqf() -> check_similarity(cdbg2.get_current_cqf()))
@@ -151,9 +132,8 @@ int merge_main(MergeOpts &opt)
 		console -> error("The CQF files of the colored dBGs are not similar.");
 		exit(1);
 	}
-
 	console -> info("Initializing the merged Mantis.");
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
+	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, opt.out, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console->info("Initializing the merger.");
 	CdBG_Merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(std::move(cdbg1), std::move(cdbg2), std::move(mergedCdBG));

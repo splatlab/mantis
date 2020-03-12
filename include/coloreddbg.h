@@ -1521,14 +1521,24 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
     minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
     minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
 
+    if(prefix.back() != '/')	// Make sure it is a full directory.
+        prefix += '/';
+
     if (!mantis::fs::DirExists(prefix.c_str())) {
         mantis::fs::MakeDir(prefix.c_str());
+        // Check to see if the output dir exists now.
+        if(!mantis::fs::DirExists(prefix.c_str()))
+        {
+            console -> error("Output dir {} could not be created.", prefix);
+            exit(1);
+        }
     } else {
         std::string sysCommand = "rm -r " + prefix + "*.ser";// + mantis::CQF_FILE;
         system(sysCommand.c_str());
         sysCommand = "rm -r " + prefix + "*.cls";// + mantis::EQCLASS_FILE;
         system(sysCommand.c_str());
     }
+
     // Construct the sample-id list.
     concat_sample_id_maps(cdbg1, cdbg2);
 }

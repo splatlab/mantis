@@ -16,7 +16,7 @@
 #include "mstMerger.h"
 //#include <thread>
 #include <future>
-
+#include <unistd.h>
 template <class qf_obj, class key_obj>
 class CdBG_Merger
 {
@@ -253,22 +253,6 @@ CdBG_Merger<qf_obj, key_obj>::
 	kmerMask = (1ULL << kbits) - 1;
 }
 
-
-template <typename qf_obj, typename key_obj>
-inline void CdBG_Merger <qf_obj, key_obj> ::
-	advance_iterator_window(typename CQF<key_obj>::Iterator &it, uint64_t &step, key_obj &cqfEntry,
-							typename CQF<key_obj>::Iterator &walkBehindIterator, const CQF<key_obj> *cqf)
-{
-	++it, ++step;
-	if(!it.done())
-		cqfEntry = it.get_cur_hash();
-
-	if(step == ITERATOR_WINDOW_SIZE)
-		walkBehindIterator = cqf -> begin(true);
-	else if(step > ITERATOR_WINDOW_SIZE)
-		++walkBehindIterator;
-}
-
 template <typename qf_obj, typename key_obj>
 std::pair<uint64_t, uint64_t> CdBG_Merger<qf_obj, key_obj>::
         walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bool isSecond) {
@@ -282,35 +266,30 @@ std::pair<uint64_t, uint64_t> CdBG_Merger<qf_obj, key_obj>::
 		auto minmax = curCdbg.getMinMaxMinimizer(curBlock);
 		minMinimizer1 = minmax.first;
 		maxMinimizer1 = minmax.second;
+
+        for (auto i = minMinimizer1; i <= maxMinimizer1; i++) {
+            minimizerKeyColorList[isSecond][i]->reserve(curCdbg.minimizerCntr[i]);
+        }
 		while (!it1.done()) {
 			auto keyval = it1.get_cur_hash();
 			auto key = hash_64i(keyval.key, kmerMask);
 			auto minimizerPair = curCdbg.findMinimizer(key, kbits);
-//			auto minimizerPair = std::make_pair<uint64_t, uint64_t>(0, 0);
 			if (minimizerPair.first == minimizerPair.second) {
 				minimizerPair.second = invalid;
 			}
 			std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-//			uint16_t countt = 0;
 			for (auto minimizer : pairs) {
 				if (minimizer != invalid and minimizer >= minMinimizer1 and minimizer <= maxMinimizer1) {
 					minimizerKeyColorList[isSecond][minimizer]->emplace_back(keyval.key, keyval.count);
-				}/* else {
-				    countt++;
-				}*/
+                    cntr++;
+				}
 			}
-			/*if (countt == 2) {
-                std::cerr << "\naaaaaaaaa\n " << minMinimizer1 << " " << maxMinimizer1 << " "
-                << minimizerPair.first << " " << minimizerPair.second << " "
-                << key << " " << " " << keyval.key << "\n";
-                std::exit(3);
-			}*/
 			++it1;
-			cntr++;
 			if (cntr % 10000000 == 0) {
-				std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " out of " << count;
+				std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " for " << count << " kmers";
 			}
 		}
+		std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
 	}
 	return std::make_pair(minMinimizer1, maxMinimizer1);
 }
@@ -321,16 +300,14 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 {
 	auto t_start = time(nullptr);
 
-//	uint64_t sampleCount = SAMPLE_PAIR_COUNT;
 	console -> info("Sampling at least {} kmers. Time-stamp = {}.",
 					sampleKmerCount, time(nullptr) - start_time_);
 
 	// force currentCQFBlock to get loaded into memory
-	cdbg1.replaceCQFInMemory(invalid);
-	cdbg2.replaceCQFInMemory(invalid);
+//	cdbg1.replaceCQFInMemory(invalid);
+//	cdbg2.replaceCQFInMemory(invalid);
 
 	uint64_t kmerCount = 0;
-	idPairMap_t pairCount;
 
 	uint64_t curBlock{0};
 	console->info("cdbg1.numBlocks={}, cdbg2.numBlocks={}", cdbg1.get_numBlocks(), cdbg2.get_numBlocks());
@@ -351,7 +328,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
         } else {
             std::tie(minMinimizer1, maxMinimizer1) = walkBlockedCQF(cdbg1, curBlock, false);
             std::tie(minMinimizer2, maxMinimizer2) = walkBlockedCQF(cdbg2, curBlock, true);
-        }
+		}
 
 		minMinimizer = curBlock >= cdbg1.get_numBlocks() ? minMinimizer2 :
 					   curBlock >= cdbg2.get_numBlocks() ? minMinimizer1 : std::min(minMinimizer1, minMinimizer2);
@@ -368,13 +345,13 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 						<< " size=" << minimizerKeyColorList[0][b]->size() << "," << minimizerKeyColorList[1][b]->size() << "     ";
 			while (it0 != minimizerKeyColorList[0][b]->end() and it1 != minimizerKeyColorList[1][b]->end()) {
 				if (it0->first < it1->first) {
-					pairCount[std::make_pair(it0->second, 0)]++;
+                    sampledPairs[std::make_pair(it0->second, 0)]++;
 					it0++;
 				} else if (it0->first > it1->first) {
-					pairCount[std::make_pair(0, it1->second)]++;
+                    sampledPairs[std::make_pair(0, it1->second)]++;
 					it1++;
 				} else { // it0->first == it1->first
-					pairCount[std::make_pair(it0->second, it1->second)]++;
+                    sampledPairs[std::make_pair(it0->second, it1->second)]++;
 					it0++;
 					it1++;
 				}
@@ -383,14 +360,14 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 			}
 			if (it0 == minimizerKeyColorList[0][b]->end()) {
 				while (it1 != minimizerKeyColorList[1][b]->end()) {
-					pairCount[std::make_pair(0, it1->second)]++;
+                    sampledPairs[std::make_pair(0, it1->second)]++;
 					cdbg.minimizerCntr[b]++;
 					kmerCount++;
 					it1++;
 				}
 			} else {
 				while (it0 != minimizerKeyColorList[0][b]->end()) {
-					pairCount[std::make_pair(it0->second, 0)]++;
+                    sampledPairs[std::make_pair(it0->second, 0)]++;
 					cdbg.minimizerCntr[b]++;
 					kmerCount++;
 					it0++;
@@ -402,19 +379,19 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 		std::cerr << "\r";
 	}
 	console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}.",
-					kmerCount, pairCount.size(), time(nullptr) - start_time_);
-
+					kmerCount, sampledPairs.size(), time(nullptr) - start_time_);
 	typedef std::pair<uint64_t, std::pair<uint64_t, uint64_t>> CountAndIdPair;
-	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<CountAndIdPair>> minPQ;
-
-	for(auto p = pairCount.begin(); p != pairCount.end(); ++p) {
+	std::priority_queue<CountAndIdPair, std::vector<CountAndIdPair>, std::greater<>> minPQ;
+	for(auto p = sampledPairs.begin(); p != sampledPairs.end(); ++p) {
 		minPQ.push(std::make_pair(p->second, p->first));
 	}
-	
+
+	uint64_t cntr = 0;
 	while(!minPQ.empty())
 	{
-		sampledPairs[minPQ.top().second] = minPQ.top().first;
+		sampledPairs[minPQ.top().second] = cntr;
 		minPQ.pop();
+		cntr++;
 	}
 
 	console -> info("Sampled {} color-id pairs. Time-stamp = {}.", sampledPairs.size(),
@@ -423,6 +400,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 
 	auto t_end = time(nullptr);
 	console -> info("Sampling abundant color-id pairs took time {} seconds.", t_end - t_start);
+//    std::exit(3);
 	return curBlock;
 }
 
@@ -472,8 +450,6 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	console -> info("Writing the non-sampled color-id pairs to disk-files of form ({}). Time-stamp = {}.",
 					TEMP_DIR + EQ_ID_PAIRS_FILE + std::string("_X_Y"), time(nullptr) - start_time_);
 
-
-
 	uint64_t writtenPairsCount = 0;
 
 	console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}", startingBlock);
@@ -511,7 +487,6 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 					   curBlock >= cdbg2.get_numBlocks() ? maxMinimizer1 : std::min(maxMinimizer1, maxMinimizer2);
 		std::cerr << "\rMin minimizer=" << minMinimizer << " Max minimizer=" << maxMinimizer << "\n";
 		curBlock++;
-//		uint64_t b = minMinimizer;
         uint64_t clearedBytes = 0;
 		for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
 			// merge the two keys from cqf1 and cqf2
@@ -530,7 +505,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 				} else if (it0->first > it1->first) {
 					colorPair = std::make_pair(0, it1->second);
 					it1++;
-				} else { // it0->first == it1->first
+				} else { // keys are the same for the two CQFs : it0->first == it1->first
 					it0++;
 					it1++;
 				}
@@ -546,7 +521,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 			if (it0 == minimizerKeyColorList[0][b]->end()) {
 				while (it1 != minimizerKeyColorList[1][b]->end()) {
 					colorCount2 = std::max(colorCount2, static_cast<uint64_t >(it1->second));
-					auto colorPair = std::make_pair(0, it1->second);
+					auto colorPair = std::make_pair(0ULL, it1->second);
 					if(sampledPairs.find(colorPair) == sampledPairs.end())
 					{
 						add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
@@ -559,7 +534,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 			} else {
 				while (it0 != minimizerKeyColorList[0][b]->end()) {
 					colorCount1 = std::max(colorCount1, static_cast<uint64_t >(it0->second));
-					auto colorPair = std::make_pair(it0->second, 0);
+					auto colorPair = std::make_pair(it0->second, 0ULL);
 					if(sampledPairs.find(colorPair) == sampledPairs.end())
 					{
 						add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
@@ -575,7 +550,7 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
             minimizerKeyColorList[1][b].reset(nullptr);
 		}
 		std::cerr << "\r";
-		std::cerr << "cleared MBs in this round: " << (clearedBytes * 12) / std::pow(2, 20) << "\n";
+		std::cerr << "\tcleared MBs in this round: " << (clearedBytes * 12) / std::pow(2, 20) << "\n";
 	}
 	console -> info("Distinct kmers found {}, color-id pairs written to disk {}. Time-stamp = {}.",
 					kmerCount, writtenPairsCount, time(nullptr) - start_time_);
@@ -680,52 +655,6 @@ uint64_t CdBG_Merger<qf_obj, key_obj>::
 	return colorClassCount;
 }
 
-
-
-template <typename qf_obj, typename key_obj>
-uint64_t CdBG_Merger<qf_obj, key_obj>::
-	get_max_sort_memory()
-{
-	uint64_t bvBuffMemory = mantis::BV_BUF_LEN;// * cdbg.num_samples / 8;
-	uint64_t maxRRR1size = 0, maxRRR2size = 0;
-
-	// File-size calculation reference:
-	// https://stackoverflow.com/questions/5840148/how-can-i-get-a-files-size-in-c
-
-	// Determine the maximum bitvectorRRR file-size for cdbg1.
-	for(uint64_t i = 0; i < cdbg1.get_eq_class_file_count(); ++i)
-	{
-		struct stat64 stat_buf;
-		if(stat64(cdbg1.get_eq_class_files()[i].c_str(), &stat_buf) == 0)
-			maxRRR1size = std::max(maxRRR1size, (uint64_t)stat_buf.st_size);
-		else
-		{
-			console -> error("File size of the bitvectorRRR file {} for CdBG1 cannot be determined.",
-							cdbg1.get_eq_class_files()[i]);
-			exit(1);
-		}
-	}
-
-	// Determine the maximum bitvectorRRR file-size for cdbg2.
-	for(uint64_t i = 0; i < cdbg2.get_eq_class_file_count(); ++i)
-	{
-		struct stat64 stat_buf;
-		if(stat64(cdbg2.get_eq_class_files()[i].c_str(), &stat_buf) == 0)
-			maxRRR2size = std::max(maxRRR2size, (uint64_t)stat_buf.st_size);
-		else
-		{
-			console -> error("File size of the bitvectorRRR file {} for CdBG2 cannot be determined.",
-							cdbg2.get_eq_class_files()[i]);
-			exit(1);
-		}
-	}
-
-
-	return (bvBuffMemory + maxRRR1size + maxRRR2size) / (1024 * 1024 * 1024);
-}
-
-
-
 template <typename qf_obj, typename key_obj>
 void CdBG_Merger<qf_obj, key_obj>:: assign_abundant_color_ids()
 {
@@ -823,20 +752,6 @@ void CdBG_Merger<qf_obj, key_obj>::
 	auto t_end = time(nullptr);
 	console -> info("Building the MPH tables took time {} seconds.", t_end - t_start);
 }
-
-template <class qf_obj, class key_obj>
-void CdBG_Merger<qf_obj, key_obj>:: bv_buffer_serialize(uint64_t colorClsCount)
-{
-	if (colorClsCount % numCCPerBuffer > 0)
-		cdbg.bv_buffer.resize((colorClsCount % numCCPerBuffer) * cdbg.num_samples);
-	
-	BitVectorRRR final_com_bv(cdbg.bv_buffer);
-	std::string bv_file(cdbg.prefix + std::to_string(cdbg.num_serializations) + "_" + mantis::EQCLASS_FILE);
-	sdsl::store_to_file(final_com_bv, bv_file);
-
-	cdbg.num_serializations++;
-}
-
 
 
 template <typename qf_obj, typename key_obj>
@@ -1258,8 +1173,6 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
     console -> info ("Splitting output minimizers into blocks based on sum of the two input minimizers");
 	minimizerKeyColorList[0].resize(cdbg1.minimizerBlock.size());
 	minimizerKeyColorList[1].resize(cdbg1.minimizerBlock.size());
-//	cdbg.minimizerCntr.resize(cdbg1.minimizerCntr.size(), 0);
-//	cdbg.minimizerBlock.resize(cdbg1.minimizerBlock.size(), 0);
 	for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
 	for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
     console -> info ("Done dividing. Time-stamp = {}.\n", time(nullptr) - t_start);
@@ -1292,11 +1205,7 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	build_MPH_tables();
 
 	uint64_t num_colorBuffers = 1;
-//	cdbg.bv_buffer = BitVector(mantis::NUM_BV_BUFFER * cdbg.num_samples);
-//	build_color_class_table();
-//	cdbg.bv_buffer = BitVector(0);
 
-	//	calc_mst_stats(cdbg1, cdbg2, opt.dir1, opt.dir2);
 	store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
 	console->info("# of color buffers is {}", num_colorBuffers);
 
