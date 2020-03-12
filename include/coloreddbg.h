@@ -6,6 +6,7 @@
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *                  Mike Ferdman (), mferdman@cs.stonybrook.edu
  *                  Jamshed Khan (), jamshed@umd.edu
+ *                  Fatemeh Almodaresi (), falmodar@umd.edu
  *   Organization:  Stony Brook University, University of Maryland
  *
  * ============================================================================
@@ -126,15 +127,26 @@ enum ColorBVResType {
     notFound, notAdded, added2FirstBuffer, added2OtherthanFirstBuffer
 };
 
+template<class T>
+class SampleObject {
+public:
+    SampleObject() : obj(), sample_id(), id(0) {}
 
-template<class key_obj>
-struct CQFDeleter {
-    void operator()(CQF<key_obj> *p) {
-//            if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
-        p->close();
-        p->free();
-//            }
-        delete p;
+    SampleObject(T o, std::string &s = std::string(),
+                 uint32_t id = 0) : obj(o), sample_id(s), id(id) {}
+
+    SampleObject(const SampleObject &o) : obj(o.obj),
+                                          sample_id(o.sample_id), id(o.id) {}
+
+    T obj;
+    std::string sample_id;
+    uint32_t id;
+};
+
+template<class T>
+struct compare {
+    bool operator()(const SampleObject<T> &lhs, const SampleObject<T> &rhs) {
+        return lhs.obj.key > rhs.obj.key;
     }
 };
 
@@ -147,11 +159,60 @@ using default_cdbg_bv_map_t = cdbg_bv_map_t<__uint128_t,
 template<class qf_obj, class key_obj>
 class ColoredDbg {
 public:
+    ColoredDbg() {}
+
+    // Load from disk
     ColoredDbg(std::string &cqf_file, std::vector<std::string> &eqclass_files,
                std::string &sample_file, int flag);
 
+    // Initialize an empty CQF to fill later
     ColoredDbg(uint64_t qbits, uint64_t key_bits, enum qf_hashmode hashmode,
                uint32_t seed, std::string &prefix, uint64_t nqf, int flag);
+
+    // Required to load the input CdBGs for manti merge.
+    ColoredDbg(std::string &dir, int flag);
+
+    // Required to instantitate the output CdBG for mantii merge.
+    ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+               std::string &prefix, int flag);
+
+    // Required for blocked CQF
+    ColoredDbg(uint64_t nqf);
+
+    // Overload of asignment operator to do deep copy for all the members
+    ColoredDbg &operator=(ColoredDbg &&other) noexcept {
+        sampleid_map = other.sampleid_map;
+        eqclass_map = other.eqclass_map;
+//        dbg = other.dbg;
+        bv_buffer = other.bv_buffer;
+        first_bv_buffer = other.first_bv_buffer;
+        eqclasses = other.eqclasses;
+        prefix = other.prefix;
+        num_samples = other.num_samples;
+        num_serializations = other.num_serializations;
+        dbg_alloc_flag = other.dbg_alloc_flag;
+        flush_eqclass_dis = other.flush_eqclass_dis;
+        start_time_ = other.start_time_;
+        console = other.console;
+
+        minlen = other.minlen;
+        minimizerCntr = other.minimizerCntr;
+        minimizerBlock = other.minimizerBlock;
+        colorClassPerBuffer = other.colorClassPerBuffer;
+        notSorted_eq_id = other.notSorted_eq_id;
+        numEqClassBVs = other.numEqClassBVs;
+        eqClsFiles = other.eqClsFiles;
+        minmaxMinimizer = other.minmaxMinimizer;
+        if (other.curDbg) {
+            curDbg = std::move(other.curDbg);//.reset(new CQF<key_obj>(std::move(*other.curDbg)));
+        }
+        currentBlock = other.currentBlock;
+        dbgs.resize(other.dbgs.size());
+        for (auto i = 0; i < other.dbgs.size(); i++) {
+            dbgs[i] = other.dbgs[i];
+        }
+        return *this;
+    }
 
     void build_sampleid_map(qf_obj *incqfs);
 
@@ -165,8 +226,6 @@ public:
 
     const uint64_t get_numBlocks(void) const { return minmaxMinimizer.size(); }
 
-    const uint64_t get_currentBlock(void) const { return currentBlock; }
-
     uint64_t get_num_bitvectors(void) const;
 
     uint64_t get_num_eqclasses(void) const { return numEqClassBVs; }//eqclass_map.size(); }
@@ -179,10 +238,7 @@ public:
 
     uint64_t range(void) const { return curDbg.range(); }
 
-    inline uint64_t get_color_class_per_buffer(void) const { return colorClassPerBuffer; }
-
-    std::vector<uint64_t>
-    find_samples(const mantis::QuerySet &kmers);
+    std::vector<uint64_t> find_samples(const mantis::QuerySet &kmers);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>
     find_samples(std::unordered_map<mantis::KmerHash, uint64_t> &uniqueKmers);
@@ -199,15 +255,6 @@ public:
 
     // Checks if all the required data for a mantis index exists at directory 'dir'.
     static bool data_exists(std::string &dir, spdlog::logger *console);
-
-    ColoredDbg() {}
-
-    // Required to load the input CdBGs for mantii merge.
-    ColoredDbg(std::string &dir, int flag);
-
-    // Required to instantitate the output CdBG for mantii merge.
-    ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-               std::string &prefix, int flag);
 
     // Returns the vector of names of all the color-class (bitvector) files.
     inline std::vector<std::string> &get_eq_class_files() { return eqClsFiles; }
@@ -230,8 +277,6 @@ public:
     class CdBG_Merger;
 
     //////////// blockedCQF
-    ColoredDbg(uint64_t nqf);
-
     void initializeCQFs(std::string &prefixIn, std::vector<uint32_t> &qbits, uint64_t key_bits, qf_hashmode hashmode,
                         uint32_t seed, uint64_t cnt, int flag);
 
@@ -267,40 +312,6 @@ public:
     }
 
     void initializeNewCQFBlock(uint64_t i, uint64_t key_bits, qf_hashmode hashmode, uint32_t seed);
-
-    ColoredDbg &operator=(ColoredDbg &&other) noexcept {
-        sampleid_map = other.sampleid_map;
-        eqclass_map = other.eqclass_map;
-//        dbg = other.dbg;
-        bv_buffer = other.bv_buffer;
-        first_bv_buffer = other.first_bv_buffer;
-        eqclasses = other.eqclasses;
-        prefix = other.prefix;
-        num_samples = other.num_samples;
-        num_serializations = other.num_serializations;
-        dbg_alloc_flag = other.dbg_alloc_flag;
-        flush_eqclass_dis = other.flush_eqclass_dis;
-        start_time_ = other.start_time_;
-        console = other.console;
-
-        minlen = other.minlen;
-        minimizerCntr = other.minimizerCntr;
-        minimizerBlock = other.minimizerBlock;
-        colorClassPerBuffer = other.colorClassPerBuffer;
-        notSorted_eq_id = other.notSorted_eq_id;
-        numEqClassBVs = other.numEqClassBVs;
-        eqClsFiles = other.eqClsFiles;
-        minmaxMinimizer = other.minmaxMinimizer;
-        if (other.curDbg) {
-            curDbg = std::move(other.curDbg);//.reset(new CQF<key_obj>(std::move(*other.curDbg)));
-        }
-        currentBlock = other.currentBlock;
-        dbgs.resize(other.dbgs.size());
-        for (auto i = 0; i < other.dbgs.size(); i++) {
-            dbgs[i] = other.dbgs[i];
-        }
-        return *this;
-    }
 
     std::vector<uint64_t> minimizerCntr;
     std::vector<uint64_t> minimizerBlock;
@@ -373,29 +384,6 @@ private:
         return x;
     }
 
-};
-
-template<class T>
-class SampleObject {
-public:
-    SampleObject() : obj(), sample_id(), id(0) {}
-
-    SampleObject(T o, std::string &s = std::string(),
-                 uint32_t id = 0) : obj(o), sample_id(s), id(id) {}
-
-    SampleObject(const SampleObject &o) : obj(o.obj),
-                                          sample_id(o.sample_id), id(o.id) {}
-
-    T obj;
-    std::string sample_id;
-    uint32_t id;
-};
-
-template<class T>
-struct compare {
-    bool operator()(const SampleObject<T> &lhs, const SampleObject<T> &rhs) {
-        return lhs.obj.key > rhs.obj.key;
-    }
 };
 
 template<class qf_obj, class key_obj>
