@@ -1533,6 +1533,14 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
     minimizerCntr.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
     minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
 
+    if (!mantis::fs::DirExists(prefix.c_str())) {
+        mantis::fs::MakeDir(prefix.c_str());
+    } else {
+        std::string sysCommand = "rm -r " + prefix + "*.ser";// + mantis::CQF_FILE;
+        system(sysCommand.c_str());
+        sysCommand = "rm -r " + prefix + "*.cls";// + mantis::EQCLASS_FILE;
+        system(sysCommand.c_str());
+    }
     // Construct the sample-id list.
     concat_sample_id_maps(cdbg1, cdbg2);
 }

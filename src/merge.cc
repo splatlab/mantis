@@ -153,10 +153,6 @@ int merge_main(MergeOpts &opt)
 	}
 
 	console -> info("Initializing the merged Mantis.");
-	std::string sysCommand = "rm -r " + outDir + "/*.ser";// + mantis::CQF_FILE;
-	system(sysCommand.c_str());
-	sysCommand = "rm -r " + outDir + "/*.cls";// + mantis::EQCLASS_FILE;
-	system(sysCommand.c_str());
 	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, outDir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console->info("Initializing the merger.");
