@@ -1177,8 +1177,7 @@ void CdBG_Merger<qf_obj, key_obj>::merge()
 	console->info("MST merge completed in {} s.", t_end - t_mst_start);
 	serialize_cqf_and_sampleid_list();
 	t_end = time(nullptr);
-    console->info("Total time is {} s", t_end - t_start);
-
+    console->info("Total merge time is {} s", t_end - t_start);
 }
 
 #endif
