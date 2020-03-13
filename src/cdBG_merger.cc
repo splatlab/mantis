@@ -182,8 +182,6 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
     return curBlock;
 }
 
-
-
 template <typename qf_obj, typename key_obj>
 void CdBG_merger<qf_obj, key_obj>::
 init_disk_buckets()
@@ -217,8 +215,6 @@ init_disk_buckets()
                     fileCount1 + 1, fileCount2 + 1);
 }
 
-
-
 template <typename qf_obj, typename key_obj>
 uint64_t CdBG_merger<qf_obj, key_obj>::
 fill_disk_buckets(uint64_t startingBlock)
@@ -231,10 +227,6 @@ fill_disk_buckets(uint64_t startingBlock)
     uint64_t writtenPairsCount = 0;
 
     console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}", startingBlock);
-
-//	std::cerr << "\n\n\nMINIMIZER MAP SIZE= " << minimizerKeyColorList.size() << "\n\n\n";
-// definitely this should not be cleaned .. BE SO careful about this. Very tricky!!!
-//	for (auto & m : minimizerKeyColorList) m.clear();
 
     // force currentCQFBlock to get loaded into memory
     cdbg1.replaceCQFInMemory(invalid);
@@ -350,8 +342,6 @@ fill_disk_buckets(uint64_t startingBlock)
     return kmerCount;
 }
 
-
-
 template <typename qf_obj, typename key_obj>
 void CdBG_merger<qf_obj, key_obj>::
 add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
@@ -364,8 +354,6 @@ add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
 
     diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
 }
-
-
 
 template <typename qf_obj, typename key_obj>
 uint64_t CdBG_merger<qf_obj, key_obj>::
@@ -432,8 +420,6 @@ filter_disk_buckets()
 
     return colorClassCount;
 }
-
-
 
 template <typename qf_obj, typename key_obj>
 void CdBG_merger<qf_obj, key_obj>::
