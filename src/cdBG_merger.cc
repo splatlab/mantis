@@ -107,7 +107,7 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
         }
         maxMinimizer =
                 // If it's the last block for both of the CQFs
-                curBlock == cdbg1.get_numBlocks() - 1 and curBlock == cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
+                curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
                 curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
                 curBlock >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
                 std::min(maxMinimizer1, maxMinimizer2);
@@ -256,7 +256,7 @@ fill_disk_buckets(uint64_t startingBlock)
 
         maxMinimizer =
                 // If it's the last block for both of the CQFs
-                curBlock == cdbg1.get_numBlocks() - 1 and curBlock == cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
+                curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
                 curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
                 curBlock >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
                 std::min(maxMinimizer1, maxMinimizer2);
@@ -358,7 +358,8 @@ add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
     const uint64_t row = (colorID1 ? (colorID1 - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
             col = (colorID2 ? (colorID2 - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
-    diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
+//    diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
+    diskBucket[0][0] << colorID1 << " " << colorID2 << "\n";
 }
 
 template <typename qf_obj, typename key_obj>
@@ -382,8 +383,7 @@ filter_disk_buckets()
     const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
             fileCount2 = cdbg2.get_eq_class_file_count();
 
-    //TODO In dire need of Jamshed's help
-    uint maxMemoryForSort = 20;//std::max(get_max_sort_memory(), (uint64_t)1);
+    uint maxMemoryForSort = 20;
 
     for(int i = 0; i <= fileCount1; ++i)
         for(int j = 0; j <= fileCount2; ++j)
@@ -542,7 +542,7 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
         }
         maxMinimizer =
                 // If it's the last block for both of the CQFs
-                curBlock == cdbg1.get_numBlocks() - 1 and curBlock == cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
+                curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
                 curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
                 curBlock >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
                 std::min(maxMinimizer1, maxMinimizer2);
@@ -889,7 +889,6 @@ void CdBG_merger<qf_obj, key_obj>::merge()
     init_disk_buckets();
     fill_disk_buckets(tillBlock);
     uint64_t colorClassCount = sampledPairs.size() + filter_disk_buckets();
-
     build_MPH_tables();
 
     uint64_t num_colorBuffers = 1;
