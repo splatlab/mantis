@@ -40,6 +40,17 @@ namespace mantis {
 			return true;
 		}
 
+	  bool IsDirEmpty(const char *dir) {
+		  auto freeme = [](DIR* f) -> void { free(f);};
+		  std::unique_ptr<DIR, decltype(freeme)> folder(opendir(dir), freeme);
+
+		  if (!folder) {
+			  std::cerr << "Directory doesn't exist " << dir << std::endl;
+			  exit(1);
+		  }
+		  return readdir(folder.get()) == nullptr;
+	  }
+
 		void MakeDir(const char* path) { mkdir(path, ACCESSPERMS); }
 
 		std::vector<std::string> GetFilesExt(const char *dir, const char *ext) {

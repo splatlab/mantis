@@ -228,7 +228,6 @@ int build_main(BuildOpts &opt) {
     return EXIT_SUCCESS;
 }                /* ----------  end of function main  ---------- */
 
-
 int build_blockedCQF_main(BuildOpts &opt) {
     spdlog::logger *console = opt.console.get();
     std::ifstream infile(opt.inlist);
@@ -255,16 +254,17 @@ int build_blockedCQF_main(BuildOpts &opt) {
     // make the output directory if it doesn't exist
     if (!mantis::fs::DirExists(prefix.c_str())) {
         mantis::fs::MakeDir(prefix.c_str());
+        // Check to see if the output dir exists now.
+        if(!mantis::fs::DirExists(prefix.c_str())) {
+            console -> error("Output dir {} could not be created.", prefix);
+            exit(1);
+        }
     } else {
-        std::string sysCommand = "rm -r " + prefix + "*.ser";// + mantis::CQF_FILE;
-        system(sysCommand.c_str());
-        sysCommand = "rm -r " + prefix + "*.cls";// + mantis::EQCLASS_FILE;
-        system(sysCommand.c_str());
-    }
-    // check to see if the output dir exists now
-    if (!mantis::fs::DirExists(prefix.c_str())) {
-        console->error("Output dir {} could not be successfully created.", prefix);
-        exit(1);
+        std::string anyFile = prefix + "/*";
+        if (mantis::fs::FileExists(anyFile.c_str())) {
+            std::string sysCommand = "rm -r " + prefix + "/*";
+            system(sysCommand.c_str());
+        }
     }
 
     // If we made it this far, record relevant meta information in the output directory

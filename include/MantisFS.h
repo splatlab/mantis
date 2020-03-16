@@ -21,6 +21,7 @@ namespace mantis {
 		// http://stackoverflow.com/questions/12774207/fastest-way-to-check-if-a-file-exist-using-standard-c-c11-c
 		bool DirExists(const char* path);
 		void MakeDir(const char* path);
+		bool IsDirEmpty(const char *dir);
 		// Taken from
 		// https://stackoverflow.com/questions/19189014/how-do-i-find-files-with-a-specific-extension-in-a-directory-that-is-provided-by
 		std::vector<std::string> GetFilesExt(const char *dir, const char *ext);

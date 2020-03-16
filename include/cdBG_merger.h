@@ -180,7 +180,7 @@ class CdBG_merger
 	uint64_t store_abundant_color_pairs(std::ofstream& output);
 	void calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string& dir1, std::string& dir2);
 
-	std::pair<uint64_t, uint64_t> walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bool isFirst);
+	uint64_t walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bool isFirst);
 };
 
 
