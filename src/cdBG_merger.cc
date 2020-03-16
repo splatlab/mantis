@@ -358,8 +358,8 @@ add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
     const uint64_t row = (colorID1 ? (colorID1 - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
             col = (colorID2 ? (colorID2 - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
-//    diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
-    diskBucket[0][0] << colorID1 << " " << colorID2 << "\n";
+    diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
+//    diskBucket[0][0] << colorID1 << " " << colorID2 << "\n";
 }
 
 template <typename qf_obj, typename key_obj>
