@@ -522,8 +522,6 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
     uint64_t colorId{0}, epsilon{100};
     KeyObject keyObj;
 
-    std::cerr << "\n\n\n0SLEEEP before initializing and loading the output cqf";
-    usleep(10000000);
     cdbg.initializeNewCQFBlock(invalid, kbits, hashmode, seed);
     cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
     while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
@@ -547,10 +545,7 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
         std::cerr << "\rMin minimizer=" << minMinimizer << " Max minimizer=" << maxMinimizer << "\n";
         curBlock++;
 
-        std::cerr << "\n\n\n2SLEEEP loading the two and filling minimizers\n";
-        usleep(10000000);
-
-//        The output block kmer count should be left for the next set of input blocks
+        //        The output block kmer count should be left for the next set of input blocks
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
             auto it0 = minimizerKeyColorList[0][b]->begin();
@@ -604,9 +599,6 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
                 console->info("Fill and serialize cqf {} with {} kmers up to minimizer {}", outputCQFBlockId, blockKmerCnt, b);
                 kmerCount += blockKmerCnt;
                 blockKmerCnt = 0;
-                console->info("3SLEEEP before sorting");
-                usleep(10000000);
-
                 std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2){
                     return kv1.first < kv2.first;
                 });
@@ -617,8 +609,6 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
 
                 cdbg.serializeCurrentCQF();
                 tmp_kmers.clear();
-                console->info("4SLEEEP after sorting, before initializing a new one");
-                usleep(10000000);
 
                 outputCQFBlockId++;
                 cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
@@ -650,22 +640,14 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
     }
 
     console -> info("Total kmers merged: {}. Time-stamp: {}.", kmerCount, time(nullptr) - start_time_);
-
     console -> info("Out of {} kmers, {} have color-ids that are sampled earlier.", kmerCount, foundAbundantId);
-
-
-    auto t_end = time(nullptr);
-    console -> info("Merging the CQFs took time {} seconds.", t_end - t_start);
-
-    console->info("5SLEEEP befor freeing the memory");
-    usleep(10000000);
 
     cdbg1.replaceCQFInMemory(invalid);
     cdbg2.replaceCQFInMemory(invalid);
     cdbg.replaceCQFInMemory(invalid);
-    console->info("6SLEEEP after freeing the memory. Before the start of merging MSTs");
-    usleep(10000000);
 
+    auto t_end = time(nullptr);
+    console -> info("Merging the CQFs took time {} seconds.", t_end - t_start);
 }
 
 
@@ -689,13 +671,8 @@ uint64_t CdBG_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
+void CdBG_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 {
-    // Serialize the CQF.
-    cdbg.serializeCurrentCQF();
-    console -> info("Serialized CQF.");
-
-
     // Serialize the sample-id map.
     std::ofstream outputFile(cdbg.prefix + mantis::SAMPLEID_FILE);
 
@@ -706,6 +683,7 @@ void CdBG_merger<qf_obj, key_obj>:: serialize_cqf_and_sampleid_list()
 
     console -> info("Serialized sample-id mapping.");
 
+    // Serialize minimizer count and associated CQF block
     std::ofstream minfile(cdbg.prefix + mantis::MINIMIZER_FREQ, std::ios::binary);
     minfile.write(reinterpret_cast<char *>(cdbg.minimizerCntr.data()), cdbg.minimizerCntr.size()*sizeof(typename decltype(cdbg.minimizerCntr)::value_type));
     minfile.close();
@@ -906,6 +884,8 @@ void CdBG_merger<qf_obj, key_obj>::merge()
 
     build_CQF();
 
+    serializeRemainingStructures();
+
     // Remove the temporary directory.
     std::string sysCommand = "rm -rf " + tempDir;
     console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
@@ -919,14 +899,15 @@ void CdBG_merger<qf_obj, key_obj>::merge()
 
     auto t_mst_start = time(nullptr);
 //    uint64_t num_colorBuffers = 1;
+    console->info("SLEEEP before MST merge");
+    usleep(10000000);
+
     console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
     MSTMerger mst(cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
     console->info("MST Initiated. Now merging the two MSTs..");
     mst.mergeMSTs();
     t_end = time(nullptr);
     console->info("MST merge completed in {} s.", t_end - t_mst_start);
-    serialize_cqf_and_sampleid_list();
-    t_end = time(nullptr);
     console->info("Total merge time is {} s", t_end - t_start);
 }
 

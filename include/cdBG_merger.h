@@ -175,7 +175,7 @@ class CdBG_merger
 		inline uint64_t get_color_id(const std::pair<uint64_t, uint64_t> &idPair);
 
 		// Serializes the output CQF and sample-id mapping.
-		void serialize_cqf_and_sampleid_list();
+		void serializeRemainingStructures();
 
 	// Builds the output color-class bitvectors for the color-id pairs.
 	void store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, uint64_t& numColorBuffers);
