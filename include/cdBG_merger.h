@@ -85,6 +85,8 @@ class CdBG_merger
 		std::vector<std::unique_ptr<std::vector<std::pair<uint64_t, colorIdType>>>> minimizerKeyColorList[2];
 //		std::vector<std::unordered_map<uint64_t, std::pair<colorIdType , colorIdType>>> minimizerKeyColorList;
 		uint64_t kbits;
+		qf_hashmode hashmode;
+		uint32_t seed;
 		uint64_t kmerMask;
 
 

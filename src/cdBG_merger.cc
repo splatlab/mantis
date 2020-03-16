@@ -27,6 +27,8 @@ CdBG_merger(ColoredDbg<qf_obj, key_obj> &&cdbg1in, ColoredDbg<qf_obj, key_obj> &
     numCCPerBuffer2 = mantis::BV_BUF_LEN / cdbg2.num_samples;
     numCCPerBuffer = mantis::BV_BUF_LEN / (cdbg1.num_samples + cdbg2.num_samples);
     kbits = cdbg1.get_current_cqf()->keybits();
+    hashmode = cdbg1.get_current_cqf()->hash_mode();
+    seed = cdbg1.get_current_cqf()->seed();
     kmerMask = (1ULL << kbits) - 1;
 }
 
@@ -383,7 +385,7 @@ filter_disk_buckets()
     const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
             fileCount2 = cdbg2.get_eq_class_file_count();
 
-    uint maxMemoryForSort = 20;
+    uint maxMemoryForSort = 5;
 
     for(int i = 0; i <= fileCount1; ++i)
         for(int j = 0; j <= fileCount2; ++j)
@@ -505,29 +507,25 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
     console -> info("At CQFs merging phase. Time-stamp = {}.\n", time(nullptr) - start_time_);
 
     std::vector<std::pair<uint64_t, uint64_t>> tmp_kmers;
-    tmp_kmers.reserve(block_kmer_threshold);
+    // reserve 1/3rd more than the threshold as the actual count of kmers is gonna be +-epsilon of the threshold
+    tmp_kmers.reserve(block_kmer_threshold + block_kmer_threshold/3);
 
     uint64_t kmerCount{0}, foundAbundantId{0};
     cdbg1.replaceCQFInMemory(invalid);
     cdbg2.replaceCQFInMemory(invalid);
 
     uint64_t curBlock{0}, outputCQFBlockId{0}, blockKmerCnt{0};
-//	std::cerr << "\n\nminimizerKeyColorList[0,1].size():" << minimizerKeyColorList[0].size() << " " << minimizerKeyColorList[1].size() << "\n\n";
-//	for (auto &m : cdbg.minimizerCntr) m = 0;
     for (auto &m :  minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m.clear();
     for (auto &m :  minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m.clear();
 
-    // don't remove! We need to load the first block to get the hash_mode and seed info
-    cdbg1.replaceCQFInMemory(0);
-    cdbg2.replaceCQFInMemory(0);
-    auto hash_mode = cdbg1.get_current_cqf()->hash_mode();
-    auto seed = cdbg1.get_current_cqf()->seed();
     uint64_t maxMinimizer{0}, minMinimizer{0};
     uint64_t colorId{0}, epsilon{100};
     KeyObject keyObj;
 
-    cdbg.initializeNewCQFBlock(invalid, kbits, hash_mode, seed);
-    cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hash_mode, seed);
+    std::cerr << "\n\n\n0SLEEEP before initializing and loading the output cqf";
+    usleep(10000000);
+    cdbg.initializeNewCQFBlock(invalid, kbits, hashmode, seed);
+    cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
     while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
@@ -548,6 +546,9 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
                 std::min(maxMinimizer1, maxMinimizer2);
         std::cerr << "\rMin minimizer=" << minMinimizer << " Max minimizer=" << maxMinimizer << "\n";
         curBlock++;
+
+        std::cerr << "\n\n\n2SLEEEP loading the two and filling minimizers\n";
+        usleep(10000000);
 
 //        The output block kmer count should be left for the next set of input blocks
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
@@ -572,7 +573,6 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
                     it0++;
                     it1++;
                 }
-//				cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
                 tmp_kmers.emplace_back(keyObj.key, keyObj.count);
                 blockKmerCnt++;
                 if(colorId <= sampledPairs.size())
@@ -581,8 +581,6 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
             if (it0 == minimizerKeyColorList[0][b]->end()) {
                 while (it1 != minimizerKeyColorList[1][b]->end()) {
                     colorId = get_color_id(std::make_pair(0, it1->second));
-//					keyObj = KeyObject(it1->first, 0, colorId);
-//					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
                     tmp_kmers.emplace_back(it1->first, colorId);
                     blockKmerCnt++;
                     it1++;
@@ -592,8 +590,6 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
             } else {
                 while (it0 != minimizerKeyColorList[0][b]->end()) {
                     colorId = get_color_id(std::make_pair(it0->second, 0));
-//					keyObj = KeyObject(it0->first, 0, colorId);
-//					cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
                     tmp_kmers.emplace_back(it0->first, colorId);
                     blockKmerCnt++;
                     it0++;
@@ -605,10 +601,12 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
             minimizerKeyColorList[0][b].reset(nullptr);
             minimizerKeyColorList[1][b].reset(nullptr);
             if (blockKmerCnt and blockKmerCnt > block_kmer_threshold - epsilon) {
-                std::cerr << "\n---> Fill and Serialize cqf " << outputCQFBlockId << " with " << blockKmerCnt
-                          << " kmers after seeing minimizer " << b << "\n";
+                console->info("Fill and serialize cqf {} with {} kmers up to minimizer {}", outputCQFBlockId, blockKmerCnt, b);
                 kmerCount += blockKmerCnt;
                 blockKmerCnt = 0;
+                console->info("3SLEEEP before sorting");
+                usleep(10000000);
+
                 std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2){
                     return kv1.first < kv2.first;
                 });
@@ -619,8 +617,11 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
 
                 cdbg.serializeCurrentCQF();
                 tmp_kmers.clear();
+                console->info("4SLEEEP after sorting, before initializing a new one");
+                usleep(10000000);
+
                 outputCQFBlockId++;
-                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hash_mode, seed);
+                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
             }
         }
         minMinimizer = maxMinimizer + 1;
@@ -629,8 +630,7 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
 
     // fill and serialize last cqf block
     if (!tmp_kmers.empty()) {
-        std::cerr << "\n---> Fill and Serialize cqf " << outputCQFBlockId << " with " << blockKmerCnt
-                  << " kmers as the last cqf block\n";
+        console->info("Fill and serialize cqf {} with {} kmers as the last cqf block", outputCQFBlockId, blockKmerCnt);
         kmerCount += blockKmerCnt;
         blockKmerCnt = 0;
         std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
@@ -656,6 +656,16 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
 
     auto t_end = time(nullptr);
     console -> info("Merging the CQFs took time {} seconds.", t_end - t_start);
+
+    console->info("5SLEEEP befor freeing the memory");
+    usleep(10000000);
+
+    cdbg1.replaceCQFInMemory(invalid);
+    cdbg2.replaceCQFInMemory(invalid);
+    cdbg.replaceCQFInMemory(invalid);
+    console->info("6SLEEEP after freeing the memory. Before the start of merging MSTs");
+    usleep(10000000);
+
 }
 
 
@@ -861,7 +871,7 @@ void CdBG_merger<qf_obj, key_obj>::merge()
     auto t_start = time(nullptr);
     console -> info ("Splitting output minimizers into blocks based on sum of the two input minimizers");
     minimizerKeyColorList[0].resize(cdbg1.minimizerBlock.size());
-    minimizerKeyColorList[1].resize(cdbg1.minimizerBlock.size());
+    minimizerKeyColorList[1].resize(cdbg2.minimizerBlock.size());
     for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
     for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
     console -> info ("Done dividing. Time-stamp = {}.\n", time(nullptr) - t_start);
@@ -890,14 +900,11 @@ void CdBG_merger<qf_obj, key_obj>::merge()
     fill_disk_buckets(tillBlock);
     uint64_t colorClassCount = sampledPairs.size() + filter_disk_buckets();
     build_MPH_tables();
-
     uint64_t num_colorBuffers = 1;
-
     store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
     console->info("# of color buffers is {}", num_colorBuffers);
 
     build_CQF();
-
 
     // Remove the temporary directory.
     std::string sysCommand = "rm -rf " + tempDir;
