@@ -1,6 +1,13 @@
-//
-// Created by Fatemeh Almodaresi on 2020-03-12.
-//
+/*
+ * ============================================================================
+ *
+ *         Authors:
+ *         Fatemeh Amodaresi, falmodar@cs.umd.edu
+ *         Jamshed Khan, jamshed@cs.umd.edu
+ *   Organization:  University of Maryland
+ *
+ * ============================================================================
+ */
 
 #include "cdBG_merger.h"
 

@@ -1,7 +1,9 @@
 /*
  * ============================================================================
  *
- *         Author:  Jamshed Khan, jamshed@cs.umd.edu
+ *         Authors:
+ *         Fatemeh Amodaresi, falmodar@cs.umd.edu
+ *         Jamshed Khan, jamshed@cs.umd.edu
  *   Organization:  University of Maryland
  *
  * ============================================================================
