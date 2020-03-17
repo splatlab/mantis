@@ -12,14 +12,10 @@ CdBG_merger(ColoredDbg<qf_obj, key_obj> &&cdbg1in, ColoredDbg<qf_obj, key_obj> &
             ColoredDbg<qf_obj, key_obj> &&cdbgOut)
 {
     start_time_ = std::time(nullptr);
-
-    if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count())
-        this -> cdbg1 = std::move(cdbg1in), this -> cdbg2 = std::move(cdbg2in);
-    else
-    {
+    if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count()) {
+        this->cdbg1 = std::move(cdbg1in), this->cdbg2 = std::move(cdbg2in);
+    } else {
         this -> cdbg1 = std::move(cdbg2in), this -> cdbg2 = std::move(cdbg1in);
-
-//		console -> info("Mantis indices are swapped.");
     }
 
     cdbg = std::move(cdbgOut);
@@ -30,6 +26,11 @@ CdBG_merger(ColoredDbg<qf_obj, key_obj> &&cdbg1in, ColoredDbg<qf_obj, key_obj> &
     hashmode = cdbg1.get_current_cqf()->hash_mode();
     seed = cdbg1.get_current_cqf()->seed();
     kmerMask = (1ULL << kbits) - 1;
+
+    minimizerKeyColorList[0].resize(cdbg1.minimizerBlock.size());
+    minimizerKeyColorList[1].resize(cdbg2.minimizerBlock.size());
+    for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
+    for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
 }
 
 template <typename qf_obj, typename key_obj>
@@ -81,10 +82,6 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
 
     console -> info("Sampling at least {} kmers. Time-stamp = {}.",
                     sampleKmerCount, time(nullptr) - start_time_);
-
-    // force currentCQFBlock to get loaded into memory
-//	cdbg1.replaceCQFInMemory(invalid);
-//	cdbg2.replaceCQFInMemory(invalid);
 
     uint64_t kmerCount = 0;
 
@@ -194,6 +191,18 @@ init_disk_buckets()
 
     console -> info("Initializing {} x {} disk-buckets.", fileCount1 + 1, fileCount2 + 1);
 
+    // Make the temporary directory if it doesn't exist.
+    std::string tempDir = cdbg.prefix + TEMP_DIR;
+
+    if(!mantis::fs::DirExists(tempDir.c_str()))
+        mantis::fs::MakeDir(tempDir.c_str());
+
+    // Check to see if the temporary directory exists now.
+    if(!mantis::fs::DirExists(tempDir.c_str()))
+    {
+        console -> error("Temporary directory {} could not be created.", tempDir);
+        exit(1);
+    }
     diskBucket.resize(fileCount1 + 1),
             bucketSize.resize(fileCount1 + 1),
             cumulativeBucketSize.resize(fileCount1 + 1),
@@ -673,6 +682,12 @@ uint64_t CdBG_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 template <typename qf_obj, typename key_obj>
 void CdBG_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 {
+
+    // Remove the temporary directory.
+    std::string sysCommand = "rm -rf " + cdbg.prefix + TEMP_DIR;
+    console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
+    system(sysCommand.c_str());
+
     // Serialize the sample-id map.
     std::ofstream outputFile(cdbg.prefix + mantis::SAMPLEID_FILE);
 
@@ -779,7 +794,6 @@ store_abundant_color_pairs(std::ofstream& output)
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
         output.write(reinterpret_cast<char*>(&(fs.first)), sizeof(fs.first));
         output.write(reinterpret_cast<char*>(&(fs.second)), sizeof(fs.second));
-//		std::cerr << colorID << " " << fs.first << " " << fs.second << "\n";
     }
     return sampledPairs.size();
 }
@@ -824,8 +838,6 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
                 output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
                 output.write(reinterpret_cast<char*>(&(idPair.first)), sizeof(idPair.first));
                 output.write(reinterpret_cast<char*>(&(idPair.second)), sizeof(idPair.second));
-//				std::cerr << colorID << " " << idPair.first << " " << idPair.second << "\n";
-
                 writtenPairsCount++;
             }
             input.close();
@@ -840,74 +852,34 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
     console -> info("Writing {} color pairs took time {} seconds.", writtenPairsCount, t_end - t_start);
 }
 
-
-
 template <typename qf_obj, typename key_obj>
 void CdBG_merger<qf_obj, key_obj>::merge()
 {
-
     auto t_start = time(nullptr);
-    console -> info ("Splitting output minimizers into blocks based on sum of the two input minimizers");
-    minimizerKeyColorList[0].resize(cdbg1.minimizerBlock.size());
-    minimizerKeyColorList[1].resize(cdbg2.minimizerBlock.size());
-    for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
-    for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
-    console -> info ("Done dividing. Time-stamp = {}.\n", time(nullptr) - t_start);
+    console -> info ("Merge starting...");
 
-    t_start = time(nullptr);
-    console -> info ("Merge starting. Time-stamp = {}.\n", time(nullptr) - start_time_);
-
-
-    // Make the temporary directory if it doesn't exist.
-    std::string tempDir = cdbg.prefix + TEMP_DIR;
-
-    if(!mantis::fs::DirExists(tempDir.c_str()))
-        mantis::fs::MakeDir(tempDir.c_str());
-
-    // Check to see if the temporary directory exists now.
-    if(!mantis::fs::DirExists(tempDir.c_str()))
-    {
-        console -> error("Temporary directory {} could not be created.", tempDir);
-        exit(1);
-    }
-
-
+    console -> info ("Merging the two CQFs..");
     auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
-
     init_disk_buckets();
     fill_disk_buckets(tillBlock);
-    uint64_t colorClassCount = sampledPairs.size() + filter_disk_buckets();
+    filter_disk_buckets();
     build_MPH_tables();
     uint64_t num_colorBuffers = 1;
     store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
     console->info("# of color buffers is {}", num_colorBuffers);
-
     build_CQF();
-
     serializeRemainingStructures();
-
-    // Remove the temporary directory.
-    std::string sysCommand = "rm -rf " + tempDir;
-    console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
-
-    system(sysCommand.c_str());
-
-
     auto t_end = time(nullptr);
-
     console -> info("CQF merge completed in {} s.", t_end - t_start);
 
+    console -> info ("Merging the two MSTs..");
     auto t_mst_start = time(nullptr);
-//    uint64_t num_colorBuffers = 1;
-    console->info("SLEEEP before MST merge");
-    usleep(10000000);
-
-    console->info("{}, {}", cdbg1.prefix, cdbg2.prefix);
     MSTMerger mst(cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
-    console->info("MST Initiated. Now merging the two MSTs..");
+    console->info("MSTs Initiated.");
     mst.mergeMSTs();
     t_end = time(nullptr);
     console->info("MST merge completed in {} s.", t_end - t_mst_start);
+
     console->info("Total merge time is {} s", t_end - t_start);
 }
 
