@@ -133,6 +133,7 @@ int main ( int argc, char *argv[] ) {
                   required("-s","--log-slots") & value("log-slots",
                                                        bopt.qbits) % "log of number of slots in the output CQF",
                   option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
+                  option("-p", "--processes") & value("num_processes", bopt.numProcesses) % "number of linux commands to be run at the same time",
                   required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                   required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
   );

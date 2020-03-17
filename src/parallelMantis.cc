@@ -57,9 +57,10 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         std::exit(1);
     }
 
-    ctpl::thread_pool p(2 /* two threads in the pool */);
+    ctpl::thread_pool p(opt.numProcesses /* num of threads in the pool */);
     int arr[5] = {0};
     std::vector<std::future<void>> results(4);
+
     for (int i = 0; i < 8; ++i) { // for 8 iterations,
         for (int j = 0; j < 4; ++j) {
             results[j] = p.push([&arr, j](int){ arr[j] +=2; });
@@ -70,4 +71,5 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         auto pt = std::min_element(arr, arr + 4);
         arr[4] = *pt;
     }
+    std::cerr << "\n\n\n"  << arr[4] << "\n\n\n";
 }
