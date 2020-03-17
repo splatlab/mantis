@@ -53,6 +53,7 @@ int validate_mst_main(MSTValidateOpts &opt);
 int stats_main(StatsOpts& statsOpts);
 
 int merge_main(MergeOpts &opt);
+int construct_mantis_by_merge_main(BuildOpts& opt);
 int validate_merge_main(ValidateMergeOpts &opt);
 int compare_indices_main(CompareIndicesOpt &opt);
 int lsmt_initialize_main(LSMT_InitializeOpts &opt);
@@ -69,7 +70,7 @@ int lsmt_query_main(LSMT_QueryOpts &opt);
  */
 int main ( int argc, char *argv[] ) {
   using namespace clipp;
-  enum class mode {build, build_mst, validate_mst, query, validate, stats, merge, validate_merge,
+  enum class mode {build, build_mst, build_by_merge, validate_mst, query, validate, stats, merge, validate_merge,
                   compare_indices, lsmt_init, lsmt_update, lsmt_query, help};
   mode selected = mode::help;
 
@@ -126,6 +127,16 @@ int main ( int argc, char *argv[] ) {
                      required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
                      required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
                      );
+  auto build_by_merge_mode = (
+          command("build_by_merge").set(selected, mode::build_by_merge),
+                  option("-e", "--eqclass_dist").set(bopt.flush_eqclass_dist) % "write the eqclass abundance distribution",
+                  required("-s","--log-slots") & value("log-slots",
+                                                       bopt.qbits) % "log of number of slots in the output CQF",
+                  option("-t", "--threads") & value("num_threads", bopt.numthreads) % "number of threads",
+                  required("-i", "--input-list") & value(ensure_file_exists, "input_list", bopt.inlist) % "file containing list of input filters",
+                  required("-o", "--output") & value("build_output", bopt.out) % "directory where results should be written"
+  );
+
   auto build_mst_mode = (
           command("mst").set(selected, mode::build_mst),
                   required("-p", "--index-prefix") & value(ensure_dir_exists, "index_prefix", qopt.prefix) % "The directory where the index is stored.",
@@ -229,7 +240,7 @@ int main ( int argc, char *argv[] ) {
 
 
   auto cli = (
-              (build_mode | build_mst_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
+              (build_mode | build_mst_mode | build_by_merge_mode | validate_mst_mode | query_mode | validate_mode | stats_mode |
               merge_mode | validate_merge_mode | compare_indices_mode |
               lsmt_init_mode | lsmt_update_mode | lsmt_query_mode |
               command("help").set(selected,mode::help) |
@@ -238,6 +249,7 @@ int main ( int argc, char *argv[] ) {
              );
 
   assert(build_mode.flags_are_prefix_free());
+  assert(build_by_merge_mode.flags_are_prefix_free());
   assert(query_mode.flags_are_prefix_free());
   assert(validate_mode.flags_are_prefix_free());
   assert(build_mst_mode.flags_are_prefix_free());
@@ -269,6 +281,7 @@ int main ( int argc, char *argv[] ) {
       qopt.prefix = bopt.out; qopt.numThreads = bopt.numthreads; qopt.remove_colorClasses = true;
       build_mst_main(qopt);
       break;//build_main(bopt);  break;
+    case mode::build_by_merge: construct_mantis_by_merge_main(bopt); break;
     case mode::build_mst: build_mst_main(qopt); break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;

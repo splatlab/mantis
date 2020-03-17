@@ -17,6 +17,7 @@ add_library(mantis_core STATIC
   		squeakrconfig.cc
 		merge.cc
 		cdBG_merger.cc
+		parallelMantis.cc
 		lsmt.cc
   		gqf/gqf.c
   		gqf/gqf_file.c
