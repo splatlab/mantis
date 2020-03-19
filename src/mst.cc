@@ -703,6 +703,9 @@ inline uint64_t MST::getBucketId(uint64_t c1, uint64_t c2) {
 int build_mst_main(QueryOpts &opt) {
     MST mst(opt.prefix, opt.console, opt.numThreads);
     mst.buildMST();
+    if (opt.prefix.back() != '/') {
+        opt.prefix.push_back('/');
+    }
     if (opt.remove_colorClasses && !opt.keep_colorclasses) {
         for (auto &f : mantis::fs::GetFilesExt(opt.prefix.c_str(), mantis::EQCLASS_FILE)) {
             std::cerr << f.c_str() << "\n";
