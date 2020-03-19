@@ -711,12 +711,6 @@ void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
 //            dbgs[i]->close();
     }
     std::ofstream minfile(prefix + mantis::MINIMIZER_FREQ, std::ios::binary);
-    std::cerr << " \n\nFrom here\n";
-    for (auto i = 0; i < minimizerCntr.size(); i++) {
-        if (minimizerCntr[i] != 0) {
-            std::cout << i << ":" << minimizerCntr[i] << "\n";
-        }
-    }
     minfile.write(reinterpret_cast<char *>(minimizerCntr.data()),
                   minimizerCntr.size() * sizeof(typename decltype(minimizerCntr)::value_type));
     minfile.close();
