@@ -25,7 +25,8 @@ namespace mantis {
 		// Taken from
 		// https://stackoverflow.com/questions/19189014/how-do-i-find-files-with-a-specific-extension-in-a-directory-that-is-provided-by
 		std::vector<std::string> GetFilesExt(const char *dir, const char *ext);
-	}
+        std::string getExecutableDir();
+    }
 }
 
 #endif //__MANTIS_FILESYSTEM_HPP__

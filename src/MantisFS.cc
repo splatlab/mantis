@@ -5,6 +5,15 @@
 #include <dirent.h>
 #include <memory>
 
+#include <stdio.h>  /* defines FILENAME_MAX */
+#ifdef WINDOWS
+    #include <direct.h>
+    #define GetCurrentDir _getcwd
+#else
+    #include <unistd.h>
+    #define GetCurrentDir getcwd
+#endif
+
 namespace mantis {
     namespace fs {
 
@@ -71,6 +80,22 @@ namespace mantis {
             }
 
             return ret;
+        }
+
+        std::string getExecutableDir() {
+            uint64_t size = 4198;
+            char* buf = new char[size];
+            ssize_t result = readlink("/proc/self/exe", buf, size);
+            if (result == -1) {
+                std::cerr << "ERROR finding the executable dir.\n";
+                std::exit(1);
+            } else if (result >= size) {
+                std::cerr << "ERROR! The executable path has been truncated. Choose a larger size value.\n";
+                std::exit(1);
+            }
+            buf[result] = '\0';
+            std::string executable = std::string(buf);
+            return executable.substr(0, executable.find_last_of("/\\"));
         }
     }
 }
