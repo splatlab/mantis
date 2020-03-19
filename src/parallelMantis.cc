@@ -147,6 +147,11 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
     for (auto &r : results) {
         r.get();
     }
-
+    std::string command = "mv "
+                          + opt.out + mantis::TEMP_DIR + "squeakr" + std::to_string(0) + "_" + std::to_string(num_samples) + " "
+                          + opt.out + "squeakr" + std::to_string(0) + "_" + std::to_string(num_samples) + ";"
+                          + "rm -r " + inputDir + ";"
+                          + "mv " + opt.out + mantis::TEMP_DIR + " " + opt.out + "logs;";
+    system(command.c_str());
     std::cerr << "\nALL DONE!\n";
 }
