@@ -886,7 +886,8 @@ void CdBG_merger<qf_obj, key_obj>::merge()
     mst.mergeMSTs();
     t_end = time(nullptr);
     console->info("MST merge completed in {} s.", t_end - t_mst_start);
-
+    std::string cmd = "rm " + cdbg.prefix + "newID2oldIDs";
+    system(cmd.c_str());
     console->info("Total merge time is {} s", t_end - t_start);
 }
 
