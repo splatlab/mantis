@@ -55,8 +55,8 @@ int recursiveConstruction(uint64_t cnt, uint64_t start, uint64_t end, std::vecto
                      + " | tail -" + std::to_string(end-start) + " > " + inputDir + tmpIn + ";";
         sysCommand += "/usr/bin/time " + execDir + "/mantis build -s 20 -i " + inputDir + tmpIn
                      + " -o " + tmpOut + tmpIn + " -t "
-                     + std::to_string(numThreads) + " > " + tmpOut + tmpIn + ".log 2>&1;";
-        sysCommand += "ls -lh " + tmpOut + tmpIn + " >> " + tmpOut + tmpIn + ".log";
+                     + std::to_string(numThreads) + " > " + tmpOut + std::to_string(level) + tmpIn + ".log 2>&1;";
+        sysCommand += "ls -lh " + tmpOut + tmpIn + " >> " + tmpOut + std::to_string(level) + tmpIn + ".log";
         cmds.emplace_back(level, sysCommand);
         return EXIT_SUCCESS;
     }
@@ -70,8 +70,8 @@ int recursiveConstruction(uint64_t cnt, uint64_t start, uint64_t end, std::vecto
                  + " -i1 " + tmpOut  + "squeakr" + std::to_string(start) + "_" + std::to_string(mid)
                  + " -i2 " + tmpOut  + "squeakr" + std::to_string(mid) + "_" + std::to_string(end)
                  + " -o " + tmpOut  + tmpIn
-                 + " > " + tmpOut + tmpIn + ".log 2>&1;";
-    sysCommand += "ls -lh " + tmpOut + tmpIn + " >> " + tmpOut + tmpIn + ".log;";
+                 + " > " + tmpOut + std::to_string(level) + tmpIn + ".log 2>&1;";
+    sysCommand += "ls -lh " + tmpOut + tmpIn + " >> " + tmpOut + std::to_string(level) + tmpIn + ".log;";
     sysCommand += "rm -rf " + tmpOut + "squeakr" + std::to_string(start) + "_" + std::to_string(mid) + ";";
     sysCommand += "rm -rf " + tmpOut + "squeakr" + std::to_string(mid) + "_" + std::to_string(end);
     cmds.emplace_back(level, sysCommand);
