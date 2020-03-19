@@ -137,6 +137,7 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
                 r.get();
             }
             results.clear();
+            console->info("Done with Level {}", level);
             level = level_cmd.first;
         }
         results.push_back(p.push([level_cmd](int) {
