@@ -1523,10 +1523,10 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
             console -> error("Output dir {} could not be created.", prefix);
             exit(1);
         }
-    } else if (not mantis::fs::IsDirEmpty(prefix.c_str())) {
+    } /*else if (not mantis::fs::IsDirEmpty(prefix.c_str())) {
             std::string sysCommand = "rm -r " + prefix + "*";
             system(sysCommand.c_str());
-    }
+    }*/
     // Construct the sample-id list.
     concat_sample_id_maps(cdbg1, cdbg2);
 }

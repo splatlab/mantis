@@ -132,7 +132,7 @@ int merge_main(MergeOpts &opt)
 		console -> error("The CQF files of the colored dBGs are not similar.");
 		exit(1);
 	}
-	console -> info("Initializing the merged Mantis.");
+	console -> info("Initializing the output Mantis.");
 	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, opt.out, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
 
 	console->info("Initializing the merger.");

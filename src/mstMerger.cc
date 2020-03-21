@@ -27,17 +27,12 @@ static constexpr uint64_t HIGHBIT_MASK{(1ULL << 32) - 1ULL};
 static constexpr uint64_t LOWBIT_MASK{std::numeric_limits<uint64_t>::max() - HIGHBIT_MASK};
 static constexpr uint64_t CONSTNUMBlocks{1 << 16};
 
-MSTMerger::MSTMerger(/*CQF<KeyObject> *cqfIn, */std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
-                     std::string prefixIn1, std::string prefixIn2, uint64_t numColorBuffersIn) :
-                /*cqf(cqfIn), */prefix(std::move(prefixIn)),
+MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
+                     std::string prefixIn1, std::string prefixIn2) :
+                prefix(std::move(prefixIn)),
                 prefix1(std::move(prefixIn1)), prefix2(std::move(prefixIn2)),
-                nThreads(numThreads),
-                num_of_ccBuffers(numColorBuffersIn), numBlocks(CONSTNUMBlocks) {
-    eqclass_files.resize(num_of_ccBuffers);
+                nThreads(numThreads), numBlocks(CONSTNUMBlocks) {
     logger = loggerIn;//.get();
-
-//    std::string cqf_file = std::string(prefix + mantis::CQF_FILE);
-//    cqf = new CQF<KeyObject>(cqf_file, CQF_MMAP);
 
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
@@ -65,7 +60,7 @@ MSTMerger::MSTMerger(/*CQF<KeyObject> *cqfIn, */std::string prefixIn, spdlog::lo
         lru_cache2.emplace_back(1000);
     }
 
-    std::string sample_file = prefix1 + mantis::SAMPLEID_FILE;//(prefix.c_str() , mantis::SAMPLEID_FILE);
+    std::string sample_file = prefix1 + mantis::SAMPLEID_FILE;
     std::ifstream sampleid(sample_file);
     std::string tmp;
     while (sampleid >> tmp >> tmp) {
@@ -85,8 +80,8 @@ MSTMerger::MSTMerger(/*CQF<KeyObject> *cqfIn, */std::string prefixIn, spdlog::lo
     numCCPerBuffer = mantis::BV_BUF_LEN / numSamples;
 
     logger->info("# of experiments: {}", numSamples);
-    logger->info("# of threads={}, # of cc buffers={}, # of ccs per buffer={}, # of edges={}",
-            numThreads, num_of_ccBuffers, numCCPerBuffer, num_edges);
+    logger->info("# of threads={}, # of ccs per buffer={}, # of edges={}",
+            numThreads, numCCPerBuffer, num_edges);
 }
 
 /**
@@ -106,9 +101,9 @@ void MSTMerger::mergeMSTs() {
 /**
  * iterates over all elements of CQF,
  * find all the existing neighbors, and build a color graph based on that
- * @return true if the color graph build was successful
+ * @return pair of maximum observed colorId and total observed edges (including duplicates)
  */
-uint64_t MSTMerger::buildMultiEdgesFromCQFs() {
+std::pair<uint64_t, uint64_t> MSTMerger::buildMultiEdgesFromCQFs() {
 
     std::vector<uint64_t> cnts(nThreads, 0);
     for (uint32_t i = 0; i < nThreads; ++i) {
@@ -117,7 +112,6 @@ uint64_t MSTMerger::buildMultiEdgesFromCQFs() {
         ofs.write(reinterpret_cast<const char *>(&cnts[i]), sizeof(cnts[i]));
         ofs.close();
     }
-    sdsl::bit_vector nodes((1 + (num_of_ccBuffers * numCCPerBuffer) / 64) * 64, 0);
     uint64_t maxId{0}, numOfKmers{0};
 
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
@@ -141,10 +135,11 @@ uint64_t MSTMerger::buildMultiEdgesFromCQFs() {
         for (uint32_t i = 0; i < nThreads; ++i) {
             threads.emplace_back(std::thread(&MSTMerger::buildPairedColorIdEdgesInParallel, this, i,
                                              std::ref(cqf), std::ref(cnts[i]),
-                                             std::ref(nodes), std::ref(maxId), std::ref(numOfKmers)));
+                                             std::ref(maxId), std::ref(numOfKmers)));
         }
         for (auto &t : threads) { t.join(); }
     }
+    uint64_t totalEdges;
     for (uint32_t i = 0; i < nThreads; ++i) {
         std::ofstream ofs;
         ofs.open(prefix+ "tmp"+std::to_string(i), std::ofstream::out | std::ofstream::in);
@@ -152,31 +147,19 @@ uint64_t MSTMerger::buildMultiEdgesFromCQFs() {
         ofs.seekp(0);
         ofs.write(reinterpret_cast<const char *>(&cnts[i]), sizeof(cnts[i]));
         ofs.close();
+        totalEdges += cnts[i];
     }
     logger->info("Total number of kmers observed: {}", numOfKmers);
-    return maxId;
+    return std::make_pair(maxId, totalEdges);
 }
 
 
 bool MSTMerger::buildEdgeSets() {
-    edgeBucketList.resize(num_of_ccBuffers * num_of_ccBuffers);
 
-    auto maxId = buildMultiEdgesFromCQFs();
-
-//    logger->info("Total number of edges observed: {}", num_edges);
-
-
-    // count total number of color classes:
-    /*uint64_t i = 0, maxIdDivisibleBy64 = (maxId / 64) * 64;
-    while (i < maxIdDivisibleBy64) {
-        if (nodes.get_int(i, 64) != UINT64_MAX) {
-            logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, i + 64);
-        }
-        i += 64;
-    }
-    uint64_t lastbits = sdsl::bits::cnt(nodes.get_int(i, maxId - maxIdDivisibleBy64));
-    if (lastbits != maxId - maxIdDivisibleBy64)
-        logger->error("Didn't see one of the color classes in the CQF between {} & {}", i, maxId);*/
+    auto pair = buildMultiEdgesFromCQFs();
+    auto maxId =  pair.first;
+    auto totalEdges = pair.second;
+    edges.reserve(totalEdges);
     num_colorClasses = maxId + 1;
     logger->info("Put edges in each bucket in a sorted list.");
     for (uint32_t i = 0; i < nThreads; ++i) {
@@ -201,44 +184,26 @@ bool MSTMerger::buildEdgeSets() {
                                    [](Edge &e1, Edge &e2) {
                                        return e1.n1 == e2.n1 and e1.n2 == e2.n2;
                                    }), edgeList.end());
-        for (auto &edge: edgeList) {
-            if (getBucketId(edge.n1, edge.n2) >= edgeBucketList.size()) {
-                std::cerr << edge.n1 << " " << edge.n2 << " " << getBucketId(edge.n1, edge.n2) << " "
-                          << edgeBucketList.size() << "\n";
-                std::exit(3);
-            }
-            edgeBucketList[getBucketId(edge.n1, edge.n2)].push_back(edge);
-        }
+        edges.insert(edges.end(), edgeList.begin(), edgeList.end());
     }
-    for (auto &bucket: edgeBucketList) {
-        std::cerr << "before uniqifying: " << bucket.size() << " ";
-        std::sort(bucket.begin(), bucket.end(),
-                  [](Edge &e1, Edge &e2) {
-                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-                  });
-        bucket.erase(std::unique(bucket.begin(), bucket.end(),
-                                 [](Edge &e1, Edge &e2) {
-                                     return e1.n1 == e2.n1 and e1.n2 == e2.n2;
-                                 }), bucket.end());
-        std::cerr << "after: " << bucket.size() << "\n";
-    }
-    /*for (auto &bucket: edgeBucketList) {
-        for (auto &e: bucket) {
-            std::cerr << "edge=" << e.n1 << " " << e.n2 << "\n";
-        }
-    }*/
-    logger->info("Done sorting the edges.");
+
+    std::cerr << "before sorting and uniqifying: " << edges.size() << " ";
+    std::sort(edges.begin(), edges.end(),
+              [](Edge &e1, Edge &e2) {
+                  return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+              });
+    edges.erase(std::unique(edges.begin(), edges.end(),
+                             [](Edge &e1, Edge &e2) {
+                                 return e1.n1 == e2.n1 and e1.n2 == e2.n2;
+                             }), edges.end());
+    std::cerr << "after: " << edges.size() << "\n";
 
     // Add an edge between each color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
     zero = static_cast<colorIdType>(num_colorClasses);
     for (colorIdType colorId = 0; colorId < num_colorClasses; colorId++) {
-        /*if (edgeBucketList[getBucketId(colorId, zero)].find(Edge(colorId, zero)) != edgeBucketList[getBucketId(colorId, zero)].end()) {
-            logger->error("already existed: {}, {}", colorId, zero);
-            std::exit(1);
-        }*/
-        edgeBucketList[getBucketId(colorId, zero)].push_back(Edge(colorId, zero));
+        edges.emplace_back(colorId, zero);
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
 
@@ -248,7 +213,6 @@ bool MSTMerger::buildEdgeSets() {
 void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                             CQF<KeyObject> &cqf,
                                             std::uint64_t& cnt,
-                                            sdsl::bit_vector &nodes,
                                             uint64_t &maxId, uint64_t &numOfKmers) {
     //std::cout << "THREAD ..... " << threadId << " " << cqf.range() << "\n";
     uint64_t kmerCntr{0}, localMaxId{0};
@@ -306,7 +270,7 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     maxId = localMaxId > maxId ? localMaxId : maxId;
     numOfKmers += kmerCntr;
     std::cerr << "\r";
-    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, cnt/*num_edges*/);
+    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, cnt);
     colorMutex.unlock();
     //}
     tmpfile.close();
@@ -350,7 +314,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     }
     cp.close();
 
-    logger->info("Splitting the edges into edges for MST1 and MST2 for {} eqclass buckets.", eqclass_files.size());
+    logger->info("Splitting the edges into edges for MST1 and MST2 for {} edges.", edges.size());
     uint64_t numEdges = 0;
     weightBuckets.resize(numSamples);
     for (auto &qf : queryStats1) {
@@ -367,14 +331,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
 
 
     // total merged edges can be a good estimate to reserve a vector per mst
-    uint64_t totalEdgeCnt{0};
-    for (auto i = 0; i < eqclass_files.size(); i++) {
-        for (auto j = i; j < eqclass_files.size(); j++) {
-            auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
-            totalEdgeCnt += edgeBucket.size();
-        }
-    }
-    logger->info("Total # of edges: {}", totalEdgeCnt);
+    logger->info("Total # of edges: {}", edges.size());
 
     // lambda function to get sorted list of unique edges for each mantis.
     auto edgeSplitter = [=](std::vector<uint32_t> &srcEndIdx,
@@ -382,38 +339,26 @@ bool MSTMerger::calculateMSTBasedWeights() {
                             colorIdType mstZero,
                             bool isFirst) {
         std::vector<Edge> edgeList;
-        edgeList.reserve(totalEdgeCnt);
+        edgeList.reserve(edges.size());
         // put all of the edges for one of the merged mantises in a vector
-        for (auto i = 0; i < eqclass_files.size(); i++) {
-            for (auto j = i; j < eqclass_files.size(); j++) {
-                if (i * num_of_ccBuffers + j >= edgeBucketList.size()) {
-                    std::cerr << "The color bucket ID requested ("
-                              << i * num_of_ccBuffers + j
-                              << ") is larger than total number of buckets (" << edgeBucketList.size() << ")\n";
-                    std::exit(3);
+        logger->info("Split for {} input mantis", isFirst?"first":"second");
+        for (auto &edge : edges) {
+            if (edge.n1 > colorPairs.size() or edge.n2 > colorPairs.size()) {
+                std::cerr <<" Should not happen. One of the edge ends is larger than number of colors: "
+                          << edge.n1 << " " << edge.n2 << " " << colorPairs.size() << "\n";
+                std::exit(3);
+            }
+            auto n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first
+                                                           : colorPairs[edge.n1].second);
+            auto n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first
+                                                           : colorPairs[edge.n2].second);
+            if (n1 != n2) {
+                if (n1 > n2) {
+                    std::swap(n1, n2);
                 }
-                auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
-                for (auto &edge : edgeBucket) {
-                    if (edge.n1 > colorPairs.size() or edge.n2 > colorPairs.size()) {
-                        std::cerr <<" Should not happen. One of the edge ends is larger than number of colors: "
-                                  << edge.n1 << " " << edge.n2 << " " << colorPairs.size() << "\n";
-                        std::exit(3);
-                    }
-                    auto n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first
-                                                                   : colorPairs[edge.n1].second);
-                    auto n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first
-                                                                   : colorPairs[edge.n2].second);
-                    if (n1 != n2) {
-                        if (n1 > n2) {
-                            std::swap(n1, n2);
-                        }
-                        edgeList.emplace_back(n1, n2);
-                    }
-                }
-                std::cerr << "\rmantis" << (isFirst ? "1" : "2") << " edgelist for " << i << "," << j << "  ";
+                edgeList.emplace_back(n1, n2);
             }
         }
-        std::cerr << "\r";
         // sort - unique the vector
         std::sort(edgeList.begin(), edgeList.end(),
                   [](Edge &e1, Edge &e2) {
@@ -478,7 +423,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
     }
     for (auto &t : threads) { t.join(); }
     threads.clear();
-    mst1->clear();
+    mst1.reset(nullptr);
+//    mst1->clear();
     logger->info("Done calculating weights for mst1");
 
     mst2 = std::make_unique<MSTQuery>(prefix2, k, k, secondMantisSamples, logger);
@@ -504,7 +450,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
     for (auto &t : threads) { t.join(); }
     threads.clear();
     colorsInCache.clear();
-    mst2->clear();
+    mst2.reset(nullptr);
+//    mst2->clear();
     logger->info("Done calculating weights for mst2");
     uint64_t cntr{0};
 
@@ -556,21 +503,14 @@ bool MSTMerger::calculateMSTBasedWeights() {
         return w;
     };
     logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
-    for (auto i = 0; i < eqclass_files.size(); i++) {
-        for (auto j = i; j < eqclass_files.size(); j++) {
-            auto &edgeBucket = edgeBucketList[i * num_of_ccBuffers + j];
-            for (auto &edge : edgeBucket) {
-                auto w1 = findWeight(edge, edge1list, srcEndIdx1, mst1Zero, true);
-                auto w2 = findWeight(edge, edge2list, srcEndIdx2, mst2Zero, false);
-                weightBuckets[w1 + w2 - 1].push_back(edge);
-                if (++cntr % 10000000 == 0)
-                    std::cerr << "\r" << cntr << " out of " << totalEdgeCnt;
-            }
-            edgeBucket.clear();
-        }
+    for (auto &edge : edges) {
+        auto w1 = findWeight(edge, edge1list, srcEndIdx1, mst1Zero, true);
+        auto w2 = findWeight(edge, edge2list, srcEndIdx2, mst2Zero, false);
+        weightBuckets[w1 + w2 - 1].push_back(edge);
+        if (++cntr % 10000000 == 0)
+            std::cerr << "\r" << cntr << " out of " << edges.size();
     }
     std::cerr << "\r";
-    edgeBucketList.clear();
     srcEndIdx1.clear();
     srcEndIdx2.clear();
     edge1list.clear();
@@ -694,9 +634,10 @@ DisjointSets MSTMerger::kruskalMSF() {
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
     kruskalMSF();
-
-    mst1->loadIdx(prefix1);
-    mst2->loadIdx(prefix2);
+    mst1.reset(new MSTQuery(prefix1, k, k, secondMantisSamples, logger));
+    mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
+//    mst1->loadIdx(prefix1);
+//    mst2->loadIdx(prefix2);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
@@ -978,24 +919,6 @@ std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t e
     }
 
     return res; // rely on c++ optimization
-}
-
-
-/**
- * calculates the edge corresponding bucket id c1 <= c2
- * @param c1 first colorId
- * @param c2 second colorId
- * @return bucket id
- */
-inline uint64_t MSTMerger::getBucketId(uint64_t c1, uint64_t c2) {
-    if (c1 == zero or c1 > c2) {
-        std::swap(c1, c2);
-    }
-    uint64_t cb1 = c1 / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
-    uint64_t cb2 = c2 / numCCPerBuffer;//mantis::NUM_BV_BUFFER;
-    if (c2 == zero) // return the corresponding buffer for the non-zero colorId
-        return cb1 * num_of_ccBuffers + cb1;
-    return cb1 * num_of_ccBuffers + cb2;
 }
 
 void MSTMerger::planCaching(MSTQuery *mst,

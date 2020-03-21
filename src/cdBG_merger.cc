@@ -856,7 +856,7 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
     numColorBuffers = writtenPairsCount/numCCPerBuffer + 1;//mantis::NUM_BV_BUFFER + 1;
 
     auto t_end = time(nullptr);
-    console -> info("Writing {} color pairs took time {} seconds.", writtenPairsCount, t_end - t_start);
+    console -> info("Writing {} color pairs in {} buffers took time {} seconds.", writtenPairsCount, numColorBuffers, t_end - t_start);
 }
 
 template <typename qf_obj, typename key_obj>
@@ -864,6 +864,7 @@ void CdBG_merger<qf_obj, key_obj>::merge()
 {
     auto t_start = time(nullptr);
     console -> info ("Merge starting...");
+/*
 
     console -> info ("Merging the two CQFs..");
     auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
@@ -876,12 +877,14 @@ void CdBG_merger<qf_obj, key_obj>::merge()
     console->info("# of color buffers is {}", num_colorBuffers);
     build_CQF();
     serializeRemainingStructures();
+*/
+    usleep(30000000);
     auto t_end = time(nullptr);
     console -> info("CQF merge completed in {} s.", t_end - t_start);
 
     console -> info ("Merging the two MSTs..");
     auto t_mst_start = time(nullptr);
-    MSTMerger mst(cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix, num_colorBuffers);
+    MSTMerger mst(cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix);
     console->info("MSTs Initiated.");
     mst.mergeMSTs();
     t_end = time(nullptr);

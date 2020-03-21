@@ -62,15 +62,15 @@ struct Edge {
         return n1 == e.n1 && n2 == e.n2;
     }
 };
-
+/*
 // note: @fatal: careful! The hash highly depends on the length of the edge ID (uint32)
 struct edge_hash {
     uint64_t operator()(const Edge &e) const {
         return MurmurHash64A(&e, sizeof(Edge), 2038074743);
-        /*uint64_t res = e.n1;
-        return (res << 32) | (uint64_t)e.n2;*/
+        *//*uint64_t res = e.n1;
+        return (res << 32) | (uint64_t)e.n2;*//*
     }
-};
+};*/
 
 struct workItem {
     dna::canonical_kmer node;
@@ -148,14 +148,17 @@ struct DisjointSets {
 
 class MSTMerger {
 public:
-    MSTMerger(/*CQF<KeyObject> *cqf, */std::string prefix, spdlog::logger *logger, uint32_t numThreads, std::string prefix1,
-              std::string prefix2, uint64_t numColorBuffers = 1);
+    MSTMerger(std::string prefix,
+            spdlog::logger *logger,
+            uint32_t numThreads,
+            std::string prefix1,
+            std::string prefix2);
 
     void mergeMSTs();
 
 private:
 
-    uint64_t buildMultiEdgesFromCQFs();
+    std::pair<uint64_t, uint64_t> buildMultiEdgesFromCQFs();
 
     bool buildEdgeSets();
 
@@ -177,17 +180,8 @@ private:
                                  QueryStats &queryStats,
                                  std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
 
-    inline uint64_t getBucketId(uint64_t c1, uint64_t c2);
-
-    /*void writePotentialColorIdEdgesInParallel(uint32_t threadId,
-                                              CQF<KeyObject> &cqf,
-                                              std::vector<std::ofstream> &blockFiles,
-                                              std::vector<uint64_t> &blockCnt,
-                                              FilterType &filter);
-*/
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
-                                           uint64_t &cnt,
-                                           sdsl::bit_vector &nodes, uint64_t &maxId, uint64_t &numOfKmers);
+                                           uint64_t &cnt, uint64_t &maxId, uint64_t &numOfKmers);
 
 
     void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
@@ -230,39 +224,29 @@ private:
     uint32_t numOfFirstMantisSamples = 0;
     uint32_t secondMantisSamples = 0;
     uint64_t k;
-    uint64_t num_of_ccBuffers = 1;
     uint64_t numCCPerBuffer;
     uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
     colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
-//    BitVectorRRR *bvp1, *bvp2;
-//    LRUCacheMap lru_cache;//10000);
     std::vector<LRUCacheMap> lru_cache1;//10000);
     std::vector<LRUCacheMap> lru_cache2;//10000);
-//    uint64_t fixed_size = 200;
     std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache1;
     std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache2;
     std::vector<QueryStats> queryStats1;
     std::vector<QueryStats> queryStats2;
-//    uint64_t gcntr = 0;
-    std::vector<std::string> eqclass_files;
     std::vector<std::pair<colorIdType, colorIdType >> colorPairs;
     std::string prefix1;
     std::string prefix2;
     std::unique_ptr<MSTQuery> mst1;
     std::unique_ptr<MSTQuery> mst2;
-//    std::unique_ptr<CQF<KeyObject>> cqf;
-    std::vector<std::vector<Edge>> edgeBucketList;
+    std::vector<Edge> edges;
     std::vector<std::vector<Edge>> weightBuckets;
     std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
-//    SpinLockT fileClosingMutex;
-//    std::vector<SpinLockT*> blockMutex;
 
-    std::unordered_set<uint64_t> test;
     uint64_t numBlocks;
 
 };
