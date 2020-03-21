@@ -103,9 +103,8 @@ int merge_main(MergeOpts &opt)
     console->info("Merge starting ...");
 
 	// merging two CQFs
-	CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject> cqfMerger(opt.dir1, opt.dir2, opt.out);
-	cqfMerger.set_console(console);
-	cqfMerger.set_thread_count(opt.threadCount);
+	CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject>
+	        cqfMerger(opt.dir1, opt.dir2, opt.out, console, opt.threadCount);
 	cqfMerger.merge();
 
 	usleep(30000000);

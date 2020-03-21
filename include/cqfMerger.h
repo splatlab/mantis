@@ -25,13 +25,8 @@
 template<class qf_obj, class key_obj>
 class CQF_merger {
 public:
-    CQF_merger(std::string &firstCQF, std::string &secondCQF, std::string &outputCQF);
-
-    void set_console(spdlog::logger *c) { console = c; }
-
-    // Sets the number of processor-threads to be used at the intermediate steps of
-    // unique id-pairs filtering and MPH building.
-    inline void set_thread_count(uint threadNum) { threadCount = threadNum; }
+    CQF_merger(std::string &firstCQF, std::string &secondCQF, std::string &outputCQF, spdlog::logger *logger,
+               uint64_t threadNum);
 
     // Merges two Colored dBG 'cdbg1' and 'cdbg2' into the colored dBG 'cdbg'
     // (all the CdBG's are private members).

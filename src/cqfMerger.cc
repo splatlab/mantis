@@ -16,7 +16,8 @@
 template<typename qf_obj, typename key_obj>
 CQF_merger<qf_obj, key_obj>::
 CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
-            std::string &outputCQFdir)
+            std::string &outputCQFdir, spdlog::logger *logger, uint64_t threadNum)
+            : console(logger), threadCount(threadNum)
 {
     console -> info("Loading metadata for the first input colored dBG from disk.");
 
