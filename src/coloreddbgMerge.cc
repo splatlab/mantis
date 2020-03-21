@@ -39,7 +39,7 @@
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
-#include "cdBG_merger.h"
+#include "cqfMerger.h"
 #include "squeakrconfig.h"
 #include "mantisconfig.hpp"
 
@@ -76,72 +76,45 @@ int merge_main(MergeOpts &opt)
 {
 	spdlog::logger *console = opt.console.get();
 
-
-	std::string dir1 = opt.dir1;
-	if(dir1.back() != '/')	// Make sure it is a full directory.
-		dir1 += '/';
+	if(opt.dir1.back() != '/')	// Make sure it is a full directory.
+		opt.dir1 += '/';
 	// Make sure if the first input directory exists.
-	if(!mantis::fs::DirExists(dir1.c_str()))
+	if(!mantis::fs::DirExists(opt.dir1.c_str()))
 	{
-		console -> error("Input directory {} does not exist.", dir1);
+		console -> error("Input directory {} does not exist.", opt.dir1);
 		exit(1);
 	}
 
-
-	std::string dir2 = opt.dir2;
-	if(dir2.back() != '/')	// Make sure it is a full directory.
-		dir2 += '/';
+	if(opt.dir2.back() != '/')	// Make sure it is a full directory.
+		opt.dir2 += '/';
 	// Make sure if the second input directory exists.
-	if(!mantis::fs::DirExists(dir2.c_str()))
+	if(!mantis::fs::DirExists(opt.dir2.c_str()))
 	{
-		console -> error("Input directory {} does not exist.", dir2);
+		console -> error("Input directory {} does not exist.", opt.dir2);
 		exit(1);
 	}
 
 	// Check if all the required data exist in the input directories.
-	if(!data_exists(dir1, console) || !data_exists(dir2, console))
+	if(!data_exists(opt.dir1, console) || !data_exists(opt.dir2, console))
 		exit(1);
 
-	
-	console -> info("Loading metadata for the first input colored dBG from disk.");
 
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg1(dir1, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
+    auto t_start = time(nullptr);
+    console->info("Merge starting ...");
 
-	console -> info("Read colored dBG over {} samples, with {} cqf files and {} color-class files.",
-					cdbg1.get_num_samples(), cdbg1.get_numBlocks(), cdbg1.get_eq_class_file_count());
+	// merging two CQFs
+	CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject> cqfMerger(opt.dir1, opt.dir2, opt.out);
+	cqfMerger.set_console(console);
+	cqfMerger.set_thread_count(opt.threadCount);
+	cqfMerger.merge();
 
+	usleep(30000000);
+	// merging two MSTs
+	MSTMerger mst(opt.out, console, opt.threadCount, opt.dir1, opt.dir2);
+	mst.mergeMSTs();
 
-	console -> info("Loading metadata for the second input colored dBG from disk.");
-
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg2(dir2, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
-
-	console -> info("Read colored dBG over {} samples, with {} cqf files and {} color-class files.",
-					cdbg2.get_num_samples(), cdbg2.get_numBlocks(), cdbg2.get_eq_class_file_count());
-
-
-	if (cdbg1.get_current_cqf() == nullptr) {
-		console -> error("The first blocked cqf for first input mantis is null.");
-		std::exit(3);
-	}
-	if (cdbg2.get_current_cqf() == nullptr) {
-		console -> error("The first blocked cqf for second input mantis is null.");
-		std::exit(3);
-	}
-	if(!cdbg1.get_current_cqf() -> check_similarity(cdbg2.get_current_cqf()))
-	{
-		console -> error("The CQF files of the colored dBGs are not similar.");
-		exit(1);
-	}
-	console -> info("Initializing the output Mantis.");
-	ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(cdbg1, cdbg2, opt.out, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
-
-	console->info("Initializing the merger.");
-	CdBG_merger<SampleObject<CQF<KeyObject> *>, KeyObject> merger(std::move(cdbg1), std::move(cdbg2), std::move(mergedCdBG));
-	merger.set_console(console);
-	merger.set_thread_count(opt.threadCount);
-
-	merger.merge();
-
+	auto t_end = time(nullptr);
+	console->info("Total merge time is {} s", t_end - t_start);
 	return EXIT_SUCCESS;
 }
 

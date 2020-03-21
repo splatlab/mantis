@@ -9,23 +9,56 @@
  * ============================================================================
  */
 
-#include "cdBG_merger.h"
+#include "cqfMerger.h"
 
 
 
 template<typename qf_obj, typename key_obj>
-CdBG_merger<qf_obj, key_obj>::
-CdBG_merger(ColoredDbg<qf_obj, key_obj> &&cdbg1in, ColoredDbg<qf_obj, key_obj> &&cdbg2in,
-            ColoredDbg<qf_obj, key_obj> &&cdbgOut)
+CQF_merger<qf_obj, key_obj>::
+CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
+            std::string &outputCQFdir)
 {
+    console -> info("Loading metadata for the first input colored dBG from disk.");
+
+    cdbg1 = ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>(firstCQFdir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
+
+    console -> info("Read colored dBG over {} samples, with {} cqf files and {} color-class files.",
+                    cdbg1.get_num_samples(), cdbg1.get_numBlocks(), cdbg1.get_eq_class_file_count());
+
+
+    console -> info("Loading metadata for the second input colored dBG from disk.");
+
+    cdbg2 = ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>(secondCQFdir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
+
+    console -> info("Read colored dBG over {} samples, with {} cqf files and {} color-class files.",
+                    cdbg2.get_num_samples(), cdbg2.get_numBlocks(), cdbg2.get_eq_class_file_count());
+
+
+    if (cdbg1.get_current_cqf() == nullptr) {
+        console -> error("The first blocked cqf for first input mantis is null.");
+        std::exit(3);
+    }
+    if (cdbg2.get_current_cqf() == nullptr) {
+        console -> error("The first blocked cqf for second input mantis is null.");
+        std::exit(3);
+    }
+    if(!cdbg1.get_current_cqf() -> check_similarity(cdbg2.get_current_cqf()))
+    {
+        console -> error("The CQF files of the colored dBGs are not similar.");
+        exit(1);
+    }
+
+    console -> info("Initializing the output Mantis.");
+    cdbg = ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>(cdbg1, cdbg2, outputCQFdir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
     start_time_ = std::time(nullptr);
+/*
     if(cdbg1.get_eq_class_file_count() >= cdbg2.get_eq_class_file_count()) {
-        this->cdbg1 = std::move(cdbg1in), this->cdbg2 = std::move(cdbg2in);
+        this->cdbg1 = std::move(cdbg1), this->cdbg2 = std::move(cdbg2in);
     } else {
         this -> cdbg1 = std::move(cdbg2in), this -> cdbg2 = std::move(cdbg1in);
     }
+*/
 
-    cdbg = std::move(cdbgOut);
     numCCPerBuffer1 = mantis::BV_BUF_LEN / cdbg1.num_samples;
     numCCPerBuffer2 = mantis::BV_BUF_LEN / cdbg2.num_samples;
     numCCPerBuffer = mantis::BV_BUF_LEN / (cdbg1.num_samples + cdbg2.num_samples);
@@ -41,7 +74,7 @@ CdBG_merger(ColoredDbg<qf_obj, key_obj> &&cdbg1in, ColoredDbg<qf_obj, key_obj> &
 }
 
 template <typename qf_obj, typename key_obj>
-uint64_t CdBG_merger<qf_obj, key_obj>::
+uint64_t CQF_merger<qf_obj, key_obj>::
 walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bool isSecond) {
     uint64_t minMinimizer{invalid}, maxMinimizer{MAX_MINIMIZER};
     curCdbg.replaceCQFInMemory(curBlock);
@@ -82,7 +115,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
 }
 
 template <typename qf_obj, typename key_obj>
-uint64_t CdBG_merger<qf_obj, key_obj>::
+uint64_t CQF_merger<qf_obj, key_obj>::
 sample_color_id_pairs(uint64_t sampleKmerCount)
 {
     auto t_start = time(nullptr);
@@ -102,9 +135,9 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
 
         if (threadCount > 1) {
             std::future<uint64_t> r1 =
-                    std::async(std::launch::async, &CdBG_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
+                    std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
             std::future<uint64_t> r2 =
-                    std::async(std::launch::async, &CdBG_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
+                    std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
             maxMinimizer1 = r1.get();
             maxMinimizer2 = r2.get();
         } else {
@@ -190,7 +223,7 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
 }
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::
+void CQF_merger<qf_obj, key_obj>::
 init_disk_buckets()
 {
     const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
@@ -235,7 +268,7 @@ init_disk_buckets()
 }
 
 template <typename qf_obj, typename key_obj>
-uint64_t CdBG_merger<qf_obj, key_obj>::
+uint64_t CQF_merger<qf_obj, key_obj>::
 fill_disk_buckets(uint64_t startingBlock)
 {
     auto t_start = time(nullptr);
@@ -263,8 +296,8 @@ fill_disk_buckets(uint64_t startingBlock)
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
 
         if (threadCount > 1) {
-            std::future<uint64_t> r1 = std::async(std::launch::async, &CdBG_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
-            std::future<uint64_t> r2 = std::async(std::launch::async, &CdBG_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
+            std::future<uint64_t> r1 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
+            std::future<uint64_t> r2 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
             maxMinimizer1 = r1.get();
             maxMinimizer2 = r2.get();
         } else {
@@ -367,7 +400,7 @@ fill_disk_buckets(uint64_t startingBlock)
 }
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::
+void CQF_merger<qf_obj, key_obj>::
 add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
                   std::vector<std::vector<std::ofstream>> &diskBucket)
 {
@@ -381,7 +414,7 @@ add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
 }
 
 template <typename qf_obj, typename key_obj>
-uint64_t CdBG_merger<qf_obj, key_obj>::
+uint64_t CQF_merger<qf_obj, key_obj>::
 filter_disk_buckets()
 {
     if(!system(NULL))
@@ -446,7 +479,7 @@ filter_disk_buckets()
 }
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::
+void CQF_merger<qf_obj, key_obj>::
 build_MPH_tables()
 {
     auto t_start = time(nullptr);
@@ -516,7 +549,7 @@ build_MPH_tables()
 }
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::build_CQF()
+void CQF_merger<qf_obj, key_obj>::build_CQF()
 {
     auto t_start = time(nullptr);
 
@@ -544,8 +577,8 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
         if (threadCount > 1) {
-            std::future<uint64_t> r1 = std::async(std::launch::async, &CdBG_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
-            std::future<uint64_t> r2 = std::async(std::launch::async, &CdBG_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
+            std::future<uint64_t> r1 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
+            std::future<uint64_t> r2 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
             maxMinimizer1 = r1.get();
             maxMinimizer2 = r2.get();
         } else {
@@ -669,7 +702,7 @@ void CdBG_merger<qf_obj, key_obj>::build_CQF()
 
 
 template <typename qf_obj, typename key_obj>
-uint64_t CdBG_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, uint64_t> &idPair)
+uint64_t CQF_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, uint64_t> &idPair)
 {
     auto it = sampledPairs.find(idPair);
     if(it != sampledPairs.end()) {
@@ -687,7 +720,7 @@ uint64_t CdBG_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, u
 
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>:: serializeRemainingStructures()
+void CQF_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 {
 
     // Remove the temporary directory.
@@ -718,7 +751,7 @@ void CdBG_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 }
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::
+void CQF_merger<qf_obj, key_obj>::
 calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string& dir1, std::string& dir2)
 {
     auto t_start = time(nullptr);
@@ -791,7 +824,7 @@ calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &
 }
 
 template <typename qf_obj, typename key_obj>
-uint64_t CdBG_merger<qf_obj, key_obj>::
+uint64_t CQF_merger<qf_obj, key_obj>::
 store_abundant_color_pairs(std::ofstream& output)
 {
     console->info("# of abundant color IDs: {}", sampledPairs.size());
@@ -807,7 +840,7 @@ store_abundant_color_pairs(std::ofstream& output)
 
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::
+void CQF_merger<qf_obj, key_obj>::
 store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
                   uint64_t& numColorBuffers)
 {
@@ -860,12 +893,9 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
 }
 
 template <typename qf_obj, typename key_obj>
-void CdBG_merger<qf_obj, key_obj>::merge()
+void CQF_merger<qf_obj, key_obj>::merge()
 {
     auto t_start = time(nullptr);
-    console -> info ("Merge starting...");
-/*
-
     console -> info ("Merging the two CQFs..");
     auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
     init_disk_buckets();
@@ -877,22 +907,9 @@ void CdBG_merger<qf_obj, key_obj>::merge()
     console->info("# of color buffers is {}", num_colorBuffers);
     build_CQF();
     serializeRemainingStructures();
-*/
-    usleep(30000000);
     auto t_end = time(nullptr);
     console -> info("CQF merge completed in {} s.", t_end - t_start);
-
-    console -> info ("Merging the two MSTs..");
-    auto t_mst_start = time(nullptr);
-    MSTMerger mst(cdbg.prefix, console, threadCount, cdbg1.prefix, cdbg2.prefix);
-    console->info("MSTs Initiated.");
-    mst.mergeMSTs();
-    t_end = time(nullptr);
-    console->info("MST merge completed in {} s.", t_end - t_mst_start);
-    std::string cmd = "rm " + cdbg.prefix + "newID2oldIDs";
-    system(cmd.c_str());
-    console->info("Total merge time is {} s", t_end - t_start);
 }
 
 
-template class CdBG_merger<SampleObject<CQF<KeyObject> *>, KeyObject>;
+template class CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject>;

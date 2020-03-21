@@ -93,9 +93,17 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
  * 3. find MST of the weighted color graph
  */
 void MSTMerger::mergeMSTs() {
+    auto t_start = time(nullptr);
+    logger->info ("Merging the two MSTs..");
+
     buildEdgeSets();
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
+
+    std::string cmd = "rm " + prefix + "newID2oldIDs";
+    system(cmd.c_str());
+    auto t_end = time(nullptr);
+    logger->info("MST merge completed in {} s.", t_end - t_start);
 }
 
 /**

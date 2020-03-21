@@ -23,10 +23,9 @@
 #include <unistd.h>
 
 template<class qf_obj, class key_obj>
-class CdBG_merger {
+class CQF_merger {
 public:
-    CdBG_merger(ColoredDbg<qf_obj, key_obj> &&cdbg1, ColoredDbg<qf_obj, key_obj> &&cdbg2,
-                ColoredDbg<qf_obj, key_obj> &&cdbgOut);
+    CQF_merger(std::string &firstCQF, std::string &secondCQF, std::string &outputCQF);
 
     void set_console(spdlog::logger *c) { console = c; }
 
