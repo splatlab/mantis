@@ -147,7 +147,7 @@ std::pair<uint64_t, uint64_t> MSTMerger::buildMultiEdgesFromCQFs() {
         }
         for (auto &t : threads) { t.join(); }
     }
-    uint64_t totalEdges;
+    uint64_t totalEdges{0};
     for (uint32_t i = 0; i < nThreads; ++i) {
         std::ofstream ofs;
         ofs.open(prefix+ "tmp"+std::to_string(i), std::ofstream::out | std::ofstream::in);
@@ -157,7 +157,7 @@ std::pair<uint64_t, uint64_t> MSTMerger::buildMultiEdgesFromCQFs() {
         ofs.close();
         totalEdges += cnts[i];
     }
-    logger->info("Total number of kmers observed: {}", numOfKmers);
+    logger->info("Total number of kmers observed: {}, total number of edges (including duplicates): {}", numOfKmers, totalEdges);
     return std::make_pair(maxId, totalEdges);
 }
 

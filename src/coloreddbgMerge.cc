@@ -103,12 +103,14 @@ int merge_main(MergeOpts &opt)
     console->info("Merge starting ...");
 
 	// merging two CQFs
+	console->info("Merging the two CQFs...");
 	CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject>
 	        cqfMerger(opt.dir1, opt.dir2, opt.out, console, opt.threadCount);
 	cqfMerger.merge();
 
-	usleep(30000000);
 	// merging two MSTs
+	console->info("Merging the two MSTs...");
+//	usleep(30000000);
 	MSTMerger mst(opt.out, console, opt.threadCount, opt.dir1, opt.dir2);
 	mst.mergeMSTs();
 
