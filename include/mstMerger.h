@@ -242,7 +242,7 @@ private:
     std::unique_ptr<MSTQuery> mst2;
     std::vector<Edge> edges;
     std::vector<std::vector<Edge>> weightBuckets;
-    std::vector<std::vector<std::pair<colorIdType, uint32_t> >> mst;
+    std::unique_ptr<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;

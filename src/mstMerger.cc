@@ -97,7 +97,12 @@ void MSTMerger::mergeMSTs() {
     logger->info ("Merging the two MSTs..");
 
     buildEdgeSets();
+    std::cerr << "Scope does have an effect\nsleep\n\n";
+    usleep(10000000);
     calculateMSTBasedWeights();
+    std::cerr << "Scope does have an effect\nsleep\n\n";
+    usleep(10000000);
+
     encodeColorClassUsingMST();
 
     std::string cmd = "rm " + prefix + "newID2oldIDs";
@@ -432,6 +437,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     for (auto &t : threads) { t.join(); }
     threads.clear();
     mst1.reset(nullptr);
+
 //    mst1->clear();
     logger->info("Done calculating weights for mst1");
 
@@ -519,10 +525,11 @@ bool MSTMerger::calculateMSTBasedWeights() {
             std::cerr << "\r" << cntr << " out of " << edges.size();
     }
     std::cerr << "\r";
-    srcEndIdx1.clear();
+    //Clearing the standard vector has no effect on memory
+    /*srcEndIdx1.clear();
     srcEndIdx2.clear();
     edge1list.clear();
-    edge2list.clear();
+    edge2list.clear();*/
     std::cerr << "\r";
     logger->info("Calculated the weight for the edges");
     return true;
@@ -586,7 +593,7 @@ void MSTMerger::calcMSTHammingDistInParallel(uint32_t i,
  */
 DisjointSets MSTMerger::kruskalMSF() {
     uint32_t bucketCnt = numSamples;
-    mst.resize(num_colorClasses);
+    mst = std::make_unique<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>>(num_colorClasses);
     // Create disjoint sets
     DisjointSets ds(num_colorClasses);
 
@@ -609,8 +616,8 @@ DisjointSets MSTMerger::kruskalMSF() {
                 // Merge two sets
                 ds.merge(root_of_u, root_of_v, w);
                 // Current edge will be in the MST
-                mst[u].emplace_back(v, w);
-                mst[v].emplace_back(u, w);
+                (*mst)[u].emplace_back(v, w);
+                (*mst)[v].emplace_back(u, w);
                 mstTotalWeight += w;
                 selectedEdgeCntr++;
             }
@@ -626,10 +633,11 @@ DisjointSets MSTMerger::kruskalMSF() {
     std::cerr << "\r";
     mstTotalWeight++;//1 empty slot for root (zero)
     logger->info("MST Construction finished:"
+                 "\n\t# of graph nodes: {}"
                  "\n\t# of graph edges: {}"
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
-                 edgeCntr, selectedEdgeCntr, mstTotalWeight);
+                 num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
     return ds;
 }
 
@@ -641,7 +649,11 @@ DisjointSets MSTMerger::kruskalMSF() {
  */
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
+    std::cerr << "Before Kruskal\nsleep\n\n";
+    usleep(10000000);
     kruskalMSF();
+    std::cerr << "After kruskal\nsleep\n\n";
+    usleep(10000000);
     mst1.reset(new MSTQuery(prefix1, k, k, secondMantisSamples, logger));
     mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
 //    mst1->loadIdx(prefix1);
@@ -655,6 +667,8 @@ bool MSTMerger::encodeColorClassUsingMST() {
     {// putting weightbv inside the scope so its memory is freed after we're done with it
         sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
         sdsl::bit_vector visited(num_colorClasses, 0);
+        std::cerr << "After Constructing the weightbv\nsleep\n\n";
+        usleep(10000000);
         bool check = false;
         std::queue<colorIdType> q;
         q.push(zero); // Root of the tree is zero
@@ -663,7 +677,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
         while (!q.empty()) {
             colorIdType parent = q.front();
             q.pop();
-            for (auto &neighbor :mst[parent]) {
+            for (auto &neighbor :(*mst)[parent]) {
                 if (!visited[neighbor.first]) {
                     parentbv[neighbor.first] = parent;
                     weightbv[neighbor.first] = neighbor.second;
@@ -677,6 +691,11 @@ bool MSTMerger::encodeColorClassUsingMST() {
             }
         }
 
+        std::cerr << "AAAAAA -- Before resetting that big vector of vectors\nsleep\n\n";
+        usleep(10000000);
+        mst.reset(nullptr);
+        std::cerr << "After resetting that big vector of vectors\nsleep\n\n";
+        usleep(10000000);
         std::cerr << "\r";
         // filling bbv
         // resize bbv
@@ -688,6 +707,9 @@ bool MSTMerger::encodeColorClassUsingMST() {
         }
     }
     std::cerr << "\r";
+    std::cerr << "After Coming out of the scope for weightbv\nsleep\n\n";
+    usleep(10000000);
+
     // fill in deltabv
     logger->info("Filling DeltaBV...");
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
