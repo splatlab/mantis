@@ -736,6 +736,7 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
                                      sdsl::bit_vector::select_1_type &sbbv,
                                      bool isMSTBased) {
 
+    uint64_t deltasKeptInMem = 1000;
     struct Delta {
         uint64_t startingOffset{0};
         std::vector<uint32_t> deltaVals;
@@ -747,6 +748,7 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
         }
     };
     std::vector<Delta> deltas;
+    deltas.reserve(deltasKeptInMem);
 
     colorIdType s = parentbv.size() * threadID / nThreads;
     colorIdType e = parentbv.size() * (threadID + 1) / nThreads;
@@ -765,6 +767,15 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
         for (auto &v : secondDelta) {
             v += numOfFirstMantisSamples;
             deltas.back().deltaVals.push_back(v);
+        }
+        if (deltas.size() == deltasKeptInMem) {
+            colorMutex.lock();
+            for (auto &v : deltas) {
+                for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
+                    deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
+            }
+            colorMutex.unlock();
+            deltas.clear();
         }
     }
 
