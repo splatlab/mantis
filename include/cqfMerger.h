@@ -52,6 +52,7 @@ public:
         c1 = other.c1;
         c2 = other.c2;
         val_ = other.val_;
+        isEnd_ = other.isEnd_;
     }
 
     ColorIdPairIterator&
@@ -63,6 +64,7 @@ public:
         c1 = other.c1;
         c2 = other.c2;
         val_ = other.val_;
+        isEnd_ = other.isEnd_;
         return *this;
     }
 
@@ -84,13 +86,13 @@ public:
     pointer operator->() {
         return &val_;
     }
-    bool operator==(const self_type& rhs) { return c1 == rhs.c1 and c2 == rhs.c2; }
+    bool operator==(const self_type& rhs) { return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
 
-    bool operator!=(const self_type& rhs) { return c1 != rhs.c1 and c2 != rhs.c2; }
+    bool operator!=(const self_type& rhs) { return isEnd_ != rhs.isEnd_ and c1 != rhs.c1 and c2 != rhs.c2; }
 
-    bool operator<(const self_type& rhs) { return c1 == rhs.c1? c2 < rhs.c2 : c1 < rhs.c1; }
+    bool operator<(const self_type& rhs) { return isEnd_ == rhs.isEnd_?(isEnd_?false:c1 == rhs.c1? c2 < rhs.c2 : c1 < rhs.c1):not isEnd_; }
 
-    bool operator<=(const self_type& rhs) { return c1 == rhs.c1? c2 <= rhs.c2 : c1 <= rhs.c1; }
+    bool operator<=(const self_type& rhs) {return isEnd_ == rhs.isEnd_?(isEnd_?false:c1 == rhs.c1? c2 <= rhs.c2 : c1 <= rhs.c1):not isEnd_; }
 
 private:
 
@@ -99,13 +101,18 @@ private:
             input_ >> c1;
             if (input_.good()) {
                 input_ >> c2;
+            } else {
+                isEnd_ = true;
             }
+        } else {
+            isEnd_ = true;
         }
     }
     std::string fileName;
     mutable std::ifstream input_;
     colorIdType c1, c2;
     std::pair<colorIdType, colorIdType> val_;
+    bool isEnd_{false};
 };
 
 
