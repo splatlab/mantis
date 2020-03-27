@@ -206,7 +206,7 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
         maxPQ.push(std::make_pair(p->second, p->first));
     }
 
-    uint64_t colorId = 1;
+    uint64_t colorId = 0;
     while(!maxPQ.empty())
     {
         sampledPairs[maxPQ.top().second] = colorId;
@@ -223,7 +223,7 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
     return curBlock;
 }
 
-template <typename qf_obj, typename key_obj>
+/*template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::
 init_disk_buckets()
 {
@@ -266,11 +266,11 @@ init_disk_buckets()
 
     console -> info("{} x {} disk-buckets  and associated data structures initialized.",
                     fileCount1 + 1, fileCount2 + 1);
-}
+}*/
 
 template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
-fill_disk_buckets(uint64_t startingBlock)
+fill_disk_bucket(uint64_t startingBlock)
 {
     auto t_start = time(nullptr);
 
@@ -285,6 +285,7 @@ fill_disk_buckets(uint64_t startingBlock)
     cdbg1.replaceCQFInMemory(invalid);
     cdbg2.replaceCQFInMemory(invalid);
 
+    auto diskBucket = std::ofstream(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
     uint64_t curBlock{startingBlock}, kmerCount{0};
     uint64_t maxMinimizer{0}, minMinimizer;
     minMinimizer = curBlock >= cdbg1.get_numBlocks() and curBlock >= cdbg2.get_numBlocks() ? 0 :
@@ -339,7 +340,8 @@ fill_disk_buckets(uint64_t startingBlock)
 
                 if(sampledPairs.find(colorPair) == sampledPairs.end())
                 {
-                    add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
+                    diskBucket << colorPair.first << " " << colorPair.second << "\n";
+//                    add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
                     writtenPairsCount++;
                 }
                 cdbg.minimizerCntr[b]++;
@@ -351,7 +353,8 @@ fill_disk_buckets(uint64_t startingBlock)
                     auto colorPair = std::make_pair(0ULL, it1->second);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
-                        add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
+                        diskBucket << colorPair.first << " " << colorPair.second << "\n";
+//                        add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
                         writtenPairsCount++;
                     }
                     it1++;
@@ -364,7 +367,8 @@ fill_disk_buckets(uint64_t startingBlock)
                     auto colorPair = std::make_pair(it0->second, 0ULL);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
-                        add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
+                        diskBucket << colorPair.first << " " << colorPair.second << "\n";
+//                        add_color_id_pair(colorPair.first, colorPair.second, diskBucket);
                         writtenPairsCount++;
                     }
                     it0++;
@@ -383,59 +387,76 @@ fill_disk_buckets(uint64_t startingBlock)
     console -> info("Distinct kmers found {}, color-id pairs written to disk {}. Time-stamp = {}.",
                     kmerCount, writtenPairsCount, time(nullptr) - start_time_);
 
-
+    diskBucket.flush();
+    diskBucket.close();
+/*
     // Flush and close the disk-bucket files.
     for(int i = 0; i <= cdbg1.get_eq_class_file_count(); ++i)
         for(int j = 0; j <= cdbg2.get_eq_class_file_count(); ++j)
         {
             diskBucket[i][j].flush();
             diskBucket[i][j].close();
-        }
+        }*/
 
 
     auto t_end = time(nullptr);
     console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
 
+    filter_disk_buckets();
 
     return kmerCount;
 }
 
-template <typename qf_obj, typename key_obj>
+/*template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::
 add_color_id_pair(const uint64_t colorID1, const uint64_t colorID2,
-                  std::vector<std::vector<std::ofstream>> &diskBucket)
+                  std::ofstream &diskBucket)
 {
-    // TODO: Add faster file-write mechanism.
-
+    diskBucket << colorID1 << " " << colorID2 << "\n";
+*//*
     const uint64_t row = (colorID1 ? (colorID1 - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
             col = (colorID2 ? (colorID2 - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
 
     diskBucket[row][col] << colorID1 << " " << colorID2 << "\n";
-//    diskBucket[0][0] << colorID1 << " " << colorID2 << "\n";
-}
+*//*
+}*/
 
 template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
 filter_disk_buckets()
 {
-    if(!system(NULL))
+    if(!system(nullptr))
     {
         console -> error("Command processor does not exist.");
         exit(1);
     }
 
 
-    auto t_start = time(nullptr);
+//    auto t_start = time(nullptr);
 
+    std::string diskBucket = cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
     console -> info("Filtering out the unique eq-id pairs from files {} with {} threads. Time-stamp = {}",
-                    TEMP_DIR + EQ_ID_PAIRS_FILE + "_X_Y", threadCount, time(nullptr) - start_time_);
+                    diskBucket + "_X_Y", threadCount, time(nullptr) - start_time_);
+    uint maxMemoryForSort = 5;
+
+    std::string sysCommand = "sort -u";
+    sysCommand += " --parallel=" + std::to_string(threadCount);
+    sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
+    sysCommand += " -o " + diskBucket + " " + diskBucket;
+
+    console -> info("System command used:\n{}", sysCommand);
+    system(sysCommand.c_str());
+
+//    sysCommand = "wc -l " + diskBucket + " | egrep -o \"[0-9]+ \" > " + lineCountFile;
+//    system(sysCommand.c_str());
+    return 0;
+/*
 
 
     uint64_t colorClassCount = 0;
     const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
             fileCount2 = cdbg2.get_eq_class_file_count();
 
-    uint maxMemoryForSort = 5;
 
     for(int i = 0; i <= fileCount1; ++i)
         for(int j = 0; j <= fileCount2; ++j)
@@ -473,10 +494,12 @@ filter_disk_buckets()
                     colorClassCount, time(nullptr) - start_time_);
 
 
+
     auto t_end = time(nullptr);
-    console -> info("Filtering the unique color-id pairs took time {} seconds.", t_end - t_start);
+    console -> info("Uniqufied {} color-id pairs down to {} unique color-id pairs in {} secs.", t_end - t_start);
 
     return colorClassCount;
+    */
 }
 
 template <typename qf_obj, typename key_obj>
@@ -487,8 +510,32 @@ build_MPH_tables()
 
     console -> info("Building an MPH (Minimal Perfect Hash) table per disk-bucket. Time-stamp = {}.",
                     time(nullptr) - start_time_);
+    // Lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query.
+    double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key).
+
+    // Build the mphf.
+    std::string colorIdPairFile = cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
+    std::ifstream input(colorIdPairFile);
+    // new lines will be skipped unless we stop it from happening:
+    input.unsetf(std::ios_base::skipws);
+    // count the newlines with an algorithm specialized for counting:
+    auto colorIdPairCount = static_cast<unsigned int>(std::count(
+                std::istream_iterator<char>(input),
+                std::istream_iterator<char>(),
+                '\n'));
+    input.close();
 
 
+    ColorIdPairIterator kb(colorIdPairFile);
+    ColorIdPairIterator ke(colorIdPairFile, true);
+    auto colorPairIt = boomphf::range(kb, ke);
+    colorMph = std::make_unique<boophf_t>(colorIdPairCount, colorPairIt, threadCount, gammaFactor);
+    console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph->totalBitSize() / 8) / (1024 * 1024));
+    auto t_end = time(nullptr);
+    console -> info("Building the MPH tables took time {} seconds and {} memory", t_end - t_start, colorMph->totalBitSize());
+
+
+/*
     const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(),
             fileCount2 = cdbg2.get_eq_class_file_count();
     uint64_t mphMemory = 0;
@@ -528,6 +575,7 @@ build_MPH_tables()
                 double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key).
 
                 // Build the mphf.
+                auto keyIt = boomphf::range(kb, ke);
                 MPH[i][j] = new boophf_t(colorIdPair.size(), colorIdPair, threadCount, gammaFactor);
                 mphMemory += MPH[i][j] -> totalBitSize();
 
@@ -545,8 +593,9 @@ build_MPH_tables()
     console -> info("Total memory consumed by all the MPH tables = {} MB.", (mphMemory / 8) / (1024 * 1024));
 
 
-    auto t_end = time(nullptr);
+    t_end = time(nullptr);
     console -> info("Building the MPH tables took time {} seconds.", t_end - t_start);
+    */
 }
 
 template <typename qf_obj, typename key_obj>
@@ -707,16 +756,16 @@ uint64_t CQF_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, ui
 {
     auto it = sampledPairs.find(idPair);
     if(it != sampledPairs.end()) {
-        return it->second;
+        return it->second + 1;
     }
-
-    const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
+    return sampledPairs.size() + colorMph->lookup(idPair) + 1;
+    /*const uint64_t row = (idPair.first ? (idPair.first - 1) / numCCPerBuffer1 + 1 : 0),//mantis::NUM_BV_BUFFER + 1 : 0),
             col = (idPair.second ? (idPair.second - 1) / numCCPerBuffer2 + 1 : 0);//mantis::NUM_BV_BUFFER + 1 : 0);
     if (row >= MPH.size() or col >= MPH[row].size()) {
         std::cerr << "Shouldn't happen! row or column greater than MPH size\n";
         std::cerr << row << " " << col << " " << idPair.first << " " << idPair.second << "\n";
     }
-    return cumulativeBucketSize[row][col] + MPH[row][col]->lookup(idPair) + 1;
+    return cumulativeBucketSize[row][col] + MPH[row][col]->lookup(idPair) + 1;*/
 }
 
 
@@ -724,6 +773,7 @@ template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 {
 
+    store_color_pairs(/*cdbg1, cdbg2, num_colorBuffers*/);
     // Remove the temporary directory.
     std::string sysCommand = "rm -rf " + cdbg.prefix + TEMP_DIR;
     console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
@@ -823,7 +873,7 @@ calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &
     std::cerr << "actual cnt: " << actualCnt << " virtual cnt: " << virtualCnt << "\n";
     std::exit(1);
 }
-
+/*
 template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
 store_abundant_color_pairs(std::ofstream& output)
@@ -837,13 +887,13 @@ store_abundant_color_pairs(std::ofstream& output)
         output.write(reinterpret_cast<char*>(&(fs.second)), sizeof(fs.second));
     }
     return sampledPairs.size();
-}
+}*/
 
 
 template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::
-store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                  uint64_t& numColorBuffers)
+store_color_pairs(/*ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+                  uint64_t& numColorBuffers*/)
 {
     auto t_start = time(nullptr);
 
@@ -851,17 +901,41 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
                     time(nullptr) - start_time_);
 
 
-    const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(), fileCount2 = cdbg2.get_eq_class_file_count();
+//    const uint64_t fileCount1 = cdbg1.get_eq_class_file_count(), fileCount2 = cdbg2.get_eq_class_file_count();
 
-    console->info("EQClass Count for cdbg1 and 2: {}, {}", fileCount1, fileCount2);
+//    console->info("EQClass Count for cdbg1 and 2: {}, {}", fileCount1, fileCount2);
     uint64_t writtenPairsCount = 0;
     //BitVectorRRR bitVec1, bitVec2;
 
     console->info("Writing color pairs and ids into file {}", cdbg.prefix + "/newID2oldIDs" );
     std::ofstream output(cdbg.prefix + "newID2oldIDs");
     output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
-    writtenPairsCount = store_abundant_color_pairs(output);
 
+    console->info("# of abundant color IDs: {}", sampledPairs.size());
+    // storing the IDs from 0 (when inserting into CQF, they needed a +1)
+    for (auto &idpair : sampledPairs) {
+        uint64_t colorID = idpair.second;
+        auto fs = idpair.first;
+        output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
+        output.write(reinterpret_cast<char*>(&(fs.first)), sizeof(fs.first));
+        output.write(reinterpret_cast<char*>(&(fs.second)), sizeof(fs.second));
+    }
+    writtenPairsCount = sampledPairs.size();
+
+    // writing down the non-popular color IDs
+    std::ifstream input(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
+    std::pair<uint64_t, uint64_t> idPair;
+//    cumulativeBucketSize[i][j] = writtenPairsCount;
+    while (input >> idPair.first >> idPair.second) {
+        /// @fatemeh write down the pair and the associated colorID here
+        uint64_t colorID = sampledPairs.size() + colorMph->lookup(idPair);
+        output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
+        output.write(reinterpret_cast<char*>(&(idPair.first)), sizeof(idPair.first));
+        output.write(reinterpret_cast<char*>(&(idPair.second)), sizeof(idPair.second));
+        writtenPairsCount++;
+    }
+    input.close();
+/*
     for(uint64_t i = 0; i <= fileCount1; ++i) {
 
         for (uint64_t j = 0; j <= fileCount2; ++j) {
@@ -884,13 +958,14 @@ store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj
             input.close();
         }
     }
+    numColorBuffers = writtenPairsCount/numCCPerBuffer + 1;//mantis::NUM_BV_BUFFER + 1;
+    */
     output.seekp(0, std::ios::beg);
     output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
     output.close();
-    numColorBuffers = writtenPairsCount/numCCPerBuffer + 1;//mantis::NUM_BV_BUFFER + 1;
 
     auto t_end = time(nullptr);
-    console -> info("Writing {} color pairs in {} buffers took time {} seconds.", writtenPairsCount, numColorBuffers, t_end - t_start);
+    console -> info("Writing {} color pairs took time {} seconds.", writtenPairsCount, t_end - t_start);
 }
 
 template <typename qf_obj, typename key_obj>
@@ -899,13 +974,12 @@ void CQF_merger<qf_obj, key_obj>::merge()
     auto t_start = time(nullptr);
     console -> info ("Merging the two CQFs..");
     auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
-    init_disk_buckets();
-    fill_disk_buckets(tillBlock);
-    filter_disk_buckets();
+//    init_disk_buckets();
+    fill_disk_bucket(tillBlock);
+//    filter_disk_buckets();
     build_MPH_tables();
-    uint64_t num_colorBuffers = 1;
-    store_color_pairs(cdbg1, cdbg2, num_colorBuffers);
-    console->info("# of color buffers is {}", num_colorBuffers);
+//    uint64_t num_colorBuffers = 1;
+//    console->info("# of color buffers is {}", num_colorBuffers);
     build_CQF();
     serializeRemainingStructures();
     auto t_end = time(nullptr);

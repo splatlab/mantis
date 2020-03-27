@@ -22,6 +22,93 @@
 #include <future>
 #include <unistd.h>
 
+// adapted from :
+// http://stackoverflow.com/questions/34875315/implementation-my-own-list-and-iterator-stl-c
+class ColorIdPairIterator {
+public:
+    using self_type = ColorIdPairIterator;
+    using value_type = std::pair<colorIdType, colorIdType>;
+    using reference = value_type&;
+    using pointer = value_type*;
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = int64_t;
+
+//    ColorIdPairIterator() = delete;
+
+    ColorIdPairIterator(std::string &inputFile, bool isEnd = false) {
+        fileName = inputFile;
+        input_.open(inputFile);
+        if (isEnd) {
+            input_.seekg(0, std::ios_base::end);
+        }
+        advance_();
+    }
+
+    ColorIdPairIterator(const ColorIdPairIterator&other) {
+        fileName = other.fileName;
+        input_.open(fileName);
+        input_.seekg(other.input_.tellg());
+//        other.input_.close();
+        c1 = other.c1;
+        c2 = other.c2;
+        val_ = other.val_;
+    }
+
+    ColorIdPairIterator&
+    operator=(const ColorIdPairIterator& other) { //}= default;
+        fileName = other.fileName;
+        input_.open(fileName);
+        input_.seekg(other.input_.tellg());
+//        other.input_.close();
+        c1 = other.c1;
+        c2 = other.c2;
+        val_ = other.val_;
+        return *this;
+    }
+
+    ColorIdPairIterator operator++() {
+        ColorIdPairIterator i = *this;
+        advance_();
+        return i;
+    }
+
+    const ColorIdPairIterator operator++(int) {
+        advance_();
+        return *this;
+    }
+
+    reference operator*() {
+        return val_;
+    }
+
+    pointer operator->() {
+        return &val_;
+    }
+    bool operator==(const self_type& rhs) { return c1 == rhs.c1 and c2 == rhs.c2; }
+
+    bool operator!=(const self_type& rhs) { return c1 != rhs.c1 and c2 != rhs.c2; }
+
+    bool operator<(const self_type& rhs) { return c1 == rhs.c1? c2 < rhs.c2 : c1 < rhs.c1; }
+
+    bool operator<=(const self_type& rhs) { return c1 == rhs.c1? c2 <= rhs.c2 : c1 <= rhs.c1; }
+
+private:
+
+    void advance_() {
+        if (input_.good()) {
+            input_ >> c1;
+            if (input_.good()) {
+                input_ >> c2;
+            }
+        }
+    }
+    std::string fileName;
+    mutable std::ifstream input_;
+    colorIdType c1, c2;
+    std::pair<colorIdType, colorIdType> val_;
+};
+
+
 template<class qf_obj, class key_obj>
 class CQF_merger {
 public:
@@ -120,6 +207,7 @@ private:
 
     // MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
     std::vector<std::vector<boophf_t *>> MPH;
+    std::unique_ptr<boophf_t> colorMph;
 
     uint64_t numCCPerBuffer{0};
     uint64_t numCCPerBuffer1{0};
@@ -130,9 +218,9 @@ private:
     // into the map 'sampledPairs', which is of the format (pair -> abundance).
     uint64_t sample_color_id_pairs(uint64_t sampleKmerCount);
 
-    // Initializes the disk-buckets, i.e. initializes the disk-files, MPH tables,
+    /*// Initializes the disk-buckets, i.e. initializes the disk-files, MPH tables,
     // bucket sizes, cumulative size counts etc.
-    inline void init_disk_buckets();
+    inline void init_disk_buckets();*/
 
     // Gathers all the color-id pairs for all the distinct k-mers of the CdBGs
     // 'cdbg1' and 'cdbg2' into disk-files (or referred to as buckets hereafter),
@@ -144,14 +232,13 @@ private:
     // at cdbg2, and read from the bitvector_file_(X - 1) of cdbg2. Buckets of the
     // form (X, 0) imply vice versa.
     // Returns the number of distinct k-mers present at the CdBGs cdg1 and cdbg2.
-    uint64_t fill_disk_buckets(uint64_t startingBlock = 0);
+    uint64_t fill_disk_bucket(uint64_t startingBlock = 0);
 
-    // Adds the color-class ID pair (colorID1, colorID2) to the appropriate disk
+    /*// Adds the color-class ID pair (colorID1, colorID2) to the appropriate disk
     // bucket; i.e. writes the pair into the file diskBucket[i][j] iff colorID1
     // has its color-class (bitvector) at bitvector_file_(i - 1) and colorID2 has
     // its color-class at bitvector_file_(j - 1).
-    inline void add_color_id_pair(uint64_t colorID1, uint64_t colorID2,
-                                  std::vector<std::vector<std::ofstream>> &diskBucket);
+    inline void add_color_id_pair(uint64_t colorID1, uint64_t colorID2, std::ofstream &diskBucket);*/
 
     // Filters the disk-buckets to contain only unique color-id pairs.
     // Returns the count of unique color-id pairs.
@@ -171,10 +258,13 @@ private:
     void serializeRemainingStructures();
 
     // Builds the output color-class bitvectors for the color-id pairs.
-    void store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                           uint64_t &numColorBuffers);
+    /*void store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
+                           uint64_t &numColorBuffers);*/
+    void store_color_pairs();
+/*
 
     uint64_t store_abundant_color_pairs(std::ofstream &output);
+*/
 
     void calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string &dir1,
                         std::string &dir2);

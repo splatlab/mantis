@@ -316,6 +316,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
     // colorPairs colors for mantis 1 and mantis 2 are 0-based --> color ID starts from 0
     colorPairs.resize(cnt);
+    uint64_t maxIndex = 0;
     for (auto i = 0; i < cnt; i++) {
         cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
         cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
@@ -324,6 +325,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         c2 = c2 == 0 ? mst2Zero : c2 - 1;
         //std::cerr << cIdx << " " << n1s << " " << n2s << "\n";
         colorPairs[cIdx] = std::make_pair(c1, c2);
+        maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
     }
     cp.close();
 
@@ -489,6 +491,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 }
                 w = (*(edgeList.begin() + srcEnd - 1)).second; // look at the last elm. for n1
             } else {
+                // jump to the start of the end nodes for the src node and run a binary search to find the corresponding edge and hence weight
                 auto wItr = std::lower_bound(edgeList.begin() + srcStart, edgeList.begin() + srcEnd,
                                              std::make_pair(n2, 0),
                                              [](auto &v1, auto &v2) {
