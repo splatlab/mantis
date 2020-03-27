@@ -28,8 +28,8 @@ class ColorIdPairIterator {
 public:
     using self_type = ColorIdPairIterator;
     using value_type = std::pair<colorIdType, colorIdType>;
-    using reference = value_type&;
-    using pointer = value_type*;
+    using reference = value_type &;
+    using pointer = value_type *;
     using iterator_category = std::forward_iterator_tag;
     using difference_type = int64_t;
 
@@ -44,7 +44,7 @@ public:
         advance_();
     }
 
-    ColorIdPairIterator(const ColorIdPairIterator&other) {
+    ColorIdPairIterator(const ColorIdPairIterator &other) {
         fileName = other.fileName;
         input_.open(fileName);
         input_.seekg(other.input_.tellg());
@@ -55,8 +55,8 @@ public:
         isEnd_ = other.isEnd_;
     }
 
-    ColorIdPairIterator&
-    operator=(const ColorIdPairIterator& other) { //}= default;
+    ColorIdPairIterator &
+    operator=(const ColorIdPairIterator &other) { //}= default;
         fileName = other.fileName;
         input_.open(fileName);
         input_.seekg(other.input_.tellg());
@@ -86,13 +86,18 @@ public:
     pointer operator->() {
         return &val_;
     }
-    bool operator==(const self_type& rhs) { return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
 
-    bool operator!=(const self_type& rhs) { return isEnd_ != rhs.isEnd_ and c1 != rhs.c1 and c2 != rhs.c2; }
+    bool operator==(const self_type &rhs) { return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
 
-    bool operator<(const self_type& rhs) { return isEnd_ == rhs.isEnd_?(isEnd_?false:c1 == rhs.c1? c2 < rhs.c2 : c1 < rhs.c1):not isEnd_; }
+    bool operator!=(const self_type &rhs) { return isEnd_ != rhs.isEnd_ and c1 != rhs.c1 and c2 != rhs.c2; }
 
-    bool operator<=(const self_type& rhs) {return isEnd_ == rhs.isEnd_?(isEnd_?false:c1 == rhs.c1? c2 <= rhs.c2 : c1 <= rhs.c1):not isEnd_; }
+    bool operator<(const self_type &rhs) {
+        return isEnd_ == rhs.isEnd_ ? (isEnd_ ? false : c1 == rhs.c1 ? c2 < rhs.c2 : c1 < rhs.c1) : not isEnd_;
+    }
+
+    bool operator<=(const self_type &rhs) {
+        return isEnd_ == rhs.isEnd_ ? (isEnd_ ? false : c1 == rhs.c1 ? c2 <= rhs.c2 : c1 <= rhs.c1) : not isEnd_;
+    }
 
 private:
 
@@ -108,6 +113,7 @@ private:
             isEnd_ = true;
         }
     }
+
     std::string fileName;
     mutable std::ifstream input_;
     colorIdType c1, c2;
@@ -131,21 +137,12 @@ private:
     // k-mer count in progress display.
     const static uint64_t PROGRESS_STEP = 10000000;
 
-    // CQF-window size to keep in memory.
-    const static uint64_t ITERATOR_WINDOW_SIZE = 4096;
-
-    // Count of popular color-id pairs to be sampled
-//		const static uint64_t SAMPLE_PAIR_COUNT = std::min((uint64_t)1000000, mantis::NUM_BV_BUFFER);
-
     // Name of the temporary working directory at disk; will be present
     // temporarily inside the output directory.
     const std::string TEMP_DIR = std::string("temp/");
 
     // Name of the temporary list of color-id pairs.
     const std::string EQ_ID_PAIRS_FILE = std::string("color-id-pairs");
-
-    // Name of the temporary file to contain count of distinct color-id pairs.
-    const std::string ID_PAIR_COUNT_FILE = std::string("color-id-pairs-count");
 
     // First input colored dBG.
     ColoredDbg<qf_obj, key_obj> cdbg1;
@@ -166,13 +163,9 @@ private:
     // color-id pairs filtering and MPH's building.
     uint threadCount = 1;
 
-    // Utility information to display at the result summary.
-    uint64_t colorCount1 = 0, colorCount2 = 0;
-
     // Blocks for minimizers in the output CDBG
     std::vector<uint64_t> minimizerBlocks;
     std::vector<std::unique_ptr<std::vector<std::pair<uint64_t, colorIdType>>>> minimizerKeyColorList[2];
-//		std::vector<std::unordered_map<uint64_t, std::pair<colorIdType , colorIdType>>> minimizerKeyColorList;
     uint64_t kbits;
     qf_hashmode hashmode;
     uint32_t seed;
@@ -202,32 +195,12 @@ private:
     // Used as the form (pair -> abundance) earlier, and finally as (pair -> colorId).
     idPairMap_t sampledPairs;
 
-    // Disk-bucket filestreams.
-    std::vector<std::vector<std::ofstream>> diskBucket;
-
-    // Stores the size (number of color-id pairs) at each disk-bucket.
-    std::vector<std::vector<uint64_t>> bucketSize;
-
-    // The (i, j)'th entry contains the total count of color-id pairs upto
-    // bucket (i, j), exclusive, in row-major order.
-    std::vector<std::vector<uint64_t>> cumulativeBucketSize;
-
-    // MPH (Minimal Perfect Hash) function tables for each of the disk-buckets.
-    std::vector<std::vector<boophf_t *>> MPH;
     std::unique_ptr<boophf_t> colorMph;
-
-    uint64_t numCCPerBuffer{0};
-    uint64_t numCCPerBuffer1{0};
-    uint64_t numCCPerBuffer2{0};
 
     // Samples 'SAMPLE_PAIR_COUNT' number of most abundant color-id pairs from the
     // first 'sampleKmerCount' distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
     // into the map 'sampledPairs', which is of the format (pair -> abundance).
     uint64_t sample_color_id_pairs(uint64_t sampleKmerCount);
-
-    /*// Initializes the disk-buckets, i.e. initializes the disk-files, MPH tables,
-    // bucket sizes, cumulative size counts etc.
-    inline void init_disk_buckets();*/
 
     // Gathers all the color-id pairs for all the distinct k-mers of the CdBGs
     // 'cdbg1' and 'cdbg2' into disk-files (or referred to as buckets hereafter),
@@ -241,15 +214,8 @@ private:
     // Returns the number of distinct k-mers present at the CdBGs cdg1 and cdbg2.
     uint64_t fill_disk_bucket(uint64_t startingBlock = 0);
 
-    /*// Adds the color-class ID pair (colorID1, colorID2) to the appropriate disk
-    // bucket; i.e. writes the pair into the file diskBucket[i][j] iff colorID1
-    // has its color-class (bitvector) at bitvector_file_(i - 1) and colorID2 has
-    // its color-class at bitvector_file_(j - 1).
-    inline void add_color_id_pair(uint64_t colorID1, uint64_t colorID2, std::ofstream &diskBucket);*/
-
     // Filters the disk-buckets to contain only unique color-id pairs.
-    // Returns the count of unique color-id pairs.
-    uint64_t filter_disk_buckets();
+    void filter_disk_buckets();
 
     // Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
     void build_MPH_tables();
@@ -264,17 +230,7 @@ private:
     // Serializes the output CQF and sample-id mapping.
     void serializeRemainingStructures();
 
-    // Builds the output color-class bitvectors for the color-id pairs.
-    /*void store_color_pairs(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
-                           uint64_t &numColorBuffers);*/
     void store_color_pairs();
-/*
-
-    uint64_t store_abundant_color_pairs(std::ofstream &output);
-*/
-
-    void calc_mst_stats(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2, std::string &dir1,
-                        std::string &dir2);
 
     uint64_t walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, uint64_t curBlock, bool isFirst);
 };
