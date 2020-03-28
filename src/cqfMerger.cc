@@ -331,7 +331,6 @@ fill_disk_bucket(uint64_t startingBlock)
 
     auto t_end = time(nullptr);
     console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
-
     filter_disk_buckets();
 
     return kmerCount;
@@ -352,7 +351,7 @@ filter_disk_buckets()
     std::string diskBucket = cdbg.prefix + EQ_ID_PAIRS_FILE;
     console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
                     diskBucket, threadCount, time(nullptr) - start_time_);
-    std::string sysCommand = "sort -u -n ";
+    std::string sysCommand = "sort -t' ' -u -n -k1,1 -k2,2";
     sysCommand += " --parallel=" + std::to_string(threadCount);
     sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
     sysCommand += " -o " + diskBucket + " " + diskBucket;
