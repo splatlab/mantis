@@ -219,17 +219,19 @@ fill_disk_bucket(uint64_t startingBlock)
     auto t_start = time(nullptr);
 
     console -> info("Writing the non-sampled color-id pairs to disk-files of form ({}). Time-stamp = {}.",
-                    TEMP_DIR + EQ_ID_PAIRS_FILE + std::string("_X_Y"), time(nullptr) - start_time_);
+                    EQ_ID_PAIRS_FILE + std::string("_X_Y"), time(nullptr) - start_time_);
 
     uint64_t writtenPairsCount = 0;
 
-    console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}", startingBlock);
 
     // force currentCQFBlock to get loaded into memory
     cdbg1.replaceCQFInMemory(invalid);
     cdbg2.replaceCQFInMemory(invalid);
 
-    auto diskBucket = std::ofstream(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
+    std::string output = cdbg.prefix + EQ_ID_PAIRS_FILE;
+    console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}"
+                    "writing in file \"{}\"", startingBlock, output);
+    std::ofstream diskBucket(output, std::ios::out);
     uint64_t curBlock{startingBlock}, kmerCount{0};
     uint64_t maxMinimizer{0}, minMinimizer;
     minMinimizer = curBlock >= cdbg1.get_numBlocks() and curBlock >= cdbg2.get_numBlocks() ? 0 :
@@ -347,9 +349,9 @@ filter_disk_buckets()
     }
     uint64_t maxMemoryForSort = 5;
 
-    std::string diskBucket = cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
-    console -> info("Filtering out the unique eq-id pairs from files {} with {} threads. Time-stamp = {}",
-                    diskBucket + "_X_Y", threadCount, time(nullptr) - start_time_);
+    std::string diskBucket = cdbg.prefix + EQ_ID_PAIRS_FILE;
+    console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
+                    diskBucket, threadCount, time(nullptr) - start_time_);
     std::string sysCommand = "sort -u -n ";
     sysCommand += " --parallel=" + std::to_string(threadCount);
     sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
@@ -371,7 +373,7 @@ build_MPH_tables()
     double gammaFactor = 2.0;	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key).
 
     // Build the mphf.
-    std::string colorIdPairFile = cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE;
+    std::string colorIdPairFile = cdbg.prefix + EQ_ID_PAIRS_FILE;
     std::ifstream input(colorIdPairFile);
     // new lines will be skipped unless we stop it from happening:
     input.unsetf(std::ios_base::skipws);
@@ -582,7 +584,7 @@ store_color_pairs()
     writtenPairsCount = sampledPairs.size();
 
     // writing down the non-popular color IDs
-    std::ifstream input(cdbg.prefix + TEMP_DIR + EQ_ID_PAIRS_FILE);
+    std::ifstream input(cdbg.prefix + EQ_ID_PAIRS_FILE);
     std::pair<uint64_t, uint64_t> idPair;
     while (input >> idPair.first >> idPair.second) {
         uint64_t colorID = sampledPairs.size() + colorMph->lookup(idPair);
@@ -606,10 +608,6 @@ void CQF_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 {
 
     store_color_pairs();
-    // Remove the temporary directory.
-    std::string sysCommand = "rm -rf " + cdbg.prefix + TEMP_DIR;
-    console -> info("Removing the temporary directory. System command used:\n{}", sysCommand);
-    system(sysCommand.c_str());
 
     // Serialize the sample-id map.
     std::ofstream outputFile(cdbg.prefix + mantis::SAMPLEID_FILE);

@@ -134,12 +134,6 @@ public:
 
 
 private:
-    // k-mer count in progress display.
-    const static uint64_t PROGRESS_STEP = 10000000;
-
-    // Name of the temporary working directory at disk; will be present
-    // temporarily inside the output directory.
-    const std::string TEMP_DIR = std::string("temp/");
 
     // Name of the temporary list of color-id pairs.
     const std::string EQ_ID_PAIRS_FILE = std::string("color-id-pairs");
