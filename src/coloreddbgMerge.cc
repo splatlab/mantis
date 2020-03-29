@@ -91,7 +91,6 @@ int merge_main(MergeOpts &opt) {
     if (!data_exists(opt.dir1, console) || !data_exists(opt.dir2, console))
         exit(1);
 
-
     auto t_start = time(nullptr);
     console->info("Merge starting ...");
 

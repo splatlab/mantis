@@ -42,6 +42,7 @@ public:
             input_.seekg(0, std::ios_base::end);
         }
         advance_();
+        std::cerr << "\n\n\n" << (isEnd_?"END":"START") << "\n\n\n";
     }
 
     ColorIdPairIterator(const ColorIdPairIterator &other) {
@@ -89,7 +90,7 @@ public:
 
     bool operator==(const self_type &rhs) { return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
 
-    bool operator!=(const self_type &rhs) { return isEnd_ != rhs.isEnd_ and c1 != rhs.c1 and c2 != rhs.c2; }
+    bool operator!=(const self_type &rhs) { return isEnd_ != rhs.isEnd_ or c1 != rhs.c1 or c2 != rhs.c2; }
 
     bool operator<(const self_type &rhs) {
         return isEnd_ == rhs.isEnd_ ? (isEnd_ ? false : c1 == rhs.c1 ? c2 < rhs.c2 : c1 < rhs.c1) : not isEnd_;
@@ -106,12 +107,18 @@ private:
             input_ >> c1;
             if (input_.good()) {
                 input_ >> c2;
+                cntr++;
+                /*if (cntr % 1000000 == 0)
+                    std::cerr << "\r" << cntr << ": " << c1 << " " << c2 << "    ";*/
             } else {
                 isEnd_ = true;
+                c1 = c2 = static_cast<colorIdType >(invalid);
             }
         } else {
             isEnd_ = true;
+            c1 = c2 = static_cast<colorIdType >(invalid);
         }
+        val_ = std::make_pair(c1, c2);
     }
 
     std::string fileName;
@@ -119,6 +126,7 @@ private:
     colorIdType c1, c2;
     std::pair<colorIdType, colorIdType> val_;
     bool isEnd_{false};
+    uint64_t cntr{0};
 };
 
 
