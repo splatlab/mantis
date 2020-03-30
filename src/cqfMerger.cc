@@ -383,6 +383,7 @@ build_MPH_tables()
                 '\n'));
     input.close();
 
+    std::cerr << "\n\npair count: " << colorIdPairCount << "\n";
 
     ColorIdPairIterator kb(colorIdPairFile);
     ColorIdPairIterator ke(colorIdPairFile, true);
@@ -553,7 +554,8 @@ uint64_t CQF_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, ui
     if(it != sampledPairs.end()) {
         return it->second + 1;
     }
-    return sampledPairs.size() + colorMph->lookup(idPair) + 1;
+    ColorPair cpair(idPair.first, idPair.second);
+    return sampledPairs.size() + colorMph->lookup(cpair) + 1;
 }
 
 
@@ -586,7 +588,8 @@ store_color_pairs()
     std::ifstream input(cdbg.prefix + EQ_ID_PAIRS_FILE);
     std::pair<uint64_t, uint64_t> idPair;
     while (input >> idPair.first >> idPair.second) {
-        uint64_t colorID = sampledPairs.size() + colorMph->lookup(idPair);
+        ColorPair cpair(idPair.first, idPair.second);
+        uint64_t colorID = sampledPairs.size() + colorMph->lookup(cpair);
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
         output.write(reinterpret_cast<char*>(&(idPair.first)), sizeof(idPair.first));
         output.write(reinterpret_cast<char*>(&(idPair.second)), sizeof(idPair.second));

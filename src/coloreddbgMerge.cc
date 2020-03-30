@@ -90,6 +90,26 @@ int merge_main(MergeOpts &opt) {
     // Check if all the required data exist in the input directories.
     if (!data_exists(opt.dir1, console) || !data_exists(opt.dir2, console))
         exit(1);
+    std::string colorIdPairFile = opt.out + "/color-id-pairs";
+    std::cerr << "file: " << colorIdPairFile << "\n";
+
+    std::ifstream input(colorIdPairFile);
+    // new lines will be skipped unless we stop it from happening:
+    input.unsetf(std::ios_base::skipws);
+    // count the newlines with an algorithm specialized for counting:
+    auto colorIdPairCount = static_cast<unsigned int>(std::count(
+            std::istream_iterator<char>(input),
+            std::istream_iterator<char>(),
+            '\n'));
+    input.close();
+
+    std::cerr << "\n\npair count: " << colorIdPairCount << "\n";
+    ColorIdPairIterator kb(colorIdPairFile);
+    ColorIdPairIterator ke(colorIdPairFile, true);
+    auto colorPairIt = boomphf::range(kb, ke);
+    auto colorMph = boophf_t(colorIdPairCount, colorPairIt, opt.threadCount, 2);
+    console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph.totalBitSize() / 8) / (1024 * 1024));
+    std::exit(2);
 
     auto t_start = time(nullptr);
     console->info("Merge starting ...");

@@ -14,6 +14,7 @@ add_library(mantis_core STATIC
 		mstMerger.cc
 		stat.cc
   		MantisFS.cc
+        xxhash.c
   		squeakrconfig.cc
         coloreddbgMerge.cc
         cqfMerger.cc

@@ -15,6 +15,8 @@
 #include "spdlog/spdlog.h"
 #include "MantisFS.h"
 #include "coloreddbg.h"
+
+#include "xxhash.h"
 #include "BooPHF.h"
 
 #include "mstMerger.h"
@@ -22,12 +24,47 @@
 #include <future>
 #include <unistd.h>
 
+// Required to hash colo-id pair objects. Resorted to boost::hash_combine
+// instead of plain XOR hashing. For more explanation, consult
+// https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
+class Custom_Pair_Hasher {
+public:
+    uint64_t operator()(const std::pair<colorIdType, colorIdType> &key, uint64_t seed = 0) const {
+        seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<uint64_t>{}(key.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        return seed;
+    }
+};
+
+struct ColorPair {
+    colorIdType c1, c2;
+
+    ColorPair(colorIdType c1, colorIdType c2) : c1(c1), c2(c2) {}
+    ColorPair() {c1=0; c2=0;}
+
+    bool operator==(const ColorPair &rhs) const {
+        return c1 == rhs.c1 and c2 == rhs.c2; }
+
+};
+
+class Fat_Custom_Pair_Hasher {
+public:
+    uint64_t operator()(const ColorPair&key, uint64_t seed = 0) const {
+        return XXH64(reinterpret_cast<void*>(const_cast<ColorPair*>(&key)), sizeof(key), seed);
+    }
+};
+
+typedef boomphf::mphf<ColorPair, Fat_Custom_Pair_Hasher> boophf_t;
+
+// Hash-map type for color-id pairs.
+typedef std::unordered_map<std::pair<colorIdType, colorIdType>, uint64_t, Custom_Pair_Hasher> idPairMap_t;
+
 // adapted from :
 // http://stackoverflow.com/questions/34875315/implementation-my-own-list-and-iterator-stl-c
 class ColorIdPairIterator {
 public:
     using self_type = ColorIdPairIterator;
-    using value_type = std::pair<colorIdType, colorIdType>;
+    using value_type = ColorPair;//std::pair<colorIdType, colorIdType>;
     using reference = value_type &;
     using pointer = value_type *;
     using iterator_category = std::forward_iterator_tag;
@@ -41,8 +78,10 @@ public:
         if (isEnd) {
             input_.seekg(0, std::ios_base::end);
         }
+        c1 = c2 = 0;
+        cntr = 0;
         advance_();
-        std::cerr << "\n\n\n" << (isEnd_?"END":"START") << "\n\n\n";
+//        std::cerr << "\n\n\n" << (isEnd_?"END":"START") << "\n\n\n";
     }
 
     ColorIdPairIterator(const ColorIdPairIterator &other) {
@@ -54,6 +93,8 @@ public:
         c2 = other.c2;
         val_ = other.val_;
         isEnd_ = other.isEnd_;
+        cntr = other.cntr;
+        buffer = other.buffer;
     }
 
     ColorIdPairIterator &
@@ -66,6 +107,8 @@ public:
         c2 = other.c2;
         val_ = other.val_;
         isEnd_ = other.isEnd_;
+        cntr = other.cntr;
+        buffer = other.buffer;
         return *this;
     }
 
@@ -88,45 +131,74 @@ public:
         return &val_;
     }
 
-    bool operator==(const self_type &rhs) { return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
+    bool operator==(const self_type &rhs) {
+        return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
 
-    bool operator!=(const self_type &rhs) { return isEnd_ != rhs.isEnd_ or c1 != rhs.c1 or c2 != rhs.c2; }
+    bool operator!=(const self_type &rhs) {
+        return isEnd_ != rhs.isEnd_ or c1 != rhs.c1 or c2 != rhs.c2; }
 
     bool operator<(const self_type &rhs) {
-        return isEnd_ == rhs.isEnd_ ? (isEnd_ ? false : c1 == rhs.c1 ? c2 < rhs.c2 : c1 < rhs.c1) : not isEnd_;
+        std::cerr << "\n<\n";
+        return isEnd_ == rhs.isEnd_ ? (c1 == rhs.c1 ? c2 < rhs.c2 : c1 < rhs.c1) : not isEnd_;
     }
 
     bool operator<=(const self_type &rhs) {
-        return isEnd_ == rhs.isEnd_ ? (isEnd_ ? false : c1 == rhs.c1 ? c2 <= rhs.c2 : c1 <= rhs.c1) : not isEnd_;
+        std::cerr << "\n<=\n";
+        return isEnd_ == rhs.isEnd_ ? (c1 == rhs.c1 ? c2 <= rhs.c2 : c1 <= rhs.c1) : not isEnd_;
     }
 
 private:
 
+    void loadIntoBuffer_() {
+        std::cerr << "\nIn load\n";
+        buffer.clear();
+        buffer.reserve(1000000);
+        while (input_.good() and buffer.size() < 1000000) {
+            input_ >> c1 >> c2;
+            buffer.emplace_back(c1, c2);
+        }
+        cntr = 0;
+    }
     void advance_() {
-        if (input_.good()) {
+        /*if (input_.good()) {
             input_ >> c1;
             if (input_.good()) {
                 input_ >> c2;
                 cntr++;
-                /*if (cntr % 1000000 == 0)
-                    std::cerr << "\r" << cntr << ": " << c1 << " " << c2 << "    ";*/
+                if (cntr % 1000000 == 0)
+                    std::cerr << "\n" << cntr << ": " << c1 << " " << c2 << "    ";
             } else {
+                std::cerr << "\n1 AAAAA reached here\n";
                 isEnd_ = true;
                 c1 = c2 = static_cast<colorIdType >(invalid);
             }
         } else {
+            std::cerr << "\n2 AAAAA reached here\n";
             isEnd_ = true;
             c1 = c2 = static_cast<colorIdType >(invalid);
         }
-        val_ = std::make_pair(c1, c2);
+        val_ = ColorPair(c1, c2);//std::make_pair(c1, c2);*/
+        if (cntr == buffer.size()) {
+            loadIntoBuffer_();
+        }
+        if (not buffer.empty()) {
+            val_ = buffer[cntr];
+            cntr++;
+        } else {
+            std::cerr << "\n2 AAAAA reached here\n";
+            isEnd_ = true;
+            val_ = ColorPair(static_cast<colorIdType >(invalid), static_cast<colorIdType >(invalid));
+        }
     }
 
     std::string fileName;
     mutable std::ifstream input_;
     colorIdType c1, c2;
-    std::pair<colorIdType, colorIdType> val_;
+    ColorPair val_;
+//    std::pair<colorIdType, colorIdType> val_;
     bool isEnd_{false};
     uint64_t cntr{0};
+    std::vector<ColorPair> buffer;
 };
 
 
@@ -174,24 +246,6 @@ private:
     uint64_t kmerMask;
 
 
-    // Required to hash colo-id pair objects. Resorted to boost::hash_combine
-    // instead of plain XOR hashing. For more explanation, consult
-    // https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
-    class Custom_Pair_Hasher {
-    public:
-        uint64_t operator()(const std::pair<uint64_t, uint64_t> &key, uint64_t seed = 0) const {
-            seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^= std::hash<uint64_t>{}(key.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-
-            return seed;
-        }
-    };
-
-    // Bloom-filter based minimal perfect hash function type.
-    typedef boomphf::mphf<std::pair<uint64_t, uint64_t>, Custom_Pair_Hasher> boophf_t;
-
-    // Hash-map type for color-id pairs.
-    typedef std::unordered_map<std::pair<uint64_t, uint64_t>, uint64_t, Custom_Pair_Hasher> idPairMap_t;
 
     // Hash-map for the sampled (on abundance) color-id pairs.
     // Used as the form (pair -> abundance) earlier, and finally as (pair -> colorId).
