@@ -45,6 +45,9 @@ struct ColorPair {
     bool operator==(const ColorPair &rhs) const {
         return c1 == rhs.c1 and c2 == rhs.c2; }
 
+    bool operator!=(const ColorPair &rhs) const {
+        return c1 != rhs.c1 or c2 != rhs.c2; }
+
 };
 
 class Fat_Custom_Pair_Hasher {
@@ -78,7 +81,7 @@ public:
         if (isEnd) {
             input_.seekg(0, std::ios_base::end);
         }
-        c1 = c2 = 0;
+//        c1 = c2 = 0;
         cntr = 0;
         advance_();
 //        std::cerr << "\n\n\n" << (isEnd_?"END":"START") << "\n\n\n";
@@ -89,8 +92,8 @@ public:
         input_.open(fileName);
         input_.seekg(other.input_.tellg());
 //        other.input_.close();
-        c1 = other.c1;
-        c2 = other.c2;
+//        c1 = other.c1;
+//        c2 = other.c2;
         val_ = other.val_;
         isEnd_ = other.isEnd_;
         cntr = other.cntr;
@@ -103,8 +106,8 @@ public:
         input_.open(fileName);
         input_.seekg(other.input_.tellg());
 //        other.input_.close();
-        c1 = other.c1;
-        c2 = other.c2;
+//        c1 = other.c1;
+//        c2 = other.c2;
         val_ = other.val_;
         isEnd_ = other.isEnd_;
         cntr = other.cntr;
@@ -127,25 +130,24 @@ public:
         return val_;
     }
 
-    pointer operator->() {
-        return &val_;
+    pointer operator->() {        return &val_;
     }
 
     bool operator==(const self_type &rhs) {
-        return isEnd_ == rhs.isEnd_ and c1 == rhs.c1 and c2 == rhs.c2; }
+        return isEnd_ == rhs.isEnd_ and val_ == rhs.val_; }
 
     bool operator!=(const self_type &rhs) {
-        return isEnd_ != rhs.isEnd_ or c1 != rhs.c1 or c2 != rhs.c2; }
+        return isEnd_ != rhs.isEnd_ or val_ != rhs.val_; }
 
-    bool operator<(const self_type &rhs) {
+   /* bool operator<(const self_type &rhs) {
         std::cerr << "\n<\n";
-        return isEnd_ == rhs.isEnd_ ? (c1 == rhs.c1 ? c2 < rhs.c2 : c1 < rhs.c1) : not isEnd_;
+        return isEnd_ == rhs.isEnd_ ? (val_ < rhs.val_) : not isEnd_;
     }
 
     bool operator<=(const self_type &rhs) {
         std::cerr << "\n<=\n";
-        return isEnd_ == rhs.isEnd_ ? (c1 == rhs.c1 ? c2 <= rhs.c2 : c1 <= rhs.c1) : not isEnd_;
-    }
+        return isEnd_ == rhs.isEnd_ ? (val_ <= rhs.val_) : not isEnd_;
+    }*/
 
 private:
 
@@ -153,6 +155,7 @@ private:
         std::cerr << "\nIn load\n";
         buffer.clear();
         buffer.reserve(1000000);
+        colorIdType c1,c2;
         while (input_.good() and buffer.size() < 1000000) {
             input_ >> c1 >> c2;
             buffer.emplace_back(c1, c2);
@@ -193,7 +196,7 @@ private:
 
     std::string fileName;
     mutable std::ifstream input_;
-    colorIdType c1, c2;
+//    colorIdType c1, c2;
     ColorPair val_;
 //    std::pair<colorIdType, colorIdType> val_;
     bool isEnd_{false};
