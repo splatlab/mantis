@@ -126,27 +126,43 @@ int merge_main(MergeOpts &opt) {
     std::cerr << "\n now lets see:\n";
     std::cerr << (*kb).c1 << " " << (*kb).c2 << "\n";
     std::exit(1);*/
-    input.setf(std::ios_base::skipws);
+    /*input.setf(std::ios_base::skipws);
     input.open(colorIdPairFile);
     std::istream_iterator<ColorPair> kb(input);
-    std::cerr << "\n\nAAAAA\n\n";
-    std::ifstream end(colorIdPairFile);
-    end.seekg(0, std::ifstream::end);
+    std::ifstream end;
     std::istream_iterator<ColorPair> ke(end);
     std::cerr << "\n\nAAAAA\n\n";
     std::cerr << (*kb).c1 << " " << (*kb).c2 << "\n";
-    std::cerr << (*ke).c1 << " " << (*ke).c2 << "\n";
+//    std::cerr << (*ke).c1 << " " << (*ke).c2 << "\n";
+//    ke++;
     for (auto it = kb; it != ke; it++) {
         std::cerr << (*it).c1 << " " << (*it).c2 << "\n";
-        it++;
     }
+    std::cerr << "\n\nAAAAA\n\n";
+
+    for (auto it = kb; it != ke; it++) {
+        std::cerr << (*it).c1 << " " << (*it).c2 << "\n";
+    }
+    std::cerr << "\n\nAAAAA\n\n";
+    for (auto it = kb; it != ke; it++) {
+        std::cerr << (*it).c1 << " " << (*it).c2 << "\n";
+    }*/
+    ColorIdPairIterator kb(colorIdPairFile);
+    ColorIdPairIterator ke(colorIdPairFile, true);
     auto colorPairIt = boomphf::range(kb, ke);
     auto colorMph = boophf_t(colorIdPairCount, colorPairIt, opt.threadCount, 2);
     console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph.totalBitSize() / 8) / (1024 * 1024));
     console -> info("Total keys: {}", colorMph.nbKeys());
-    for (auto it = kb; it != ke; it++) {
-        std::cerr << (*it).c1 << "," << (*it).c2 << " " << colorMph.lookup(*it) << "\n";
+    std::vector<bool> r(colorIdPairCount, false);
+    for (auto it = kb; it != ke; ++it) {
+        auto idx = colorMph.lookup(*it);
+        if (r[idx]) {
+            std::cerr << "no! " << idx;
+            std::exit(2);
+        }
+        r[idx] = true;
     }
+    std::cerr << "could construct the mphf and pass the validation\n";
     std::exit(2);
 
     auto t_start = time(nullptr);
