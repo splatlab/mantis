@@ -310,7 +310,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, nodeCnt1,
                  nodeCnt2);
     std::ifstream cp(prefix + "newID2oldIDs");
-    uint64_t cnt, cIdx, c1, c2;
+    uint64_t cnt, cIdx;
+    colorIdType c1, c2;
     cp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
     logger->info("# of color classes based on count of colorPairs: {}", cnt);
     logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
@@ -323,7 +324,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
         cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
         c1 = c1 == 0 ? mst1Zero : c1 - 1;
         c2 = c2 == 0 ? mst2Zero : c2 - 1;
-        //std::cerr << cIdx << " " << n1s << " " << n2s << "\n";
         colorPairs[cIdx] = std::make_pair(c1, c2);
         maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
     }

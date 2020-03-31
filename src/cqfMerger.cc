@@ -59,8 +59,8 @@ CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
 
     minimizerKeyColorList[0].resize(cdbg1.minimizerBlock.size());
     minimizerKeyColorList[1].resize(cdbg2.minimizerBlock.size());
-    for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
-    for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m->clear();
+    for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());
+    for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());
 }
 
 template <typename qf_obj, typename key_obj>
@@ -329,6 +329,10 @@ fill_disk_bucket(uint64_t startingBlock)
     diskBucket.flush();
     diskBucket.close();
 
+    // force currentCQFBlock to get loaded into memory
+    cdbg1.replaceCQFInMemory(invalid);
+    cdbg2.replaceCQFInMemory(invalid);
+    std::cerr << "1.5. Before sortUnique colorPairs\n\n";
     auto t_end = time(nullptr);
     console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
     filter_disk_buckets();
@@ -346,7 +350,7 @@ filter_disk_buckets()
         console -> error("Command processor does not exist.");
         exit(1);
     }
-    uint64_t maxMemoryForSort = 5;
+    uint64_t maxMemoryForSort = 20;
 
     std::string diskBucket = cdbg.prefix + EQ_ID_PAIRS_FILE;
     console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
@@ -568,7 +572,7 @@ store_color_pairs()
     console -> info("At color-class building (bitvectors concatenation) phase. Time-stamp = {}.",
                     time(nullptr) - start_time_);
     uint64_t writtenPairsCount = 0;
-    console->info("Writing color pairs and ids into file {}", cdbg.prefix + "/newID2oldIDs" );
+    console->info("Writing color pairs and ids into file {}", cdbg.prefix + "newID2oldIDs" );
     std::ofstream output(cdbg.prefix + "newID2oldIDs");
     output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
 
@@ -586,13 +590,13 @@ store_color_pairs()
 
     // writing down the non-popular color IDs
     std::ifstream input(cdbg.prefix + EQ_ID_PAIRS_FILE);
-    std::pair<uint64_t, uint64_t> idPair;
-    while (input >> idPair.first >> idPair.second) {
-        ColorPair cpair(idPair.first, idPair.second);
+    colorIdType c1, c2;
+    while (input >> c1 >> c2) {
+        ColorPair cpair(c1, c2);
         uint64_t colorID = sampledPairs.size() + colorMph->lookup(cpair);
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
-        output.write(reinterpret_cast<char*>(&(idPair.first)), sizeof(idPair.first));
-        output.write(reinterpret_cast<char*>(&(idPair.second)), sizeof(idPair.second));
+        output.write(reinterpret_cast<char*>(&(cpair.c1)), sizeof(cpair.c1));
+        output.write(reinterpret_cast<char*>(&(cpair.c2)), sizeof(cpair.c2));
         writtenPairsCount++;
     }
     input.close();
@@ -638,11 +642,17 @@ void CQF_merger<qf_obj, key_obj>::merge()
 {
     auto t_start = time(nullptr);
     console -> info ("Merging the two CQFs..");
+    std::cerr << "0. Before starting anything\n\n";
     auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
+    std::cerr << "1. After sampling the colorIdPairs and before finding the rest of pairs\n\n";
     fill_disk_bucket(tillBlock);
+    std::cerr << "2. After fillDiskBucket before buildMPH\n\n";
     build_MPH_tables();
+    std::cerr << "3. After buildMPH before buildCQF\n\n";
     build_CQF();
+    std::cerr << "4. After buildCQF before serialize\n\n";
     serializeRemainingStructures();
+    std::cerr << "5. After serialize\n\n";
     auto t_end = time(nullptr);
     console -> info("CQF merge completed in {} s.", t_end - t_start);
 }
