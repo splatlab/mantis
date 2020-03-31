@@ -76,43 +76,31 @@ public:
 //    ColorIdPairIterator() = delete;
 
     ColorIdPairIterator(std::string &inputFile, bool isEnd = false) {
-        fileName = inputFile;
         input_.open(inputFile);
+        curIt = std::istream_iterator<colorIdType>(input_);
+        end_.open(inputFile);
+        end_.seekg(0, std::ifstream::end);
+        endIt = std::istream_iterator<colorIdType >(end_);
         if (isEnd) {
-            input_.seekg(0, std::ios_base::end);
+            curIt = endIt;
         }
-//        c1 = c2 = 0;
-        cntr = 0;
-        advance_();
-//        std::cerr << "\n\n\n" << (isEnd_?"END":"START") << "\n\n\n";
+        std::cerr << (*curIt) << " vs " << (*endIt) << "\n";
+        if (curIt != endIt) {
+            for (auto i = 0; i < 20; i++) {
+                std::cerr << (*curIt) << "\n";
+                curIt++;
+            }
+            advance_();
+        }
     }
 
     ColorIdPairIterator(const ColorIdPairIterator &other) {
-        fileName = other.fileName;
-        input_.open(fileName);
-        input_.seekg(other.input_.tellg());
-//        other.input_.close();
-//        c1 = other.c1;
-//        c2 = other.c2;
+//        fileName = other.fileName;
+//        input_.open(fileName);
+//        input_.seekg(other.input_.tellg());
         val_ = other.val_;
-        isEnd_ = other.isEnd_;
-        cntr = other.cntr;
-        buffer = other.buffer;
-    }
-
-    ColorIdPairIterator &
-    operator=(const ColorIdPairIterator &other) { //}= default;
-        fileName = other.fileName;
-        input_.open(fileName);
-        input_.seekg(other.input_.tellg());
-//        other.input_.close();
-//        c1 = other.c1;
-//        c2 = other.c2;
-        val_ = other.val_;
-        isEnd_ = other.isEnd_;
-        cntr = other.cntr;
-        buffer = other.buffer;
-        return *this;
+        curIt = other.curIt;
+        endIt = other.endIt;
     }
 
     ColorIdPairIterator operator++() {
@@ -130,78 +118,36 @@ public:
         return val_;
     }
 
-    pointer operator->() {        return &val_;
+    pointer operator->() {
+         return &val_;
     }
 
     bool operator==(const self_type &rhs) {
-        return isEnd_ == rhs.isEnd_ and val_ == rhs.val_; }
+        return curIt == rhs.curIt and val_ == rhs.val_; }
 
     bool operator!=(const self_type &rhs) {
-        return isEnd_ != rhs.isEnd_ or val_ != rhs.val_; }
-
-   /* bool operator<(const self_type &rhs) {
-        std::cerr << "\n<\n";
-        return isEnd_ == rhs.isEnd_ ? (val_ < rhs.val_) : not isEnd_;
-    }
-
-    bool operator<=(const self_type &rhs) {
-        std::cerr << "\n<=\n";
-        return isEnd_ == rhs.isEnd_ ? (val_ <= rhs.val_) : not isEnd_;
-    }*/
+        return curIt != rhs.curIt or val_ != rhs.val_; }
 
 private:
-
-    void loadIntoBuffer_() {
-        std::cerr << "\nIn load\n";
-        buffer.clear();
-        buffer.reserve(1000000);
-        colorIdType c1,c2;
-        while (input_.good() and buffer.size() < 1000000) {
-            input_ >> c1 >> c2;
-            buffer.emplace_back(c1, c2);
-        }
-        cntr = 0;
-    }
     void advance_() {
-        /*if (input_.good()) {
-            input_ >> c1;
-            if (input_.good()) {
-                input_ >> c2;
-                cntr++;
-                if (cntr % 1000000 == 0)
-                    std::cerr << "\n" << cntr << ": " << c1 << " " << c2 << "    ";
-            } else {
-                std::cerr << "\n1 AAAAA reached here\n";
-                isEnd_ = true;
-                c1 = c2 = static_cast<colorIdType >(invalid);
-            }
-        } else {
-            std::cerr << "\n2 AAAAA reached here\n";
-            isEnd_ = true;
-            c1 = c2 = static_cast<colorIdType >(invalid);
-        }
-        val_ = ColorPair(c1, c2);//std::make_pair(c1, c2);*/
-        if (cntr == buffer.size()) {
-            loadIntoBuffer_();
-        }
-        if (not buffer.empty()) {
-            val_ = buffer[cntr];
-            cntr++;
-        } else {
-            std::cerr << "\n2 AAAAA reached here\n";
-            isEnd_ = true;
+        if (curIt == endIt) {
             val_ = ColorPair(static_cast<colorIdType >(invalid), static_cast<colorIdType >(invalid));
+            std::cerr << "end: " << val_.c1 << " " << val_.c2 << "\n";
+            return;
         }
+        auto c1 = *curIt;
+        curIt++;
+        auto c2 = *curIt;
+        val_ = ColorPair(c1, c2);
+        curIt++;
     }
 
-    std::string fileName;
-    mutable std::ifstream input_;
-//    colorIdType c1, c2;
+//    std::string fileName;
+    std::ifstream input_;
+    std::ifstream end_;
     ColorPair val_;
-//    std::pair<colorIdType, colorIdType> val_;
-    bool isEnd_{false};
-    uint64_t cntr{0};
-    std::vector<ColorPair> buffer;
+    std::istream_iterator<colorIdType> curIt;
+    std::istream_iterator<colorIdType> endIt;
 };
 
 

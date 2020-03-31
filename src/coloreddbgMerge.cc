@@ -102,13 +102,29 @@ int merge_main(MergeOpts &opt) {
             std::istream_iterator<char>(),
             '\n'));
     input.close();
+//    input.open(colorIdPairFile);
+//    input.setf(std::ios_base::skipws);
+//    input.unsetf(std::ios_base::skipws);
 
+    /*auto cn = 0;
+    for (auto it = std::istream_iterator<uint32_t >(input); it != std::istream_iterator<uint32_t >(); ++it) {
+        std::cerr << *it << "\n";
+        cn++;
+        if (cn == 500)
+            std::exit(1);
+    }
+    std::exit(1);*/
+//    usleep(30000000);
     std::cerr << "\n\npair count: " << colorIdPairCount << "\n";
     ColorIdPairIterator kb(colorIdPairFile);
     ColorIdPairIterator ke(colorIdPairFile, true);
     auto colorPairIt = boomphf::range(kb, ke);
     auto colorMph = boophf_t(colorIdPairCount, colorPairIt, opt.threadCount, 2);
     console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph.totalBitSize() / 8) / (1024 * 1024));
+    console -> info("Total keys: {}", colorMph.nbKeys());
+    for (auto it = kb; it != ke; it++) {
+        std::cerr << (*it).c1 << "," << (*it).c2 << " " << colorMph.lookup(*it) << "\n";
+    }
     std::exit(2);
 
     auto t_start = time(nullptr);
