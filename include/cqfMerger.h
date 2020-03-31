@@ -48,6 +48,12 @@ struct ColorPair {
     bool operator!=(const ColorPair &rhs) const {
         return c1 != rhs.c1 or c2 != rhs.c2; }
 
+    friend std::istream& operator>> (std::istream& is, ColorPair& cp)
+    {
+        is>> cp.c1 >> cp.c2;
+        return is;
+    }
+
 };
 
 class Fat_Custom_Pair_Hasher {
@@ -77,21 +83,15 @@ public:
 
     ColorIdPairIterator(std::string &inputFile, bool isEnd = false) {
         input_.open(inputFile);
-        curIt = std::istream_iterator<colorIdType>(input_);
+        curIt = std::istream_iterator<ColorPair>(input_);
         end_.open(inputFile);
         end_.seekg(0, std::ifstream::end);
-        endIt = std::istream_iterator<colorIdType >(end_);
+        endIt = std::istream_iterator<ColorPair >(end_);
         if (isEnd) {
             curIt = endIt;
         }
-        std::cerr << (*curIt) << " vs " << (*endIt) << "\n";
-        if (curIt != endIt) {
-            for (auto i = 0; i < 20; i++) {
-                std::cerr << (*curIt) << "\n";
-                curIt++;
-            }
-            advance_();
-        }
+        std::cerr << (*curIt).c1 << "," << (*curIt).c2 << "\n";
+        advance_();
     }
 
     ColorIdPairIterator(const ColorIdPairIterator &other) {
@@ -123,10 +123,10 @@ public:
     }
 
     bool operator==(const self_type &rhs) {
-        return curIt == rhs.curIt and val_ == rhs.val_; }
+        return curIt == rhs.curIt/* and val_ == rhs.val_*/; }
 
     bool operator!=(const self_type &rhs) {
-        return curIt != rhs.curIt or val_ != rhs.val_; }
+        return curIt != rhs.curIt/* or val_ != rhs.val_*/; }
 
 private:
     void advance_() {
@@ -135,19 +135,19 @@ private:
             std::cerr << "end: " << val_.c1 << " " << val_.c2 << "\n";
             return;
         }
-        auto c1 = *curIt;
+        val_ = *curIt;
         curIt++;
-        auto c2 = *curIt;
-        val_ = ColorPair(c1, c2);
-        curIt++;
+//        auto c2 = *curIt;
+//        val_ = ColorPair(c1, c2);
+//        curIt++;
     }
 
 //    std::string fileName;
     std::ifstream input_;
     std::ifstream end_;
     ColorPair val_;
-    std::istream_iterator<colorIdType> curIt;
-    std::istream_iterator<colorIdType> endIt;
+    std::istream_iterator<ColorPair> curIt;
+    std::istream_iterator<ColorPair> endIt;
 };
 
 

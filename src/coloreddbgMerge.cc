@@ -116,8 +116,30 @@ int merge_main(MergeOpts &opt) {
     std::exit(1);*/
 //    usleep(30000000);
     std::cerr << "\n\npair count: " << colorIdPairCount << "\n";
-    ColorIdPairIterator kb(colorIdPairFile);
+   /* ColorIdPairIterator kb(colorIdPairFile);
     ColorIdPairIterator ke(colorIdPairFile, true);
+    ColorIdPairIterator ktest(kb);
+    for (auto i = 0; i < 10; i++) {
+        std::cerr << (*ktest).c1 << " " << (*ktest).c2 << "\n";
+        ktest++;
+    }
+    std::cerr << "\n now lets see:\n";
+    std::cerr << (*kb).c1 << " " << (*kb).c2 << "\n";
+    std::exit(1);*/
+    input.setf(std::ios_base::skipws);
+    input.open(colorIdPairFile);
+    std::istream_iterator<ColorPair> kb(input);
+    std::cerr << "\n\nAAAAA\n\n";
+    std::ifstream end(colorIdPairFile);
+    end.seekg(0, std::ifstream::end);
+    std::istream_iterator<ColorPair> ke(end);
+    std::cerr << "\n\nAAAAA\n\n";
+    std::cerr << (*kb).c1 << " " << (*kb).c2 << "\n";
+    std::cerr << (*ke).c1 << " " << (*ke).c2 << "\n";
+    for (auto it = kb; it != ke; it++) {
+        std::cerr << (*it).c1 << " " << (*it).c2 << "\n";
+        it++;
+    }
     auto colorPairIt = boomphf::range(kb, ke);
     auto colorMph = boophf_t(colorIdPairCount, colorPairIt, opt.threadCount, 2);
     console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph.totalBitSize() / 8) / (1024 * 1024));
