@@ -383,7 +383,7 @@ build_MPH_tables()
                 '\n'));
     input.close();
 
-    std::cerr << "\n\npair count: " << colorIdPairCount << "\n";
+    console -> info("Total colorId pair count: {}", colorIdPairCount);
 
     ColorIdPairIterator kb(colorIdPairFile);
     ColorIdPairIterator ke(colorIdPairFile, true);
