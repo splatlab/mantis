@@ -172,7 +172,8 @@ bool MSTMerger::buildEdgeSets() {
     auto pair = buildMultiEdgesFromCQFs();
     auto maxId =  pair.first;
     auto totalEdges = pair.second;
-    edges.reserve(totalEdges);
+    edges = std::make_unique<std::vector<Edge>>();
+    edges->reserve(totalEdges);
     num_colorClasses = maxId + 1;
     logger->info("Put edges in each bucket in a sorted list.");
     for (uint32_t i = 0; i < nThreads; ++i) {
@@ -197,26 +198,26 @@ bool MSTMerger::buildEdgeSets() {
                                    [](Edge &e1, Edge &e2) {
                                        return e1.n1 == e2.n1 and e1.n2 == e2.n2;
                                    }), edgeList.end());
-        edges.insert(edges.end(), edgeList.begin(), edgeList.end());
+        edges->insert(edges->end(), edgeList.begin(), edgeList.end());
     }
 
-    std::cerr << "before sorting and uniqifying: " << edges.size() << " ";
-    std::sort(edges.begin(), edges.end(),
+    std::cerr << "before sorting and uniqifying: " << edges->size() << " ";
+    std::sort(edges->begin(), edges->end(),
               [](Edge &e1, Edge &e2) {
                   return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
               });
-    edges.erase(std::unique(edges.begin(), edges.end(),
+    edges->erase(std::unique(edges->begin(), edges->end(),
                              [](Edge &e1, Edge &e2) {
                                  return e1.n1 == e2.n1 and e1.n2 == e2.n2;
-                             }), edges.end());
-    std::cerr << "after: " << edges.size() << "\n";
+                             }), edges->end());
+    std::cerr << "after: " << edges->size() << "\n";
 
     // Add an edge between each color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
     zero = static_cast<colorIdType>(num_colorClasses);
     for (colorIdType colorId = 0; colorId < num_colorClasses; colorId++) {
-        edges.emplace_back(colorId, zero);
+        edges->emplace_back(colorId, zero);
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
 
@@ -329,7 +330,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     }
     cp.close();
 
-    logger->info("Splitting the edges into edges for MST1 and MST2 for {} edges.", edges.size());
+    logger->info("Splitting the edges into edges for MST1 and MST2 for {} edges.", edges->size());
     uint64_t numEdges = 0;
     weightBuckets.resize(numSamples);
     for (auto &qf : queryStats1) {
@@ -346,7 +347,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
 
 
     // total merged edges can be a good estimate to reserve a vector per mst
-    logger->info("Total # of edges: {}", edges.size());
+    logger->info("Total # of edges: {}", edges->size());
 
     // lambda function to get sorted list of unique edges for each mantis.
     auto edgeSplitter = [=](std::vector<uint32_t> &srcEndIdx,
@@ -354,10 +355,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
                             colorIdType mstZero,
                             bool isFirst) {
         std::vector<Edge> edgeList;
-        edgeList.reserve(edges.size());
+        edgeList.reserve(edges->size());
         // put all of the edges for one of the merged mantises in a vector
         logger->info("Split for {} input mantis", isFirst?"first":"second");
-        for (auto &edge : edges) {
+        for (auto &edge : (*edges)) {
             if (edge.n1 > colorPairs.size() or edge.n2 > colorPairs.size()) {
                 std::cerr <<" Should not happen. One of the edge ends is larger than number of colors: "
                           << edge.n1 << " " << edge.n2 << " " << colorPairs.size() << "\n";
@@ -520,14 +521,15 @@ bool MSTMerger::calculateMSTBasedWeights() {
         return w;
     };
     logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
-    for (auto &edge : edges) {
+    for (auto &edge : (*edges)) {
         auto w1 = findWeight(edge, edge1list, srcEndIdx1, mst1Zero, true);
         auto w2 = findWeight(edge, edge2list, srcEndIdx2, mst2Zero, false);
         weightBuckets[w1 + w2 - 1].push_back(edge);
         if (++cntr % 10000000 == 0)
-            std::cerr << "\r" << cntr << " out of " << edges.size();
+            std::cerr << "\r" << cntr << " out of " << edges->size();
     }
     std::cerr << "\r";
+    edges.reset(nullptr);
     //Clearing the standard vector has no effect on memory
     /*srcEndIdx1.clear();
     srcEndIdx2.clear();

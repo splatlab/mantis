@@ -241,7 +241,7 @@ private:
     std::string prefix2;
     std::unique_ptr<MSTQuery> mst1;
     std::unique_ptr<MSTQuery> mst2;
-    std::vector<Edge> edges;
+    std::unique_ptr<std::vector<Edge>> edges;
     std::vector<std::vector<Edge>> weightBuckets;
     std::unique_ptr<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>> mst;
     spdlog::logger *logger{nullptr};
