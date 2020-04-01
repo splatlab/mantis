@@ -524,7 +524,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     for (auto &edge : (*edges)) {
         auto w1 = findWeight(edge, edge1list, srcEndIdx1, mst1Zero, true);
         auto w2 = findWeight(edge, edge2list, srcEndIdx2, mst2Zero, false);
-        weightBuckets[w1 + w2 - 1].push_back(edge);
+        weightBuckets[w1 + w2 - 1]->push_back(edge);
         if (++cntr % 10000000 == 0)
             std::cerr << "\r" << cntr << " out of " << edges->size();
     }
@@ -609,7 +609,7 @@ DisjointSets MSTMerger::kruskalMSF() {
     for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
         uint32_t edgeIdxInBucket = 0;
         w = bucketCntr + 1;
-        for (auto &it : weightBuckets[bucketCntr]) {
+        for (auto &it : *(weightBuckets[bucketCntr])) {
             colorIdType u = it.n1;
             colorIdType v = it.n2;
             colorIdType root_of_u = ds.find(u);
@@ -633,7 +633,7 @@ DisjointSets MSTMerger::kruskalMSF() {
             }
             edgeIdxInBucket++;
         }
-        weightBuckets[bucketCntr].clear();
+        weightBuckets[bucketCntr].reset(nullptr);
     }
     std::cerr << "\r";
     mstTotalWeight++;//1 empty slot for root (zero)
