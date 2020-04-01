@@ -394,6 +394,8 @@ build_MPH_tables()
     auto colorPairIt = boomphf::range(kb, ke);
     colorMph = std::make_unique<boophf_t>(colorIdPairCount, colorPairIt, threadCount, gammaFactor);
     console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph->totalBitSize() / 8) / (1024 * 1024));
+    std::string sysCommand = "rm " + colorIdPairFile;
+    system(sysCommand.c_str());
     auto t_end = time(nullptr);
     console -> info("Building the MPH tables took time {} seconds and {} memory", t_end - t_start, colorMph->totalBitSize());
 }
