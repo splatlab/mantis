@@ -35,8 +35,6 @@ using SpinLockT = std::mutex;
 
 using FilterType = CQF<KeyObject>;
 
-typedef sdsl::bit_vector BitVector;
-typedef sdsl::rrr_vector<63> BitVectorRRR;
 typedef uint32_t colorIdType;
 typedef uint32_t weightType;
 
