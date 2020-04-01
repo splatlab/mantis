@@ -105,7 +105,7 @@ struct DisjointSetNode {
 
 // To represent Disjoint Sets
 struct DisjointSets {
-    std::vector<DisjointSetNode> els;
+    std::vector<DisjointSetNode> els; // the size of total number of colors
     uint64_t n;
 
     // Constructor.
@@ -205,8 +205,11 @@ private:
                             QueryStats &queryStats,
                             std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
 
-    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap &lru_cache,
-                                               bool isFirst, QueryStats &queryStats);
+    std::vector<uint32_t> getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2,
+                                               MSTQuery * mstPtr,
+                                               std::unordered_map<uint64_t, std::vector<uint64_t>>& fixed_cache,
+                                               LRUCacheMap &lru_cache,
+                                               QueryStats &queryStats);
 
     void planCaching(MSTQuery *mst,
                      std::vector<std::pair<colorIdType, weightType>> &edges,

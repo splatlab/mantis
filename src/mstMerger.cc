@@ -657,10 +657,6 @@ bool MSTMerger::encodeColorClassUsingMST() {
     kruskalMSF();
     std::cerr << "After kruskal\nsleep\n\n";
     usleep(10000000);
-    mst1.reset(new MSTQuery(prefix1, k, k, secondMantisSamples, logger));
-    mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
-//    mst1->loadIdx(prefix1);
-//    mst2->loadIdx(prefix2);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
@@ -715,6 +711,10 @@ bool MSTMerger::encodeColorClassUsingMST() {
 
     // fill in deltabv
     logger->info("Filling DeltaBV...");
+    mst1.reset(new MSTQuery(prefix1, k, k, secondMantisSamples, logger));
+    mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
+//    mst1->loadIdx(prefix1);
+//    mst2->loadIdx(prefix2);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
     sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
     std::vector<std::thread> threads;
@@ -762,10 +762,10 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
         deltas.push_back(deltaOffset);
         auto n1s = p == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[p];
         auto n2s = parentbv[p] == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[parentbv[p]];
-        auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, lru_cache1[threadID], true,
-                                               queryStats1[threadID]);
-        auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, lru_cache2[threadID], false,
-                                                queryStats2[threadID]);
+        auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, mst1.get(), fixed_cache1,
+                                               lru_cache1[threadID], queryStats1[threadID]);
+        auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, mst2.get(), fixed_cache2,
+                                                lru_cache2[threadID], queryStats2[threadID]);
         deltas.back().deltaVals = firstDelta;
         for (auto &v : secondDelta) {
             v += numOfFirstMantisSamples;
@@ -927,18 +927,16 @@ uint64_t MSTMerger::mstBasedHammingDist(uint64_t eqid1,
     return dist;
 }
 
-std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2, LRUCacheMap &lru_cache,
-                                                      bool isFirst, QueryStats &queryStats) {
+std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t eqid2,
+                                                      MSTQuery * mstPtr,
+                                                      std::unordered_map<uint64_t, std::vector<uint64_t>>& fixed_cache,
+                                                      LRUCacheMap &lru_cache,
+                                                      QueryStats &queryStats) {
     std::vector<uint32_t> res;
     if (eqid1 == eqid2) return res;
     std::vector<uint64_t> eq1, eq2;
-    if (isFirst) {
-        buildMSTBasedColor(eqid1, mst1.get(), lru_cache, eq1, queryStats, fixed_cache1);
-        buildMSTBasedColor(eqid2, mst1.get(), lru_cache, eq2, queryStats, fixed_cache1);
-    } else {
-        buildMSTBasedColor(eqid1, mst2.get(), lru_cache, eq1, queryStats, fixed_cache2);
-        buildMSTBasedColor(eqid2, mst2.get(), lru_cache, eq2, queryStats, fixed_cache2);
-    }
+    buildMSTBasedColor(eqid1, mstPtr, lru_cache, eq1, queryStats, fixed_cache);
+    buildMSTBasedColor(eqid2, mstPtr, lru_cache, eq2, queryStats, fixed_cache);
     /// calc delta
     auto i{0}, j{0};
     while (i != eq1.size() and j != eq2.size()) {
