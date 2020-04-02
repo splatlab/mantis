@@ -97,12 +97,7 @@ void MSTMerger::mergeMSTs() {
     logger->info ("Merging the two MSTs..");
 
     buildEdgeSets();
-    std::cerr << "Scope does have an effect\nsleep\n\n";
-    usleep(10000000);
     calculateMSTBasedWeights();
-    std::cerr << "Scope does have an effect\nsleep\n\n";
-    usleep(10000000);
-
     encodeColorClassUsingMST();
 
     std::string cmd = "rm " + prefix + "newID2oldIDs";
@@ -657,11 +652,7 @@ DisjointSets MSTMerger::kruskalMSF() {
  */
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
-    std::cerr << "Before Kruskal\nsleep\n\n";
-    usleep(10000000);
     kruskalMSF();
-    std::cerr << "After kruskal\nsleep\n\n";
-    usleep(10000000);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
@@ -671,8 +662,6 @@ bool MSTMerger::encodeColorClassUsingMST() {
     {// putting weightbv inside the scope so its memory is freed after we're done with it
         sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
         sdsl::bit_vector visited(num_colorClasses, 0);
-        std::cerr << "After Constructing the weightbv\nsleep\n\n";
-        usleep(10000000);
         bool check = false;
         std::queue<colorIdType> q;
         q.push(zero); // Root of the tree is zero
@@ -695,11 +684,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
             }
         }
 
-        std::cerr << "AAAAAA -- Before resetting that big vector of vectors\nsleep\n\n";
-        usleep(10000000);
         mst.reset(nullptr);
-        std::cerr << "After resetting that big vector of vectors\nsleep\n\n";
-        usleep(10000000);
         std::cerr << "\r";
         // filling bbv
         // resize bbv
@@ -711,8 +696,6 @@ bool MSTMerger::encodeColorClassUsingMST() {
         }
     }
     std::cerr << "\r";
-    std::cerr << "After Coming out of the scope for weightbv\nsleep\n\n";
-    usleep(10000000);
 
     // fill in deltabv
     logger->info("Filling DeltaBV...");
