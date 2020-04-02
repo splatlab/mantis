@@ -333,6 +333,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("Splitting the edges into edges for MST1 and MST2 for {} edges.", edges->size());
     uint64_t numEdges = 0;
     weightBuckets.resize(numSamples);
+    for (auto &w : weightBuckets) {
+        w.reset(new std::vector<Edge>());
+    }
     for (auto &qf : queryStats1) {
         qf.numSamples = numSamples;
         qf.trySample = true;

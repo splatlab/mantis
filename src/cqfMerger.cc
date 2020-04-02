@@ -394,8 +394,6 @@ build_MPH_tables()
     auto colorPairIt = boomphf::range(kb, ke);
     colorMph = std::make_unique<boophf_t>(colorIdPairCount, colorPairIt, threadCount, gammaFactor);
     console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph->totalBitSize() / 8) / (1024 * 1024));
-    std::string sysCommand = "rm " + colorIdPairFile;
-    system(sysCommand.c_str());
     auto t_end = time(nullptr);
     console -> info("Building the MPH tables took time {} seconds and {} memory", t_end - t_start, colorMph->totalBitSize());
 }
@@ -591,7 +589,8 @@ store_color_pairs()
     writtenPairsCount = sampledPairs.size();
 
     // writing down the non-popular color IDs
-    std::ifstream input(cdbg.prefix + EQ_ID_PAIRS_FILE);
+    std::string colorIdPairFile = cdbg.prefix + EQ_ID_PAIRS_FILE;
+    std::ifstream input(colorIdPairFile);
     colorIdType c1, c2;
     while (input >> c1 >> c2) {
         ColorPair cpair(c1, c2);
@@ -606,6 +605,8 @@ store_color_pairs()
     output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
     output.close();
 
+    std::string sysCommand = "rm " + colorIdPairFile;
+    system(sysCommand.c_str());
     auto t_end = time(nullptr);
     console -> info("Writing {} color pairs took time {} seconds.", writtenPairsCount, t_end - t_start);
 }
