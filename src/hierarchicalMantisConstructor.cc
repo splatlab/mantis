@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 //#include <utility>
 //#include <algorithm>
 //#include <string>
@@ -93,6 +94,7 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         std::exit(1);
     }
 
+    // Allowing only a limited num of processes run at the same time, even if more threads are provided
     ctpl::thread_pool p(opt.numProcesses /* num of threads in the pool */);
     std::vector<std::future<void>> results;
     results.reserve(num_samples);
@@ -141,7 +143,8 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
             level = level_cmd.first;
         }
         results.push_back(p.push([level_cmd](int) {
-            std::cerr << level_cmd.first << ": " << level_cmd.second << "\n\n";
+            std::stringstream ss(std::to_string(level_cmd.first) + ": " + level_cmd.second + "\n\n");
+            std::cerr << ss.str();
             system(level_cmd.second.c_str());
         }));
     }
