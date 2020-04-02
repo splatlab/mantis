@@ -42,7 +42,7 @@
 //#include "mantis_utils.hpp"
 //#include "mantisconfig.hpp"
 
-constexpr static uint32_t classicMaxCnt = 32;
+constexpr static uint32_t classicMaxCnt = 128;
 
 
 int recursiveConstruction(uint64_t cnt, uint64_t start, uint64_t end, std::vector<std::pair<uint64_t, std::string>>&cmds,

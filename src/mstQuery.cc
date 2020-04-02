@@ -133,7 +133,9 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
         if (blockKmers[blockId].empty())
             continue;
+        logger->info("{}: kmer count: {}", blockId, blockKmers[blockId].size());
         cdbg.replaceCQFInMemory(blockId);
+        logger->info("\t-->cqf loaded");
         for (auto key : blockKmers[blockId]) {
             KeyObject keyObj(key, 0, 0);
             uint64_t eqclass = cdbg.query_kmerInCurDbg(keyObj, 0);
@@ -378,6 +380,7 @@ int mst_query_main(QueryOpts &opt) {
 
     logger->info("Loading the first cdbg and the first CQF...");
     ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(opt.prefix, MANTIS_DBG_IN_MEMORY);
+    cdbg.set_console(logger);
     auto curDbg = cdbg.get_current_cqf();
     if (not curDbg) {
         logger->error("No dbg has been loaded into memory.");
