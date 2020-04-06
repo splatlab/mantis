@@ -150,7 +150,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
 
     nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-
+    logger->info("Fetching colors now ..");
     for (auto &it : query_eqclass_set) {
         uint64_t eqclass_id = it;
 
@@ -395,7 +395,6 @@ int mst_query_main(QueryOpts &opt) {
     MSTQuery mstQuery(opt.prefix, indexK, queryK, queryStats.numSamples, logger);
     logger->info("Done Loading color classes. Total # of color classes is {}",
                  mstQuery.parentbv.size() - 1);
-
     logger->info("Querying colored dbg.");
     std::ofstream opfile(opt.output);
     LRUCacheMap cache_lru(100000);
@@ -404,6 +403,7 @@ int mst_query_main(QueryOpts &opt) {
     CLI::AutoTimer timer{"query time ", CLI::Timer::Big};
     if (opt.process_in_bulk) {
         numOfQueries = mstQuery.parseBulkKmers(opt.query_file, indexK);
+        logger->info("# of observed sequences: {}", numOfQueries);
         mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
         if (opt.use_json) {
             opfile << "[\n";
