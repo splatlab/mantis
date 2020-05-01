@@ -447,8 +447,7 @@ static inline uint64_t bitselectv(const uint64_t val, int ignore, int rank)
 
 static inline int is_runend(const QF *qf, uint64_t index)
 {
-	return (METADATA_WORD(qf, runends, index) >> ((index % QF_SLOTS_PER_BLOCK) %
-																								64)) & 1ULL;
+	return (METADATA_WORD(qf, runends, index) >> ((index % QF_SLOTS_PER_BLOCK) % 64)) & 1ULL;
 }
 
 static inline int is_occupied(const QF *qf, uint64_t index)
@@ -1646,7 +1645,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	if (buffer == NULL || total_num_bytes > buffer_len)
 		return total_num_bytes;
 
-	// memset(buffer, 0, total_num_bytes);
+	memset(buffer, 0, total_num_bytes);
 	qf->metadata = (qfmetadata *)(buffer);
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
@@ -2377,7 +2376,7 @@ int qfi_next(QFi *qfi)
 																		rank);
 			if (next_run == 64) {
 				rank = 0;
-				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks) {
+				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks - 1) {
 					block_index++;
 					next_run = bitselect(get_block(qfi->qf, block_index)->occupieds[0],
 															 rank);
