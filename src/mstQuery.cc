@@ -123,6 +123,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     uint64_t ksize{cdbg.get_current_cqf()->keybits()}, numBlocks{cdbg.get_numBlocks()};
     std::vector<std::unordered_set<mantis::KmerHash>> blockKmers(numBlocks);
     // split kmers based on minimizers into blocks
+    logger->info("# of distinct kmers to query: {}", kmer2cidMap.size());
     for (auto kv : kmer2cidMap) {
         auto minimizers = cdbg.findMinimizer(kv.first, ksize); //assuming not hashed
         blockKmers[cdbg.minimizerBlock[minimizers.first]].insert(kv.first);
