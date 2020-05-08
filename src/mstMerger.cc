@@ -594,24 +594,25 @@ void MSTMerger::calcMSTHammingDistInParallel(uint32_t i,
  * https://www.geeksforgeeks.org/kruskals-minimum-spanning-tree-using-stl-in-c/
  * @return List of connected components in the Minimum Spanning Forest
  */
-DisjointSets MSTMerger::kruskalMSF() {
+void MSTMerger::kruskalMSF() {
     uint32_t bucketCnt = numSamples;
-    mst = std::make_unique<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>>(num_colorClasses);
+    std::ofstream mstAdj(prefix + mantis::TEMP_MST_ADJ_FILE);
+//    std::make_unique<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>>(num_colorClasses);
     // Create disjoint sets
     DisjointSets ds(num_colorClasses);
 
-    uint64_t edgeCntr{0}, selectedEdgeCntr{0};
-    uint32_t w{0};
+    uint64_t edgeCntr{0}, selectedEdgeCntr{0}, u, v, w;
+//    uint32_t w{0};
 
     // Iterate through all sorted edges
     for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
         uint32_t edgeIdxInBucket = 0;
         w = bucketCntr + 1;
         for (auto &it : *(weightBuckets[bucketCntr])) {
-            colorIdType u = it.n1;
-            colorIdType v = it.n2;
-            colorIdType root_of_u = ds.find(u);
-            colorIdType root_of_v = ds.find(v);
+            u = it.n1;
+            v = it.n2;
+            auto root_of_u = ds.find(u);
+            auto root_of_v = ds.find(v);
 
             // Check if the selected edge is causing a cycle or not
             // (A cycle is induced if u and v belong to the same set)
@@ -619,8 +620,7 @@ DisjointSets MSTMerger::kruskalMSF() {
                 // Merge two sets
                 ds.merge(root_of_u, root_of_v, w);
                 // Current edge will be in the MST
-                (*mst)[u].emplace_back(v, w);
-                (*mst)[v].emplace_back(u, w);
+                mstAdj << u << v << w;
                 mstTotalWeight += w;
                 selectedEdgeCntr++;
             }
@@ -641,7 +641,7 @@ DisjointSets MSTMerger::kruskalMSF() {
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
-    return ds;
+    mstAdj.close();
 }
 
 /**
@@ -653,29 +653,40 @@ DisjointSets MSTMerger::kruskalMSF() {
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
     kruskalMSF();
+    // sort external disk edges
+
+    // read the MST file in memory
+    auto adjListPtr = std::make_unique<AdjList>(num_colorClasses, numSamples);
+    std::string mstFile = prefix+mantis::TEMP_MST_ADJ_FILE;
+    adjListPtr->loadFromFile(mstFile.c_str());
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
     sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
     // create and fill the deltabv and boundarybv data structures
-    sdsl::bit_vector bbv(mstTotalWeight, 0);
+//    sdsl::bit_vector bbv(mstTotalWeight, 0);
     {// putting weightbv inside the scope so its memory is freed after we're done with it
-        sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
+//        sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
         sdsl::bit_vector visited(num_colorClasses, 0);
         bool check = false;
         std::queue<colorIdType> q;
         q.push(zero); // Root of the tree is zero
         parentbv[zero] = zero; // and it's its own parent (has no parent)
-        weightbv[zero] = 1; // adding a dummy weight for a dummy node
+//        weightbv[zero] = 1; // adding a dummy weight for a dummy node
         while (!q.empty()) {
             colorIdType parent = q.front();
             q.pop();
-            for (auto &neighbor :(*mst)[parent]) {
-                if (!visited[neighbor.first]) {
-                    parentbv[neighbor.first] = parent;
-                    weightbv[neighbor.first] = neighbor.second;
-                    q.push(neighbor.first);
+//            for (auto &neighbor :(*mst)[parent]) {
+            for (auto &neighbor : adjListPtr->neighbors(parent)) {
+                if (!visited[neighbor]) {
+                    parentbv[neighbor] = parent;
+                    q.push(neighbor);
                 }
+//                if (!visited[neighbor.first]) {
+//                    parentbv[neighbor.first] = parent;
+//                    weightbv[neighbor.first] = neighbor.second;
+//                    q.push(neighbor.first);
+//                }
             }
             visited[parent] = 1;
             nodeCntr++; // just a counter for the log
@@ -683,33 +694,54 @@ bool MSTMerger::encodeColorClassUsingMST() {
                 std::cerr << "\rset parent of " << nodeCntr << " ccs";
             }
         }
-
-        mst.reset(nullptr);
         std::cerr << "\r";
-        // filling bbv
+        /*// filling bbv
         // resize bbv
         logger->info("Filling BBV...");
         uint64_t deltaOffset{0};
         for (uint64_t i = 0; i < num_colorClasses; i++) {
             deltaOffset += static_cast<uint64_t>(weightbv[i]);
             bbv[deltaOffset - 1] = 1;
-        }
+        }*/
     }
     std::cerr << "\r";
 
-    // fill in deltabv
-    logger->info("Filling DeltaBV...");
+    std::vector<std::pair<uint64_t, uint64_t>> thread_deltaOffset_and_parentEnd;
+    thread_deltaOffset_and_parentEnd.reserve(nThreads);
+    uint64_t deltaOffset{0}, s{0};
+    for (uint32_t t = 0; t < nThreads; ++t) {
+        uint64_t e = parentbv.size() * (t + 1) / nThreads;
+        thread_deltaOffset_and_parentEnd.emplace_back(deltaOffset, e);
+        for (auto i = s; i < e; i++) {
+            auto w = adjListPtr->getWeight(s, parentbv[s]);
+            if (w == invalid) {
+                std::cerr << "ERROR! Could not find the pair of " << s << " and " << parentbv[s] << " in MST\n";
+                std::exit(3);
+            }
+            deltaOffset += w;
+        }
+        s = e;
+    }
+    adjListPtr.reset(nullptr);
+
+    // fill in deltabv and bbv
+    logger->info("Filling DeltaBV and BBV...");
     mst1.reset(new MSTQuery(prefix1, k, k, secondMantisSamples, logger));
     mst2.reset(new MSTQuery(prefix2, k, k, secondMantisSamples, logger));
 //    mst1->loadIdx(prefix1);
 //    mst2->loadIdx(prefix2);
+    sdsl::bit_vector bbv(mstTotalWeight, 0);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
-    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
+//    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
     std::vector<std::thread> threads;
+    s = 0;
     for (uint32_t t = 0; t < nThreads; ++t) {
+        deltaOffset = thread_deltaOffset_and_parentEnd[t].first;
+        auto e = thread_deltaOffset_and_parentEnd[t].second;
         threads.emplace_back(std::thread(&MSTMerger::calcDeltasInParallel, this,
-                                         t, 0, 0,
-                                         std::ref(parentbv), std::ref(deltabv), std::ref(sbbv), true));
+                                         t, s, e, deltaOffset,
+                                         std::ref(parentbv), std::ref(deltabv), std::ref(bbv), true));
+        s = e;
     }
     for (auto &t : threads) { t.join(); }
     std::cerr << "\r";
@@ -722,9 +754,9 @@ bool MSTMerger::encodeColorClassUsingMST() {
     return true;
 }
 
-void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
+void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t s, uint64_t e, uint64_t deltaOffset,
                                      sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-                                     sdsl::bit_vector::select_1_type &sbbv,
+                                     sdsl::bit_vector &bbv,
                                      bool isMSTBased) {
 
     uint64_t deltasKeptInMem = 1000;
@@ -741,12 +773,9 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
     std::vector<Delta> deltas;
     deltas.reserve(deltasKeptInMem);
 
-    colorIdType s = parentbv.size() * threadID / nThreads;
-    colorIdType e = parentbv.size() * (threadID + 1) / nThreads;
-
     colorIdType mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
-    for (colorIdType p = s; p < e; p++) {
-        auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
+    for (uint64_t p = s; p < e; p++) {
+//        auto deltaOffset = (p > 0) ? (sbbv(p) + 1) : 0;
         deltas.push_back(deltaOffset);
         auto n1s = p == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[p];
         auto n2s = parentbv[p] == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[parentbv[p]];
@@ -759,9 +788,13 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
             v += numOfFirstMantisSamples;
             deltas.back().deltaVals.push_back(v);
         }
-        if (deltas.size() == deltasKeptInMem) {
+        deltaOffset += deltas.back().deltaVals.size();
+        if (deltas.size() >= deltasKeptInMem) {
             colorMutex.lock();
             for (auto &v : deltas) {
+                if (v.startingOffset > 0) {
+                    bbv[v.startingOffset - 1] = 1;
+                }
                 for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
                     deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
             }
@@ -772,6 +805,9 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_
 
     colorMutex.lock();
     for (auto &v : deltas) {
+        if (v.startingOffset > 0) {
+            bbv[v.startingOffset - 1] = 1;
+        }
         for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
             deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
     }

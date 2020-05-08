@@ -44,6 +44,20 @@ struct Cost {
     uint64_t numQueries{0};
 };
 
+struct CompactEdge {
+
+    static uint128_t getEdge(uint64_t hi, uint64_t lo, uint64_t nodeSize) {
+        return (uint128_t)(lo) + (((uint128_t)hi) << nodeSize);
+    }
+
+    static std::pair<uint64_t, uint64_t> getNodes(uint128_t edge, uint64_t nodeSize) {
+        uint64_t mask = ((1ULL << nodeSize) - 1);
+        uint64_t hi = (edge >> nodeSize) & mask;
+        uint64_t lo = edge & mask;
+        return std::make_pair(hi, lo);
+    }
+};
+
 // undirected edge
 struct Edge {
     colorIdType n1;
@@ -185,6 +199,148 @@ struct DisjointSets {
     }
 };
 
+/**
+ * Adjacency List
+ * Weight is stored within the smallerSrc vector
+ */
+struct AdjList {
+    // weight is in the smallerSrc
+    sdsl::int_vector<> smallerSrc;
+    sdsl::bit_vector smallerSrcBoundary;
+    sdsl::bit_vector::select_1_type smallerSrcBoundarySel;
+    sdsl::int_vector<> greaterSrc;
+    sdsl::bit_vector greaterSrcBoundary;
+    sdsl::bit_vector::select_1_type greaterSrcBoundarySel;
+
+    uint64_t weightBits;
+    uint64_t weightMask;
+
+    AdjList(uint64_t numColorClasses, uint64_t numSamples) {
+        weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
+        weightMask = (1ULL << weightBits) - 1;
+        smallerSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses))+weightBits);
+        smallerSrcBoundary = sdsl::bit_vector(numColorClasses);
+        greaterSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses))+1);
+        greaterSrcBoundary = sdsl::bit_vector(numColorClasses);
+    }
+
+    bool loadFromFile(const char* file) {
+        std::ifstream input(file);
+        uint64_t src,dest, weight, smallerIdx{0}, greaterIdx{0}, prevSrc{0}, smallerNeighborCnt{0}, greaterNeighborCnt{0};
+        input >> src >> dest >> weight;
+        while (input.good()) {
+            if (smallerIdx == smallerSrc.size() or greaterIdx == greaterSrc.size()) {
+                std::cerr << "ERROR! Found more edges than expected for the MST stored in the temp file " << file << "\n";
+                std::exit(3);
+            }
+            if (src < dest) {
+                if (prevSrc != src) {
+                    smallerIdx += (smallerNeighborCnt == 0); // leave the slot zero if no greater neighbor nodes
+                    smallerSrcBoundary[smallerIdx] = 1;
+                    smallerNeighborCnt = 0;
+                }
+                if (smallerIdx == smallerSrc.size() ) {
+                    std::cerr << "ERROR! src<dest: Found more edges than expected for the MST stored in the temp file " << file << "\n";
+                    std::exit(3);
+                }
+                smallerSrc[smallerIdx] = (dest << weightBits) & weight;
+                ++smallerNeighborCnt;
+                ++smallerIdx;
+            } else {
+                if (prevSrc != src) {
+                    greaterIdx += (greaterNeighborCnt == 0); // leave the slot zero if no smaller neighbor nodes
+                    greaterSrcBoundary[greaterIdx] = 1;
+                    greaterNeighborCnt = 0;
+                }
+                if (greaterIdx == greaterSrc.size() ) {
+                    std::cerr << "ERROR! src>dest: Found more edges than expected for the MST stored in the temp file " << file << "\n";
+                    std::exit(3);
+                }
+                greaterSrc[greaterIdx] = (dest << 1ULL) & 1ULL;
+                ++greaterNeighborCnt;
+                ++greaterIdx;
+            }
+            input >> src >> dest >> weight;
+        }
+        input.close();
+        smallerSrcBoundarySel = sdsl::bit_vector::select_1_type(&smallerSrcBoundary);
+        greaterSrcBoundarySel = sdsl::bit_vector::select_1_type(&greaterSrcBoundary);
+        return greaterIdx == greaterSrc.size() and smallerIdx == smallerSrc.size();
+    }
+
+    std::vector<colorIdType> neighbors(uint64_t idx) {
+        std::vector<colorIdType> res;
+        res.reserve(1000);
+        auto start = smallerSrcBoundarySel(idx);
+        bool found = false;
+        uint64_t wrd{0};
+        do {
+            uint64_t wrdLen = std::min(static_cast<uint64_t >(64), smallerSrcBoundary.size()-start);
+            wrd = smallerSrcBoundary.get_int(start, wrdLen);
+            for (uint64_t j = 0; j < wrdLen; j++) {
+                auto nei = smallerSrc[start + j];
+                if (nei & weightMask)
+                    res.push_back(nei >> weightBits);
+                if ((wrd >> j) & 0x01) {
+                    found = true;
+                    break;
+                }
+            }
+            start += wrdLen;
+        } while (!found);
+    //// greater
+        start = greaterSrcBoundarySel(idx);
+        found = false;
+        do {
+            uint64_t wrdLen = std::min(static_cast<uint64_t >(64), greaterSrcBoundary.size()-start);
+            wrd = greaterSrcBoundary.get_int(start, wrdLen);
+            for (uint64_t j = 0; j < wrdLen; j++) {
+                auto nei = greaterSrc[start + j];
+                if (nei & 1ULL)
+                    res.push_back(nei >> 1ULL);
+                if ((wrd >> j) & 0x01) {
+                    found = true;
+                    break;
+                }
+            }
+            start += wrdLen;
+        } while (!found);
+
+        return res;
+    }
+
+    uint64_t getWeight(uint64_t n1, uint64_t n2) {
+        if (n1 == n2)
+            return 0;
+        if (n1 > n2) {
+            std::swap(n1, n2);
+        }
+        auto start = smallerSrcBoundarySel(n1);
+        bool found = false;
+        uint64_t wrd{0};
+        do {
+            uint64_t wrdLen = std::min(static_cast<uint64_t >(64), smallerSrcBoundary.size()-start);
+            wrd = smallerSrcBoundary.get_int(start, wrdLen);
+            for (uint64_t j = 0; j < wrdLen; j++) {
+                auto nei = smallerSrc[start + j];
+                if (nei & weightMask) {
+                    auto neighbor = (nei >> weightBits);
+                    if (neighbor == n2) {
+                        return (nei & weightMask);
+                    }
+                }
+                if ((wrd >> j) & 0x01) {
+                    found = true;
+                    break;
+                }
+            }
+            start += wrdLen;
+        } while (!found);
+        return invalid;
+    }
+
+};
+
 class MSTMerger {
 public:
     MSTMerger(std::string prefix,
@@ -205,7 +361,7 @@ private:
 
     bool encodeColorClassUsingMST();
 
-    DisjointSets kruskalMSF();
+    void kruskalMSF();
 
     std::set<workItem> neighbors(CQF<KeyObject> &cqf, workItem n);
 
@@ -234,9 +390,9 @@ private:
                                   std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
                                   uint32_t numSamples);
 
-    void calcDeltasInParallel(uint32_t threadID, uint64_t cbvID1, uint64_t cbvID2,
+    void calcDeltasInParallel(uint32_t threadID, uint64_t s, uint64_t e, uint64_t deltaOffset,
                               sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
-                              sdsl::bit_vector::select_1_type &sbbv,
+                              sdsl::bit_vector &bbv,
                               bool isMSTBased);
 
     void buildMSTBasedColor(uint64_t eqid1, MSTQuery *mst1,
@@ -284,7 +440,9 @@ private:
     std::unique_ptr<MSTQuery> mst2;
     std::unique_ptr<std::vector<Edge>> edges;
     std::vector<std::unique_ptr<std::vector<Edge>>> weightBuckets;
-    std::unique_ptr<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>> mst;
+    std::unique_ptr<sdsl::int_vector<>> mst;
+    std::unique_ptr<sdsl::bit_vector> mstBbv;
+//    std::unique_ptr<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;

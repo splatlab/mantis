@@ -35,6 +35,7 @@ namespace mantis{
     constexpr char LSMT_LEVEL_DIR[] = "lsmt-level-";
     constexpr char TEMP_BUILD_IDX_DIR[] = "temp-build-idx/";
     constexpr char TEMP_MERGE_IDX_DIR[] = "temp-merge-idx/";
+    constexpr char TEMP_MST_ADJ_FILE[] = "tmp-mst-adj.tmp";
 
 //    constexpr const uint64_t NUM_BV_BUFFER{20000000};
     constexpr const uint64_t BV_BUF_LEN{(uint64_t)20000000000};
