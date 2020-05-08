@@ -37,6 +37,7 @@ using FilterType = CQF<KeyObject>;
 
 typedef uint32_t colorIdType;
 typedef uint32_t weightType;
+typedef unsigned __int128 uint128_t;
 
 struct Cost {
     uint64_t numSteps{0};
@@ -82,6 +83,7 @@ struct workItem {
     }
 };
 
+/*
 
 struct DisjointSetNode {
     colorIdType parent{0};
@@ -100,47 +102,86 @@ struct DisjointSetNode {
         }
     }
 };
+*/
 
 // To represent Disjoint Sets
 struct DisjointSets {
-    std::vector<DisjointSetNode> els; // the size of total number of colors
+    sdsl::int_vector<> els;
+//    std::vector<DisjointSetNode> els; // the size of total number of colors
     uint64_t n;
 
     // Constructor.
     explicit DisjointSets(uint64_t n) {
         // Allocate memory
         this->n = n;
-        els.resize(n);
+        els = sdsl::int_vector<>(n, 0, ceil(log2(n))+1); // 1 bit which is set if the node IS its own parent
+//        els.resize(n);
         // Initially, all vertices are in
         // different sets and have rank 0.
-        for (uint64_t i = 0; i < n; i++) {
-            //every element is parent of itself
-            els[i].setParent(static_cast<colorIdType>(i));
-        }
+//        for (uint64_t i = 0; i < n; i++) {
+//            //every element is parent of itself
+//            els[i].setParent(static_cast<colorIdType>(i));
+//        }
     }
 
+    bool selfParent(uint64_t idx) {
+        return els[idx] & 1ULL;
+    }
+
+    void setParent(uint64_t idx, uint64_t parentIdx) {
+        bool ownParent = idx == parentIdx;
+        els[idx] = (parentIdx << 1ULL) | static_cast<uint64_t>(ownParent);
+    }
+
+    uint64_t getParent(uint64_t idx) {
+        if (selfParent(idx))
+            return idx;
+        return els[idx] >> 1ULL;
+    }
+
+    uint64_t getRank(uint64_t idx) {
+        uint64_t par = find(idx);
+        return els[par] >> 1ULL;
+    }
+
+    void incrementRank(uint64_t idx) {
+        auto parIdx = find(idx);
+        uint64_t rank = els[parIdx] >> 1ULL;
+        ++rank;
+        els[parIdx] = (rank << 1ULL) & 1ULL; // selfParent bit is set
+    }
     // Find the parent of a node 'u'
     // Path Compression
-    uint32_t find(colorIdType u) {
+    uint64_t find(uint64_t u) {
         /* Make the parent of the nodes in the path
            from u--> parent[u] point to parent[u] */
-        if (u != els[u].parent)
-            els[u].parent = find(els[u].parent);
-        return els[u].parent;
+        if (not selfParent(u)) {
+            setParent(u, find(u));
+        }
+        return getParent(u);
+//        if (u != els[u].parent)
+//            els[u].parent = find(els[u].parent);
+//        return els[u].parent;
     }
 
     // Union by rank
-    void merge(colorIdType x, colorIdType y, uint32_t edgeW) {
+    void merge(uint64_t x, uint64_t y, uint32_t edgeW) {
         x = find(x), y = find(y);
 
         /* Make tree with smaller height
            a subtree of the other tree  */
-        if (els[x].rnk > els[y].rnk) {
-            els[x].mergeWith(els[y], edgeW, x);
+        if (getRank(x) <= getRank(y)) {
+            std::swap(x, y);
+            if (getRank(x) == getRank(y)) {
+                incrementRank(x);
+            }
+//            els[x].mergeWith(els[y], edgeW, x);
 
-        } else {// If rnk[x] <= rnk[y]
-            els[y].mergeWith(els[x], edgeW, y);
         }
+//        else {// If rnk[x] <= rnk[y]
+//            els[y].mergeWith(els[x], edgeW, y);
+//        }
+        setParent(x, y);
     }
 };
 
