@@ -600,7 +600,6 @@ void MSTMerger::kruskalMSF() {
 //    std::make_unique<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>>(num_colorClasses);
     // Create disjoint sets
     DisjointSets ds(num_colorClasses);
-
     uint64_t edgeCntr{0}, selectedEdgeCntr{0}, u, v, w;
 //    uint32_t w{0};
 
@@ -652,13 +651,20 @@ void MSTMerger::kruskalMSF() {
  */
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
+//    std::cerr << "before kruskal\n";
+//    usleep(10000000);
     kruskalMSF();
+    std::cerr << "after kruskal\n";
+    usleep(10000000);
     // sort external disk edges
 
     // read the MST file in memory
     auto adjListPtr = std::make_unique<AdjList>(num_colorClasses, numSamples);
     std::string mstFile = prefix+mantis::TEMP_MST_ADJ_FILE;
     adjListPtr->loadFromFile(mstFile.c_str());
+    std::cerr << "after loading adjList from disk\n";
+    usleep(10000000);
+
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
@@ -668,6 +674,9 @@ bool MSTMerger::encodeColorClassUsingMST() {
     {// putting weightbv inside the scope so its memory is freed after we're done with it
 //        sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
         sdsl::bit_vector visited(num_colorClasses, 0);
+        std::cerr << "after initializing parentbv and visited\n";
+        usleep(10000000);
+
         bool check = false;
         std::queue<colorIdType> q;
         q.push(zero); // Root of the tree is zero
@@ -723,6 +732,8 @@ bool MSTMerger::encodeColorClassUsingMST() {
         s = e;
     }
     adjListPtr.reset(nullptr);
+    std::cerr << "after deleting MST adjacency list\n";
+    usleep(10000000);
 
     // fill in deltabv and bbv
     logger->info("Filling DeltaBV and BBV...");
@@ -732,6 +743,9 @@ bool MSTMerger::encodeColorClassUsingMST() {
 //    mst2->loadIdx(prefix2);
     sdsl::bit_vector bbv(mstTotalWeight, 0);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
+    std::cerr << "after initializing deltabv and bbv\n";
+    usleep(10000000);
+
 //    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
     std::vector<std::thread> threads;
     s = 0;
@@ -745,6 +759,9 @@ bool MSTMerger::encodeColorClassUsingMST() {
     }
     for (auto &t : threads) { t.join(); }
     std::cerr << "\r";
+
+    std::cerr << "Done\n";
+    usleep(10000000);
 
     logger->info("Serializing data structures parentbv, deltabv, & bbv...");
     sdsl::store_to_file(parentbv, std::string(prefix + mantis::PARENTBV_FILE));

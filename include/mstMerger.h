@@ -122,13 +122,13 @@ struct DisjointSetNode {
 struct DisjointSets {
     sdsl::int_vector<> els;
 //    std::vector<DisjointSetNode> els; // the size of total number of colors
-    uint64_t n;
+//    uint64_t n;
 
     // Constructor.
     explicit DisjointSets(uint64_t n) {
         // Allocate memory
-        this->n = n;
-        els = sdsl::int_vector<>(n, 0, ceil(log2(n))+1); // 1 bit which is set if the node IS its own parent
+//        this->n = n;
+        els = sdsl::int_vector<>(n, 1, ceil(log2(n))+1); // 1 bit which is set if the node IS its own parent
 //        els.resize(n);
         // Initially, all vertices are in
         // different sets and have rank 0.
@@ -139,30 +139,51 @@ struct DisjointSets {
     }
 
     bool selfParent(uint64_t idx) {
+        if (idx >= els.size()) {
+            std::cerr << "ERROR in selfParent => idx > vector size: " << idx << " " << els.size() << "\n";
+            std::exit(3);
+        }
         return els[idx] & 1ULL;
     }
 
     void setParent(uint64_t idx, uint64_t parentIdx) {
         bool ownParent = idx == parentIdx;
+        if (idx >= els.size() or parentIdx >= els.size()) {
+            std::cerr << "ERROR in setParent => idx > vector size: "
+            << idx << " " << parentIdx << " " << els.size() << "\n";
+        }
+        parentIdx = getParent(parentIdx);
         els[idx] = (parentIdx << 1ULL) | static_cast<uint64_t>(ownParent);
     }
 
     uint64_t getParent(uint64_t idx) {
+        if (idx >= els.size()) {
+            std::cerr << "ERROR in getParent => idx > vector size: " << idx << " " << els.size() << "\n";
+            std::exit(3);
+        }
         if (selfParent(idx))
             return idx;
         return els[idx] >> 1ULL;
     }
 
     uint64_t getRank(uint64_t idx) {
+        if (idx >= els.size()) {
+            std::cerr << "ERROR in getRank => idx > vector size: " << idx << " " << els.size() << "\n";
+            std::exit(3);
+        }
         uint64_t par = find(idx);
         return els[par] >> 1ULL;
     }
 
     void incrementRank(uint64_t idx) {
+        if (idx >= els.size()) {
+            std::cerr << "ERROR in incrementRank => idx > vector size: " << idx << " " << els.size() << "\n";
+            std::exit(3);
+        }
         auto parIdx = find(idx);
         uint64_t rank = els[parIdx] >> 1ULL;
         ++rank;
-        els[parIdx] = (rank << 1ULL) & 1ULL; // selfParent bit is set
+        els[parIdx] = (rank << 1ULL) | 1ULL; // selfParent bit is set
     }
     // Find the parent of a node 'u'
     // Path Compression
@@ -170,32 +191,24 @@ struct DisjointSets {
         /* Make the parent of the nodes in the path
            from u--> parent[u] point to parent[u] */
         if (not selfParent(u)) {
-            setParent(u, find(u));
+            setParent(u, find(getParent(u)));
         }
         return getParent(u);
-//        if (u != els[u].parent)
-//            els[u].parent = find(els[u].parent);
-//        return els[u].parent;
     }
 
     // Union by rank
     void merge(uint64_t x, uint64_t y, uint32_t edgeW) {
-        x = find(x), y = find(y);
+        auto parent = find(x), child = find(y);
 
         /* Make tree with smaller height
            a subtree of the other tree  */
-        if (getRank(x) <= getRank(y)) {
-            std::swap(x, y);
-            if (getRank(x) == getRank(y)) {
-                incrementRank(x);
-            }
-//            els[x].mergeWith(els[y], edgeW, x);
-
+        if (getRank(child) > getRank(parent)) {
+            std::swap(child, parent);
         }
-//        else {// If rnk[x] <= rnk[y]
-//            els[y].mergeWith(els[x], edgeW, y);
-//        }
-        setParent(x, y);
+        if (getRank(child) == getRank(parent)) {
+            incrementRank(parent);
+        }
+        setParent(child, parent);
     }
 };
 
