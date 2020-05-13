@@ -12,6 +12,7 @@ add_library(mantis_core STATIC
 		canonicalKmer.cc
   		mst.cc
 		mstMerger.cc
+		adjList.cc
 		stat.cc
   		MantisFS.cc
         xxhash.c

@@ -670,11 +670,15 @@ bool MSTMerger::encodeColorClassUsingMST() {
     adjListPtr->hybridTreeWalk(zero, parentbv, visited);
     std::cerr << "\r";
     std::cerr << "Filled parentBV\n";
+    uint64_t cntr = 0;
     for (auto i = 0; i < visited.size(); i++) {
         if (visited[i] == 0) {
-            std::cerr << "GOD help me! " << i << "\n";
+            cntr++;
+
+//            std::cerr << "GOD help me! " << i << "\n";
         }
     }
+    std::cerr << "total " << visited.size() << " visited: " << adjListPtr->visitedCnt << " not visited: " << cntr << "\n";
     std::vector<uint64_t> thread_deltaOffset_and_parentEnd(nThreads, 0);
     uint64_t idx{0};
     uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);
