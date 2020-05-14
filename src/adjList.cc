@@ -3,9 +3,10 @@
 //
 
 #include <cmath>
+#include <mantisconfig.hpp>
 #include "adjList.h"
 
-AdjList::AdjList(uint64_t numColorClasses, uint64_t numSamples) {
+AdjList::AdjList(std::string prefixIn, uint64_t numColorClasses, uint64_t numSamples) : prefix(prefixIn), adjListFile(prefix+mantis::TEMP_MST_ADJ_FILE) {
     weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
     weightMask = (1ULL << weightBits) - 1;
     smallerSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses))+weightBits);
@@ -20,37 +21,37 @@ AdjList::AdjList(uint64_t numColorClasses, uint64_t numSamples) {
      * @param dest greater vertex of the edge
      * @param weight of the edge
      */
-void AdjList::addEdge(uint64_t src, uint64_t dest, uint64_t weight) {
+void AdjList::storeEdge(uint64_t src, uint64_t dest, uint64_t weight) {
     if (src > dest) {
         std::cerr << "WARNING!! Expect src < dest but " << src << " > " << dest << "\n";
         std::swap(src, dest);
     }
-    smallerSrc[idx] = (((uint128_t)dest) << weightBits) | weight;
+    adjListFile << src << " " << dest << " " << weight << "\n";
     smallerSrcCnt[src] = smallerSrcCnt[src]+1;
     greaterSrcCnt[dest] = greaterSrcCnt[dest]+1;
-    ++idx;
+//    std::cerr << "edge " << idx << " " << src << " " << dest << " " << smallerSrcCnt[src] << " " << greaterSrcCnt[dest] << "\n";
 }
 
-void AdjList::fillGreater() {
-    std::cerr << "\n\nIDX\n\n" << idx << "\n";
+void AdjList::loadCompactedAdjList() {
     for (auto i = 1; i < smallerSrcCnt.size(); i++) {
         smallerSrcCnt[i] = smallerSrcCnt[i-1] + smallerSrcCnt[i];
         greaterSrcCnt[i] = greaterSrcCnt[i-1] + greaterSrcCnt[i];
     }
-    std::cerr << "\n";
-    uint64_t edgeCntr = 0;
-    for (auto i = 0; i < smallerSrcCnt.size(); i++) {
-        while (edgeCntr < smallerSrcCnt[i]) {
-            uint64_t dest = (smallerSrc[edgeCntr] >> weightBits);
-            greaterSrcCnt[dest] = greaterSrcCnt[dest] - 1;
-            greaterSrc[greaterSrcCnt[dest]] = dest;
-            edgeCntr++;
-        }
+
+    adjListFile.close();
+    std::ifstream adjListIn(prefix+mantis::TEMP_MST_ADJ_FILE);
+    uint64_t src, dest, weight;
+    adjListIn >> src >> dest >> weight;
+    while (adjListIn.good()) {
+        smallerSrcCnt[src] = smallerSrcCnt[src] - 1;
+        smallerSrc[smallerSrcCnt[src]] = ((uint128_t)dest << weightBits) | weight;
+
+        greaterSrcCnt[dest] = greaterSrcCnt[dest] - 1;
+        greaterSrc[greaterSrcCnt[dest]] = src;
+        adjListIn >> src >> dest >> weight;
     }
-    for (auto i = smallerSrcCnt.size()-1; i > 0; i--) {
-        smallerSrcCnt[i] = smallerSrcCnt[i-1];
-    }
-    smallerSrcCnt[0] = 0;
+    adjListIn.close();
+    // system("rm " + prefix + mantis::TEMP_MST_ADJ_FILE);
 }
 
 /**
@@ -101,8 +102,6 @@ void AdjList::boundedDfs(uint64_t parIdx,
         std::cerr << "200 remaining " << remaining << "\n";
         return;
     }
-//        std::cerr << "l" << level++ << "  ===>   ";
-//        std::cerr << "p" << parIdx << " ";
     if (parIdx >= visited.size()) {
         std::cerr << "1 happened\n";
         std::exit(3);
@@ -110,6 +109,7 @@ void AdjList::boundedDfs(uint64_t parIdx,
     if (visited[parIdx] == 0) {
         visitedCnt++;
     }
+    std::cerr << "l" << level << " => " << parIdx << " ";
     visited[parIdx] = 1;
     level++;
 
@@ -119,6 +119,10 @@ void AdjList::boundedDfs(uint64_t parIdx,
     }
     uint64_t startIdx = smallerSrcCnt[parIdx];
     uint64_t endIdx = parIdx+1 == smallerSrcCnt.size() ? smallerSrcCnt.size() : smallerSrcCnt[parIdx+1];
+    auto cnt = endIdx - startIdx;
+    auto tmp1 = greaterSrcCnt[parIdx];
+    auto tmp2 = parIdx+1 == greaterSrcCnt.size() ? greaterSrcCnt.size() : greaterSrcCnt[parIdx+1];
+    std::cerr << " child cnt: " << cnt + (tmp2 - tmp1) - 1 << "\n";
     for (auto i = startIdx; i < endIdx; i++) {
 //            std::cerr << "s" << i << " ";
         if (i >= smallerSrc.size()) {

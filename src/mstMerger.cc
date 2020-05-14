@@ -100,8 +100,8 @@ void MSTMerger::mergeMSTs() {
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
 
-    std::string cmd = "rm " + prefix + "newID2oldIDs";
-    system(cmd.c_str());
+//    std::string cmd = "rm " + prefix + "newID2oldIDs";
+//    system(cmd.c_str());
     auto t_end = time(nullptr);
     logger->info("MST merge completed in {} s.", t_end - t_start);
 }
@@ -599,7 +599,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
 //    std::ofstream mstAdj(prefix + mantis::TEMP_MST_ADJ_FILE);
 //    std::make_unique<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>>(num_colorClasses);
     // Create disjoint sets
-    DisjointSets ds(num_colorClasses);
+    DisjointTrees ds(num_colorClasses);
     uint64_t edgeCntr{0}, selectedEdgeCntr{0}, u, v, w;
 //    uint32_t w{0};
 
@@ -619,7 +619,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                 // Merge two sets
                 ds.merge(root_of_u, root_of_v, w);
                 // Current edge will be in the MST
-                adjListPtr->addEdge(u, v, w);
+                adjListPtr->storeEdge(u, v, w);
 //                mstAdj << u << " " << v << " " << w << "\n";
                 mstTotalWeight += w;
                 selectedEdgeCntr++;
@@ -653,19 +653,19 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
     logger->info("before kruskal");
-    usleep(10000000);
-    auto adjListPtr = std::make_unique<AdjList>(num_colorClasses, numSamples);
+//    usleep(10000000);
+    auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
-    adjListPtr->fillGreater();
+    adjListPtr->loadCompactedAdjList();
     logger->info("after kruskal");
-    usleep(10000000);
+//    usleep(10000000);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
     sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
     sdsl::bit_vector visited(num_colorClasses, 0);
     std::cerr << "after initializing parentbv and visited\n";
-    usleep(10000000);
+//    usleep(10000000);
     std::cerr << "zero: " << zero << " " << parentbv.size() << "\n";
     adjListPtr->hybridTreeWalk(zero, parentbv, visited);
     std::cerr << "\r";
@@ -674,8 +674,6 @@ bool MSTMerger::encodeColorClassUsingMST() {
     for (auto i = 0; i < visited.size(); i++) {
         if (visited[i] == 0) {
             cntr++;
-
-//            std::cerr << "GOD help me! " << i << "\n";
         }
     }
     std::cerr << "total " << visited.size() << " visited: " << adjListPtr->visitedCnt << " not visited: " << cntr << "\n";
@@ -701,30 +699,13 @@ bool MSTMerger::encodeColorClassUsingMST() {
     for (auto i = 1; i < thread_deltaOffset_and_parentEnd.size(); i++) {
         thread_deltaOffset_and_parentEnd[i] += thread_deltaOffset_and_parentEnd[i-1];
     }
-    for (auto i = 1; i < thread_deltaOffset_and_parentEnd.size(); i++) {
+    for (auto i = thread_deltaOffset_and_parentEnd.size()-1; i > 0 ; i--) {
         thread_deltaOffset_and_parentEnd[i] = thread_deltaOffset_and_parentEnd[i-1];
-        std::cerr << thread_deltaOffset_and_parentEnd[i] << "\n";
+        std::cerr << "thr: " << thread_deltaOffset_and_parentEnd[i] << "\n";
     }
     thread_deltaOffset_and_parentEnd[0] = 0;
 
     std::cerr << "\r";
-
-    /*std::vector<std::pair<uint64_t, uint64_t>> thread_deltaOffset_and_parentEnd;
-    thread_deltaOffset_and_parentEnd.reserve(nThreads);
-    uint64_t deltaOffset{0}, s{0};
-    for (uint32_t t = 0; t < nThreads; ++t) {
-        uint64_t e = parentbv.size() * (t + 1) / nThreads;
-        thread_deltaOffset_and_parentEnd.emplace_back(deltaOffset, e);
-        for (auto i = s; i < e; i++) {
-            auto w = adjListPtr->getWeight(s, parentbv[s]);
-            if (w == invalid) {
-                std::cerr << "ERROR! Could not find the pair of " << s << " and " << parentbv[s] << " in MST\n";
-                std::exit(3);
-            }
-            deltaOffset += w;
-        }
-        s = e;
-    }*/
     adjListPtr.reset(nullptr);
     std::cerr << "after deleting MST adjacency list\n";
     usleep(10000000);
@@ -822,7 +803,6 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
             deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
     }
     colorMutex.unlock();
-
 }
 
 /**

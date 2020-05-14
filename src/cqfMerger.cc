@@ -229,8 +229,8 @@ fill_disk_bucket(uint64_t startingBlock)
     cdbg2.replaceCQFInMemory(invalid);
 
     std::string output = cdbg.prefix + EQ_ID_PAIRS_FILE;
-    console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}"
-                    "writing in file \"{}\"", startingBlock, output);
+    console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}."
+                    " writing in file \"{}\"", startingBlock, output);
     std::ofstream diskBucket(output, std::ios::out);
     uint64_t curBlock{startingBlock}, kmerCount{0};
     uint64_t maxMinimizer{0}, minMinimizer;

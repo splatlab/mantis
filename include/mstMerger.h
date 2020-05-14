@@ -98,35 +98,14 @@ struct workItem {
     }
 };
 
-/*
-
-struct DisjointSetNode {
-    colorIdType parent{0};
-    uint64_t rnk{0}, w{0}, edges{0};
-
-    void setParent(colorIdType p) { parent = p; }
-
-    void mergeWith(DisjointSetNode &n, uint32_t edgeW, colorIdType id) {
-        n.setParent(parent);
-        w += (n.w + static_cast<uint64_t>(edgeW));
-        edges += (n.edges + 1);
-        n.edges = 0;
-        n.w = 0;
-        if (rnk == n.rnk) {
-            rnk++;
-        }
-    }
-};
-*/
-
 // To represent Disjoint Sets
-struct DisjointSets {
-    sdsl::int_vector<> els;
+struct DisjointTrees {
+    sdsl::int_vector<> els{};
 //    std::vector<DisjointSetNode> els; // the size of total number of colors
 //    uint64_t n;
 
     // Constructor.
-    explicit DisjointSets(uint64_t n) {
+    explicit DisjointTrees(uint64_t n) {
         // Allocate memory
 //        this->n = n;
         els = sdsl::int_vector<>(n, 1, ceil(log2(n))+1); // 1 bit which is set if the node IS its own parent
