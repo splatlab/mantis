@@ -63,7 +63,7 @@ void AdjList::hybridTreeWalk(uint64_t root, sdsl::int_vector<> &parentbv, sdsl::
     parentbv[root] = root; // and it's its own parent (has no parent)
     uint64_t parIdx = root;
     boundedDfs(parIdx, parentbv, visited, currentLevel, remaining);
-    std::cerr << "remaining " << remaining << "\n";
+//    std::cerr << "remaining " << remaining << "\n";
     while (remaining) {
         uint64_t idx = 0;
         while (remaining and idx < currentLevel.size()) {
@@ -74,9 +74,9 @@ void AdjList::hybridTreeWalk(uint64_t root, sdsl::int_vector<> &parentbv, sdsl::
                     parIdx = idx + i;
                     if ( ((wrd >> i) & 1ULL) and visited[parIdx] == 0) {
                         remaining--;
-                        std::cerr << "in if remaining " << remaining << " ";
+//                        std::cerr << "in if remaining " << remaining << " ";
                         boundedDfs(parIdx, parentbv, visited, currentLevel, remaining);
-                        std::cerr << " after remaining " << remaining << "\n";
+//                        std::cerr << " after remaining " << remaining << "\n";
                     }
                 }
             }
@@ -84,7 +84,7 @@ void AdjList::hybridTreeWalk(uint64_t root, sdsl::int_vector<> &parentbv, sdsl::
             currentLevel.set_int(idx, newWrd ^ wrd, wrdLen); // this is so cool and smart :D
             idx += wrdLen;
         }
-        std::cerr << "remaining " << remaining << "\n";
+//        std::cerr << "remaining " << remaining << "\n";
     }
 }
 /**
@@ -99,7 +99,7 @@ void AdjList::boundedDfs(uint64_t parIdx,
     if (level == 200) {
         activeLevel[parIdx] = 1;
         remaining++;
-        std::cerr << "200 remaining " << remaining << "\n";
+//        std::cerr << "200 remaining " << remaining << "\n";
         return;
     }
     if (parIdx >= visited.size()) {
@@ -109,7 +109,7 @@ void AdjList::boundedDfs(uint64_t parIdx,
     if (visited[parIdx] == 0) {
         visitedCnt++;
     }
-    std::cerr << "l" << level << " => " << parIdx << " ";
+//    std::cerr << "l" << level << " => " << parIdx << " ";
     visited[parIdx] = 1;
     level++;
 
@@ -122,7 +122,7 @@ void AdjList::boundedDfs(uint64_t parIdx,
     auto cnt = endIdx - startIdx;
     auto tmp1 = greaterSrcCnt[parIdx];
     auto tmp2 = parIdx+1 == greaterSrcCnt.size() ? greaterSrcCnt.size() : greaterSrcCnt[parIdx+1];
-    std::cerr << " child cnt: " << cnt + (tmp2 - tmp1) - 1 << "\n";
+//    std::cerr << " child cnt: " << cnt + (tmp2 - tmp1) - 1 << "\n";
     for (auto i = startIdx; i < endIdx; i++) {
 //            std::cerr << "s" << i << " ";
         if (i >= smallerSrc.size()) {

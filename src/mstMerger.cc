@@ -713,7 +713,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     }
     for (auto i = thread_deltaOffset_and_parentEnd.size()-1; i > 0 ; i--) {
         thread_deltaOffset_and_parentEnd[i] = thread_deltaOffset_and_parentEnd[i-1];
-        std::cerr << "thr" << i << " " << thread_deltaOffset_and_parentEnd[i] << "\n";
+//        std::cerr << "thr" << i << " " << thread_deltaOffset_and_parentEnd[i] << "\n";
     }
     thread_deltaOffset_and_parentEnd[0] = 0;
 
@@ -741,6 +741,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
                                          std::ref(parentbv), std::ref(deltabv), std::ref(bbv), true));
     }
     for (auto &t : threads) { t.join(); }
+    bbv[bbv.size()-1] = 1;
     std::cerr << "\r";
 
     std::cerr << "Done\n";
