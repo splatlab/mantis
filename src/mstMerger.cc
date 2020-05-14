@@ -676,32 +676,44 @@ bool MSTMerger::encodeColorClassUsingMST() {
             cntr++;
         }
     }
-    std::cerr << "total " << visited.size() << " visited: " << adjListPtr->visitedCnt << " not visited: " << cntr << "\n";
+    std::cerr << "total " << visited.size() << ", visited: " << adjListPtr->visitedCnt << ", not visited: " << cntr << "\n";
     std::vector<uint64_t> thread_deltaOffset_and_parentEnd(nThreads, 0);
     uint64_t idx{0};
     uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);
-    for (auto i = 1; i < adjListPtr->smallerSrcCnt.size(); i++) {
-        while (idx < adjListPtr->smallerSrcCnt[i]) {
-            uint64_t par = (i-1);
+    uint64_t doubleCheckTotWeight{0};
+    for (auto i = 1; i <= adjListPtr->smallerSrcCnt.size(); i++) {
+        auto limit = i == adjListPtr->smallerSrcCnt.size() ?
+                adjListPtr->smallerSrcCnt.size() : adjListPtr->smallerSrcCnt[i];
+        while (idx < limit) {
+            auto par = static_cast<uint64_t>(i-1);
             auto val = adjListPtr->smallerSrc[idx];
             uint64_t weight = val & adjListPtr->weightMask;
             uint64_t child = val >> adjListPtr->weightBits;
             if (parentbv[par] == child) {
                 std::swap(par, child);
             } else if (parentbv[child] != par) {
-                std::cerr << "ERROR! Neither of the two nodes are the parent: " << child << " " << par << "\n";
+                std::cerr << "ERROR! Neither of the two nodes are the parent at index: " << idx << "\n" <<
+                             "Expected: " << child << " <-> " << par << "\n"
+                             << "Got: " << parentbv[par] << " for " << par <<
+                             " and " << parentbv[child] << " for " << child << "\n";
                 std::exit(3);
             }
-            thread_deltaOffset_and_parentEnd[std::min(static_cast<uint64_t >(nThreads-1), par / bucketSize)] += weight;
+            thread_deltaOffset_and_parentEnd[std::min(static_cast<uint64_t >(nThreads-1), child / bucketSize)] += weight;
+            doubleCheckTotWeight += weight;
             idx++;
         }
+    }
+    if (doubleCheckTotWeight != mstTotalWeight - 1) {
+        std::cerr << "ERROR! Weights are not stored properly:\n" <<
+        "Expected: " << mstTotalWeight << " Got: " << doubleCheckTotWeight << "\n";
+        std::exit(3);
     }
     for (auto i = 1; i < thread_deltaOffset_and_parentEnd.size(); i++) {
         thread_deltaOffset_and_parentEnd[i] += thread_deltaOffset_and_parentEnd[i-1];
     }
     for (auto i = thread_deltaOffset_and_parentEnd.size()-1; i > 0 ; i--) {
         thread_deltaOffset_and_parentEnd[i] = thread_deltaOffset_and_parentEnd[i-1];
-        std::cerr << "thr: " << thread_deltaOffset_and_parentEnd[i] << "\n";
+        std::cerr << "thr" << i << " " << thread_deltaOffset_and_parentEnd[i] << "\n";
     }
     thread_deltaOffset_and_parentEnd[0] = 0;
 
@@ -786,8 +798,9 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
                 if (v.startingOffset > 0) {
                     bbv[v.startingOffset - 1] = 1;
                 }
-                for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
+                for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++) {
                     deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
+                }
             }
             colorMutex.unlock();
             deltas.clear();
@@ -799,8 +812,9 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
         if (v.startingOffset > 0) {
             bbv[v.startingOffset - 1] = 1;
         }
-        for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++)
+        for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++) {
             deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
+        }
     }
     colorMutex.unlock();
 }
