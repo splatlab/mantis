@@ -407,7 +407,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
 
     std::vector<std::pair<uint64_t, uint64_t>> tmp_kmers;
     // reserve 1/3rd more than the threshold as the actual count of kmers is gonna be +-epsilon of the threshold
-    tmp_kmers.reserve(block_kmer_threshold + block_kmer_threshold/3);
+    tmp_kmers.reserve(cdbg.getCqfSlotCnt());
 
     uint64_t kmerCount{0}, foundAbundantId{0};
     cdbg1.replaceCQFInMemory(invalid);
@@ -422,7 +422,6 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     KeyObject keyObj;
 
     cdbg.initializeNewCQFBlock(invalid, kbits, hashmode, seed);
-    cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
     while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
@@ -469,6 +468,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 }
                 tmp_kmers.emplace_back(keyObj.key, keyObj.count);
                 blockKmerCnt++;
+                if (colorId > 1) {
+                    blockKmerCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
+                }
                 if(colorId <= sampledPairs.size())
                     foundAbundantId++;
             }
@@ -477,6 +479,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                     colorId = get_color_id(std::make_pair(0, it1->second));
                     tmp_kmers.emplace_back(it1->first, colorId);
                     blockKmerCnt++;
+                    if (colorId > 1) {
+                        blockKmerCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
+                    }
                     it1++;
                     if(colorId <= sampledPairs.size())
                         foundAbundantId++;
@@ -486,6 +491,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                     colorId = get_color_id(std::make_pair(it0->second, 0));
                     tmp_kmers.emplace_back(it0->first, colorId);
                     blockKmerCnt++;
+                    if (colorId > 1) {
+                        blockKmerCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
+                    }
                     it0++;
                     if(colorId <= sampledPairs.size())
                         foundAbundantId++;
@@ -494,13 +502,14 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             cdbg.minimizerBlock[b] = outputCQFBlockId;
             minimizerKeyColorList[0][b].reset(nullptr);
             minimizerKeyColorList[1][b].reset(nullptr);
-            if (blockKmerCnt and blockKmerCnt > block_kmer_threshold - epsilon) {
+            if (blockKmerCnt and blockKmerCnt > cdbg.getCqfSlotCnt() - epsilon) {
                 console->info("Fill and serialize cqf {} with {} kmers up to minimizer {}", outputCQFBlockId, blockKmerCnt, b);
                 kmerCount += blockKmerCnt;
                 blockKmerCnt = 0;
                 std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2){
                     return kv1.first < kv2.first;
                 });
+                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
                 for (auto &kv : tmp_kmers) {
                     keyObj = KeyObject(kv.first, 0, kv.second);
                     cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
@@ -510,7 +519,6 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 tmp_kmers.clear();
 
                 outputCQFBlockId++;
-                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
             }
         }
         minMinimizer = maxMinimizer + 1;
@@ -525,6 +533,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
             return kv1.first < kv2.first;
         });
+        cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
         for (auto &kv : tmp_kmers) {
             keyObj = KeyObject(kv.first, 0, kv.second);
             cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);

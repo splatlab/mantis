@@ -463,11 +463,7 @@ void LSMT<qf_obj, key_obj>::
         std::string levelDir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
         if(mantis::fs::DirExists(levelDir.c_str()))
         {
-            std::string cqfFile = levelDir + mantis::CQF_FILE;
-            std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(levelDir.c_str(),
-                                                                                mantis::EQCLASS_FILE);
-            std::string sampleListFile = levelDir + mantis::SAMPLEID_FILE;
-            ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(cqfFile, colorClassFiles, sampleListFile,
+            ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(levelDir,
                                                                         MANTIS_DBG_IN_MEMORY);
 
             uint64_t kmerLen = cdbg.get_cqf() -> keybits() / 2;

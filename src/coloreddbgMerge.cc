@@ -95,11 +95,13 @@ int merge_main(MergeOpts &opt) {
     console->info("Merge starting ...");
     // merging two CQFs
     console->info("Merging the two CQFs...");
+/*
     auto cqfMerger = std::make_unique<CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject>>(opt.dir1, opt.dir2,
                                                                                              opt.out, console,
                                                                                              opt.threadCount);
 	cqfMerger->merge();
     cqfMerger.reset(nullptr); // make the memory back to almost 0 to start the next section
+*/
     // merging two MSTs
     console->info("Merging the two MSTs...");
     MSTMerger mst(opt.out, console, opt.threadCount, opt.dir1, opt.dir2);
@@ -124,38 +126,21 @@ int validate_merge_main(ValidateMergeOpts &opt) {
     if (mergedResPrefix.back() != '/')
         mergedResPrefix += '/';
 
-
-    std::string corrCQFfile(correctResPrefix + mantis::CQF_FILE);
-    std::vector<std::string> corrColorClassFiles = mantis::fs::GetFilesExt(correctResPrefix.c_str(),
-                                                                           mantis::EQCLASS_FILE);
-    std::string corrSampleListFile(correctResPrefix + mantis::SAMPLEID_FILE);
-
-
     console->info("Loading the correct CdBG into memory.");
-    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> corrCdBG(corrCQFfile, corrColorClassFiles,
-                                                                   corrSampleListFile, MANTIS_DBG_IN_MEMORY);
+    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> corrCdBG(correctResPrefix, MANTIS_DBG_IN_MEMORY);
 
-    console->info("Loaded the correct CdBG; it has {} k-mers, {} color-class files, and {} color-classes.",
-                  corrCdBG.get_cqf()->dist_elts(), corrColorClassFiles.size(),
-                  corrCdBG.get_num_bitvectors());
-
-
-    std::string mergedCQFfile = mergedResPrefix + mantis::CQF_FILE;
-    std::vector<std::string> mergedColorClassFiles = mantis::fs::GetFilesExt(mergedResPrefix.c_str(),
-                                                                             mantis::EQCLASS_FILE);
-    std::string mergedSampleListFile = mergedResPrefix + mantis::SAMPLEID_FILE;
+    console->info("Loaded the correct CdBG; it has {} k-mers, and {} color-classes.",
+                  corrCdBG.get_cqf()->dist_elts(), corrCdBG.get_num_eqclasses());
 
     console->info("Loading the merged CdBG into memory.");
-    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(mergedCQFfile, mergedColorClassFiles,
-                                                                     mergedSampleListFile, MANTIS_DBG_IN_MEMORY);
+    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> mergedCdBG(mergedResPrefix, MANTIS_DBG_IN_MEMORY);
 
-    console->info("Loaded the merged CdBG; it has {} k-mers, {} color-class files, and {} color-classes.",
-                  mergedCdBG.get_cqf()->dist_elts(), mergedColorClassFiles.size(),
-                  mergedCdBG.get_num_bitvectors());
+    console->info("Loaded the merged CdBG; it has {} k-mers, and {} color-classes.",
+                  mergedCdBG.get_cqf()->dist_elts(), mergedCdBG.get_num_eqclasses());
 
 
     if (corrCdBG.get_cqf()->dist_elts() != mergedCdBG.get_cqf()->dist_elts() ||
-        corrColorClassFiles.size() != mergedColorClassFiles.size() ||
+            corrCdBG.get_num_eqclasses() != mergedCdBG.get_num_eqclasses() ||
         corrCdBG.get_num_bitvectors() != mergedCdBG.get_num_bitvectors() ||
         corrCdBG.get_num_samples() != mergedCdBG.get_num_samples()) {
         console->error("Mismatching meta-info.");

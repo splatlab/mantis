@@ -223,7 +223,7 @@ private:
     uint32_t seed;
     uint64_t kmerMask;
 
-
+    uint64_t colorBits{0};
 
     // Hash-map for the sampled (on abundance) color-id pairs.
     // Used as the form (pair -> abundance) earlier, and finally as (pair -> colorId).
