@@ -234,7 +234,7 @@ public:
 
     void serialize();
 
-    void reinit(default_cdbg_bv_map_t &map);
+    void reorderColorIDs();
 
     void set_flush_eqclass_dist() { flush_eqclass_dis = true; }
 
@@ -262,13 +262,13 @@ public:
 
     //////////// blockedCQF
     void initializeCQFs(std::string &prefixIn, std::vector<uint32_t> &qbits, uint64_t key_bits, qf_hashmode hashmode,
-                        uint32_t seed, uint64_t cnt, int flag);
+                        uint32_t seed, int flag);
 
     std::pair<uint64_t, uint64_t> findMinimizer(const typename key_obj::kmer_t &key, uint64_t k);
 
-    std::vector<uint64_t> divideKmersIntoBlocks();
+    std::vector<uint32_t> divideKmersIntoBlocks();
 
-    cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> &enumerate_minimizers(qf_obj *incqfs);
+    void enumerate_minimizers(qf_obj *incqfs);
 
     void constructBlockedCQF(qf_obj *incqfs);
 
@@ -305,28 +305,32 @@ public:
             std::exit(3);
         }
         auto blockLog = 33 + log2(blockSizeInGig);
-        if (blockLog >= keybits) {
+        if (blockLog > keybits) {
             std::cerr << "Error! QF remainder should be > 0\n";
             std::exit(3);
         }
-        double right = keybits - blockLog;
-        remainder = static_cast<uint64_t >(right + 1);
-        double left = remainder - log2(remainder+2.25);
-        while (left < right) {
+        // 2^(keybits - remainder) * (remainder+2.25) <= 2 ^ (blockLog)
+        // ==? keybits - remainder + log2(remainder+2.25) <= blockLog
+        // find the smallest remainder that applies to the above equation
+        double right = blockLog;
+        remainder = static_cast<uint64_t >(keybits-right); // start from a safe remainder that makes left > log
+        std::cerr << "started from remainder=" << remainder << "\n";
+        double left = keybits - remainder + log2(remainder+2.25);
+        while (left > right) {
             remainder++;
-            left = remainder - log2(remainder+2.25);
+            left = keybits - remainder + log2(remainder+2.25);
         }
-        remainder--;
         std::cerr << "Selected remainder is " << remainder << "\n";
         qbits = keybits - remainder;
         cqfSlotCnt = 1ULL << qbits;//std::pow(2, keybits-r) / (std::ceil(colorBits/r)+2);
         approximateKmerCnt = cqfSlotCnt;
     }
 
-    void updateApproximateKmerCnt(uint64_t kmerCnt) {
+    void updateApproximateKmerCnt(uint64_t kmerCnt, uint64_t nonZeroCnt, uint64_t nonZeroColorIdBitLogSum) {
         double nonZeroRatio = (double)nonZeroCnt/kmerCnt;
-        double avgExtraSlotsPerNonZeroKmer = ceil((double)nonZeroColorIdBitLogSum/remainder) + 2;
-        approximateKmerCnt = static_cast<uint64_t >(cqfSlotCnt * (1-nonZeroRatio) + (cqfSlotCnt * nonZeroRatio)/avgExtraSlotsPerNonZeroKmer);
+        approximateKmerCnt = static_cast<uint64_t >(cqfSlotCnt * (1-nonZeroRatio) + (cqfSlotCnt * nonZeroRatio)/nonZeroColorIdBitLogSum);
+        std::cerr << "HEEEEREE\n";
+        std::cerr << nonZeroCnt << " " << kmerCnt << " " << nonZeroRatio << " " << remainder << " " << nonZeroColorIdBitLogSum << " " << cqfSlotCnt << " " << approximateKmerCnt << "\n";
     }
 
     uint64_t getCqfSlotCnt() {return cqfSlotCnt;}
@@ -377,8 +381,6 @@ private:
     std::vector<std::string> eqClsFiles;
     uint64_t cqfSlotCnt = 160000000;
     uint64_t approximateKmerCnt = 160000000;
-    uint64_t nonZeroColorIdBitLogSum = 0;
-    uint64_t nonZeroCnt{0};
     uint64_t qbits{0};
     uint64_t remainder{0};
     // Returns the sample-id mapping.
@@ -561,7 +563,6 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(uint64_t nqf, uint64_t keybits) :
         num_samples(nqf), num_serializations(0), start_time_(std::time(nullptr)) {
     colorClassPerBuffer = mantis::BV_BUF_LEN / num_samples;
     notSorted_eq_id = colorClassPerBuffer;
-    numEqClassBVs = colorClassPerBuffer;
 
     bv_buffer = BitVector(colorClassPerBuffer * num_samples);
     first_bv_buffer = BitVector(colorClassPerBuffer * num_samples);
@@ -598,9 +599,31 @@ uint64_t ColoredDbg<qf_obj, key_obj>::get_num_bitvectors(void) const {
 
 
 template<class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::reinit(cdbg_bv_map_t<__uint128_t,
-        std::pair<uint64_t, uint64_t>> &map) {
-    eqclass_map = map;
+void ColoredDbg<qf_obj, key_obj>::reorderColorIDs() {
+    // Sort equivalence classes based on their abundances.
+    std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
+    for (auto &it : eqclass_map) {
+        sorted.insert(std::pair<uint64_t, __uint128_t>(it.second.second, it.first));
+    }
+    eqclass_map.clear();
+    //DEBUG_CDBG("After sorting.");
+    uint64_t i = 1, totalKmerCnt{0}, nonZeroKmerCnt{0}, nonZeroColorIdBitLogSum{0};
+    for (auto &it : sorted) {
+        //DEBUG_CDBG(it.first << " " << it.second.data());
+//        std::cerr << "mp" << i << " " << it.first << " " << static_cast<uint64_t >(it.second >> 64) << static_cast<uint64_t >(it.second) << "\n";
+        std::pair<uint64_t, uint64_t> val(i, 0);
+        std::pair<__uint128_t, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
+        eqclass_map.insert(keyval);
+        totalKmerCnt += it.first;
+        if (i > 1) {
+            nonZeroKmerCnt += it.first;
+            nonZeroColorIdBitLogSum += (ceil(ceil(log2(i))/remainder) + 2)*it.first;
+        }
+        i++;
+    }
+    auto prevCnt = approximateKmerCnt;
+    updateApproximateKmerCnt(totalKmerCnt, nonZeroKmerCnt, nonZeroColorIdBitLogSum);
+    console->info("Updated approximate kmer count limit per CQF partition considering the colorID distribution: {} -> {}", prevCnt, approximateKmerCnt);
 }
 
 template<class qf_obj, class key_obj>
@@ -650,16 +673,13 @@ bool ColoredDbg<qf_obj, key_obj>::add_colorId(uint64_t &eq_id, const BitVector &
         eqclass_map.emplace(std::piecewise_construct,
                             std::forward_as_tuple(vec_hash),
                             std::forward_as_tuple(eq_id, 1));
-//        add_bitvector(vector, eq_id - 1);
+        numEqClassBVs++;
         added_eq_class = true;
     } else { // eq class is seen before so increment the abundance.
         eq_id = it->second.first;
         // with standard map
         it->second.second += 1; // update the abundance.
-    }
-    if (eq_id > 1) {
-        nonZeroCnt++;
-        nonZeroColorIdBitLogSum += log2(eq_id) + 1;
+//        std::cerr << "f " << eqclass_map.size() << " " << eq_id << " ";
     }
     return added_eq_class;
 }
@@ -983,7 +1003,7 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
 }
 
 template<class qf_obj, class key_obj>
-cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> &
+void
 ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
 //    typename CQF<key_obj>::Iterator walk_behind_iterator;
 
@@ -1041,34 +1061,31 @@ ColoredDbg<qf_obj, key_obj>::enumerate_minimizers(qf_obj *incqfs) {
         }
 
     }
+    console->info("Number of colorClasses found {}", eqclass_map.size());
     console->info("Total number of kmers enumerated: {} plus duplicated kmers: {} Total time: {}",
                   counter, duplicated_kmers, time(nullptr) - start_time_);
-    auto prevCnt = approximateKmerCnt;
-    updateApproximateKmerCnt(counter-duplicated_kmers);
-    console->info("Updated approximate kmer count limit per CQF partition considering the colorID distribution: {} -> {}", prevCnt, approximateKmerCnt);
-    return eqclass_map;
 }
 
 template<class qf_obj, class key_obj>
-std::vector<uint64_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
+std::vector<uint32_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
     uint64_t blockCnt{minimizerCntr[0]}, block{0};
-    std::vector<uint64_t> blockKmerCount;
+    std::vector<uint32_t> qbitsList;
     for (auto i = 1; i < minimizerCntr.size(); i++) {
         minimizerBlock[i - 1] = block;
         if ((blockCnt + minimizerCntr[i]) > approximateKmerCnt) {
 //            std::cerr << "minimizer " << i-1 << " block " << block << "\n";
             block++;
-            blockKmerCount.push_back(blockCnt);
+            qbitsList.push_back(qbits);
             blockCnt = 0;
         }
         blockCnt += minimizerCntr[i];
     }
     minimizerBlock[minimizerBlock.size() - 1] = block;
     if (blockCnt != 0) {
-        blockKmerCount.push_back(blockCnt);
+        qbitsList.push_back(qbits);
     }
-    console->info("Total # of blocks: {}", blockKmerCount.size());
-    return blockKmerCount;
+    console->info("Total # of blocks: {}", qbitsList.size());
+    return qbitsList;
 }
 
 template<class qf_obj, class key_obj>
@@ -1241,12 +1258,10 @@ void ColoredDbg<qf_obj, key_obj>::replaceCQFInMemory(uint64_t i) {
 
 template<class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::initializeCQFs(std::string &prefixIn, std::vector<uint32_t> &qbits, uint64_t key_bits,
-                                                 qf_hashmode hashmode, uint32_t seed,
-                                                 uint64_t cnt, int flag) {
+                                                 qf_hashmode hashmode, uint32_t seed, int flag) {
     prefix = prefixIn;
-    dbgs.reserve(cnt);
-//    dbgs.resize(cnt);
-    for (auto i = 0; i < cnt; i++) {
+    dbgs.reserve(qbits.size());
+    for (auto i = 0; i < qbits.size(); i++) {
         if (flag == MANTIS_DBG_IN_MEMORY) {
             dbgs.emplace_back(qbits[i], key_bits, hashmode, seed);
             dbg_alloc_flag = MANTIS_DBG_IN_MEMORY;

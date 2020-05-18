@@ -170,53 +170,19 @@ int build_blockedCQF_main(BuildOpts &opt) {
 
     console->info("Enumerating the minimizer counts and counting total number of eqs");
     // First construct the colored dbg on initial SAMPLE_SIZE k-mers.
-    default_cdbg_bv_map_t unsorted_map;
+    cdbg.enumerate_minimizers(inobjects.data());
+    console->info("Reorder color IDs based on frequency.");
+    cdbg.reorderColorIDs();
 
-    unsorted_map = cdbg.enumerate_minimizers(inobjects.data());
-
-    console->info("Number of eq classes found {}", unsorted_map.size());
-
-    auto blockKmerCount = cdbg.divideKmersIntoBlocks();
-    // TODO how to decide on qbits
-
-    std::vector<uint32_t> qbitsList;
-    uint64_t bc{0};
-    for (auto b : blockKmerCount) {
-        uint32_t qbits{0};
-        for(qbits = 0; (b >> qbits) != (uint64_t)1; qbits++);
-        qbits++;
-//    qbits += 2;	// to avoid the initial rapid resizes at minuscule load factors
-        console->info("Chosen log(slots) for block {} w. cnt {} is {}", bc++, b, qbits);
-        qbitsList.push_back(qbits);
-    }
+    auto qbitsList = cdbg.divideKmersIntoBlocks();
 
     console->info("Initializing the CQFs");
     cdbg.initializeCQFs(prefix, qbitsList,
                         inobjects[0].obj->keybits(),
                         cqfs[0].hash_mode(),
                         inobjects[0].obj->seed(),
-                        blockKmerCount.size(), MANTIS_DBG_IN_MEMORY);
+                        MANTIS_DBG_IN_MEMORY);
     console->info("Done initializing CQFs.");
-
-    // Sort equivalence classes based on their abundances.
-    std::multimap<uint64_t, __uint128_t, std::greater<uint64_t>> sorted;
-    for (auto &it : unsorted_map) {
-        sorted.insert(std::pair<uint64_t, __uint128_t>(it.second.second, it.first));
-    }
-    cdbg_bv_map_t<__uint128_t, std::pair<uint64_t, uint64_t>> sorted_map;
-    //DEBUG_CDBG("After sorting.");
-    uint64_t i = 1;
-    for (auto &it : sorted) {
-        //DEBUG_CDBG(it.first << " " << it.second.data());
-//        std::cerr << "mp" << i << " " << it.first << " " << static_cast<uint64_t >(it.second >> 64) << static_cast<uint64_t >(it.second) << "\n";
-        std::pair<uint64_t, uint64_t> val(i, 0);
-        std::pair<__uint128_t, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
-        sorted_map.insert(keyval);
-        i++;
-    }
-
-    console->info("Reinitializing colored DBG after the sampling phase.");
-    cdbg.reinit(sorted_map);
 
     console->info("Constructing the colored dBG.");
 
