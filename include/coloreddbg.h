@@ -309,12 +309,12 @@ public:
             std::cerr << "Error! QF remainder should be > 0\n";
             std::exit(3);
         }
-        // 2^(keybits - remainder) * (remainder+2.25) <= 2 ^ (blockLog)
-        // ==? keybits - remainder + log2(remainder+2.25) <= blockLog
-        // find the smallest remainder that applies to the above equation
+        //  2^(keybits - remainder) * (remainder+2.25) <= 2 ^ (blockLog)
+        // ==> keybits - remainder + log2(remainder+2.25) <= blockLog
+        // Find the smallest remainder that applies to the above equation
         double right = blockLog;
         remainder = static_cast<uint64_t >(keybits-right); // start from a safe remainder that makes left > log
-        std::cerr << "started from remainder=" << remainder << "\n";
+        std::cerr << "Started from remainder=" << remainder << "\n";
         double left = keybits - remainder + log2(remainder+2.25);
         while (left > right) {
             remainder++;
@@ -322,15 +322,27 @@ public:
         }
         std::cerr << "Selected remainder is " << remainder << "\n";
         qbits = keybits - remainder;
-        cqfSlotCnt = 1ULL << qbits;//std::pow(2, keybits-r) / (std::ceil(colorBits/r)+2);
+        cqfSlotCnt = 1ULL << qbits;
+        // Assuming we only insert kmers (no colorIDs)
+        // It will later be updated including colorIDs (having the distribution of colorIDs);
         approximateKmerCnt = cqfSlotCnt;
     }
 
-    void updateApproximateKmerCnt(uint64_t kmerCnt, uint64_t nonZeroCnt, uint64_t nonZeroColorIdBitLogSum) {
-        double nonZeroRatio = (double)nonZeroCnt/kmerCnt;
-        approximateKmerCnt = static_cast<uint64_t >(cqfSlotCnt * (1-nonZeroRatio) + (cqfSlotCnt * nonZeroRatio)/nonZeroColorIdBitLogSum);
-        std::cerr << "HEEEEREE\n";
-        std::cerr << nonZeroCnt << " " << kmerCnt << " " << nonZeroRatio << " " << remainder << " " << nonZeroColorIdBitLogSum << " " << cqfSlotCnt << " " << approximateKmerCnt << "\n";
+    /**
+     * Update/reduce approximate allowed kmers per CQF block considering the space taken by colorIDs as well
+     * @param kmerCnt total count of kmers
+     * @param nonZeroCnt count of kmers with colorID > 0
+     * @param nonZeroColorIdBitLogSum required slots to store colorIDs > 0 for kmers
+     */
+    void updateApproximateKmerCnt(uint64_t kmerCnt, uint64_t colorIdSumSlots) {
+        // x*(1-nonZero) + x*(nonzero)*(nonZeroSlots) = y
+        // x*(1 + nonZero*(nonZeroSlots-1)) = y
+        // x = y / (1 + nonZero*(nonZeroSlots-1)
+        avgSlotCntPerKmer = (double)colorIdSumSlots / kmerCnt;
+        approximateKmerCnt = static_cast<uint64_t >(cqfSlotCnt/avgSlotCntPerKmer);
+        std::cerr << "Avg slots per kmer: " << avgSlotCntPerKmer
+        << " CQF slots: " << cqfSlotCnt
+        << " CQF kmer limit:" << approximateKmerCnt << "\n";
     }
 
     uint64_t getCqfSlotCnt() {return cqfSlotCnt;}
@@ -381,6 +393,7 @@ private:
     std::vector<std::string> eqClsFiles;
     uint64_t cqfSlotCnt = 160000000;
     uint64_t approximateKmerCnt = 160000000;
+    double avgSlotCntPerKmer = 1;
     uint64_t qbits{0};
     uint64_t remainder{0};
     // Returns the sample-id mapping.
@@ -607,7 +620,7 @@ void ColoredDbg<qf_obj, key_obj>::reorderColorIDs() {
     }
     eqclass_map.clear();
     //DEBUG_CDBG("After sorting.");
-    uint64_t i = 1, totalKmerCnt{0}, nonZeroKmerCnt{0}, nonZeroColorIdBitLogSum{0};
+    uint64_t i = 1, totalKmerCnt{0}, sumSlotsPerKmer{0};//nonZeroKmerCnt{0}, nonZeroColorIdBitLogSum{0};
     for (auto &it : sorted) {
         //DEBUG_CDBG(it.first << " " << it.second.data());
 //        std::cerr << "mp" << i << " " << it.first << " " << static_cast<uint64_t >(it.second >> 64) << static_cast<uint64_t >(it.second) << "\n";
@@ -615,14 +628,15 @@ void ColoredDbg<qf_obj, key_obj>::reorderColorIDs() {
         std::pair<__uint128_t, std::pair<uint64_t, uint64_t>> keyval(it.second, val);
         eqclass_map.insert(keyval);
         totalKmerCnt += it.first;
-        if (i > 1) {
-            nonZeroKmerCnt += it.first;
-            nonZeroColorIdBitLogSum += (ceil(ceil(log2(i))/remainder) + 2)*it.first;
+        if (i == 1) {
+            sumSlotsPerKmer += it.first;
+        } else {
+            sumSlotsPerKmer += (ceil(ceil(log2(i))/remainder) + 2)*it.first;
         }
         i++;
     }
     auto prevCnt = approximateKmerCnt;
-    updateApproximateKmerCnt(totalKmerCnt, nonZeroKmerCnt, nonZeroColorIdBitLogSum);
+    updateApproximateKmerCnt(totalKmerCnt, sumSlotsPerKmer);
     console->info("Updated approximate kmer count limit per CQF partition considering the colorID distribution: {} -> {}", prevCnt, approximateKmerCnt);
 }
 
@@ -1082,7 +1096,8 @@ std::vector<uint32_t> ColoredDbg<qf_obj, key_obj>::divideKmersIntoBlocks() {
     }
     minimizerBlock[minimizerBlock.size() - 1] = block;
     if (blockCnt != 0) {
-        qbitsList.push_back(qbits);
+        uint32_t lastQbits = ceil(log2(blockCnt * avgSlotCntPerKmer));
+        qbitsList.push_back(lastQbits);
     }
     console->info("Total # of blocks: {}", qbitsList.size());
     return qbitsList;
