@@ -234,7 +234,7 @@ private:
     // Samples 'SAMPLE_PAIR_COUNT' number of most abundant color-id pairs from the
     // first 'sampleKmerCount' distinct k-mers of the CdBGs 'cdbg1' and 'cdbg2',
     // into the map 'sampledPairs', which is of the format (pair -> abundance).
-    uint64_t sample_color_id_pairs(uint64_t sampleKmerCount);
+    uint64_t sample_colorID_pairs(uint64_t sampleKmerCount);
 
     // Gathers all the color-id pairs for all the distinct k-mers of the CdBGs
     // 'cdbg1' and 'cdbg2' into disk-files (or referred to as buckets hereafter),
@@ -246,25 +246,25 @@ private:
     // at cdbg2, and read from the bitvector_file_(X - 1) of cdbg2. Buckets of the
     // form (X, 0) imply vice versa.
     // Returns the number of distinct k-mers present at the CdBGs cdg1 and cdbg2.
-    uint64_t fill_disk_bucket(uint64_t startingBlock = 0);
+    uint64_t store_colorID_pairs(uint64_t startingBlock = 0);
 
     // Filters the disk-buckets to contain only unique color-id pairs.
-    void filter_disk_buckets();
+    void sortUniq_colorID_pairs();
 
     // Builds an MPH (Minimal Perfect Hash) table for each disk-bucket.
-    void build_MPH_tables();
+    void build_MPHF();
 
     // Builds the output merged CQF.
     void build_CQF();
 
     // Given a color-id pair 'idPair', returns the newly assigned color-id of this
     // pair at the merged CdBG.
-    inline uint64_t get_color_id(const std::pair<uint64_t, uint64_t> &idPair);
+    inline uint64_t get_colorID(const std::pair<uint64_t, uint64_t> &idPair);
 
     // Serializes the output CQF and sample-id mapping.
     void serializeRemainingStructures();
 
-    void store_color_pairs();
+    void store_colorID_map();
 
     uint64_t walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, uint64_t curBlock, bool isFirst);
 };

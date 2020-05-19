@@ -106,7 +106,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
 
 template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
-sample_color_id_pairs(uint64_t sampleKmerCount)
+sample_colorID_pairs(uint64_t sampleKmerCount)
 {
     auto t_start = time(nullptr);
 
@@ -214,7 +214,7 @@ sample_color_id_pairs(uint64_t sampleKmerCount)
 
 template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
-fill_disk_bucket(uint64_t startingBlock)
+store_colorID_pairs(uint64_t startingBlock)
 {
     auto t_start = time(nullptr);
 
@@ -335,15 +335,14 @@ fill_disk_bucket(uint64_t startingBlock)
     std::cerr << "1.5. Before sortUnique colorPairs\n\n";
     auto t_end = time(nullptr);
     console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
-    filter_disk_buckets();
+    sortUniq_colorID_pairs();
 
     return kmerCount;
 }
 
-
 template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::
-filter_disk_buckets()
+sortUniq_colorID_pairs()
 {
     if(!system(nullptr))
     {
@@ -366,7 +365,7 @@ filter_disk_buckets()
 
 template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::
-build_MPH_tables()
+build_MPHF()
 {
     auto t_start = time(nullptr);
 
@@ -453,15 +452,15 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                           << " size=" << minimizerKeyColorList[0][b]->size() << "," << minimizerKeyColorList[1][b]->size() << "     ";
             while (it0 != minimizerKeyColorList[0][b]->end() and it1 != minimizerKeyColorList[1][b]->end()) {
                 if (it0->first < it1->first) {
-                    colorId = get_color_id(std::make_pair(it0->second, 0));
+                    colorId = get_colorID(std::make_pair(it0->second, 0));
                     keyObj = KeyObject(it0->first, 0, colorId);
                     it0++;
                 } else if (it0->first > it1->first) {
-                    colorId = get_color_id(std::make_pair(0, it1->second));
+                    colorId = get_colorID(std::make_pair(0, it1->second));
                     keyObj = KeyObject(it1->first, 0, colorId);
                     it1++;
                 } else { // it0->first == it1->first
-                    colorId = get_color_id(std::make_pair(it0->second, it1->second));
+                    colorId = get_colorID(std::make_pair(it0->second, it1->second));
                     keyObj = KeyObject(it0->first, 0, colorId);
                     it0++;
                     it1++;
@@ -476,7 +475,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             }
             if (it0 == minimizerKeyColorList[0][b]->end()) {
                 while (it1 != minimizerKeyColorList[1][b]->end()) {
-                    colorId = get_color_id(std::make_pair(0, it1->second));
+                    colorId = get_colorID(std::make_pair(0, it1->second));
                     tmp_kmers.emplace_back(it1->first, colorId);
                     blockKmerCnt++;
                     if (colorId > 1) {
@@ -488,7 +487,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 }
             } else {
                 while (it0 != minimizerKeyColorList[0][b]->end()) {
-                    colorId = get_color_id(std::make_pair(it0->second, 0));
+                    colorId = get_colorID(std::make_pair(it0->second, 0));
                     tmp_kmers.emplace_back(it0->first, colorId);
                     blockKmerCnt++;
                     if (colorId > 1) {
@@ -561,7 +560,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
 
 
 template <typename qf_obj, typename key_obj>
-uint64_t CQF_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, uint64_t> &idPair)
+uint64_t CQF_merger<qf_obj, key_obj>:: get_colorID(const std::pair<uint64_t, uint64_t> &idPair)
 {
     auto it = sampledPairs.find(idPair);
     if(it != sampledPairs.end()) {
@@ -574,7 +573,7 @@ uint64_t CQF_merger<qf_obj, key_obj>:: get_color_id(const std::pair<uint64_t, ui
 
 template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::
-store_color_pairs()
+store_colorID_map()
 {
     auto t_start = time(nullptr);
 
@@ -625,7 +624,7 @@ template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>:: serializeRemainingStructures()
 {
 
-    store_color_pairs();
+    store_colorID_map();
 
     // Serialize the sample-id map.
     std::ofstream outputFile(cdbg.prefix + mantis::SAMPLEID_FILE);
@@ -655,11 +654,11 @@ void CQF_merger<qf_obj, key_obj>::merge()
     auto t_start = time(nullptr);
     console -> info ("Merging the two CQFs..");
     std::cerr << "0. Before starting anything\n\n";
-    auto tillBlock = sample_color_id_pairs(mantis::SAMPLE_SIZE);
+    auto tillBlock = sample_colorID_pairs(mantis::SAMPLE_SIZE);
     std::cerr << "1. After sampling the colorIdPairs and before finding the rest of pairs\n\n";
-    fill_disk_bucket(tillBlock);
+    store_colorID_pairs(tillBlock);
     std::cerr << "2. After fillDiskBucket before buildMPH\n\n";
-    build_MPH_tables();
+    build_MPHF();
     std::cerr << "3. After buildMPH before buildCQF\n\n";
     build_CQF();
     std::cerr << "4. After buildCQF before serialize\n\n";
