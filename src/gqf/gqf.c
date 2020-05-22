@@ -2382,7 +2382,7 @@ int qfi_next(QFi *qfi)
 															 rank);
 				}
 			}
-			if (block_index == qfi->qf->metadata->nblocks) {
+			if (block_index == qfi->qf->metadata->nblocks - 1) {
 				/* set the index values to max. */
 				qfi->run = qfi->current = qfi->qf->metadata->xnslots;
 				return QFI_INVALID;
