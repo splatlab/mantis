@@ -194,6 +194,11 @@ public:
         numEqClassBVs = other.numEqClassBVs;
         eqClsFiles = other.eqClsFiles;
         minmaxMinimizer = other.minmaxMinimizer;
+        remainder = other.remainder;
+        qbits = other.qbits;
+        cqfSlotCnt = other.cqfSlotCnt;
+        approximateKmerCnt = other.approximateKmerCnt;
+        avgSlotCntPerKmer = other.avgSlotCntPerKmer;
         if (other.curDbg) {
             curDbg = std::move(other.curDbg);//.reset(new CQF<key_obj>(std::move(*other.curDbg)));
         }
@@ -280,7 +285,8 @@ public:
 
     bool add_colorId(uint64_t &eq_id, const BitVector &vector);
 
-    void add_kmer2CurDbg(key_obj &keyObj, uint8_t flags);
+    int add_kmer2CurDbg(std::vector<std::pair<uint64_t , uint64_t >> &kmers,
+            uint64_t s, uint64_t e);
 
     uint64_t query_kmerInCurDbg(key_obj &keyObj, uint8_t flags);
 
@@ -295,7 +301,7 @@ public:
         return minmaxMinimizer[blockId];
     }
 
-    void initializeNewCQFBlock(uint64_t i, uint64_t key_bits, qf_hashmode hashmode, uint32_t seed);
+    void initializeNewCQFBlock(uint64_t i, uint64_t key_bits, uint64_t q_bits, qf_hashmode hashmode, uint32_t seed);
 
     void setUpperboundPerBlock(uint64_t keybits, double blockSizeInGig=2) {
         //blockSize = 2^(keybits - r) * (r+2.25);
@@ -320,13 +326,15 @@ public:
             remainder++;
             left = keybits - remainder + log2(remainder+2.25);
         }
-        std::cerr << "Selected remainder is " << remainder << "\n";
         qbits = keybits - remainder;
         cqfSlotCnt = 1ULL << qbits;
+        std::cerr << "Selected remainder: " << remainder << " qbits: "<< qbits << " cqfSlotCnt: " << cqfSlotCnt << "\n";
         // Assuming we only insert kmers (no colorIDs)
         // It will later be updated including colorIDs (having the distribution of colorIDs);
         approximateKmerCnt = cqfSlotCnt;
     }
+
+    uint64_t get_qbits() {return qbits;}
 
     /**
      * Update/reduce approximate allowed kmers per CQF block considering the space taken by colorIDs as well
@@ -552,7 +560,7 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
     minimizerBlock.resize(1ULL << (minlen * 2), 0); // does it also zero out the cells?
 
     setUpperboundPerBlock(cdbg1.get_current_cqf()->keybits());
-
+    std::cerr << "Inside constructor qbits: " << qbits << "\n";
     if(prefix.back() != '/')	// Make sure it is a full directory.
         prefix += '/';
 
@@ -569,6 +577,7 @@ ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg
     }
     // Construct the sample-id list.
     concat_sample_id_maps(cdbg1, cdbg2);
+    std::cerr << "Inside constructor2 qbits: " << qbits << "\n";
 }
 
 template<class qf_obj, class key_obj>
@@ -704,9 +713,10 @@ uint64_t ColoredDbg<qf_obj, key_obj>::query_kmerInCurDbg(key_obj &keyObj, uint8_
 }
 
 template<class qf_obj, class key_obj>
-void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, uint8_t flags) {
+int ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(std::vector<std::pair<uint64_t , uint64_t >> &kmers,
+        uint64_t s, uint64_t e) {
     // check: the k-mer should not already be present.
-    uint64_t count = curDbg->query(keyObj, flags);
+    /*uint64_t count = curDbg->query(keyObj, flags);
     if (count > 0) {
         if (count != keyObj.count) {
             std::cerr << "\nError. Kmer was already present. kmer: "
@@ -718,14 +728,23 @@ void ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(key_obj &keyObj, uint8_t flags
         }
     } else {
         // we use the count to store the eqclass ids
-        int ret = curDbg->insert(keyObj, flags);
+        return curDbg->insert(keyObj, flags);
+    }*/
+    auto ret = 0;
+    uint8_t flags = QF_WAIT_FOR_LOCK | QF_KEY_IS_HASH;
+    std::stringstream ss(" range inside: "+ std::to_string(s) + " " + std::to_string(e) + "\n");
+    std::cerr << ss.str();
+    for (uint32_t i = s; i < e; i++) {
+        auto keyObj = KeyObject(kmers[i].first, 0, kmers[i].second);
+        ret = curDbg->insert(keyObj, flags);
         if (ret == QF_NO_SPACE) {
-            // This means that auto_resize failed.
-            console->error("The CQF is full and auto resize failed. Please rerun build with a bigger size.");
-            exit(1);
+            break;
+        } else if (ret < 0) {
+            console->error("CQF multi-threaded insertion failed with code: {}", ret);
+            std::exit(3);
         }
     }
-
+    return ret;
 }
 
 template<class qf_obj, class key_obj>
@@ -1221,7 +1240,7 @@ void ColoredDbg<qf_obj, key_obj>::build_sampleid_map(qf_obj *incqfs) {
 }
 
 template<typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key_bits,
+void ColoredDbg<qf_obj, key_obj>:: initializeNewCQFBlock(uint64_t i, uint64_t key_bits, uint64_t q_bits,
                                                         qf_hashmode hashmode, uint32_t seed) {
 
     if (i == invalid) {
@@ -1234,12 +1253,12 @@ void ColoredDbg<qf_obj, key_obj>::initializeNewCQFBlock(uint64_t i, uint64_t key
     }
 
     if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY) {
-        curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed));
+        curDbg.reset(new CQF<key_obj>(q_bits, key_bits, hashmode, seed));
     } else if (dbg_alloc_flag == MANTIS_DBG_ON_DISK) {
-        curDbg.reset(new CQF<key_obj>(qbits, key_bits, hashmode, seed,
+        curDbg.reset(new CQF<key_obj>(q_bits, key_bits, hashmode, seed,
                                       prefix + std::to_string(i) + "_" + mantis::CQF_FILE));
     }
-    curDbg->set_auto_resize();
+//    curDbg->set_auto_resize();
     currentBlock = i;
 }
 

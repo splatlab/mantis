@@ -23,7 +23,8 @@ add_library(mantis_core STATIC
 		lsmt.cc
   		gqf/gqf.c
   		gqf/gqf_file.c
-  		gqf/hashutil.c)
+  		gqf/hashutil.c
+		gqf/partitioned_counter.c)
 
 set(MANTIS_DEBUG_CFLAGS "${MANTIS_C_FLAGS};-g;")
 set(MANTIS_DEBUG_CXXFLAGS "${MANTIS_CXX_FLAGS};-g;")
@@ -44,7 +45,8 @@ target_link_libraries(mantis_core
   z
   rt
   ${ASAN_LIB}
-  sdsl)
+  sdsl
+  OpenMP::OpenMP_CXX)
 
 # The driver program is `mantis`, which is a front-end
 # with the relevant sub-commands

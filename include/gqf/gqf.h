@@ -148,8 +148,8 @@ extern "C" {
 	 Return value: Same as qf_insert. 
 	 Returns 0 if new count is equal to old count.
 	*/
-//	int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count,
-//									 uint8_t flags);
+	int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count,
+									 uint8_t flags);
 
 	/* Remove up to count instances of this key/value combination.
 	 * If the CQF contains <= count instances, then they will all be 
@@ -159,8 +159,8 @@ extern "C" {
 	 *    == QF_DOESNT_EXIST: Specified item did not exist.
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
-//	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
-//								flags);
+	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
+								flags);
 
 	/* Remove all instances of this key/value pair. */
 	int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, uint8_t flags);
@@ -235,7 +235,9 @@ extern "C" {
 	/* Number of (distinct) key-value pairs. */
 	uint64_t qf_get_sum_of_counts(const QF *qf);
 	uint64_t qf_get_num_distinct_key_value_pairs(const QF *qf);
-	
+
+	void qf_sync_counters(const QF *qf);
+
 	/****************************************
 		Iterators
 	*****************************************/

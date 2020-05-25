@@ -160,6 +160,10 @@ uint64_t qf_usefile(QF* qf, const char* filename, int flag)
 	}
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
+	pc_init(&qf->runtimedata->pc_nelts, (int64_t*)&qf->metadata->nelts, 8, 100);
+	pc_init(&qf->runtimedata->pc_ndistinct_elts, (int64_t*)&qf->metadata->ndistinct_elts, 8, 100);
+	pc_init(&qf->runtimedata->pc_noccupied_slots, (int64_t*)&qf->metadata->noccupied_slots, 8, 100);
+
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
 
@@ -174,7 +178,7 @@ int64_t qf_resize_file(QF *qf, uint64_t nslots)
 		exit(EXIT_FAILURE);
 	}
 	// Create new filename
-	int ret = snprintf(new_filename, new_filename_len, "%s_%ld",
+	uint64_t ret = snprintf(new_filename, new_filename_len, "%s_%ld",
 										 qf->runtimedata->f_info.filepath, nslots);
 	if (ret <= strlen(qf->runtimedata->f_info.filepath)) {
 		fprintf(stderr, "Wrong new filename created!");
@@ -186,19 +190,17 @@ int64_t qf_resize_file(QF *qf, uint64_t nslots)
 								 qf->metadata->value_bits, qf->metadata->hash_mode,
 								 qf->metadata->seed, new_filename))
 		return false;
-	if (qf->metadata->auto_resize)
+	if (qf->runtimedata->auto_resize)
 		qf_set_auto_resize(&new_qf, true);
 
 	// copy keys from qf into new_qf
 	QFi qfi;
 	qf_iterator_from_position(qf, &qfi, 0);
-	// qfi_initial_madvise(&qfi);
 	int64_t ret_numkeys = 0;
 	do {
 		uint64_t key, value, count;
 		qfi_get_hash(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
-		// qfi_next_madvise(&qfi);
 		int ret = qf_insert(&new_qf, key, value, count, QF_NO_LOCK | QF_KEY_IS_HASH);
 		if (ret < 0) {
 			fprintf(stderr, "Failed to insert key: %ld into the new CQF.\n", key);
@@ -229,6 +231,7 @@ bool qf_closefile(QF* qf)
 {
 	assert(qf->metadata != NULL);
 	int fd = qf->runtimedata->f_info.fd;
+	qf_sync_counters(qf);
 	uint64_t size = qf->metadata->total_size_in_bytes + sizeof(qfmetadata);
 	void *buffer = qf_destroy(qf);
 	if (buffer != NULL) {
@@ -251,6 +254,7 @@ bool qf_deletefile(QF* qf)
 	strcpy(path, qf->runtimedata->f_info.filepath);
 	if (qf_closefile(qf)) {
 		remove(path);
+		free(path);
 		return true;
 	}
 
@@ -265,9 +269,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 		perror("Error opening file for serializing.");
 		exit(EXIT_FAILURE);
 	}
-//	if (qf->metadata != NULL) {
-//		perror("\n\n\n\nMetadata is not null and is being serialized!!\n\n\n\n");
-//	}
+	qf_sync_counters(qf);
 	fwrite(qf->metadata, sizeof(qfmetadata), 1, fout);
 	fwrite(qf->blocks, qf->metadata->total_size_in_bytes, 1, fout);
 	fclose(fout);
@@ -277,7 +279,6 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 
 uint64_t qf_deserialize(QF *qf, const char *filename)
 {
-//	perror("\n\n\nDESERIALIZING\n\n\n");
 	FILE *fin;
 	fin = fopen(filename, "rb");
 	if (fin == NULL) {
@@ -321,25 +322,28 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 		perror("Couldn't allocate memory for runtime locks.");
 		exit(EXIT_FAILURE);
 	}
-	/*qf->blocks = (qfblock *)calloc(qf->metadata->total_size_in_bytes, 1);*/
-	/*if (qf->blocks == NULL) {*/
-		/*perror("Couldn't allocate memory for blocks.");*/
-		/*exit(EXIT_FAILURE);*/
-	/*}*/
-	qf->metadata = (qfmetadata *)realloc(qf->metadata, sizeof(qfmetadata) +
-																			 qf->metadata->total_size_in_bytes);
-	/*qf->blocks = (qfblock *)calloc(qf->metadata->total_size_in_bytes, 1);*/
+	qf->metadata = (qfmetadata *)realloc(qf->metadata,
+																			 qf->metadata->total_size_in_bytes +
+																			 sizeof(qfmetadata));
 	if (qf->metadata == NULL) {
-		perror("Couldn't allocate memory for blocks.");
+		perror("Couldn't allocate memory for metadata.");
 		exit(EXIT_FAILURE);
 	}
 	qf->blocks = (qfblock *)(qf->metadata + 1);
+	if (qf->blocks == NULL) {
+		perror("Couldn't allocate memory for blocks.");
+		exit(EXIT_FAILURE);
+	}
 	ret = fread(qf->blocks, qf->metadata->total_size_in_bytes, 1, fin);
 	if (ret < 1) {
 		perror("Couldn't read metadata from file.");
 		exit(EXIT_FAILURE);
 	}
 	fclose(fin);
+
+	pc_init(&qf->runtimedata->pc_nelts, (int64_t*)&qf->metadata->nelts, 8, 100);
+	pc_init(&qf->runtimedata->pc_ndistinct_elts, (int64_t*)&qf->metadata->ndistinct_elts, 8, 100);
+	pc_init(&qf->runtimedata->pc_noccupied_slots, (int64_t*)&qf->metadata->noccupied_slots, 8, 100);
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }

@@ -10,7 +10,7 @@
  */
 
 #include "cqfMerger.h"
-
+#include <parallel/algorithm>
 
 
 template<typename qf_obj, typename key_obj>
@@ -51,6 +51,8 @@ CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
 
     console -> info("Initializing the output Mantis.");
     cdbg = ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>(cdbg1, cdbg2, outputCQFdir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
+    std::cerr << " constructor qbits: " << cdbg.get_qbits() << "\n";
+
     start_time_ = std::time(nullptr);
     kbits = cdbg1.get_current_cqf()->keybits();
     hashmode = cdbg1.get_current_cqf()->hash_mode();
@@ -108,6 +110,8 @@ template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
 sample_colorID_pairs(uint64_t sampleKmerCount)
 {
+    std::cerr << " sampleColorIDPairs qbits: " << cdbg.get_qbits() << "\n";
+
     auto t_start = time(nullptr);
 
     console -> info("Sampling at least {} kmers. Time-stamp = {}.",
@@ -386,15 +390,20 @@ build_MPHF()
                 '\n'));
     input.close();
 
-    console -> info("Total colorId pair count: {}", colorIdPairCount);
-
-    ColorIdPairIterator kb(colorIdPairFile);
-    ColorIdPairIterator ke(colorIdPairFile, true);
-    auto colorPairIt = boomphf::range(kb, ke);
-    colorMph = std::make_unique<boophf_t>(colorIdPairCount, colorPairIt, threadCount, gammaFactor);
-    console -> info("Total memory consumed by all the MPH tables = {} MB.", (colorMph->totalBitSize() / 8) / (1024 * 1024));
-    auto t_end = time(nullptr);
-    console -> info("Building the MPH tables took time {} seconds and {} memory", t_end - t_start, colorMph->totalBitSize());
+    console -> info("Total non-sampled colorId pair count: {}", colorIdPairCount);
+    if (colorIdPairCount > 0) {
+        ColorIdPairIterator kb(colorIdPairFile);
+        ColorIdPairIterator ke(colorIdPairFile, true);
+        auto colorPairIt = boomphf::range(kb, ke);
+        colorMph = std::make_unique<boophf_t>(colorIdPairCount, colorPairIt, threadCount, gammaFactor);
+        console->info("Total memory consumed by all the MPH tables = {} MB.",
+                      (colorMph->totalBitSize() / 8) / (1024 * 1024));
+        auto t_end = time(nullptr);
+        console->info("Building the MPH tables took time {} seconds and {} memory", t_end - t_start,
+                      colorMph->totalBitSize());
+    } else {
+        console->info("No non-sampled colorIds");
+    }
 }
 
 template <typename qf_obj, typename key_obj>
@@ -412,7 +421,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     cdbg1.replaceCQFInMemory(invalid);
     cdbg2.replaceCQFInMemory(invalid);
 
-    uint64_t curBlock{0}, outputCQFBlockId{0}, blockKmerCnt{0};
+    uint64_t curBlock{0}, outputCQFBlockId{0}, occupiedSlotsCnt{0}, currMinimizerSlotsCnt{0};
     for (auto &m :  minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m.clear();
     for (auto &m :  minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());//m.clear();
 
@@ -420,7 +429,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     uint64_t colorId{0}, epsilon{100};
     KeyObject keyObj;
 
-    cdbg.initializeNewCQFBlock(invalid, kbits, hashmode, seed);
+    cdbg.initializeNewCQFBlock(invalid, kbits, cdbg.get_qbits(), hashmode, seed);
     while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
@@ -443,6 +452,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         curBlock++;
 
         //        The output block kmer count should be left for the next set of input blocks
+        std::vector<std::pair<uint64_t, uint64_t>> currMinimizerKmers;
+        currMinimizerKmers.reserve(cdbg.getCqfSlotCnt());
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
             auto it0 = minimizerKeyColorList[0][b]->begin();
@@ -465,10 +476,11 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                     it0++;
                     it1++;
                 }
-                tmp_kmers.emplace_back(keyObj.key, keyObj.count);
-                blockKmerCnt++;
+                currMinimizerKmers.emplace_back(keyObj.key, keyObj.count);
+//                tmp_kmers.emplace_back(keyObj.key, keyObj.count);
+                currMinimizerSlotsCnt++;
                 if (colorId > 1) {
-                    blockKmerCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
+                    currMinimizerSlotsCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
                 }
                 if(colorId <= sampledPairs.size())
                     foundAbundantId++;
@@ -476,10 +488,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             if (it0 == minimizerKeyColorList[0][b]->end()) {
                 while (it1 != minimizerKeyColorList[1][b]->end()) {
                     colorId = get_colorID(std::make_pair(0, it1->second));
-                    tmp_kmers.emplace_back(it1->first, colorId);
-                    blockKmerCnt++;
+                    currMinimizerKmers.emplace_back(it1->first, colorId);
+                    currMinimizerSlotsCnt++;
                     if (colorId > 1) {
-                        blockKmerCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
+                        currMinimizerSlotsCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
                     }
                     it1++;
                     if(colorId <= sampledPairs.size())
@@ -488,37 +500,67 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             } else {
                 while (it0 != minimizerKeyColorList[0][b]->end()) {
                     colorId = get_colorID(std::make_pair(it0->second, 0));
-                    tmp_kmers.emplace_back(it0->first, colorId);
-                    blockKmerCnt++;
+                    currMinimizerKmers.emplace_back(it0->first, colorId);
+                    currMinimizerSlotsCnt++;
                     if (colorId > 1) {
-                        blockKmerCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
+                        currMinimizerSlotsCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
                     }
                     it0++;
                     if(colorId <= sampledPairs.size())
                         foundAbundantId++;
                 }
             }
+
+            if (not tmp_kmers.empty() and occupiedSlotsCnt + currMinimizerSlotsCnt > cdbg.getCqfSlotCnt()) {
+                console->info("Fill and serialize cqf {} with {} kmers up to minimizer {}", outputCQFBlockId, occupiedSlotsCnt, b);
+                kmerCount+=tmp_kmers.size();
+                __gnu_parallel::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+                    return kv1.first < kv2.first;
+                });
+                // unique
+                tmp_kmers.erase(std::unique(tmp_kmers.begin(), tmp_kmers.end(),
+                                           [](auto &kv1, auto &kv2) {
+                                               return kv1.first == kv2.first and kv1.second == kv2.second;
+                                           }), tmp_kmers.end());
+                console->info("Sort-unique done.");
+                uint64_t qbits = cdbg.get_qbits();
+                std::vector<int> rets(threadCount, 0);
+                int ret = 0;
+                do {
+                    if (qbits > cdbg.get_qbits()) {
+                        console->warn("This thing should not happen very often! Almost never. "
+                                      "CurrQbits: {}, expected: {}, numKmers: {}, occupiedSlotCnt: {}, originalNumSlots: {}",
+                                      qbits, cdbg.get_qbits(), tmp_kmers.size(), occupiedSlotsCnt, cdbg.getCqfSlotCnt());
+                    }
+                    cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
+                    std::vector<std::thread> threads;
+                    for (uint32_t t = 0; t < threadCount; ++t) {
+                        uint64_t s = tmp_kmers.size()*((double)t/threadCount),
+                                e = ((double)(t+1)/threadCount)*tmp_kmers.size();
+                        threads.emplace_back(std::thread( [&, s, e] {rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);}));
+                    }
+                    for (uint32_t t = 0; t < threadCount; ++t) {
+                        threads[t].join();
+                        if (rets[t] == QF_NO_SPACE) {
+                            ret = rets[t];
+                        }
+                    }
+                    threads.clear();
+                    // increase qbits by 1
+                    qbits++;
+                } while (ret == QF_NO_SPACE);
+                cdbg.serializeCurrentCQF();
+                tmp_kmers.clear();
+                occupiedSlotsCnt = 0;
+                outputCQFBlockId++;
+            }
             cdbg.minimizerBlock[b] = outputCQFBlockId;
             minimizerKeyColorList[0][b].reset(nullptr);
             minimizerKeyColorList[1][b].reset(nullptr);
-            if (blockKmerCnt and blockKmerCnt > cdbg.getCqfSlotCnt() - epsilon) {
-                console->info("Fill and serialize cqf {} with {} kmers up to minimizer {}", outputCQFBlockId, blockKmerCnt, b);
-                kmerCount += blockKmerCnt;
-                blockKmerCnt = 0;
-                std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2){
-                    return kv1.first < kv2.first;
-                });
-                cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
-                for (auto &kv : tmp_kmers) {
-                    keyObj = KeyObject(kv.first, 0, kv.second);
-                    cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-                }
-
-                cdbg.serializeCurrentCQF();
-                tmp_kmers.clear();
-
-                outputCQFBlockId++;
-            }
+            tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
+            currMinimizerKmers.clear();
+            occupiedSlotsCnt += currMinimizerSlotsCnt;
+            currMinimizerSlotsCnt = 0;
         }
         minMinimizer = maxMinimizer + 1;
         std::cerr << "\r";
@@ -526,19 +568,51 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
 
     // fill and serialize last cqf block
     if (!tmp_kmers.empty()) {
-        console->info("Fill and serialize cqf {} with {} kmers as the last cqf block", outputCQFBlockId, blockKmerCnt);
-        kmerCount += blockKmerCnt;
-        blockKmerCnt = 0;
-        std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+        console->info("Fill and serialize cqf {} with {} kmers as the last cqf block", outputCQFBlockId, occupiedSlotsCnt);
+        kmerCount+=tmp_kmers.size();
+        __gnu_parallel::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
             return kv1.first < kv2.first;
         });
-        cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, hashmode, seed);
-        for (auto &kv : tmp_kmers) {
-            keyObj = KeyObject(kv.first, 0, kv.second);
-            cdbg.add_kmer2CurDbg(keyObj, QF_NO_LOCK | QF_KEY_IS_HASH);
-        }
+        // unique
+        tmp_kmers.erase(std::unique(tmp_kmers.begin(), tmp_kmers.end(),
+                                    [](auto &kv1, auto &kv2) {
+                                        return kv1.first == kv2.first and kv1.second == kv2.second;
+                                    }), tmp_kmers.end());
+        auto qbits = static_cast<uint64_t >(ceil(std::log2(occupiedSlotsCnt)));
+        console->info("Selected qbits for last cqf: {}", qbits);
+        std::vector<int> rets(threadCount, 0);
+        int ret = 0;
+        do {
+            if (qbits > cdbg.get_qbits()) {
+                console->warn("This thing should not happen very often! Almost never. "
+                              "CurrQbits: {}, numKmers: {}, occupiedSlotCnt: {}",
+                              qbits, tmp_kmers.size(), occupiedSlotsCnt);
+            }
+            cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
+            std::vector<std::thread> threads;
+            for (uint32_t t = 0; t < threadCount; ++t) {
+                uint64_t s = tmp_kmers.size()*((double)t/threadCount),
+                e = ((double)(t+1)/threadCount)*tmp_kmers.size();
+                std::stringstream ss(std::to_string(t) + " range outside: "+ std::to_string((double)t/threadCount) + " " + std::to_string(s) + " " + std::to_string(e) + "\n");
+                std::cerr << ss.str();
+                threads.emplace_back(std::thread( [&, s, e] {rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);}));
+            }
+            for (uint32_t t = 0; t < threadCount; ++t) {
+                std::cerr << t << " " << rets[t] << "\n";
+                threads[t].join();
+                std::cerr << t << " " << rets[t] << "\n";
+                if (rets[t] == QF_NO_SPACE) {
+                    ret = rets[t];
+                }
+            }
+            threads.clear();
+            // increase qbits by 1
+            qbits++;
+        } while (ret == QF_NO_SPACE);
+        console->info("Done constructing last cqf");
         cdbg.serializeCurrentCQF();
         tmp_kmers.clear();
+        occupiedSlotsCnt = 0;
     }
 
 
