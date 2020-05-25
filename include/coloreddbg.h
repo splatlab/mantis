@@ -732,8 +732,8 @@ int ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(std::vector<std::pair<uint64_t 
     }*/
     auto ret = 0;
     uint8_t flags = QF_WAIT_FOR_LOCK | QF_KEY_IS_HASH;
-    std::stringstream ss(" range inside: "+ std::to_string(s) + " " + std::to_string(e) + "\n");
-    std::cerr << ss.str();
+//    std::stringstream ss(" range inside: "+ std::to_string(s) + " " + std::to_string(e) + "\n");
+//    std::cerr << ss.str();
     for (uint32_t i = s; i < e; i++) {
         auto keyObj = KeyObject(kmers[i].first, 0, kmers[i].second);
         ret = curDbg->insert(keyObj, flags);

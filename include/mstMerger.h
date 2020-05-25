@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <mutex>
 #include <thread>
+#include <parallel/algorithm>
 
 // sparsepp should be included before gqf_cpp! ow, we'll get a conflict in MAGIC_NUMBER
 #include "sparsepp/spp.h"
@@ -26,7 +27,6 @@
 #include "lru/lru.hpp"
 #include "mstQuery.h"
 #include "adjList.h"
-
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 

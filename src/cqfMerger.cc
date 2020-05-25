@@ -10,7 +10,6 @@
  */
 
 #include "cqfMerger.h"
-#include <parallel/algorithm>
 
 
 template<typename qf_obj, typename key_obj>
@@ -593,14 +592,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             for (uint32_t t = 0; t < threadCount; ++t) {
                 uint64_t s = tmp_kmers.size()*((double)t/threadCount),
                 e = ((double)(t+1)/threadCount)*tmp_kmers.size();
-                std::stringstream ss(std::to_string(t) + " range outside: "+ std::to_string((double)t/threadCount) + " " + std::to_string(s) + " " + std::to_string(e) + "\n");
-                std::cerr << ss.str();
                 threads.emplace_back(std::thread( [&, s, e] {rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);}));
             }
             for (uint32_t t = 0; t < threadCount; ++t) {
-                std::cerr << t << " " << rets[t] << "\n";
                 threads[t].join();
-                std::cerr << t << " " << rets[t] << "\n";
                 if (rets[t] == QF_NO_SPACE) {
                     ret = rets[t];
                 }

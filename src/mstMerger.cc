@@ -122,8 +122,8 @@ std::pair<uint64_t, uint64_t> MSTMerger::buildMultiEdgesFromCQFs() {
         ofs.open(prefix+"tmp"+std::to_string(i)+".txt", std::ofstream::out | std::ofstream::trunc);
         ofs.close();
     }
-    std::ofstream tm(prefix+"tmpedge.txt", std::ofstream::out | std::ofstream::trunc);
-    tm.close();
+//    std::ofstream tm(prefix+"tmpedge.txt", std::ofstream::out | std::ofstream::trunc);
+//    tm.close();
     uint64_t maxId{0}, numOfKmers{0};
 
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
@@ -175,7 +175,7 @@ bool MSTMerger::buildEdgeSets() {
     edges->reserve(totalEdges);
     num_colorClasses = maxId + 1;
     logger->info("Put edges in each bucket in a sorted list.");
-    std::string allEdgesFile = prefix + "tmpedge.txt";
+//    std::string allEdgesFile = prefix + "tmpedge.txt";
     usleep(30000000);
     for (uint32_t i = 0; i < nThreads; ++i) {
         logger->info("method1: {}", i);
@@ -190,6 +190,10 @@ bool MSTMerger::buildEdgeSets() {
         tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
         tmp.close();
 //        std::remove(filename.c_str());
+        /*__gnu_parallel::sort(edgeList.begin(), edgeList.end(),
+                             [](Edge &e1, Edge &e2) {
+                                 return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
+                             });*/
         std::sort(edgeList.begin(), edgeList.end(),
                   [](Edge &e1, Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
@@ -201,7 +205,7 @@ bool MSTMerger::buildEdgeSets() {
         edges->insert(edges->end(), edgeList.begin(), edgeList.end());
         logger->info("method1: {} - uniq edgeCnt: {}", i, edgeList.size());
 
-        logger->info("method2: {}", i);
+        /*logger->info("method2: {}", i);
         std::string sysCommand = "sort -t' ' -u -n -k1,1 -k2,2";
         sysCommand += " --parallel=" + std::to_string(nThreads);
         sysCommand += " -S " + std::to_string(20) + "G";
@@ -209,7 +213,7 @@ bool MSTMerger::buildEdgeSets() {
         sysCommand += " >> " + allEdgesFile;
 
         system(sysCommand.c_str());
-        logger->info("method2: {}", i);
+        logger->info("method2: {}", i);*/
 
     }
 
@@ -225,14 +229,14 @@ bool MSTMerger::buildEdgeSets() {
                              }), edges->end());
     std::cerr << "after: " << edges->size() << "\n";
     logger->info("method1: sort all edges done");
-    logger->info("method2: sort all edges");
+    /*logger->info("method2: sort all edges");
     std::string sysCommand = "sort -t' ' -u -n -k1,1 -k2,2";
     sysCommand += " --parallel=" + std::to_string(nThreads);
     sysCommand += " -S " + std::to_string(20) + "G";
     sysCommand += " -o " + allEdgesFile + " " + allEdgesFile;
     system(sysCommand.c_str());
-    logger->info("method2: sort all edges done");
-    std::exit(3);
+    logger->info("method2: sort all edges done");*/
+//    std::exit(3);
     // Add an edge between each color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
@@ -265,7 +269,7 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     std::string filename(prefix+"tmp"+std::to_string(threadId));
     std::ofstream tmpfile;
     tmpfile.open(filename, std::ios::out | std::ios::app | std::ios::binary);
-    std::ofstream tmp2(filename+".txt", std::ios::out | std::ios::app);
+//    std::ofstream tmp2(filename+".txt", std::ios::out | std::ios::app);
     while (!it.reachedHashLimit()) {
         KeyObject keyObject = *it;
         uint64_t curEqId = keyObject.count - 1;
@@ -283,9 +287,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                            return e1.n1 == e2.n1 and e1.n2 == e2.n2;
                                        }), edgeList.end());
             tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
-            for (auto v : edgeList) {
+            /*for (auto v : edgeList) {
                 tmp2 << v.n1 << " " << v.n2 << "\n";
-            }
+            }*/
             cnt+=edgeList.size();
             edgeList.clear();
         }
@@ -304,9 +308,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
                                    return e1.n1 == e2.n1 and e1.n2 == e2.n2;
                                }), edgeList.end());
     tmpfile.write(reinterpret_cast<const char *>(edgeList.data()), sizeof(Edge)*edgeList.size());
-    for (auto v : edgeList) {
+    /*for (auto v : edgeList) {
         tmp2 << v.n1 << " " << v.n2 << "\n";
-    }
+    }*/
     cnt+=edgeList.size();
     colorMutex.lock();
     maxId = localMaxId > maxId ? localMaxId : maxId;
@@ -316,7 +320,7 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     colorMutex.unlock();
     //}
     tmpfile.close();
-    tmp2.close();
+//    tmp2.close();
 }
 
 /**
