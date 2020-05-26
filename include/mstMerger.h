@@ -227,10 +227,12 @@ private:
                                  std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
+                                           std::vector<std::pair<uint64_t, uint64_t>> &tmpEdges,
+                                           uint64_t &curFileIdx,
                                            uint64_t &cnt, uint64_t &maxId, uint64_t &numOfKmers);
 
 
-    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<Edge> &edgeList);
+    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<std::pair<uint64_t, uint64_t>> &edgeList);
 
     void calcMSTHammingDistInParallel(uint32_t i,
                                   std::vector<std::pair<colorIdType, weightType>> &edgeList,
@@ -268,6 +270,16 @@ private:
                          std::vector<colorIdType> &colorsInCache,
                          uint64_t &cntr);
 
+    inline void edgePairSortUniq(std::vector<std::pair<uint64_t, uint64_t>> &edgeList) {
+        __gnu_parallel::sort(edgeList.begin(), edgeList.end(),
+                             [](auto &e1, auto &e2) {
+                                 return e1.first == e2.first ? e1.second < e2.second : e1.first < e2.first;
+                             });
+        edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
+                                   [](auto &e1, auto &e2) {
+                                       return e1.first == e2.first and e1.second == e2.second;
+                                   }), edgeList.end());
+    }
     std::string prefix;
     uint32_t numSamples = 0;
     uint32_t numOfFirstMantisSamples = 0;
