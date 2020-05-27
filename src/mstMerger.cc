@@ -169,69 +169,7 @@ bool MSTMerger::buildEdgeSets() {
     edges = std::make_unique<std::vector<Edge>>();
     edges->reserve(totalEdges);
     num_colorClasses = maxId + 1;
-    logger->info("Put edges in each bucket in a sorted list.");
-//    std::string allEdgesFile = prefix + "tmpedge.txt";
-    usleep(30000000);
-    for (uint32_t i = 0; i < nThreads; ++i) {
-        logger->info("method1: {}", i);
-        std::string filename = prefix + "tmp"+std::to_string(i);
-//        std::cerr << filename << "\n";
-        std::ifstream tmp;
-        tmp.open(filename, std::ios::in | std::ios::binary);
-        uint64_t cnt;
-        tmp.read(reinterpret_cast<char *>(&cnt), sizeof(cnt));
-        std::vector<Edge> edgeList;
-        edgeList.resize(cnt);
-        tmp.read(reinterpret_cast<char *>(edgeList.data()), sizeof(Edge)*cnt);
-        tmp.close();
-//        std::remove(filename.c_str());
-        /*__gnu_parallel::sort(edgeList.begin(), edgeList.end(),
-                             [](Edge &e1, Edge &e2) {
-                                 return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-                             });*/
-        std::sort(edgeList.begin(), edgeList.end(),
-                  [](Edge &e1, Edge &e2) {
-                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-                  });
-        edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
-                                   [](Edge &e1, Edge &e2) {
-                                       return e1.n1 == e2.n1 and e1.n2 == e2.n2;
-                                   }), edgeList.end());
-        edges->insert(edges->end(), edgeList.begin(), edgeList.end());
-        logger->info("method1: {} - uniq edgeCnt: {}", i, edgeList.size());
-
-        /*logger->info("method2: {}", i);
-        std::string sysCommand = "sort -t' ' -u -n -k1,1 -k2,2";
-        sysCommand += " --parallel=" + std::to_string(nThreads);
-        sysCommand += " -S " + std::to_string(20) + "G";
-        sysCommand += " " + filename + ".txt";
-        sysCommand += " >> " + allEdgesFile;
-
-        system(sysCommand.c_str());
-        logger->info("method2: {}", i);*/
-
-    }
-
-    std::cerr << "before sorting and uniqifying: " << edges->size() << " ";
-    logger->info("method1: sort all edges");
-    std::sort(edges->begin(), edges->end(),
-              [](Edge &e1, Edge &e2) {
-                  return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-              });
-    edges->erase(std::unique(edges->begin(), edges->end(),
-                             [](Edge &e1, Edge &e2) {
-                                 return e1.n1 == e2.n1 and e1.n2 == e2.n2;
-                             }), edges->end());
-    std::cerr << "after: " << edges->size() << "\n";
-    logger->info("method1: sort all edges done");
-    /*logger->info("method2: sort all edges");
-    std::string sysCommand = "sort -t' ' -u -n -k1,1 -k2,2";
-    sysCommand += " --parallel=" + std::to_string(nThreads);
-    sysCommand += " -S " + std::to_string(20) + "G";
-    sysCommand += " -o " + allEdgesFile + " " + allEdgesFile;
-    system(sysCommand.c_str());
-    logger->info("method2: sort all edges done");*/
-//    std::exit(3);
+    logger->info("Merge edges of different temp buckets in a sorted list and calculate weight on the fly.");
     // Add an edge between each color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
