@@ -72,6 +72,7 @@ public:
         if (end()) return false;
         if (vecIdx >= buffer.size()) {
             auto toFetch = std::min(maxBufferSize, countOfItemsInFile - fileIdx);
+            std::cerr << "Fetching: " << maxBufferSize << " " << countOfItemsInFile << " " << fileIdx << " " << toFetch <<"\n";
             buffer.resize(toFetch);
             file.read(reinterpret_cast<char*>(buffer.data()), sizeof(valType)*toFetch);
             fileIdx += toFetch;
@@ -81,14 +82,14 @@ public:
     }
 
     bool end() const {
-        return fileIdx == countOfItemsInFile and vecIdx >= buffer.size();
+        return fileIdx >= countOfItemsInFile and vecIdx >= buffer.size();
     }
 
     bool operator<(const TmpFileIterator &rhs) const {
         return get_val() < rhs.get_val();
     }
 
-    const valType &get_val() const { std::cerr << "vecIdx: " << vecIdx << " " << buffer.size() << "\n"; return buffer[vecIdx]; }
+    const valType &get_val() const { return buffer[vecIdx]; }
 private:
     std::string filename;
     std::ifstream file;

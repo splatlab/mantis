@@ -403,7 +403,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                                       fixed_cache1,
                                       ccSetBitCnts1);
         auto src2 = src & c2mask;
-        auto dest2 = dest >> c2len;
+        auto dest2 = dest & c2mask;
         auto w2 = mstBasedHammingDist(src2, dest2,
                                       mst2.get(), lru_cache2[0], queryStats2[0],
                                       fixed_cache2,
@@ -493,9 +493,9 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
             }
             edgeIdxInBucket++;
             it.next();
-            if (selectedEdgeCntr == num_colorClasses-1) break;
+            if (selectedEdgeCntr == num_colorClasses) break;
         }
-        if (selectedEdgeCntr == num_colorClasses-1) break;
+        if (selectedEdgeCntr == num_colorClasses) break;
 //        weightBuckets[bucketCntr].reset(nullptr);
     }
     std::cerr << "\r";
