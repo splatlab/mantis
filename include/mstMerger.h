@@ -45,6 +45,84 @@ struct Cost {
     uint64_t numQueries{0};
 };
 
+class TmpFileIterator {
+    typedef std::pair<uint64_t , uint64_t > valType;
+public:
+    TmpFileIterator(std::string fileNameIn, uint64_t maxBufferSizeIn) :
+    filename(fileNameIn), maxBufferSize(maxBufferSizeIn) {
+        file.open(filename, std::ios::in | std::ios::binary);
+        file.read(reinterpret_cast<char* >(&countOfItemsInFile), sizeof(countOfItemsInFile));
+        std::cerr << "count of items in file " << filename << " = " << countOfItemsInFile << "\n";
+        next();
+    }
+    ~TmpFileIterator() {file.close();}
+    TmpFileIterator(const TmpFileIterator& o) {
+        filename = o.filename;
+        fileIdx = o.fileIdx;
+        vecIdx = o.vecIdx;
+        countOfItemsInFile = o.countOfItemsInFile;
+        maxBufferSize = o.maxBufferSize;
+        buffer = o.buffer;
+        file.open(filename, std::ios::in | std::ios::binary);
+        file.seekg(fileIdx);
+    }
+
+    bool next() {
+        vecIdx++;
+        if (end()) return false;
+        if (vecIdx >= buffer.size()) {
+            auto toFetch = std::min(maxBufferSize, countOfItemsInFile - fileIdx);
+            buffer.resize(toFetch);
+            file.read(reinterpret_cast<char*>(buffer.data()), sizeof(valType)*toFetch);
+            fileIdx += toFetch;
+            vecIdx = 0;
+        }
+        return true;
+    }
+
+    bool end() const {
+        return fileIdx == countOfItemsInFile and vecIdx >= buffer.size();
+    }
+
+    bool operator<(const TmpFileIterator &rhs) const {
+        return get_val() < rhs.get_val();
+    }
+
+    const valType &get_val() const { std::cerr << "vecIdx: " << vecIdx << " " << buffer.size() << "\n"; return buffer[vecIdx]; }
+private:
+    std::string filename;
+    std::ifstream file;
+    uint64_t fileIdx{0};
+    uint64_t vecIdx{0};
+    uint64_t countOfItemsInFile{0};
+    uint64_t maxBufferSize{0};
+    std::vector<valType> buffer;
+};
+
+struct Minheap_edge {
+    void push(TmpFileIterator *obj) {
+        c.emplace_back(obj);
+        std::push_heap(c.begin(), c.end(), [](auto &f, auto &s) {return (*f) < (*s);});
+    }
+
+    void pop() {
+        std::pop_heap(c.begin(), c.end(), [](auto &f, auto &s) {return (*f) < (*s);});
+        c.pop_back();
+    }
+
+    void replace_top(TmpFileIterator *obj) {
+        c.emplace_back(obj);
+        pop();
+    }
+
+    TmpFileIterator* top() { return c.front(); }
+
+    bool empty() const { return c.empty(); }
+
+private:
+    std::vector<TmpFileIterator*> c;
+};
+
 struct CompactEdge {
 
     static uint128_t getEdge(uint64_t hi, uint64_t lo, uint64_t nodeSize) {
@@ -204,8 +282,6 @@ public:
 
 private:
 
-    std::pair<uint64_t, uint64_t> buildMultiEdgesFromCQFs();
-
     bool buildEdgeSets();
 
     bool calculateMSTBasedWeights();
@@ -222,9 +298,9 @@ private:
                                  uint64_t eqid2,
                                  MSTQuery *mst,
                                  LRUCacheMap &lru_cache,
-                                 std::vector<uint64_t> &srcEq,
                                  QueryStats &queryStats,
-                                 std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
+                                 std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
+                                 sdsl::int_vector<> &ccSetBitCnt);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
                                            std::vector<std::pair<uint64_t, uint64_t>> &tmpEdges,
@@ -233,15 +309,6 @@ private:
 
 
     void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<std::pair<uint64_t, uint64_t>> &edgeList);
-
-    void calcMSTHammingDistInParallel(uint32_t i,
-                                  std::vector<std::pair<colorIdType, weightType>> &edgeList,
-                                  std::vector<uint32_t> &srcStarts,
-                                  MSTQuery *mst,
-                                  std::vector<LRUCacheMap> &lru_cache,
-                                  std::vector<QueryStats> &queryStats,
-                                  std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
-                                  uint32_t numSamples);
 
     void calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
                               sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
@@ -259,10 +326,7 @@ private:
                                                LRUCacheMap &lru_cache,
                                                QueryStats &queryStats);
 
-    void planCaching(MSTQuery *mst,
-                     std::vector<std::pair<colorIdType, weightType>> &edges,
-                     std::vector<uint32_t> &srcStartIdx,
-                     std::vector<colorIdType> &colorsInCache);
+    void planCaching(MSTQuery *mst, std::vector<colorIdType> &colorsInCache);
 
     void planRecursively(uint64_t nodeId,
                          std::vector<std::vector<colorIdType>> &children,
@@ -280,6 +344,24 @@ private:
                                        return e1.first == e2.first and e1.second == e2.second;
                                    }), edgeList.end());
     }
+    inline uint64_t splitHarmonically(uint64_t size, uint64_t cnt, std::vector<uint64_t> &endIndices) {
+        endIndices.resize(cnt);
+        // alpha * (1 + 1/2 + ... + 1/cnt) <= alpha * (log(cnt)+1) = size
+        // alpha = size/(log(cnt)+1)
+        auto alpha = static_cast<uint64_t >(ceil(size / (log(cnt)+1)));
+//        std::cerr << "alpha is " << alpha << " for size: " << size << " and count: " << cnt << "\n";
+        size = 0;
+        for (uint64_t i = 0; i < endIndices.size(); i++) {
+            double ratio = 1.0/(i+1);
+            auto val = static_cast<uint64_t >(ceil(alpha * ratio));
+            size += val;
+            endIndices[i] = size;
+//            std::cerr  << startIndices[i] << " ";
+        }
+//        std::cerr << "\n new size: " << size << "\n";
+        return size;
+    }
+
     std::string prefix;
     uint32_t numSamples = 0;
     uint32_t numOfFirstMantisSamples = 0;
@@ -296,7 +378,7 @@ private:
     std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache2;
     std::vector<QueryStats> queryStats1;
     std::vector<QueryStats> queryStats2;
-    std::vector<std::pair<colorIdType, colorIdType >> colorPairs;
+    sdsl::int_vector<> colorPairs;
     std::string prefix1;
     std::string prefix2;
     std::unique_ptr<MSTQuery> mst1;
@@ -311,6 +393,7 @@ private:
     SpinLockT colorMutex;
 
     uint64_t numBlocks;
+    uint64_t curFileIdx = 0;
 
 };
 

@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <iterator>
 #include <algorithm>
+#include <zconf.h>
 
 #include "MantisFS.h"
 #include "mstMerger.h"
@@ -21,7 +22,7 @@
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
 static constexpr uint64_t MAX_ALLOWED_TMP_EDGES{31250000}; // Up to 0.5G
-static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{260000000}; // Up to 4G
+static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{130000000}; // Up to 2G
 static constexpr uint64_t SHIFTBITS{32};
 static constexpr uint64_t HIGHBIT_MASK{(1ULL << 32) - 1ULL};
 static constexpr uint64_t LOWBIT_MASK{std::numeric_limits<uint64_t>::max() - HIGHBIT_MASK};
@@ -111,12 +112,12 @@ void MSTMerger::mergeMSTs() {
  * find all the existing neighbors, and build a color graph based on that
  * @return pair of maximum observed colorId and total observed edges (including duplicates)
  */
-std::pair<uint64_t, uint64_t> MSTMerger::buildMultiEdgesFromCQFs() {
+bool MSTMerger::buildEdgeSets() {
 
     std::vector<uint64_t> cnts(nThreads, 0);
     uint64_t maxId{0}, numOfKmers{0};
 
-    uint64_t curFileIdx = 0;
+
     std::vector<std::pair<uint64_t, uint64_t>> tmpEdges;
     tmpEdges.reserve(MAX_ALLOWED_TMP_EDGES_IN_FILE);
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
@@ -144,32 +145,30 @@ std::pair<uint64_t, uint64_t> MSTMerger::buildMultiEdgesFromCQFs() {
         for (auto &t : threads) { t.join(); }
     }
     if (not tmpEdges.empty()) {
+        std::cerr << "tmpEdges.size(): " << tmpEdges.size() << " sizeof(element): " << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type) <<  "\n";
         edgePairSortUniq(tmpEdges);
+        std::cerr << "tmpEdges.size(): " << tmpEdges.size() << "\n";
         std::string filename(prefix+"tmp"+std::to_string(curFileIdx));
+        std::cerr << "Filename: " << filename << "\n";
         std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
-        tmpfile.write(reinterpret_cast<const char *>(tmpEdges.size()), sizeof(size_t));
+        uint64_t vecSize = tmpEdges.size();
+        std::cerr << sizeof(vecSize) << "\n";
+        tmpfile.write(reinterpret_cast<const char *>(&vecSize), sizeof(vecSize));
+        std::cerr << "Done writing size\n";
         tmpfile.write(reinterpret_cast<const char *>(tmpEdges.data()),
                       sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size());
         tmpfile.close();
+        curFileIdx++;
     }
+    logger->info("Done writing the last tmp file");
     uint64_t totalEdges{0};
     for (uint32_t i = 0; i < nThreads; ++i) {
         totalEdges += cnts[i];
     }
     logger->info("Total number of kmers observed: {}, total number of edges (including duplicates): {}", numOfKmers, totalEdges);
-    return std::make_pair(maxId, totalEdges);
-}
+    num_colorClasses = maxId + 1 + 1; // last one is for zer as the dummy color class with ID equal to actual num of color classes
 
-
-bool MSTMerger::buildEdgeSets() {
-
-    auto pair = buildMultiEdgesFromCQFs();
-    auto maxId =  pair.first;
-    auto totalEdges = pair.second;
-    edges = std::make_unique<std::vector<Edge>>();
-    edges->reserve(totalEdges);
-    num_colorClasses = maxId + 1;
-    logger->info("Merge edges of different temp buckets in a sorted list and calculate weight on the fly.");
+    /*logger->info("Merge edges of different temp buckets in a sorted list and calculate weight on the fly.");
     // Add an edge between each color class ID and node zero
     logger->info("Adding edges from dummy node zero to each color class Id for {} color classes",
                  num_colorClasses);
@@ -178,7 +177,7 @@ bool MSTMerger::buildEdgeSets() {
         edges->emplace_back(colorId, zero);
     }
     num_colorClasses++; // zero is now a dummy color class with ID equal to actual num of color classes
-
+*/
     return true;
 }
 
@@ -256,10 +255,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
  */
 bool MSTMerger::calculateMSTBasedWeights() {
 
-    colorIdType nodeCnt1 = MSTQuery::getNodeCount(prefix1);
-    colorIdType nodeCnt2 = MSTQuery::getNodeCount(prefix2);
-    colorIdType mst1Zero{nodeCnt1 - 1}, mst2Zero{nodeCnt2 - 1};
-
+    uint64_t nodeCnt1 = MSTQuery::getNodeCount(prefix1);
+    uint64_t nodeCnt2 = MSTQuery::getNodeCount(prefix2);
+    uint64_t mst1Zero{nodeCnt1 - 1}, mst2Zero{nodeCnt2 - 1};
+    auto c1len{static_cast<uint64_t >(ceil(log2(nodeCnt1)))}, c2len{static_cast<uint64_t >(ceil(log2(nodeCnt2)))};
+    uint64_t c2mask = (1ULL << c2len) - 1;
+    std::cerr << "c1len: " << c1len << " c2len:" << c2len << " c2mask:" << c2mask << "\n";
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
 
     QueryStats dummyStats1, dummyStats2;
@@ -273,104 +274,25 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("# of color classes based on count of colorPairs: {}", cnt);
     logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
     // colorPairs colors for mantis 1 and mantis 2 are 0-based --> color ID starts from 0
-    colorPairs.resize(cnt);
+    colorPairs = sdsl::int_vector<>(cnt, 0, c1len+c2len);
     uint64_t maxIndex = 0;
+    std::cerr << "Reading colorPairs from file " << cnt << "\n";
     for (auto i = 0; i < cnt; i++) {
         cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
         cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
         cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
         c1 = c1 == 0 ? mst1Zero : c1 - 1;
         c2 = c2 == 0 ? mst2Zero : c2 - 1;
-        colorPairs[cIdx] = std::make_pair(c1, c2);
+        colorPairs[cIdx] = ((c1 << c2len) | c2);
+        std::cerr << cIdx << " " << c1 << " " << c2 << " " << colorPairs[cIdx] << " " << (colorPairs[cIdx] >> c2len) << " " << (colorPairs[cIdx] & c2mask) << "\n";
         maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
     }
     cp.close();
 
-    logger->info("Splitting the edges into edges for MST1 and MST2 for {} edges.", edges->size());
-    uint64_t numEdges = 0;
-    weightBuckets.resize(numSamples);
-    for (auto &w : weightBuckets) {
-        w.reset(new std::vector<Edge>());
-    }
-    for (auto &qf : queryStats1) {
-        qf.numSamples = numSamples;
-        qf.trySample = true;
-    }
-    for (auto &qf : queryStats2) {
-        qf.numSamples = numSamples;
-        qf.trySample = true;
-    }
-    std::vector<std::pair<colorIdType, weightType>> edge1list;
-    std::vector<std::pair<colorIdType, weightType>> edge2list;
-    std::vector<uint32_t> srcEndIdx1(nodeCnt1, 0), srcEndIdx2(nodeCnt2, 0);
-
-
-    // total merged edges can be a good estimate to reserve a vector per mst
-    logger->info("Total # of edges: {}", edges->size());
-
-    // lambda function to get sorted list of unique edges for each mantis.
-    auto edgeSplitter = [=](std::vector<uint32_t> &srcEndIdx,
-                            std::vector<std::pair<colorIdType, weightType>> &destWeightList,
-                            colorIdType mstZero,
-                            bool isFirst) {
-        std::vector<Edge> edgeList;
-        edgeList.reserve(edges->size());
-        // put all of the edges for one of the merged mantises in a vector
-        logger->info("Split for {} input mantis", isFirst?"first":"second");
-        for (auto &edge : (*edges)) {
-            if (edge.n1 > colorPairs.size() or edge.n2 > colorPairs.size()) {
-                std::cerr <<" Should not happen. One of the edge ends is larger than number of colors: "
-                          << edge.n1 << " " << edge.n2 << " " << colorPairs.size() << "\n";
-                std::exit(3);
-            }
-            auto n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first
-                                                           : colorPairs[edge.n1].second);
-            auto n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first
-                                                           : colorPairs[edge.n2].second);
-            if (n1 != n2) {
-                if (n1 > n2) {
-                    std::swap(n1, n2);
-                }
-                edgeList.emplace_back(n1, n2);
-            }
-        }
-        // sort - unique the vector
-        std::sort(edgeList.begin(), edgeList.end(),
-                  [](Edge &e1, Edge &e2) {
-                      return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
-                  });
-        edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
-                                   [](Edge &e1, Edge &e2) {
-                                       return e1.n1 == e2.n1 and e1.n2 == e2.n2;
-                                   }), edgeList.end());
-
-        // move all the unique edges for one mantis to the designed low-memory data structure
-        destWeightList.resize(edgeList.size());
-        uint64_t destIdx{0};
-//        std::cerr << "isFirst?" << static_cast<int>(isFirst) << "\n";
-        for (auto &e : edgeList) {
-            srcEndIdx[e.n1]++;
-            destWeightList[destIdx++] = std::make_pair(e.n2, 0);
-        }
-        // accumulate the out-degrees per sorted source edges to get to source start index
-        // now each value in srcEndIdx is pointing to the start of the next source in the edge-weight vec.
-        for (uint64_t i = 1; i < srcEndIdx.size(); i++) {
-            srcEndIdx[i] += srcEndIdx[i-1];
-        }
-        // having a list of destination of edges and the edge weight for all the source nodes sorted in the
-        // order of source node id, srcEndIdx returns the starting index of the destinations and edge weights for that
-        // source index in that list
-    };
-    // call the lambda function per mantis
-    // filling srcEndIndices and edgeLists (given as inputs)
-    edgeSplitter(srcEndIdx1, edge1list, mst1Zero, true);
-    edgeSplitter(srcEndIdx2, edge2list, mst2Zero, false);
-    logger->info("num of edges in first mantis: {}", edge1list.size());
-    logger->info("num of edges in second mantis: {}", edge2list.size());
 
     mst1 = std::make_unique<MSTQuery>(prefix1, k, k, numOfFirstMantisSamples, logger);
     std::vector<colorIdType> colorsInCache;
-    planCaching(mst1.get(), edge1list, srcEndIdx1, colorsInCache);
+    planCaching(mst1.get(), colorsInCache);
     logger->info("fixed cache size for mst1 is : {}", colorsInCache.size());
     // fillout fixed_cache1
     // walking in reverse order on colorsInCache is intentional
@@ -383,169 +305,145 @@ bool MSTMerger::calculateMSTBasedWeights() {
         fixed_cache1[colorsInCache[idx]] = setbits;
     }
     colorsInCache.clear();
-
     logger->info("Done filling the fixed cache for mst1. Calling multi-threaded MSTBasedHammingDist .. ");
-    std::vector<std::thread> threads;
-    for (uint32_t t = 0; t < nThreads; ++t) {
-        threads.emplace_back(std::thread(&MSTMerger::calcMSTHammingDistInParallel, this, t,
-                                         std::ref(edge1list),
-                                         std::ref(srcEndIdx1),
-                                         mst1.get(),
-                                         std::ref(lru_cache1),
-                                         std::ref(queryStats1),
-                                         std::ref(fixed_cache1),
-                                         numOfFirstMantisSamples));
-    }
-    for (auto &t : threads) { t.join(); }
-    threads.clear();
-    mst1.reset(nullptr);
-
-//    mst1->clear();
-    logger->info("Done calculating weights for mst1");
 
     mst2 = std::make_unique<MSTQuery>(prefix2, k, k, secondMantisSamples, logger);
-    planCaching(mst2.get(), edge2list, srcEndIdx2, colorsInCache);
+    planCaching(mst2.get(), colorsInCache);
     logger->info("fixed cache size for mst2 is : {}", colorsInCache.size());
     //fillout fixed_cache2
     for (int64_t idx = colorsInCache.size() - 1; idx >= 0; idx--) {
         auto setbits = mst2->buildColor(colorsInCache[idx], dummyStats2, &lru_cache2[0], nullptr, &fixed_cache2, dummy);
         fixed_cache2[colorsInCache[idx]] = setbits;
     }
-
     logger->info("Done filling the fixed cache for mst2. Calling multi-threaded MSTBasedHammingDist .. ");
-    for (uint32_t t = 0; t < nThreads; ++t) {
-        threads.emplace_back(std::thread(&MSTMerger::calcMSTHammingDistInParallel, this, t,
-                                         std::ref(edge2list),
-                                         std::ref(srcEndIdx2),
-                                         mst2.get(),
-                                         std::ref(lru_cache2),
-                                         std::ref(queryStats2),
-                                         std::ref(fixed_cache2),
-                                         secondMantisSamples));
-    }
-    for (auto &t : threads) { t.join(); }
-    threads.clear();
-    colorsInCache.clear();
-    mst2.reset(nullptr);
-//    mst2->clear();
-    logger->info("Done calculating weights for mst2");
-    uint64_t cntr{0};
 
-    //abstract out the part repeated for mst1 and mst2 as a lambda function
-    auto findWeight = [=](Edge &edge, std::vector<std::pair<colorIdType, weightType>> &edgeList,
-                          std::vector<uint32_t> &srcEndIndex, colorIdType mstZero, bool isFirst) {
-        colorIdType n1 = edge.n1 == zero ? mstZero : (isFirst ? colorPairs[edge.n1].first : colorPairs[edge.n1].second);
-        colorIdType n2 = edge.n2 == zero ? mstZero : (isFirst ? colorPairs[edge.n2].first : colorPairs[edge.n2].second);
-        if (n1 == n2) return static_cast<weightType>(0);
-        if (n1 > n2) std::swap(n1, n2);
-        weightType w{0};
-        auto srcStart = n1 == 0 ? 0 : srcEndIndex[n1 - 1];
-        if (srcStart < edgeList.size()) {
-            auto srcEnd = srcEndIndex[n1];
-            if (n2 == mstZero) { // zero is the biggest color ID, and hence the last in a sorted list
-                if ((*(edgeList.begin() + srcEnd - 1)).first != n2) {
-                    std::cerr << "!!NOOOOOO! Last end node for this start node is not zero while it's expected to be\n";
-                    std::cerr << n1 << " " << srcStart << " " << srcEnd << " " << n2 << " "
-                              << (*(edgeList.begin() + srcEnd - 1)).first << "\n";
-                    std::exit(3);
-                }
-                w = (*(edgeList.begin() + srcEnd - 1)).second; // look at the last elm. for n1
-            } else {
-                // jump to the start of the end nodes for the src node and run a binary search to find the corresponding edge and hence weight
-                auto wItr = std::lower_bound(edgeList.begin() + srcStart, edgeList.begin() + srcEnd,
-                                             std::make_pair(n2, 0),
-                                             [](auto &v1, auto &v2) {
-                                                 return v1.first < v2.first;
-                                             });
-                if (wItr == edgeList.begin() + srcEnd) {
-                    std::cerr << "Couldn't find the element in the vector. Should not happen.\n";
-                    std::exit(3);
-                }
-                if ((*wItr).first != n2) {
-                    std::cerr << "NOOOOOO! The returned binary search value does not match searched for value n2\n";
-                    std::cerr << "isFirst?" << static_cast<int>(isFirst) <<
-                    " edge in the mergedCDBG: " << edge.n1 << "--" << edge.n2 << " n1=" << n1
-                              << " srcStart=" << srcStart << " srcEnd=" << srcEnd
-                              << " n2=" << n2 << " BS return val=" << (*wItr).first << "\n";
-                    std::stringstream ss;
-                    for (auto it = wItr - 3; it < wItr + 3; it++) {
-                        ss << " " << (*it).first << "\n";
-                    }
-                    std::cerr << ss.str();
-                    std::exit(3);
-                }
-                w = (*wItr).second;
-            }
-        }
-        return w;
-    };
+    uint64_t cntr{0};
     logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
-    for (auto &edge : (*edges)) {
-        auto w1 = findWeight(edge, edge1list, srcEndIdx1, mst1Zero, true);
-        auto w2 = findWeight(edge, edge2list, srcEndIdx2, mst2Zero, false);
-        weightBuckets[w1 + w2 - 1]->push_back(edge);
-        if (++cntr % 10000000 == 0)
-            std::cerr << "\r" << cntr << " out of " << edges->size();
+
+    sdsl::int_vector<> ccSetBitCnts1(mst1Zero+1, 0, ceil(log2(numOfFirstMantisSamples)));
+    sdsl::int_vector<> ccSetBitCnts2(mst2Zero+1, 0, ceil(log2(secondMantisSamples)));
+    uint32_t maxWeightInFile = std::min(static_cast<uint32_t >(1000), numSamples);
+    std::vector<uint64_t> bufferEndIndices;
+    uint64_t size = splitHarmonically(MAX_ALLOWED_TMP_EDGES_IN_FILE/2, maxWeightInFile, bufferEndIndices);
+    std::vector<uint64_t> bufferCurrIndices(bufferEndIndices.size(), 0);
+    std::vector<uint64_t > bufferCnt(bufferEndIndices.size(), 0);
+    for (auto i = 1; i < bufferCurrIndices.size(); i++) {
+        bufferCurrIndices[i] = bufferEndIndices[i-1];
     }
-    std::cerr << "\r";
-    edges.reset(nullptr);
-    //Clearing the standard vector has no effect on memory
-    /*srcEndIdx1.clear();
-    srcEndIdx2.clear();
-    edge1list.clear();
-    edge2list.clear();*/
-    std::cerr << "\r";
+    std::vector<std::pair<uint64_t , uint64_t >> output_buffer(size);
+    std::vector<std::ofstream> outWeightFile;
+    outWeightFile.reserve(maxWeightInFile);
+    for (auto tmpOutIdx = 1; tmpOutIdx <= maxWeightInFile; tmpOutIdx++) {
+        std::string filename = prefix+"w"+std::to_string(tmpOutIdx);
+        outWeightFile.emplace_back(filename, std::ios::out | std::ios::binary);
+        uint64_t cnt = 0;
+        outWeightFile.back().write(reinterpret_cast<char*>(&cnt), sizeof(cnt));
+    }
+    std::vector<std::tuple<uint64_t , uint64_t , uint32_t >> inMemEdgeWeight;
+    inMemEdgeWeight.reserve(1000000);
+    auto store_edge_weight = [&outWeightFile,
+                              &output_buffer,
+                              &bufferEndIndices,
+                              &bufferCurrIndices,
+                              &bufferCnt,
+                              &inMemEdgeWeight,
+                              &maxWeightInFile](auto &pair, auto w) {
+        w--;
+        std::cerr << "w:" << w << " maxWeightInFile:" << maxWeightInFile << "\n";
+        if (w < maxWeightInFile) {
+            std::cerr << "curvsend: " << bufferCurrIndices[w] << " " << bufferEndIndices[w] << "\n";
+            if (bufferCurrIndices[w] < bufferEndIndices[w]) {
+                output_buffer[bufferCurrIndices[w]] = pair;
+                bufferCurrIndices[w]++;
+            } else {
+                auto startIdx = w == 0?0:bufferEndIndices[w-1];
+                outWeightFile[w].write(reinterpret_cast<char *>(output_buffer.data()+startIdx),
+                                       sizeof(std::remove_reference<decltype(output_buffer)>::type::value_type) * (bufferEndIndices[w]-startIdx));
+                bufferCnt[w] += (bufferEndIndices[w]-startIdx);
+                bufferCurrIndices[w] = startIdx;
+            }
+        } else {
+            inMemEdgeWeight.emplace_back(pair.first, pair.second, w);
+        }
+    };
+
+    std::vector<TmpFileIterator> tis;
+    Minheap_edge minheap;
+    std::cerr << "curfileidx: " << curFileIdx << "\n";
+    for (uint64_t i = 0; i < curFileIdx; i++) {
+        tis.emplace_back(prefix+"tmp"+std::to_string(i), MAX_ALLOWED_TMP_EDGES_IN_FILE/(2.0*curFileIdx));
+    }
+    for (uint64_t i = 0; i < curFileIdx; i++) {
+        if (tis[i].end()) continue;
+        minheap.push(&tis[i]);
+        std::cerr <<"iterator " << i << " pushed\n";
+    }
+    std::cerr << tis[0].get_val().first << " " << tis[0].get_val().second << "\n";
+    std::cerr << minheap.empty() << "\n";
+    std::cerr << minheap.top() << "\n";
+    std::cerr << &tis[0] <<"\n";
+    auto val = minheap.top()->get_val();
+    while (!minheap.empty()) {
+        do {
+            auto cur = minheap.top();
+            val = cur->get_val();
+            std::cerr << "while " <<val.first << " " << val.second << " ";
+            if (cur->next())
+                minheap.replace_top(cur);
+            else
+                minheap.pop();
+        } while (!minheap.empty() && val == minheap.top()->get_val());
+        // calculate weight
+        auto src = colorPairs[val.first];
+        auto dest = colorPairs[val.second];
+        auto src1 = src >> c2len;
+        auto dest1 = dest >> c2len;
+        auto w1 = mstBasedHammingDist(src1, dest1,
+                                      mst1.get(), lru_cache1[0], queryStats1[0],
+                                      fixed_cache1,
+                                      ccSetBitCnts1);
+        auto src2 = src & c2mask;
+        auto dest2 = dest >> c2len;
+        auto w2 = mstBasedHammingDist(src2, dest2,
+                                      mst2.get(), lru_cache2[0], queryStats2[0],
+                                      fixed_cache2,
+                                      ccSetBitCnts2);
+        auto w = w1 + w2;
+        std::cerr << val.first << " " << val.second << " " << src << "->" << dest << " e1: " << src1 << "->" << dest1 << " e2: " << src2 << "->" << dest2 << " w: " << w1 << " " << w2 << " " << w << "\n";
+        store_edge_weight(val, w);
+    }
+    for (auto cc : colorPairs) {
+        auto cc1 = cc >> c2len;
+        auto cc2 = cc & c2mask;
+        auto w = ccSetBitCnts1[cc1] + ccSetBitCnts2[cc2];
+        auto pair = std::make_pair(cc, zero);
+        store_edge_weight(pair, w);
+    }
+    for (auto w = 0; w < outWeightFile.size(); w++) {
+        auto startIdx = w == 0?0:bufferEndIndices[w-1];
+        std::cerr << " bufferCurrIndices[" << w << "]:" << bufferCurrIndices[w] << " vs startIdx:" << startIdx << "\n";
+        if (bufferCurrIndices[w] != startIdx) {
+            outWeightFile[w].write(reinterpret_cast<char *>(output_buffer.data()+startIdx),
+                                   sizeof(std::remove_reference<decltype(output_buffer)>::type::value_type) * (bufferCurrIndices[w]-startIdx));
+            bufferCnt[w] += (bufferEndIndices[w]-startIdx);
+        }
+        std::cerr << "before writing to " << w << " cnt: " << bufferCnt[w] << "\n";
+        outWeightFile[w].seekp(0);
+        outWeightFile[w].write(reinterpret_cast<char*>(bufferCnt.data()+w), sizeof(uint64_t));
+        outWeightFile[w].close();
+    }
+
+//    for (auto &edge : (*edges)) {
+//        auto w1 = findWeight(edge, edge1list, srcEndIdx1, mst1Zero, true);
+//        auto w2 = findWeight(edge, edge2list, srcEndIdx2, mst2Zero, false);
+//        weightBuckets[w1 + w2 - 1]->push_back(edge);
+//        if (++cntr % 10000000 == 0)
+//            std::cerr << "\r" << cntr << " out of " << edges->size();
+//    }
+//    std::cerr << "\r";
+//    edges.reset(nullptr);
     logger->info("Calculated the weight for the edges");
     return true;
-}
-
-
-void MSTMerger::calcMSTHammingDistInParallel(uint32_t i,
-                                             std::vector<std::pair<colorIdType, weightType>> &edgeList,
-                                             std::vector<uint32_t> &srcStarts,
-                                             MSTQuery *mst,
-                                             std::vector<LRUCacheMap> &lru_cache,
-                                             std::vector<QueryStats> &queryStats,
-                                             std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
-                                             uint32_t numSamples) {
-    std::vector<uint64_t> srcBV;
-    uint64_t s = 0, e;
-    // If the list contains less than a hundred edges, don't bother with multi-threading and
-    // just run the first thread
-    if (edgeList.size() < 100/* or isMSTBased*/) {
-        if (i == 0) {
-            e = edgeList.size();
-        } else {
-            e = 0;
-        }
-    } else {
-        s = edgeList.size() * i / nThreads;
-        e = edgeList.size() * (i + 1) / nThreads;
-    }
-    auto start = std::upper_bound(srcStarts.begin(), srcStarts.end(), s);
-    colorIdType n1 = static_cast<colorIdType>(start - srcStarts.begin());
-    auto itrStart = edgeList.begin() + s;
-    auto itrEnd = edgeList.begin() + e;
-    uint64_t cntr{0}, edgeCntr{s};
-    std::cerr << "\r";
-//    logger->info("initiated thread {} from {} to {} with {} edges", i, s, e, e-s);
-    for (auto edge = itrStart; edge != itrEnd; edge++) {
-        if (srcStarts[n1] == edgeCntr) {
-            n1++;
-        }
-        colorIdType n2 = edge->first;
-        if (n1 != n2) {
-            auto w = mstBasedHammingDist(n1, n2,
-                                         mst, lru_cache[i], srcBV, queryStats[i],
-                                         fixed_cache);
-            edge->second = static_cast<weightType>(w);
-        }
-        if (++cntr % 1000000 == 0) {
-            std::cerr << "\rthread " << i << ": " << cntr << " edges out of " << e - s << "   ";
-        }
-        edgeCntr++;
-    }
-    std::cerr << "\r";
 }
 
 /**
@@ -568,9 +466,12 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
     for (uint32_t bucketCntr = 0; bucketCntr < bucketCnt; bucketCntr++) {
         uint32_t edgeIdxInBucket = 0;
         w = bucketCntr + 1;
-        for (auto &it : *(weightBuckets[bucketCntr])) {
-            u = it.n1;
-            v = it.n2;
+        TmpFileIterator it(prefix+"w"+std::to_string(w), MAX_ALLOWED_TMP_EDGES_IN_FILE);
+//        for (auto &it : *(weightBuckets[bucketCntr])) {
+        while (not it.end()) {
+            auto edge = it.get_val();
+            u = edge.first;
+            v = edge.second;
             auto root_of_u = ds.find(u);
             auto root_of_v = ds.find(v);
 
@@ -591,8 +492,11 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                           << selectedEdgeCntr << " were selected";
             }
             edgeIdxInBucket++;
+            it.next();
+            if (selectedEdgeCntr == num_colorClasses-1) break;
         }
-        weightBuckets[bucketCntr].reset(nullptr);
+        if (selectedEdgeCntr == num_colorClasses-1) break;
+//        weightBuckets[bucketCntr].reset(nullptr);
     }
     std::cerr << "\r";
     mstTotalWeight++;//1 empty slot for root (zero)
@@ -736,17 +640,29 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
     deltas.reserve(deltasKeptInMem);
 
     colorIdType mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
+    auto c1len{static_cast<uint64_t >(ceil(log2(mst1Zero+1)))}, c2len{static_cast<uint64_t >(ceil(log2(mst2Zero+1)))};
+    uint64_t c2mask = (1ULL << c2len) - 1;
     uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);
     uint64_t s = bucketSize * threadID;;
     uint64_t e = std::min(parentbv.size(), bucketSize * (threadID+1));
     for (uint64_t childIdx = s; childIdx < e; childIdx++) {
 //        auto deltaOffset = (childIdx > 0) ? (sbbv(childIdx) + 1) : 0;
         deltas.emplace_back(deltaOffset);
-        auto n1s = childIdx == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[childIdx];
-        auto n2s = parentbv[childIdx] == zero ? std::make_pair(mst1Zero, mst2Zero) : colorPairs[parentbv[childIdx]];
-        auto firstDelta = getMSTBasedDeltaList(n1s.first, n2s.first, mst1.get(), fixed_cache1,
+        uint64_t child1{mst1Zero}, parent1{mst1Zero}, child2{mst2Zero}, parent2{mst2Zero};
+        if (childIdx != zero) {
+            auto child = colorPairs[childIdx];
+            child1 = child >> c2len;
+            child2 = child & c2mask;
+        }
+        if (parentbv[childIdx] != zero) {
+            auto parent = colorPairs[parentbv[childIdx]];
+            parent1 = parent >> c2len;
+            parent2 = parent & c2mask;
+        }
+
+        auto firstDelta = getMSTBasedDeltaList(child1, parent1, mst1.get(), fixed_cache1,
                                                lru_cache1[threadID], queryStats1[threadID]);
-        auto secondDelta = getMSTBasedDeltaList(n1s.second, n2s.second, mst2.get(), fixed_cache2,
+        auto secondDelta = getMSTBasedDeltaList(child2, parent2, mst2.get(), fixed_cache2,
                                                 lru_cache2[threadID], queryStats2[threadID]);
         deltas.back().deltaVals = firstDelta;
         for (auto &v : secondDelta) {
@@ -783,7 +699,7 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
 
 /**
  * finds the neighbors of each kmer in the cqf,
- * and adds an edge of the element's colorId and its neighbor's
+ * and adds an edge of the element's colorId and its neighbor's (0-based)
  * @param cqf (required to query for existence of neighbors)
  * @param it iterator to the elements of cqf
  */
@@ -805,7 +721,7 @@ void MSTMerger::findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::v
  * finds neighbors of a node in cqf
  * @param cqf
  * @param n : work_item containing node and colorId (colorId will be filled)
- * @return set of neighbors for current node n and their colorIds
+ * @return set of neighbors for current node n and their colorIds (0-based)
  */
 std::set<workItem> MSTMerger::neighbors(CQF<KeyObject> &cqf, workItem n) {
     std::set<workItem> result;
@@ -887,9 +803,9 @@ uint64_t MSTMerger::mstBasedHammingDist(uint64_t eqid1,
                                         uint64_t eqid2,
                                         MSTQuery *mst,
                                         LRUCacheMap &lru_cache,
-                                        std::vector<uint64_t> &srcEq,
                                         QueryStats &queryStats,
-                                        std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache) {
+                                        std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
+                                        sdsl::int_vector<> &ccSetBitCnt) {
 
     uint64_t dist{0};
     std::vector<uint64_t> eq1, eq2;
@@ -954,27 +870,17 @@ std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t e
     return res; // rely on c++ optimization
 }
 
-void MSTMerger::planCaching(MSTQuery *mst,
-                            std::vector<std::pair<colorIdType, weightType>> &edges,
-                            std::vector<uint32_t> &srcStartIdx,
-                            std::vector<colorIdType> &colorsInCache) {
+void MSTMerger::planCaching(MSTQuery *mst,std::vector<colorIdType> &colorsInCache) {
     std::vector<Cost> mstCost(mst->parentbv.size());
 
     logger->info("In planner ..");
     // setting local edge costs
     // local cost for each node is its degree (in + out)
     uint64_t src{0}, edgeCntr{0};
-    for (auto &edge: edges) {
-        if (edgeCntr == srcStartIdx[src]) {
-            src++;
-        }
-        if (src >= mstCost.size() or edge.first >= mstCost.size()) {
-            std::cerr << "PlanCaching. Shouldn't happen: " << src << " " << edge.first << " " << mstCost.size() << "\n";
-            std::exit(3);
-        }
-        mstCost[src].numQueries++;
-        mstCost[edge.first].numQueries++;
-        edgeCntr++;
+    uint64_t queryCost = mst->parentbv.size()-1;
+    for (auto i = 0; i < queryCost; i++) {
+        mstCost[i].numQueries = queryCost;
+        queryCost = queryCost/(i+1);
     }
     logger->info("Done setting the local costs");
 

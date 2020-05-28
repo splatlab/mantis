@@ -655,7 +655,7 @@ store_colorID_map()
 
     console->info("# of abundant color IDs: {}", sampledPairs.size());
     // write down the pair and the associated colorID here
-    // storing the IDs from 0 (when inserting into CQF, they needed a +1)
+    // storing the IDs from 0 (when inserting into CQF, they needed a +1) (0-based)
     for (auto &idpair : sampledPairs) {
         uint64_t colorID = idpair.second;
         auto fs = idpair.first;
