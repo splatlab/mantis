@@ -380,7 +380,7 @@ private:
 
     uint64_t numBlocks;
     uint64_t curFileIdx = 0;
-    uint32_t maxWeightInFile{5};
+    uint32_t maxWeightInFile{1000};
 
 };
 
