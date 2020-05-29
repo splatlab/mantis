@@ -52,7 +52,7 @@ public:
     filename(fileNameIn), maxBufferSize(maxBufferSizeIn) {
         file.open(filename, std::ios::in | std::ios::binary);
         file.read(reinterpret_cast<char* >(&countOfItemsInFile), sizeof(countOfItemsInFile));
-        std::cerr << "count of items in file " << filename << " = " << countOfItemsInFile << "\n";
+        std::cerr << "Count of items in file " << filename << " = " << countOfItemsInFile << "\n";
         next();
     }
     ~TmpFileIterator() {file.close();}
@@ -72,7 +72,6 @@ public:
         if (end()) return false;
         if (vecIdx >= buffer.size()) {
             auto toFetch = std::min(maxBufferSize, countOfItemsInFile - fileIdx);
-            std::cerr << "Fetching: " << maxBufferSize << " " << countOfItemsInFile << " " << fileIdx << " " << toFetch <<"\n";
             buffer.resize(toFetch);
             file.read(reinterpret_cast<char*>(buffer.data()), sizeof(valType)*toFetch);
             fileIdx += toFetch;
@@ -180,21 +179,12 @@ struct workItem {
 // To represent Disjoint Sets
 struct DisjointTrees {
     sdsl::int_vector<> els{};
-//    std::vector<DisjointSetNode> els; // the size of total number of colors
-//    uint64_t n;
 
     // Constructor.
     explicit DisjointTrees(uint64_t n) {
         // Allocate memory
 //        this->n = n;
         els = sdsl::int_vector<>(n, 1, ceil(log2(n))+1); // 1 bit which is set if the node IS its own parent
-//        els.resize(n);
-        // Initially, all vertices are in
-        // different sets and have rank 0.
-//        for (uint64_t i = 0; i < n; i++) {
-//            //every element is parent of itself
-//            els[i].setParent(static_cast<colorIdType>(i));
-//        }
     }
 
     bool selfParent(uint64_t idx) {
@@ -369,10 +359,9 @@ private:
     uint32_t secondMantisSamples = 0;
     uint64_t k;
     uint64_t numCCPerBuffer;
-    uint64_t num_edges = 0;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
-    colorIdType zero = static_cast<colorIdType>(UINT64_MAX);
+    uint64_t zero = static_cast<colorIdType>(UINT64_MAX);
     std::vector<LRUCacheMap> lru_cache1;//10000);
     std::vector<LRUCacheMap> lru_cache2;//10000);
     std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache1;
@@ -380,21 +369,19 @@ private:
     std::vector<QueryStats> queryStats1;
     std::vector<QueryStats> queryStats2;
     sdsl::int_vector<> colorPairs;
+    sdsl::int_vector<> ccBits;
+    std::vector<uint64_t> ccBitsBucketCnt;
     std::string prefix1;
     std::string prefix2;
     std::unique_ptr<MSTQuery> mst1;
     std::unique_ptr<MSTQuery> mst2;
-    std::unique_ptr<std::vector<Edge>> edges;
-    std::vector<std::unique_ptr<std::vector<Edge>>> weightBuckets;
-    std::unique_ptr<sdsl::int_vector<>> mst;
-    std::unique_ptr<sdsl::bit_vector> mstBbv;
-//    std::unique_ptr<std::vector<std::vector<std::pair<colorIdType, uint32_t> >>> mst;
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
 
     uint64_t numBlocks;
     uint64_t curFileIdx = 0;
+    uint32_t maxWeightInFile{1000};
 
 };
 
