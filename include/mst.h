@@ -30,7 +30,7 @@ using SpinLockT = std::mutex;
 
 typedef sdsl::bit_vector BitVector;
 typedef sdsl::rrr_vector<63> BitVectorRRR;
-typedef uint32_t colorIdType;
+typedef uint64_t colorIdType;
 
 
 struct Edge {

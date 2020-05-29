@@ -36,7 +36,7 @@ using SpinLockT = std::mutex;
 
 using FilterType = CQF<KeyObject>;
 
-typedef uint32_t colorIdType;
+typedef uint64_t colorIdType;
 typedef uint32_t weightType;
 typedef unsigned __int128 uint128_t;
 
@@ -358,7 +358,6 @@ private:
     uint32_t numOfFirstMantisSamples = 0;
     uint32_t secondMantisSamples = 0;
     uint64_t k;
-    uint64_t numCCPerBuffer;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
     uint64_t zero = static_cast<colorIdType>(UINT64_MAX);
@@ -381,7 +380,7 @@ private:
 
     uint64_t numBlocks;
     uint64_t curFileIdx = 0;
-    uint32_t maxWeightInFile{1000};
+    uint32_t maxWeightInFile{5};
 
 };
 

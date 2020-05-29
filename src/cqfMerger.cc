@@ -579,6 +579,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                                     }), tmp_kmers.end());
         auto qbits = static_cast<uint64_t >(ceil(std::log2(occupiedSlotsCnt)));
         console->info("Selected qbits for last cqf: {}", qbits);
+        usleep(10000000);
         std::vector<int> rets(threadCount, 0);
         int ret = 0;
         do {
@@ -601,6 +602,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 }
             }
             threads.clear();
+            std::cerr << "Cleared threads\n";
+            usleep(10000000);
+
             // increase qbits by 1
             qbits++;
         } while (ret == QF_NO_SPACE);

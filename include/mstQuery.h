@@ -26,7 +26,7 @@ using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
 //using LRUCacheMap = HPHP::ConcurrentScalableCache<uint64_t , std::vector<uint64_t >>;
 
-typedef uint32_t colorIdType;
+typedef uint64_t colorIdType;
 
 struct QueryStats {
     uint32_t cnt = 0, cacheCntr = 0, noCacheCntr{0};

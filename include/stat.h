@@ -16,8 +16,6 @@
 #include "canonicalKmer.h"
 #include "gqf/hashutil.h"
 
-typedef uint32_t colorIdType;
-
 #define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
 
 struct Mc_stats {

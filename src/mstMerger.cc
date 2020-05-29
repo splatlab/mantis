@@ -78,8 +78,6 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
     secondMantisSamples = numSamples - numOfFirstMantisSamples;
     sampleid.close();
 
-    numCCPerBuffer = mantis::BV_BUF_LEN / numSamples;
-
     logger->info("# of experiments: {}", numSamples);
 }
 
@@ -93,8 +91,8 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
  */
 void MSTMerger::mergeMSTs() {
     auto t_start = time(nullptr);
-    logger->info ("Merging the two MSTs..");
-
+    logger->info ("call mergeMSTs method");
+    usleep(10000000);
     buildEdgeSets();
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
@@ -244,39 +242,11 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
  */
 bool MSTMerger::calculateMSTBasedWeights() {
 
-    uint64_t nodeCnt1 = MSTQuery::getNodeCount(prefix1);
-    uint64_t nodeCnt2 = MSTQuery::getNodeCount(prefix2);
-    uint64_t mst1Zero{nodeCnt1 - 1}, mst2Zero{nodeCnt2 - 1};
-    auto c1len{static_cast<uint64_t >(ceil(log2(nodeCnt1)))}, c2len{static_cast<uint64_t >(ceil(log2(nodeCnt2)))};
-    uint64_t c2mask = (1ULL << c2len) - 1;
-    std::cerr << "c1len: " << c1len << " c2len:" << c2len << " c2mask:" << c2mask << "\n";
+    std::cerr << "Before calculating the weights\n";
+    usleep(10000000);
+
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-
     QueryStats dummyStats1, dummyStats2;
-
-    logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, nodeCnt1,
-                 nodeCnt2);
-    std::ifstream cp(prefix + "newID2oldIDs");
-    uint64_t newColorIdCnt, cIdx;
-    colorIdType c1, c2;
-    cp.read(reinterpret_cast<char *>(&newColorIdCnt), sizeof(newColorIdCnt));
-    logger->info("# of color classes based on count of colorPairs: {}", newColorIdCnt);
-    logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
-    // colorPairs colors for mantis 1 and mantis 2 are 0-based --> color ID starts from 0
-    colorPairs = sdsl::int_vector<>(newColorIdCnt, 0, c1len+c2len);
-    uint64_t maxIndex = 0;
-    for (auto i = 0; i < newColorIdCnt; i++) {
-        cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
-        cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
-        cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
-        c1 = c1 == 0 ? mst1Zero : c1 - 1;
-        c2 = c2 == 0 ? mst2Zero : c2 - 1;
-        colorPairs[cIdx] = ((c1 << c2len) | c2);
-        maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
-    }
-    cp.close();
-
-
     mst1 = std::make_unique<MSTQuery>(prefix1, k, k, numOfFirstMantisSamples, logger);
     std::vector<colorIdType> colorsInCache;
     planCaching(mst1.get(), colorsInCache);
@@ -292,7 +262,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         fixed_cache1[colorsInCache[idx]] = setbits;
     }
     colorsInCache.clear();
-    logger->info("Done filling the fixed cache for mst1. Calling multi-threaded MSTBasedHammingDist .. ");
+    logger->info("Done filling the fixed cache for mst1.");
 
     mst2 = std::make_unique<MSTQuery>(prefix2, k, k, secondMantisSamples, logger);
     planCaching(mst2.get(), colorsInCache);
@@ -302,22 +272,49 @@ bool MSTMerger::calculateMSTBasedWeights() {
         auto setbits = mst2->buildColor(colorsInCache[idx], dummyStats2, &lru_cache2[0], nullptr, &fixed_cache2, dummy);
         fixed_cache2[colorsInCache[idx]] = setbits;
     }
-    logger->info("Done filling the fixed cache for mst2. Calling multi-threaded MSTBasedHammingDist .. ");
+    logger->info("Done filling the fixed cache for mst2.");
 
-    uint64_t cntr{0};
+    uint64_t nodeCnt1 = mst1->parentbv.size();
+    uint64_t nodeCnt2 = mst2->parentbv.size();
+    uint64_t mst1Zero{nodeCnt1 - 1}, mst2Zero{nodeCnt2 - 1};
+    auto c1len{static_cast<uint64_t >(ceil(log2(nodeCnt1)))}, c2len{static_cast<uint64_t >(ceil(log2(nodeCnt2)))};
+    uint64_t c2mask = (1ULL << c2len) - 1;
+    logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, nodeCnt1,
+                 nodeCnt2);
+    uint64_t newColorIdCnt, cIdx, c1, c2;
+    std::ifstream cp(prefix + "newID2oldIDs");
+    // colorPairs colors for mantis 1 and mantis 2 are 0-based --> color ID starts from 0
+    cp.read(reinterpret_cast<char *>(&newColorIdCnt), sizeof(newColorIdCnt));
+    logger->info("# of color classes based on count of colorPairs: {}", newColorIdCnt);
+    logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
+    colorPairs = sdsl::int_vector<>(newColorIdCnt, 0, c1len+c2len);
+    uint64_t maxIndex = 0;
+    for (auto i = 0; i < newColorIdCnt; i++) {
+        cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
+        cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
+        cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
+        c1 = c1 == 0 ? mst1Zero : c1 - 1;
+        c2 = c2 == 0 ? mst2Zero : c2 - 1;
+        colorPairs[cIdx] = ((c1 << c2len) | c2);
+        maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
+    }
+    cp.close();
+
     logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
-
+//    usleep(10000000);
     sdsl::int_vector<> ccSetBitCnts1(mst1Zero+1, 0, ceil(log2(numOfFirstMantisSamples)));
     sdsl::int_vector<> ccSetBitCnts2(mst2Zero+1, 0, ceil(log2(secondMantisSamples)));
-    maxWeightInFile = std::min(static_cast<uint32_t >(1000), numSamples);
+//    std::cerr << "constructing the ccSetBits for each of the manti\n";
+//    usleep(10000000);
     std::vector<uint64_t> bufferEndIndices;
+    maxWeightInFile = std::min(static_cast<uint32_t >(maxWeightInFile), numSamples);
     uint64_t size = splitHarmonically(MAX_ALLOWED_TMP_EDGES_IN_FILE/2, maxWeightInFile, bufferEndIndices);
+    std::vector<std::pair<uint64_t , uint64_t >> output_buffer(size);
     std::vector<uint64_t> bufferCurrIndices(bufferEndIndices.size(), 0);
     std::vector<uint64_t > bufferCnt(bufferEndIndices.size(), 0);
     for (auto i = 1; i < bufferCurrIndices.size(); i++) {
         bufferCurrIndices[i] = bufferEndIndices[i-1];
     }
-    std::vector<std::pair<uint64_t , uint64_t >> output_buffer(size);
     std::vector<std::ofstream> outWeightFile;
     outWeightFile.reserve(maxWeightInFile);
     for (auto tmpOutIdx = 1; tmpOutIdx <= maxWeightInFile; tmpOutIdx++) {
@@ -433,7 +430,11 @@ bool MSTMerger::calculateMSTBasedWeights() {
             std::cerr << i << ":" << ccBitsBucketCnt[i] << "\n";
         }
     }
+    std::cerr << "Before initializing the ccBits vector.\n";
+    usleep(10000000);
     ccBits = sdsl::int_vector<>(ccBitsBucketCnt.back(), 0, ceil(log2(zero)));
+    std::cerr << "After initializing the ccBits vector.\n";
+    usleep(10000000);
     for (auto i = 0; i < colorPairs.size(); i++) {
         auto cc = colorPairs[i];
         auto cc1 = cc >> c2len;
@@ -539,7 +540,6 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
-//    mstAdj.close();
 }
 
 /**
@@ -551,12 +551,12 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
     logger->info("before kruskal");
-//    usleep(10000000);
+    usleep(10000000);
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
     adjListPtr->loadCompactedAdjList();
     logger->info("after kruskal");
-//    usleep(10000000);
+    usleep(10000000);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
