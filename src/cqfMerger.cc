@@ -511,6 +511,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             }
 
             if (not tmp_kmers.empty() and occupiedSlotsCnt + currMinimizerSlotsCnt > cdbg.getCqfSlotCnt()) {
+                std::cerr << "\r";
                 console->info("Fill and serialize cqf {} with {} kmers up to minimizer {}", outputCQFBlockId, occupiedSlotsCnt, b);
                 kmerCount+=tmp_kmers.size();
                 __gnu_parallel::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
@@ -523,20 +524,26 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                                            }), tmp_kmers.end());
                 console->info("Sort-unique done.");
                 uint64_t qbits = cdbg.get_qbits();
-                std::vector<int> rets(threadCount, 0);
-                int ret = 0;
+                int ret;
                 do {
+                    ret = 0;
+                    std::vector<int> rets(threadCount, 0);
                     if (qbits > cdbg.get_qbits()) {
-                        console->warn("This thing should not happen very often! Almost never. "
-                                      "CurrQbits: {}, expected: {}, numKmers: {}, occupiedSlotCnt: {}, originalNumSlots: {}",
-                                      qbits, cdbg.get_qbits(), tmp_kmers.size(), occupiedSlotsCnt, cdbg.getCqfSlotCnt());
+                        console->warn("NOOO!! This thing should not happen very often! Almost never.");
                     }
+                    console->info("CurrQbits: {}, availableSlotCnt: {}, requiredSlotCnt: {} for {} kmers",
+                                  qbits, 1ULL << qbits, occupiedSlotsCnt, tmp_kmers.size());
                     cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
                     std::vector<std::thread> threads;
                     for (uint32_t t = 0; t < threadCount; ++t) {
                         uint64_t s = tmp_kmers.size()*((double)t/threadCount),
                                 e = ((double)(t+1)/threadCount)*tmp_kmers.size();
-                        threads.emplace_back(std::thread( [&, s, e] {rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);}));
+                        threads.emplace_back(std::thread( [&, s, e, t] {
+                            std::stringstream ss;
+                            ss << "thread " << t << " s=" << s << " e=" << e << " start with reset return value " << rets[t] << "\n";
+                            std::cerr << ss.str();
+                            rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);
+                        }));
                     }
                     for (uint32_t t = 0; t < threadCount; ++t) {
                         threads[t].join();
@@ -580,20 +587,26 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         auto qbits = static_cast<uint64_t >(ceil(std::log2(occupiedSlotsCnt)));
         console->info("Selected qbits for last cqf: {}", qbits);
         usleep(10000000);
-        std::vector<int> rets(threadCount, 0);
-        int ret = 0;
+        int ret;
         do {
+            ret = 0;
+            std::vector<int> rets(threadCount, 0);
             if (qbits > cdbg.get_qbits()) {
                 console->warn("This thing should not happen very often! Almost never. "
-                              "CurrQbits: {}, numKmers: {}, occupiedSlotCnt: {}",
-                              qbits, tmp_kmers.size(), occupiedSlotsCnt);
+                              "CurrQbits: {}, availableSlotCnt: {}, requiredSlotCnt: {} for {} kmers",
+                              qbits, 1ULL << qbits, occupiedSlotsCnt, tmp_kmers.size());
             }
             cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
             std::vector<std::thread> threads;
             for (uint32_t t = 0; t < threadCount; ++t) {
                 uint64_t s = tmp_kmers.size()*((double)t/threadCount),
                 e = ((double)(t+1)/threadCount)*tmp_kmers.size();
-                threads.emplace_back(std::thread( [&, s, e] {rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);}));
+                threads.emplace_back(std::thread( [&, s, e, t] {
+                    std::stringstream ss;
+                    ss << "thread " << t << " s=" << s << " e=" << e << " start with reset return value " << rets[t] << "\n";
+                    std::cerr << ss.str();
+                    rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);
+                }));
             }
             for (uint32_t t = 0; t < threadCount; ++t) {
                 threads[t].join();

@@ -828,6 +828,7 @@ void ColoredDbg<qf_obj, key_obj>::serializeCurrentCQF() {
     }
     if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
         curDbg->serialize(prefix + std::to_string(currentBlock) + "_" + mantis::CQF_FILE);
+    curDbg->dump_metadata();
 }
 
 template<class qf_obj, class key_obj>
@@ -1246,9 +1247,6 @@ void ColoredDbg<qf_obj, key_obj>:: initializeNewCQFBlock(uint64_t i, uint64_t ke
     if (i == invalid) {
         curDbg.reset(nullptr);
         currentBlock = invalid;
-        return;
-    }
-    if (currentBlock == i and curDbg) {
         return;
     }
 
