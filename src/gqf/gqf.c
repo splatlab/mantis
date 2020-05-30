@@ -1753,6 +1753,7 @@ bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 																		 hash, seed, NULL, 0);
 
 	void *buffer = malloc(total_num_bytes);
+	memset(buffer, 0, total_num_bytes);
 	if (buffer == NULL) {
 		perror("Couldn't allocate memory for the CQF.");
 		exit(EXIT_FAILURE);
