@@ -91,8 +91,6 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
  */
 void MSTMerger::mergeMSTs() {
     auto t_start = time(nullptr);
-    logger->info ("call mergeMSTs method");
-    usleep(10000000);
     buildEdgeSets();
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
@@ -121,11 +119,14 @@ bool MSTMerger::buildEdgeSets() {
     for (uint64_t c = 0; c < cqfBlocks.size(); c++) {
         logger->info("Reading colored dbg from disk...");
 //        std::cerr << cqfBlocks[c] << "\n";
+        std::cerr << "\n\ncqf" << c << "\n";
+        usleep(10000000);
         std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
-        std::cerr << "\n\ncqf" << c << "\n";
         cqf.dump_metadata();
         std::cerr << "\n\n";
+        std::cerr << "TmpEdges: " << tmpEdges.size() << "\n";
+        usleep(10000000);
 
         k = cqf.keybits() / 2;
         logger->info("Done loading cdbg. k is {}", k);
@@ -143,7 +144,7 @@ bool MSTMerger::buildEdgeSets() {
     if (not tmpEdges.empty()) {
         std::cerr << "tmpEdges.size(): " << tmpEdges.size() << " sizeof(element): " << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type) <<  "\n";
         edgePairSortUniq(tmpEdges);
-        std::cerr << "tmpEdges.size(): " << tmpEdges.size() << "\n";
+        std::cerr << "tmpEdges.size() after sort/uniq: " << tmpEdges.size() << "\n";
         std::string filename(prefix+"tmp"+std::to_string(curFileIdx));
         std::cerr << "Filename: " << filename << "\n";
         std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
@@ -157,14 +158,13 @@ bool MSTMerger::buildEdgeSets() {
         curFileIdx++;
     }
     logger->info("Done writing the last tmp file");
-    uint64_t totalEdges{0};
     for (uint32_t i = 0; i < nThreads; ++i) {
-        totalEdges += cnts[i];
+        totalWrittenEdges += cnts[i];
     }
     num_colorClasses = maxId + 1;
     zero = static_cast<colorIdType>(num_colorClasses);
     num_colorClasses++;// last one is for zero as the dummy color class with ID equal to actual num of color classes
-    logger->info("Total number of kmers and color classes (including dummy) observed: {}, {}.\nTotal number of edges (including duplicates): {}", numOfKmers, num_colorClasses, totalEdges);
+    logger->info("Total number of kmers and color classes (including dummy) observed: {}, {}.\nTotal number of edges (including duplicates): {}", numOfKmers, num_colorClasses, totalWrittenEdges);
     return true;
 }
 
@@ -189,7 +189,6 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     auto appendStore = [&]() {
         edgePairSortUniq(edgeList);
         colorMutex.lock();
-        uint64_t prevSize=tmpEdges.size();
         tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
         if (tmpEdges.size() >= MAX_ALLOWED_TMP_EDGES_IN_FILE) {
             edgePairSortUniq(tmpEdges);
@@ -906,10 +905,8 @@ void MSTMerger::planCaching(MSTQuery *mst,std::vector<colorIdType> &colorsInCach
     // setting local edge costs
     // local cost for each node is its degree (in + out)
     uint64_t src{0}, edgeCntr{0};
-    uint64_t queryCost = mst->parentbv.size()-1;
-    for (auto i = 0; i < queryCost; i++) {
-        mstCost[i].numQueries = queryCost;
-        queryCost = queryCost/(i+1);
+    for (auto i = 0; i < mst->parentbv.size()-1; i++) {
+        mstCost[i].numQueries = ceil(totalWrittenEdges/(double)(i+2));
     }
     logger->info("Done setting the local costs");
 
