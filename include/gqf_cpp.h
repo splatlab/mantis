@@ -24,6 +24,7 @@
 #include "gqf/gqf_int.h"
 #include "gqf/gqf_file.h"
 #include "util.h"
+#include "canonicalKmer.h"
 
 #define NUM_HASH_BITS 14
 #define NUM_Q_BITS 6
@@ -32,6 +33,23 @@
 enum readmode {
 	CQF_MMAP,
 	CQF_FREAD
+};
+
+class KeyObject {
+public:
+	KeyObject() : key(0), value(0), count(0) {};
+
+	KeyObject(uint64_t k, uint64_t v, uint64_t c) : key(k),
+													value(v), count(c) {};
+
+	KeyObject(const KeyObject& k) : key(k.key), value(k.value), count(k.count) {};
+
+	bool operator==(KeyObject k) { return key == k.key; }
+
+	typedef uint64_t kmer_t;
+	kmer_t key;
+	uint64_t value;
+	uint64_t count;
 };
 
 template <class key_obj>
@@ -43,30 +61,47 @@ class CQF {
 		CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash, uint32_t
 				seed, std::string filename);
 		CQF(std::string& filename, enum readmode flag);
-		CQF(const CQF<key_obj>& copy_cqf) = delete;
+//		CQF(const CQF<key_obj>& copy_cqf) = delete;
 
-		CQF(CQF<key_obj>&& other) {
+		CQF(const CQF<key_obj>& copy_cqf) = delete;
+		/*{
+            std::cerr << "\n\nWe're in copy\n\n";
+            qf_copy(&cqf, &copy_cqf.cqf);
+//            memcpy(reinterpret_cast<void*>(&cqf),
+//				   reinterpret_cast<void*>(const_cast<quotient_filter*>(&copy_cqf.cqf)), sizeof(QF));
+			is_filebased = copy_cqf.is_filebased;
+			inMem = copy_cqf.inMem;
+		}*/
+
+		CQF(CQF<key_obj>&& other) noexcept {
+		    std::cerr << "\n\nWe're in move\n\n";
 			memcpy(reinterpret_cast<void*>(&cqf),
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
+			inMem = other.inMem;
 			other.cqf.runtimedata = nullptr;
 			other.cqf.metadata = nullptr;
 			other.cqf.blocks = nullptr;
 			other.is_filebased = false;
+            other.inMem = false;
+		}
+
+		~CQF() {
+			free();
+			close();
 		}
 
 		CQF& operator=(CQF<key_obj>& other) {
 			memcpy(reinterpret_cast<void*>(&cqf),
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
+			inMem = other.inMem;
 			other.cqf.runtimedata = nullptr;
 			other.cqf.metadata = nullptr;
 			other.cqf.blocks = nullptr;
 			other.is_filebased = false;
 			return *this;
 		}
-
-		//~CQF();
 
 		int insert(const key_obj& k, uint8_t flags);
 
@@ -79,8 +114,18 @@ class CQF {
 			qf_serialize(&cqf, filename.c_str());
 		}
 
-		void free() { std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
-		void close() { if (is_filebased) qf_closefile(&cqf); }
+		void free() {
+			if (inMem) {
+//				std::cerr << "free\n";
+				qf_free(&cqf);
+			}
+		}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
+		void close() {
+			if (is_filebased and not inMem) {
+//				std::cerr << "close\n";
+				qf_closefile(&cqf);
+			}
+		}
 		void delete_file() { if (is_filebased) qf_deletefile(&cqf); }
 
 		void set_auto_resize(void) { qf_set_auto_resize(&cqf, true); }
@@ -99,7 +144,9 @@ class CQF {
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
 		uint64_t total_elts(void) const { return qf_get_sum_of_counts(&cqf); }
 		uint64_t dist_elts(void) const { return
-			qf_get_num_distinct_key_value_pairs(&cqf); }
+				qf_get_num_distinct_key_value_pairs(&cqf); }
+//		uint64_t total_elts(void) const { return cqf.metadata->nelts; }
+//		uint64_t dist_elts(void) const { return cqf.metadata->ndistinct_elts; }
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
 
@@ -138,25 +185,11 @@ class CQF {
 	private:
 		QF cqf;
 		bool is_filebased{false};
+		bool inMem{false};
 		//std::unordered_set<uint64_t> set;
 };
 
-class KeyObject {
-	public:
-		KeyObject() : key(0), value(0), count(0) {};
 
-		KeyObject(uint64_t k, uint64_t v, uint64_t c) : key(k),
-		value(v), count(c) {};
-
-		KeyObject(const KeyObject& k) : key(k.key), value(k.value), count(k.count) {};
-
-		bool operator==(KeyObject k) { return key == k.key; }
-
-		typedef uint64_t kmer_t;
-		kmer_t key;
-		uint64_t value;
-		uint64_t count;
-};
 
 template <class key_obj>
 CQF<key_obj>::CQF() {
@@ -165,6 +198,7 @@ CQF<key_obj>::CQF() {
 		ERROR("Can't allocate the CQF");
 		exit(EXIT_FAILURE);
 	}
+	inMem = true;
 }
 
 template <class key_obj>
@@ -174,6 +208,7 @@ CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
 		ERROR("Can't allocate the CQF");
 		exit(EXIT_FAILURE);
 	}
+	inMem = true;
 }
 
 template <class key_obj>
@@ -185,15 +220,20 @@ CQF<key_obj>::CQF(uint64_t q_bits, uint64_t key_bits, enum qf_hashmode hash,
 		exit(EXIT_FAILURE);
 	}
 	is_filebased = true;
+	inMem = false;
 }
 
 template <class key_obj>
 CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 	uint64_t size = 0;
-	if (flag == CQF_MMAP)
-	 size = qf_usefile(&cqf, filename.c_str(), QF_USEFILE_READ_ONLY);
-	else if (flag == CQF_FREAD)
+	if (flag == CQF_MMAP) {
+		size = qf_usefile(&cqf, filename.c_str(), QF_USEFILE_READ_ONLY);
+		inMem = false;
+	}
+	else if (flag == CQF_FREAD) {
 		size = qf_deserialize(&cqf, filename.c_str());
+		inMem = true;
+	}
 	else {
 		ERROR("Wrong CQF read mode.");
 		exit(EXIT_FAILURE);
@@ -205,12 +245,6 @@ CQF<key_obj>::CQF(std::string& filename, enum readmode flag) {
 	}
 	is_filebased = true;
 }
-
-//template <class key_obj> CQF<key_obj>::~CQF() {
-	//if (is_filebased)
-		//close();
-	//free();
-//}
 
 template <class key_obj>
 int CQF<key_obj>::insert(const key_obj& k, uint8_t flags) {
