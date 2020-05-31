@@ -217,13 +217,14 @@ private:
 
     // Blocks for minimizers in the output CDBG
     std::vector<uint64_t> minimizerBlocks;
-    std::vector<std::unique_ptr<std::vector<std::pair<uint64_t, colorIdType>>>> minimizerKeyColorList[2];
+    std::vector<std::unique_ptr<sdsl::int_vector<>>> minimizerKeyColorList[2];
     uint64_t kbits;
     qf_hashmode hashmode;
     uint32_t seed;
     uint64_t kmerMask;
 
-    uint64_t colorBits{0};
+    uint64_t colorBits[2];
+    uint64_t colorMask[2];
 
     // Hash-map for the sampled (on abundance) color-id pairs.
     // Used as the form (pair -> abundance) earlier, and finally as (pair -> colorId).

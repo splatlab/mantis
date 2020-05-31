@@ -528,6 +528,7 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     } else { // since it's none we won't load the color info, but still need to get the eqClsFiles count
         sdsl::int_vector<> parentbv;
         sdsl::load_from_file(parentbv, dir + mantis::PARENTBV_FILE);
+        numEqClassBVs = parentbv.size();
         eqClsFiles.resize(static_cast<uint64_t >(std::ceil(
                 static_cast<double>(parentbv.size()) / static_cast<double>(colorClassPerBuffer)) + 1));
         std::cerr << "Find # of color classes based on the parentbv size.\n"
@@ -731,10 +732,15 @@ int ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(std::vector<std::pair<uint64_t 
         return curDbg->insert(keyObj, flags);
     }*/
     auto ret = 0;
-    uint8_t flags = QF_WAIT_FOR_LOCK | QF_KEY_IS_HASH;
+//    uint8_t flags = QF_WAIT_FOR_LOCK | QF_KEY_IS_HASH;
+    uint8_t flags = QF_NO_LOCK | QF_KEY_IS_HASH;
 //    std::stringstream ss(" range inside: "+ std::to_string(s) + " " + std::to_string(e) + "\n");
 //    std::cerr << ss.str();
-    for (uint32_t i = s; i < e; i++) {
+
+//    for (uint64_t i = s; i < e; i++)
+//        std::cerr << kmers[i].first << " " << kmers[i].second << "\n";
+
+    for (uint64_t i = s; i < e; i++) {
         auto keyObj = KeyObject(kmers[i].first, 0, kmers[i].second);
         ret = curDbg->insert(keyObj, flags);
         if (ret == QF_NO_SPACE) {
@@ -1256,7 +1262,7 @@ void ColoredDbg<qf_obj, key_obj>:: initializeNewCQFBlock(uint64_t i, uint64_t ke
         curDbg.reset(new CQF<key_obj>(q_bits, key_bits, hashmode, seed,
                                       prefix + std::to_string(i) + "_" + mantis::CQF_FILE));
     }
-//    curDbg->set_auto_resize();
+    curDbg->set_auto_resize();
     currentBlock = i;
 }
 

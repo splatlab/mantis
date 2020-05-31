@@ -125,7 +125,6 @@ bool MSTMerger::buildEdgeSets() {
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
         cqf.dump_metadata();
         std::cerr << "\n\n";
-        std::cerr << "TmpEdges: " << tmpEdges.size() << "\n";
         usleep(10000000);
 
         k = cqf.keybits() / 2;
