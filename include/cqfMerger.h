@@ -217,7 +217,8 @@ private:
 
     // Blocks for minimizers in the output CDBG
     std::vector<uint64_t> minimizerBlocks;
-    std::vector<std::unique_ptr<sdsl::int_vector<>>> minimizerKeyColorList[2];
+    std::vector<std::unique_ptr<std::vector<uint64_t >>> minimizerKeyList[2];
+    std::vector<std::unique_ptr<sdsl::int_vector<>>> minimizerColorList[2];
     uint64_t kbits;
     qf_hashmode hashmode;
     uint32_t seed;

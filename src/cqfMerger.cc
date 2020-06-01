@@ -54,15 +54,17 @@ CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
     colorMask[0] = (1ULL << colorBits[0]) - 1;
     colorBits[1] = ceil(log2(cdbg2.get_num_eqclasses()));
     colorMask[1] = (1ULL << colorBits[1]) - 1;
-
+    console->info("colorCnt1: {}, colorBits1:{} || colorCnt2: {}, colorBits2: {}", cdbg1.get_num_eqclasses(), colorBits[0], cdbg2.get_num_eqclasses(), colorBits[1]);
     start_time_ = std::time(nullptr);
     kbits = cdbg1.get_current_cqf()->keybits();
     hashmode = cdbg1.get_current_cqf()->hash_mode();
     seed = cdbg1.get_current_cqf()->seed();
     kmerMask = (1ULL << kbits) - 1;
 
-    minimizerKeyColorList[0].resize(cdbg1.minimizerBlock.size());
-    minimizerKeyColorList[1].resize(cdbg2.minimizerBlock.size());
+    minimizerKeyList[0].resize(cdbg1.minimizerBlock.size());
+    minimizerKeyList[1].resize(cdbg2.minimizerBlock.size());
+    minimizerColorList[0].resize(cdbg1.minimizerBlock.size());
+    minimizerColorList[1].resize(cdbg2.minimizerBlock.size());
 //    for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());
 //    for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());
 }
@@ -82,7 +84,8 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
         maxMinimizer = minmax.second;
         std::vector<uint64_t> minimizerIdx(maxMinimizer-minMinimizer+1, 0);
         for (auto i = minMinimizer; i <= maxMinimizer; i++) {
-            minimizerKeyColorList[isSecond][i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, 64+colorBits[isSecond]);
+            minimizerKeyList[isSecond][i] = std::make_unique<std::vector<uint64_t>>(curCdbg.minimizerCntr[i], 0);
+            minimizerColorList[isSecond][i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, colorBits[isSecond]);
         }
         while (!it1.done()) {
             auto keyval = it1.get_cur_hash();
@@ -100,7 +103,8 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                                        isSecond, minimizer, minimizerIdx[minimizer-minMinimizer], curCdbg.minimizerCntr[minimizer], minMinimizer, maxMinimizer);
                         std::exit(3);
                     }
-                    (*minimizerKeyColorList[isSecond][minimizer])[minimizerIdx[minimizer-minMinimizer]] = (((uint128_t)keyval.key) << colorBits[isSecond]) | keyval.count;
+                    (*minimizerKeyList[isSecond][minimizer])[minimizerIdx[minimizer-minMinimizer]] = keyval.key;
+                    (*minimizerColorList[isSecond][minimizer])[minimizerIdx[minimizer-minMinimizer]] = keyval.count;
                     minimizerIdx[minimizer-minMinimizer]++;
                     cntr++;
                 }
@@ -166,17 +170,15 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
         curBlock++;
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
-            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyColorList[0][b]->size()}, size1{minimizerKeyColorList[1][b]->size()};
+            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyList[0][b]->size()}, size1{minimizerKeyList[1][b]->size()};
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
             while (cntr0 < size0 and cntr1 < size1) {
-                uint128_t keyval = (*minimizerKeyColorList[0][b])[cntr0];
-                uint64_t key0 = keyval >> colorBits[0];
-                uint64_t color0 = keyval & colorMask[0];
-                keyval = (*minimizerKeyColorList[1][b])[cntr1];
-                uint64_t key1 = (keyval) >> colorBits[1];
-                uint64_t color1 = (keyval) & colorMask[1];
+                uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
+                uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
+                uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
+                uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
                 if (key0 < key1) {
                     sampledPairs[std::make_pair(color0, 0)]++;
                     ++cntr0;
@@ -193,8 +195,7 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
             }
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
-                    uint128_t keyval = (*minimizerKeyColorList[1][b])[cntr1];
-                    uint64_t color = (keyval) & colorMask[1];
+                    uint64_t color = (*minimizerColorList[1][b])[cntr1];
                     sampledPairs[std::make_pair(0, color)]++;
                     cdbg.minimizerCntr[b]++;
                     kmerCount++;
@@ -202,16 +203,17 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
                 }
             } else {
                 while (cntr0 < size0) {
-                    uint128_t keyval = (*minimizerKeyColorList[0][b])[cntr0];
-                    uint64_t color = (keyval) & colorMask[0];
+                    uint64_t color = (*minimizerColorList[0][b])[cntr0];
                     sampledPairs[std::make_pair(color, 0)]++;
                     cdbg.minimizerCntr[b]++;
                     kmerCount++;
                     ++cntr0;
                 }
             }
-            minimizerKeyColorList[0][b].reset(nullptr);
-            minimizerKeyColorList[1][b].reset(nullptr);
+            minimizerKeyList[0][b].reset(nullptr);
+            minimizerColorList[0][b].reset(nullptr);
+            minimizerKeyList[1][b].reset(nullptr);
+            minimizerColorList[1][b].reset(nullptr);
         }
         minMinimizer = maxMinimizer+1;
         std::cerr << "\r";
@@ -295,17 +297,15 @@ store_colorID_pairs(uint64_t startingBlock)
         uint64_t clearedBytes = 0;
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
-            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyColorList[0][b]->size()}, size1{minimizerKeyColorList[1][b]->size()};
+            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyList[0][b]->size()}, size1{minimizerKeyList[1][b]->size()};
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
             while (cntr0 < size0 and cntr1 < size1) {
-                uint128_t keyval = (*minimizerKeyColorList[0][b])[cntr0];
-                uint64_t key0 = keyval >> colorBits[0];
-                uint64_t color0 = keyval & colorMask[0];
-                keyval = (*minimizerKeyColorList[1][b])[cntr1];
-                uint64_t key1 = (keyval) >> colorBits[1];
-                uint64_t color1 = (keyval) & colorMask[1];
+                uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
+                uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
+                uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
+                uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
                 auto colorPair = std::make_pair(color0, color1);
                 if (key0 < key1) {
                     colorPair = std::make_pair(color0, 0);
@@ -328,8 +328,7 @@ store_colorID_pairs(uint64_t startingBlock)
             }
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
-                    uint128_t keyval = (*minimizerKeyColorList[1][b])[cntr1];
-                    uint64_t color = (keyval) & colorMask[1];
+                    uint64_t color = (*minimizerColorList[1][b])[cntr1];
                     auto colorPair = std::make_pair(0ULL, color);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
@@ -342,8 +341,7 @@ store_colorID_pairs(uint64_t startingBlock)
                 }
             } else {
                 while (cntr0 < size0) {
-                    uint128_t keyval = (*minimizerKeyColorList[0][b])[cntr0];
-                    uint64_t color = (keyval) & colorMask[0];
+                    uint64_t color = (*minimizerColorList[0][b])[cntr0];
                     auto colorPair = std::make_pair(color, 0ULL);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
@@ -355,9 +353,11 @@ store_colorID_pairs(uint64_t startingBlock)
                     ++cntr0;
                 }
             }
-            clearedBytes += (minimizerKeyColorList[0][b]->size()+minimizerKeyColorList[1][b]->size());
-            minimizerKeyColorList[0][b].reset(nullptr);
-            minimizerKeyColorList[1][b].reset(nullptr);
+            clearedBytes += (minimizerKeyList[0][b]->size()+minimizerKeyList[1][b]->size());
+            minimizerKeyList[0][b].reset(nullptr);
+            minimizerColorList[0][b].reset(nullptr);
+            minimizerKeyList[1][b].reset(nullptr);
+            minimizerColorList[1][b].reset(nullptr);
         }
         minMinimizer = maxMinimizer+1;
         std::cerr << "\r";
@@ -458,8 +458,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     cdbg2.replaceCQFInMemory(invalid);
 
     uint64_t curBlock{0}, outputCQFBlockId{0}, occupiedSlotsCnt{0}, currMinimizerSlotsCnt{0};
-    for (auto &m :  minimizerKeyColorList[0]) m.reset(nullptr);//m.clear();
-    for (auto &m :  minimizerKeyColorList[1]) m.reset(nullptr);//m.clear();
+    for (auto &m :  minimizerKeyList[0]) m.reset(nullptr);//m.clear();
+    for (auto &m :  minimizerKeyList[1]) m.reset(nullptr);//m.clear();
+    for (auto &m :  minimizerColorList[0]) m.reset(nullptr);//m.clear();
+    for (auto &m :  minimizerColorList[1]) m.reset(nullptr);//m.clear();
 
     uint64_t maxMinimizer{0}, minMinimizer{0};
     uint64_t colorId{0}, epsilon{100};
@@ -492,17 +494,15 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         currMinimizerKmers.reserve(cdbg.getCqfSlotCnt());
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
-            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyColorList[0][b]->size()}, size1{minimizerKeyColorList[1][b]->size()};
+            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyList[0][b]->size()}, size1{minimizerKeyList[1][b]->size()};
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
             while (cntr0 < size0 and cntr1 < size1) {
-                uint128_t keyval = (*minimizerKeyColorList[0][b])[cntr0];
-                uint64_t key0 = keyval >> colorBits[0];
-                uint64_t color0 = keyval & colorMask[0];
-                keyval = (*minimizerKeyColorList[1][b])[cntr1];
-                uint64_t key1 = (keyval) >> colorBits[1];
-                uint64_t color1 = (keyval) & colorMask[1];
+                uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
+                uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
+                uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
+                uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
                 if (key0 < key1) {
                     colorId = get_colorID(std::make_pair(color0, 0));
                     keyObj = KeyObject(key0, 0, colorId);
@@ -528,9 +528,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             }
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
-                    uint128_t keyval = (*minimizerKeyColorList[1][b])[cntr1];
-                    uint64_t key1 = (keyval) >> colorBits[1];
-                    uint64_t color1 = (keyval) & colorMask[1];
+                    uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
+                    uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
                     colorId = get_colorID(std::make_pair(0, color1));
                     currMinimizerKmers.emplace_back(key1, colorId);
                     currMinimizerSlotsCnt++;
@@ -543,9 +542,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 }
             } else {
                 while (cntr0 < size0) {
-                    uint128_t keyval = (*minimizerKeyColorList[0][b])[cntr0];
-                    uint64_t key0 = (keyval) >> colorBits[0];
-                    uint64_t color0 = (keyval) & colorMask[0];
+                    uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
+                    uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
                     colorId = get_colorID(std::make_pair(color0, 0));
                     currMinimizerKmers.emplace_back(key0, colorId);
                     currMinimizerSlotsCnt++;
@@ -612,8 +610,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 outputCQFBlockId++;
             }
             cdbg.minimizerBlock[b] = outputCQFBlockId;
-            minimizerKeyColorList[0][b].reset(nullptr);
-            minimizerKeyColorList[1][b].reset(nullptr);
+            minimizerKeyList[0][b].reset(nullptr);
+            minimizerColorList[0][b].reset(nullptr);
+            minimizerKeyList[1][b].reset(nullptr);
+            minimizerColorList[1][b].reset(nullptr);
             tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
             currMinimizerKmers.clear();
             occupiedSlotsCnt += currMinimizerSlotsCnt;
