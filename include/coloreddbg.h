@@ -327,7 +327,7 @@ public:
             left = keybits - remainder + log2(remainder+2.25);
         }
         qbits = keybits - remainder;
-        cqfSlotCnt = 1ULL << qbits;
+        cqfSlotCnt = (1ULL << qbits) * 0.94;
         std::cerr << "Selected remainder: " << remainder << " qbits: "<< qbits << " cqfSlotCnt: " << cqfSlotCnt << "\n";
         // Assuming we only insert kmers (no colorIDs)
         // It will later be updated including colorIDs (having the distribution of colorIDs);

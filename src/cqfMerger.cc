@@ -636,7 +636,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                                         return kv1.first == kv2.first and kv1.second == kv2.second;
                                     }), tmp_kmers.end());
         console->info("Sort-unique done.");
-        auto qbits = static_cast<uint64_t >(ceil(std::log2(occupiedSlotsCnt)));
+        auto qbits = static_cast<uint64_t >(ceil(std::log2(occupiedSlotsCnt*100.0/95.0)));
         console->info("Selected qbits for last cqf: {}", qbits);
         console->info("CurrQbits: {}, availableSlotCnt: {}, requiredSlotCnt: {} for {} kmers",
                       qbits, 1ULL << qbits, occupiedSlotsCnt, tmp_kmers.size());
