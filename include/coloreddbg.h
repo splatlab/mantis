@@ -54,6 +54,22 @@ struct hash128 {
     }
 };
 
+// Required to hash colo-id pair objects. Resorted to boost::hash_combine
+// instead of plain XOR hashing. For more explanation, consult
+// https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
+class Custom_Pair_Hasher {
+public:
+    uint64_t operator()(const std::pair<uint64_t , uint64_t > &val) const {
+        return MurmurHash64A((void *) &val, 2*sizeof(uint64_t),
+                             2038074743);
+    }
+    /*uint64_t operator()(const std::pair<colorIdType, colorIdType> &key, uint64_t seed = 0) const {
+        seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<uint64_t>{}(key.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        return seed;
+    }*/
+};
+
 template<class key_obj>
 struct Iterator {
     QFi qfi;
@@ -327,7 +343,7 @@ public:
             left = keybits - remainder + log2(remainder+2.25);
         }
         qbits = keybits - remainder;
-        cqfSlotCnt = (1ULL << qbits) * 0.94;
+        cqfSlotCnt = (1ULL << qbits) * 0.95;
         std::cerr << "Selected remainder: " << remainder << " qbits: "<< qbits << " cqfSlotCnt: " << cqfSlotCnt << "\n";
         // Assuming we only insert kmers (no colorIDs)
         // It will later be updated including colorIDs (having the distribution of colorIDs);
@@ -467,11 +483,11 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
         std::exit(3);
     }
     minmaxMinimizer.push_back(std::make_pair(min, lastExistingMin));
-    std::cerr << "Total # of blocks: " << minmaxMinimizer.size() << "\n";
+    /*std::cerr << "Total # of blocks: " << minmaxMinimizer.size() << "\n";
     uint64_t blockCntr=0;
     for (auto v : minmaxMinimizer) {
         std::cerr << blockCntr++ << ":" << v.first << " " << v.second << "\n";
-    }
+    }*/
     replaceCQFInMemory(invalid); // just to force the first CQF to definitely be loaded into memory
     std::cerr << "Loading first CQF block\n";
     replaceCQFInMemory(0);

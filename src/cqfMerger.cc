@@ -51,9 +51,7 @@ CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
     console -> info("Initializing the output Mantis.");
     cdbg = ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>(cdbg1, cdbg2, outputCQFdir, MANTIS_DBG_IN_MEMORY);//MANTIS_DBG_ON_DISK);
     colorBits[0] = ceil(log2(cdbg1.get_num_eqclasses()));
-    colorMask[0] = (1ULL << colorBits[0]) - 1;
     colorBits[1] = ceil(log2(cdbg2.get_num_eqclasses()));
-    colorMask[1] = (1ULL << colorBits[1]) - 1;
     console->info("colorCnt1: {}, colorBits1:{} || colorCnt2: {}, colorBits2: {}", cdbg1.get_num_eqclasses(), colorBits[0], cdbg2.get_num_eqclasses(), colorBits[1]);
     start_time_ = std::time(nullptr);
     kbits = cdbg1.get_current_cqf()->keybits();
@@ -77,49 +75,118 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
 
     if (curBlock < curCdbg.get_numBlocks()) {
         const CQF<key_obj> *cqf1 = curCdbg.get_current_cqf();
-        typename CQF<key_obj>::Iterator it1 = cqf1->begin();
-        uint64_t cntr{0}, count{cqf1->dist_elts()};
+        cqf1->dump_metadata();
+        uint64_t count{cqf1->dist_elts()};
         auto minmax = curCdbg.getMinMaxMinimizer(curBlock);
         minMinimizer = minmax.first;
         maxMinimizer = minmax.second;
-        std::vector<uint64_t> minimizerIdx(maxMinimizer-minMinimizer+1, 0);
+        std::vector<std::vector<uint32_t>> minimizerIdx(threadCount);
+        for (auto &v: minimizerIdx)
+            v.resize(maxMinimizer-minMinimizer+1, 0);
+        std::vector<std::thread> threads;
+        for (auto threadId = 0; threadId < threadCount; threadId++) {
+            threads.emplace_back(std::thread([&, threadId](){
+                __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
+                __uint128_t endPoint =
+                        threadId + 1 == threadCount ? cqf1->range() + 1 : (threadId + 1) * (cqf1->range() / (__uint128_t) threadCount);
+                auto it = cqf1->setIteratorLimits(startPoint, endPoint);
+                while (!it.reachedHashLimit()) {
+                    auto keyval = it.get_cur_hash();
+                    auto key = hash_64i(keyval.key, kmerMask);
+                    auto minimizerPair = curCdbg.findMinimizer(key, kbits);
+                    if (minimizerPair.first == minimizerPair.second) {
+                        minimizerPair.second = invalid;
+                    }
+                    std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
+                    for (auto minimizer : pairs) {
+                        if (minimizer != invalid and minimizer >= minMinimizer and minimizer <= maxMinimizer) {
+                            minimizerIdx[threadId][minimizer-minMinimizer]++;
+                        }
+                    }
+                    ++it;
+                }
+            }));
+        }
+        for (auto &t : threads) { t.join(); }
+        threads.clear();
+        for (auto m = 0; m <= maxMinimizer-minMinimizer; m++) {
+            uint32_t prevCnt = 0, cur = 0;
+            for (auto idx = 0; idx < threadCount; idx++) {
+                cur = minimizerIdx[idx][m];
+                minimizerIdx[idx][m] = prevCnt;
+                prevCnt += cur;
+            }
+        }
         for (auto i = minMinimizer; i <= maxMinimizer; i++) {
             minimizerKeyList[isSecond][i] = std::make_unique<std::vector<uint64_t>>(curCdbg.minimizerCntr[i], 0);
             minimizerColorList[isSecond][i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, colorBits[isSecond]);
         }
-        while (!it1.done()) {
-            auto keyval = it1.get_cur_hash();
-            auto key = hash_64i(keyval.key, kmerMask);
-            auto minimizerPair = curCdbg.findMinimizer(key, kbits);
-            if (minimizerPair.first == minimizerPair.second) {
-                minimizerPair.second = invalid;
-            }
-            std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-            for (auto minimizer : pairs) {
-                if (minimizer != invalid and minimizer >= minMinimizer and minimizer <= maxMinimizer) {
-                    if (minimizerIdx[minimizer-minMinimizer] >= curCdbg.minimizerCntr[minimizer]) {
-                        console->error("IsSecond?{} --> Did not observe all the kmers with minimizer {}. "
-                                       "Observed:{}, Expected:{}, min:{}, max:{}",
-                                       isSecond, minimizer, minimizerIdx[minimizer-minMinimizer], curCdbg.minimizerCntr[minimizer], minMinimizer, maxMinimizer);
-                        std::exit(3);
+        console->info("Start walking Cqf{}. isSecond:{}", curBlock, isSecond);
+        std::vector<SpinLockT> mutexes(maxMinimizer-minMinimizer+1);
+
+        for (auto threadId = 0; threadId < threadCount; threadId++) {
+            threads.emplace_back(std::thread([&, threadId](){
+                __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
+                __uint128_t endPoint =
+                        threadId + 1 == threadCount ? cqf1->range() + 1 : (threadId + 1) * (cqf1->range() / (__uint128_t) threadCount);
+//                std::stringstream ss;
+//                ss << "threadId: " << std::to_string(threadId) << "\n";
+//                std::cerr << ss.str();
+                auto it = cqf1->setIteratorLimits(startPoint, endPoint);
+                uint64_t tmpSize{100000}, cntr{0};
+                std::vector<KeyColorMin> tmpList;
+                tmpList.reserve(tmpSize);
+                while (!it.reachedHashLimit()) {
+                    auto keyval = it.get_cur_hash();
+                    auto key = hash_64i(keyval.key, kmerMask);
+                    auto minimizerPair = curCdbg.findMinimizer(key, kbits);
+                    if (minimizerPair.first == minimizerPair.second) {
+                        minimizerPair.second = invalid;
                     }
-                    (*minimizerKeyList[isSecond][minimizer])[minimizerIdx[minimizer-minMinimizer]] = keyval.key;
-                    (*minimizerColorList[isSecond][minimizer])[minimizerIdx[minimizer-minMinimizer]] = keyval.count;
-                    minimizerIdx[minimizer-minMinimizer]++;
-                    cntr++;
+                    std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
+                    for (auto minimizer : pairs) {
+                        if (minimizer != invalid and minimizer >= minMinimizer and minimizer <= maxMinimizer) {
+                            tmpList.emplace_back(keyval.key, keyval.count, minimizer);
+                            cntr++;
+                        }
+                    }
+                    ++it;
+                    if (tmpList.size() >= tmpSize or it.reachedHashLimit()) {
+                        std::sort(tmpList.begin(), tmpList.end(), [](auto &f, auto &s) {
+                            return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
+                        });
+                        uint64_t i = 0;
+                        while (i < tmpList.size()) {
+                            auto prev = tmpList[i].minimizer;
+                            mutexes[prev - minMinimizer].lock();
+                            while (i < tmpList.size() and tmpList[i].minimizer == prev) {
+                                int64_t curIdx = minimizerIdx[threadId][prev - minMinimizer];
+                                (*minimizerKeyList[isSecond][prev])[curIdx] = tmpList[i].key;
+                                (*minimizerColorList[isSecond][prev])[curIdx] = tmpList[i].color;
+                                minimizerIdx[threadId][prev - minMinimizer]++;
+                                i++;
+                            }
+                            mutexes[prev - minMinimizer].unlock();
+                        }
+                        tmpList.clear();
+                    }
                 }
-            }
-            ++it1;
-            if (cntr % 10000000 == 0) {
-                std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " for " << count << " kmers      ";
-            }
+            }));
         }
-        std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
+        for (auto &t : threads) { t.join(); }
+        console->info("Done walking Cqf{}. isSecond:{}", curBlock, isSecond);
+//        std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
         // validating the minimizer observed count;
         for (auto i = minMinimizer; i <= maxMinimizer; i++) {
-            if (minimizerIdx[i - minMinimizer] != curCdbg.minimizerCntr[i]) {
-                console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected{}", i, minimizerIdx[i-minMinimizer], curCdbg.minimizerCntr[i]);
+            if (minimizerIdx[threadCount-1][i - minMinimizer] != curCdbg.minimizerCntr[i]) {
+                console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected{}", i, minimizerIdx[threadCount-1][i-minMinimizer], curCdbg.minimizerCntr[i]);
                 std::exit(3);
+            }
+            for (auto idx = 1; idx < minimizerKeyList[isSecond][i]->size(); idx++) {
+                if ((*minimizerKeyList[isSecond][i])[idx-1] >= (*minimizerKeyList[isSecond][i])[idx]) {
+                    std::cerr << "didn't work yet\n";
+                    std::exit(3);
+                }
             }
         }
     }
@@ -149,17 +216,17 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
           (curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks())) {
         console->info("Current block={}", curBlock);
 
-        if (threadCount > 1) {
+        /*if (threadCount > 1) {
             std::future<uint64_t> r1 =
                     std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
             std::future<uint64_t> r2 =
                     std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
             maxMinimizer1 = r1.get();
             maxMinimizer2 = r2.get();
-        } else {
+        } else {*/
             maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
             maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
-        }
+//        }
         maxMinimizer =
                 // If it's the last block for both of the CQFs
                 curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
@@ -179,6 +246,10 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
                 uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
                 uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
                 uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
+                /*if (kmerCount < 20000) {
+                    std::cerr << ">>false " << key0 << " " << cntr0 << "\n";
+                    std::cerr << ">>true " << key1 << " " << cntr1 << "\n";
+                }*/
                 if (key0 < key1) {
                     sampledPairs[std::make_pair(color0, 0)]++;
                     ++cntr0;
@@ -276,15 +347,15 @@ store_colorID_pairs(uint64_t startingBlock)
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
 
-        if (threadCount > 1) {
+        /*if (threadCount > 1) {
             std::future<uint64_t> r1 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
             std::future<uint64_t> r2 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
             maxMinimizer1 = r1.get();
             maxMinimizer2 = r2.get();
-        } else {
+        } else {*/
             maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
             maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
-        }
+//        }
 
         maxMinimizer =
                 // If it's the last block for both of the CQFs
@@ -471,15 +542,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
-        if (threadCount > 1) {
-            std::future<uint64_t> r1 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
-            std::future<uint64_t> r2 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
-            maxMinimizer1 = r1.get();
-            maxMinimizer2 = r2.get();
-        } else {
-            maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
-            maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
-        }
+        maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
+        maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
         maxMinimizer =
                 // If it's the last block for both of the CQFs
                 curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
@@ -605,6 +669,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                     qbits++;
                 } while (ret == QF_NO_SPACE);*/
                 cdbg.serializeCurrentCQF();
+                console->info("Done filling and storing cqf {}", outputCQFBlockId);
                 tmp_kmers.clear();
                 occupiedSlotsCnt = 0;
                 outputCQFBlockId++;

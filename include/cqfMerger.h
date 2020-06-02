@@ -24,17 +24,6 @@
 #include <future>
 #include <unistd.h>
 
-// Required to hash colo-id pair objects. Resorted to boost::hash_combine
-// instead of plain XOR hashing. For more explanation, consult
-// https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
-class Custom_Pair_Hasher {
-public:
-    uint64_t operator()(const std::pair<colorIdType, colorIdType> &key, uint64_t seed = 0) const {
-        seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        seed ^= std::hash<uint64_t>{}(key.second) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        return seed;
-    }
-};
 
 struct ColorPair {
     colorIdType c1, c2;
@@ -67,6 +56,13 @@ typedef boomphf::mphf<ColorPair, Fat_Custom_Pair_Hasher> boophf_t;
 
 // Hash-map type for color-id pairs.
 typedef std::unordered_map<std::pair<colorIdType, colorIdType>, uint64_t, Custom_Pair_Hasher> idPairMap_t;
+
+struct KeyColorMin {
+    uint64_t key;
+    colorIdType color;
+    uint16_t minimizer;
+    KeyColorMin(uint64_t keyIn, colorIdType colorIn, uint16_t minimizerIn): key(keyIn), color(colorIn), minimizer(minimizerIn) {}
+};
 
 // adapted from :
 // http://stackoverflow.com/questions/34875315/implementation-my-own-list-and-iterator-stl-c
@@ -225,8 +221,6 @@ private:
     uint64_t kmerMask;
 
     uint64_t colorBits[2];
-    uint64_t colorMask[2];
-
     // Hash-map for the sampled (on abundance) color-id pairs.
     // Used as the form (pair -> abundance) earlier, and finally as (pair -> colorId).
     idPairMap_t sampledPairs;

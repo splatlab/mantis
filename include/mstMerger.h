@@ -27,6 +27,7 @@
 #include "lru/lru.hpp"
 #include "mstQuery.h"
 #include "adjList.h"
+#include "cqfMerger.h"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
@@ -296,10 +297,12 @@ private:
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
                                            std::vector<std::pair<uint64_t, uint64_t>> &tmpEdges,
                                            uint64_t &curFileIdx,
-                                           uint64_t &cnt, uint64_t &maxId, uint64_t &numOfKmers);
+                                           uint64_t &cnt, uint64_t &maxId, uint64_t &numOfKmers,
+                                           spp::sparse_hash_map<std::pair<uint64_t , uint64_t >, uint64_t, Custom_Pair_Hasher > &popularEdges);
 
 
-    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<std::pair<uint64_t, uint64_t>> &edgeList);
+    void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<std::pair<uint64_t, uint64_t>> &edgeList,
+                           spp::sparse_hash_map<std::pair<uint64_t , uint64_t >, uint64_t, Custom_Pair_Hasher > & popularEdges);
 
     void calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
                               sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
