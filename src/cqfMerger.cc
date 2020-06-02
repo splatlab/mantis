@@ -819,8 +819,8 @@ store_colorID_map()
         c1 = c1 == 0 ? cdbg1ColorCnt - 1 : c1 - 1;
         c2 = c2 == 0 ? cdbg2ColorCnt - 1: c2 - 1;
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
-        output.write(reinterpret_cast<char*>(&(cpair.c1)), sizeof(cpair.c1));
-        output.write(reinterpret_cast<char*>(&(cpair.c2)), sizeof(cpair.c2));
+        output.write(reinterpret_cast<char*>(&(c1)), sizeof(c1));
+        output.write(reinterpret_cast<char*>(&(c2)), sizeof(c2));
         writtenPairsCount++;
     }
     input.close();
