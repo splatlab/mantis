@@ -79,6 +79,30 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
     secondMantisSamples = numSamples - numOfFirstMantisSamples;
     sampleid.close();
 
+    uint64_t newColorIdCnt, cIdx, c1, c2;
+    std::ifstream cp(prefix + "newID2oldIDs");
+    // colorPairs colors for mantis 1 and mantis 2 are 0-based --> color ID starts from 0
+    cp.read(reinterpret_cast<char *>(&newColorIdCnt), sizeof(newColorIdCnt));
+    cp.read(reinterpret_cast<char *>(&cc1Cnt), sizeof(cc1Cnt));
+    cp.read(reinterpret_cast<char *>(&cc2Cnt), sizeof(cc2Cnt));
+    uint64_t mst1Zero{cc1Cnt - 1}, mst2Zero{cc1Cnt - 1};
+    auto c1len{static_cast<uint64_t >(ceil(log2(cc1Cnt)))}, c2len{static_cast<uint64_t >(ceil(log2(cc1Cnt)))};
+    logger->info("# of color classes based on count of colorPairs: {}", newColorIdCnt);
+    logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
+    colorPairs[0] = sdsl::int_vector<>(newColorIdCnt, 0, c1len);
+    colorPairs[1] = sdsl::int_vector<>(newColorIdCnt, 0, c2len);
+    uint64_t maxIndex = 0;
+    for (auto i = 0; i < newColorIdCnt; i++) {
+        cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
+        cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
+        cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
+        colorPairs[0][cIdx] = c1;
+        colorPairs[1][cIdx] = c2;
+        maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
+    }
+    cp.close();
+
+
     logger->info("# of experiments: {}", numSamples);
 }
 
@@ -316,36 +340,12 @@ bool MSTMerger::calculateMSTBasedWeights() {
     }
     logger->info("Done filling the fixed cache for mst2.");
 
-    uint64_t nodeCnt1 = mst1->parentbv.size();
-    uint64_t nodeCnt2 = mst2->parentbv.size();
-    uint64_t mst1Zero{nodeCnt1 - 1}, mst2Zero{nodeCnt2 - 1};
-    auto c1len{static_cast<uint64_t >(ceil(log2(nodeCnt1)))}, c2len{static_cast<uint64_t >(ceil(log2(nodeCnt2)))};
-    uint64_t c2mask = (1ULL << c2len) - 1;
-    logger->info("loaded the two msts with k={}. MST sizes are {}, {} respectively.", k, nodeCnt1,
-                 nodeCnt2);
-    uint64_t newColorIdCnt, cIdx, c1, c2;
-    std::ifstream cp(prefix + "newID2oldIDs");
-    // colorPairs colors for mantis 1 and mantis 2 are 0-based --> color ID starts from 0
-    cp.read(reinterpret_cast<char *>(&newColorIdCnt), sizeof(newColorIdCnt));
-    logger->info("# of color classes based on count of colorPairs: {}", newColorIdCnt);
-    logger->info("# of color classes for mantis 1 : {} and for mantis 2 : {}", mst1Zero, mst2Zero);
-    colorPairs = sdsl::int_vector<>(newColorIdCnt, 0, c1len+c2len);
-    uint64_t maxIndex = 0;
-    for (auto i = 0; i < newColorIdCnt; i++) {
-        cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
-        cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
-        cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
-        c1 = c1 == 0 ? mst1Zero : c1 - 1;
-        c2 = c2 == 0 ? mst2Zero : c2 - 1;
-        colorPairs[cIdx] = ((c1 << c2len) | c2);
-        maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
-    }
-    cp.close();
-
+    uint64_t mst1Zero{cc1Cnt - 1}, mst2Zero{cc1Cnt - 1};
+    auto c1len{static_cast<uint64_t >(ceil(log2(cc1Cnt)))}, c2len{static_cast<uint64_t >(ceil(log2(cc1Cnt)))};
     logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
 //    usleep(10000000);
-    sdsl::int_vector<> ccSetBitCnts1(mst1Zero+1, 0, ceil(log2(numOfFirstMantisSamples)));
-    sdsl::int_vector<> ccSetBitCnts2(mst2Zero+1, 0, ceil(log2(secondMantisSamples)));
+    sdsl::int_vector<> ccSetBitCnts1(cc1Cnt, 0, ceil(log2(numOfFirstMantisSamples)));
+    sdsl::int_vector<> ccSetBitCnts2(cc2Cnt, 0, ceil(log2(secondMantisSamples)));
 //    std::cerr << "constructing the ccSetBits for each of the manti\n";
 //    usleep(10000000);
     std::vector<uint64_t> bufferEndIndices;
@@ -410,18 +410,17 @@ bool MSTMerger::calculateMSTBasedWeights() {
             tmpedgecnt++;
         } while (!minheap.empty() && val == minheap.top()->get_val());
         // calculate weight
-        auto src = colorPairs[val.first];
-        auto dest = colorPairs[val.second];
-        auto src1 = src >> c2len;
-        auto dest1 = dest >> c2len;
+
+        auto src1 = colorPairs[0][val.first];;
+        auto dest1 = colorPairs[0][val.second];
         uint64_t w1 = 0;
         if (src1 != dest1)
             w1 = mstBasedHammingDist(src1, dest1,
                                       mst1.get(), lru_cache1[0], queryStats1[0],
                                       fixed_cache1,
                                       ccSetBitCnts1);
-        auto src2 = src & c2mask;
-        auto dest2 = dest & c2mask;
+        auto src2 = colorPairs[1][val.first];;
+        auto dest2 = colorPairs[1][val.second];
         uint64_t w2 = 0;
         if (src2 != dest2)
             w2 = mstBasedHammingDist(src2, dest2,
@@ -450,9 +449,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
     // calculate and store weights of the edges connected to dummy node
     ccBitsBucketCnt.resize(numSamples, 0);
     if (maxWeightInFile < ccBitsBucketCnt.size()) {
-        for (auto cc : colorPairs) {
-            auto cc1 = cc >> c2len;
-            auto cc2 = cc & c2mask;
+        for (auto i = 0; i < colorPairs[0].size(); i++) {
+            auto cc1 = colorPairs[0][i];
+            auto cc2 = colorPairs[1][i];
             if (cc1 > mst1Zero or cc2 > mst2Zero) {
                 logger->error("Should not happen. Either of the colorIDs does not exist. cc1={}, max1={}. cc2={}, max2={}",
                               cc1, mst1Zero, cc2, mst2Zero);
@@ -477,10 +476,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
     ccBits = sdsl::int_vector<>(ccBitsBucketCnt.back(), 0, ceil(log2(zero)));
     std::cerr << "After initializing the ccBits vector.\n";
     usleep(10000000);
-    for (auto i = 0; i < colorPairs.size(); i++) {
-        auto cc = colorPairs[i];
-        auto cc1 = cc >> c2len;
-        auto cc2 = cc & c2mask;
+    for (auto i = 0; i < colorPairs[0].size(); i++) {
+        auto cc1 = colorPairs[0][i];
+        auto cc2 = colorPairs[1][i];
         auto w1 = cc1 == mst1Zero ? 0 : ccSetBitCnts1[cc1];
         auto w2 = cc2 == mst2Zero ? 0 : ccSetBitCnts2[cc2];
         auto w = w1 + w2;
@@ -514,7 +512,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
             outWeightFile[w].close();
         }
     }
-    logger->info("Duplicated edge count: {}, final unique edge count: {}", tmpedgecnt+colorPairs.size(), totalUniqEdgeCnt);
+    logger->info("Duplicated edge count: {}, final unique edge count: {}", tmpedgecnt+colorPairs[0].size(), totalUniqEdgeCnt);
     logger->info("Calculated the weight for all the edges");
     return true;
 }
@@ -709,9 +707,8 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
     std::vector<Delta> deltas;
     deltas.reserve(deltasKeptInMem);
 
-    colorIdType mst1Zero = mst1->parentbv.size() - 1, mst2Zero = mst2->parentbv.size() - 1;
-    auto c1len{static_cast<uint64_t >(ceil(log2(mst1Zero+1)))}, c2len{static_cast<uint64_t >(ceil(log2(mst2Zero+1)))};
-    uint64_t c2mask = (1ULL << c2len) - 1;
+    colorIdType mst1Zero = cc1Cnt - 1, mst2Zero = cc2Cnt - 1;
+    auto c1len{static_cast<uint64_t >(ceil(log2(cc1Cnt)))}, c2len{static_cast<uint64_t >(ceil(log2(cc2Cnt)))};
     uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);
     uint64_t s = bucketSize * threadID;;
     uint64_t e = std::min(parentbv.size(), bucketSize * (threadID+1));
@@ -720,14 +717,12 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
         deltas.emplace_back(deltaOffset);
         uint64_t child1{mst1Zero}, parent1{mst1Zero}, child2{mst2Zero}, parent2{mst2Zero};
         if (childIdx != zero) {
-            auto child = colorPairs[childIdx];
-            child1 = child >> c2len;
-            child2 = child & c2mask;
+            child1 = colorPairs[0][childIdx];
+            child2 = colorPairs[1][childIdx];
         }
         if (parentbv[childIdx] != zero) {
-            auto parent = colorPairs[parentbv[childIdx]];
-            parent1 = parent >> c2len;
-            parent2 = parent & c2mask;
+            parent1 = colorPairs[0][parentbv[childIdx]];
+            parent2 = colorPairs[1][parentbv[childIdx]];
         }
 
         auto firstDelta = getMSTBasedDeltaList(child1, parent1, mst1.get(), fixed_cache1,

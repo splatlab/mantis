@@ -370,7 +370,7 @@ private:
     std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache2;
     std::vector<QueryStats> queryStats1;
     std::vector<QueryStats> queryStats2;
-    sdsl::int_vector<> colorPairs;
+    sdsl::int_vector<> colorPairs[2];
     sdsl::int_vector<> ccBits;
     std::vector<uint64_t> ccBitsBucketCnt;
     std::string prefix1;
@@ -385,6 +385,7 @@ private:
     uint64_t curFileIdx = 0;
     uint32_t maxWeightInFile{1000};
     uint64_t totalWrittenEdges{0};
+    uint64_t cc1Cnt, cc2Cnt;
 
 };
 

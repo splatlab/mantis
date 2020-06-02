@@ -84,37 +84,40 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
         for (auto &v: minimizerIdx)
             v.resize(maxMinimizer-minMinimizer+1, 0);
         std::vector<std::thread> threads;
-        for (auto threadId = 0; threadId < threadCount; threadId++) {
-            threads.emplace_back(std::thread([&, threadId](){
-                __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
-                __uint128_t endPoint =
-                        threadId + 1 == threadCount ? cqf1->range() + 1 : (threadId + 1) * (cqf1->range() / (__uint128_t) threadCount);
-                auto it = cqf1->setIteratorLimits(startPoint, endPoint);
-                while (!it.reachedHashLimit()) {
-                    auto keyval = it.get_cur_hash();
-                    auto key = hash_64i(keyval.key, kmerMask);
-                    auto minimizerPair = curCdbg.findMinimizer(key, kbits);
-                    if (minimizerPair.first == minimizerPair.second) {
-                        minimizerPair.second = invalid;
-                    }
-                    std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
-                    for (auto minimizer : pairs) {
-                        if (minimizer != invalid and minimizer >= minMinimizer and minimizer <= maxMinimizer) {
-                            minimizerIdx[threadId][minimizer-minMinimizer]++;
+        if (threadCount > 1) {
+            for (auto threadId = 0; threadId < threadCount; threadId++) {
+                threads.emplace_back(std::thread([&, threadId]() {
+                    __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
+                    __uint128_t endPoint =
+                            threadId + 1 == threadCount ? cqf1->range() + 1 : (threadId + 1) * (cqf1->range() /
+                                                                                                (__uint128_t) threadCount);
+                    auto it = cqf1->setIteratorLimits(startPoint, endPoint);
+                    while (!it.reachedHashLimit()) {
+                        auto keyval = it.get_cur_hash();
+                        auto key = hash_64i(keyval.key, kmerMask);
+                        auto minimizerPair = curCdbg.findMinimizer(key, kbits);
+                        if (minimizerPair.first == minimizerPair.second) {
+                            minimizerPair.second = invalid;
                         }
+                        std::vector<uint64_t> pairs{minimizerPair.first, minimizerPair.second};
+                        for (auto minimizer : pairs) {
+                            if (minimizer != invalid and minimizer >= minMinimizer and minimizer <= maxMinimizer) {
+                                minimizerIdx[threadId][minimizer - minMinimizer]++;
+                            }
+                        }
+                        ++it;
                     }
-                    ++it;
+                }));
+            }
+            for (auto &t : threads) { t.join(); }
+            threads.clear();
+            for (auto m = 0; m <= maxMinimizer - minMinimizer; m++) {
+                uint32_t prevCnt = 0, cur = 0;
+                for (auto idx = 0; idx < threadCount; idx++) {
+                    cur = minimizerIdx[idx][m];
+                    minimizerIdx[idx][m] = prevCnt;
+                    prevCnt += cur;
                 }
-            }));
-        }
-        for (auto &t : threads) { t.join(); }
-        threads.clear();
-        for (auto m = 0; m <= maxMinimizer-minMinimizer; m++) {
-            uint32_t prevCnt = 0, cur = 0;
-            for (auto idx = 0; idx < threadCount; idx++) {
-                cur = minimizerIdx[idx][m];
-                minimizerIdx[idx][m] = prevCnt;
-                prevCnt += cur;
             }
         }
         for (auto i = minMinimizer; i <= maxMinimizer; i++) {
@@ -177,7 +180,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
         console->info("Done walking Cqf{}. isSecond:{}", curBlock, isSecond);
 //        std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
         // validating the minimizer observed count;
-        for (auto i = minMinimizer; i <= maxMinimizer; i++) {
+        /*for (auto i = minMinimizer; i <= maxMinimizer; i++) {
             if (minimizerIdx[threadCount-1][i - minMinimizer] != curCdbg.minimizerCntr[i]) {
                 console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected{}", i, minimizerIdx[threadCount-1][i-minMinimizer], curCdbg.minimizerCntr[i]);
                 std::exit(3);
@@ -188,7 +191,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                     std::exit(3);
                 }
             }
-        }
+        }*/
     }
 
     curCdbg.replaceCQFInMemory(invalid);
@@ -785,20 +788,24 @@ store_colorID_map()
 
     console -> info("At color-class building (bitvectors concatenation) phase. Time-stamp = {}.",
                     time(nullptr) - start_time_);
-    uint64_t writtenPairsCount = 0;
+    uint64_t writtenPairsCount = 0, cdbg1ColorCnt{cdbg1.get_num_eqclasses()}, cdbg2ColorCnt{cdbg2.get_num_eqclasses()};
     console->info("Writing color pairs and ids into file {}", cdbg.prefix + "newID2oldIDs" );
     std::ofstream output(cdbg.prefix + "newID2oldIDs");
     output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
-
+    output.write(reinterpret_cast<char*>(&cdbg1ColorCnt), sizeof(cdbg1ColorCnt));
+    output.write(reinterpret_cast<char*>(&cdbg2ColorCnt), sizeof(cdbg2ColorCnt));
     console->info("# of abundant color IDs: {}", sampledPairs.size());
     // write down the pair and the associated colorID here
     // storing the IDs from 0 (when inserting into CQF, they needed a +1) (0-based)
+
     for (auto &idpair : sampledPairs) {
         uint64_t colorID = idpair.second;
         auto fs = idpair.first;
+        colorIdType c1 = fs.first == 0 ? cdbg1ColorCnt - 1 : fs.first - 1;
+        colorIdType c2 = fs.second == 0 ? cdbg2ColorCnt - 1 : fs.second - 1;
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
-        output.write(reinterpret_cast<char*>(&(fs.first)), sizeof(fs.first));
-        output.write(reinterpret_cast<char*>(&(fs.second)), sizeof(fs.second));
+        output.write(reinterpret_cast<char*>(&(c1)), sizeof(c1));
+        output.write(reinterpret_cast<char*>(&(c2)), sizeof(c2));
     }
     writtenPairsCount = sampledPairs.size();
 
@@ -809,6 +816,8 @@ store_colorID_map()
     while (input >> c1 >> c2) {
         ColorPair cpair(c1, c2);
         uint64_t colorID = sampledPairs.size() + colorMph->lookup(cpair);
+        c1 = c1 == 0 ? cdbg1ColorCnt - 1 : c1 - 1;
+        c2 = c2 == 0 ? cdbg2ColorCnt - 1: c2 - 1;
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
         output.write(reinterpret_cast<char*>(&(cpair.c1)), sizeof(cpair.c1));
         output.write(reinterpret_cast<char*>(&(cpair.c2)), sizeof(cpair.c2));
