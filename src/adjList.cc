@@ -10,9 +10,9 @@ AdjList::AdjList(std::string prefixIn, uint64_t numColorClasses, uint64_t numSam
     weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
     weightMask = (1ULL << weightBits) - 1;
     smallerSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses))+weightBits);
-    smallerSrcCnt = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
+    smallerSrcStartIdx = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
     greaterSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
-    greaterSrcCnt = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
+    greaterSrcStartIdx = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
 }
 
 /**
@@ -27,15 +27,15 @@ void AdjList::storeEdge(uint64_t src, uint64_t dest, uint64_t weight) {
         std::swap(src, dest);
     }
     adjListFile << src << " " << dest << " " << weight << "\n";
-    smallerSrcCnt[src] = smallerSrcCnt[src]+1;
-    greaterSrcCnt[dest] = greaterSrcCnt[dest]+1;
-//    std::cerr << "edge " << idx << " " << src << " " << dest << " " << smallerSrcCnt[src] << " " << greaterSrcCnt[dest] << "\n";
+    smallerSrcStartIdx[src] = smallerSrcStartIdx[src]+1;
+    greaterSrcStartIdx[dest] = greaterSrcStartIdx[dest]+1;
+//    std::cerr << "edge " << idx << " " << src << " " << dest << " " << smallerSrcStartIdx[src] << " " << greaterSrcStartIdx[dest] << "\n";
 }
 
 void AdjList::loadCompactedAdjList() {
-    for (auto i = 1; i < smallerSrcCnt.size(); i++) {
-        smallerSrcCnt[i] = smallerSrcCnt[i-1] + smallerSrcCnt[i];
-        greaterSrcCnt[i] = greaterSrcCnt[i-1] + greaterSrcCnt[i];
+    for (auto i = 1; i < smallerSrcStartIdx.size(); i++) {
+        smallerSrcStartIdx[i] = smallerSrcStartIdx[i-1] + smallerSrcStartIdx[i];
+        greaterSrcStartIdx[i] = greaterSrcStartIdx[i-1] + greaterSrcStartIdx[i];
     }
 
     adjListFile.close();
@@ -43,11 +43,11 @@ void AdjList::loadCompactedAdjList() {
     uint64_t src, dest, weight;
     adjListIn >> src >> dest >> weight;
     while (adjListIn.good()) {
-        smallerSrcCnt[src] = smallerSrcCnt[src] - 1;
-        smallerSrc[smallerSrcCnt[src]] = ((uint128_t)dest << weightBits) | weight;
+        smallerSrcStartIdx[src] = smallerSrcStartIdx[src] - 1;
+        smallerSrc[smallerSrcStartIdx[src]] = ((uint128_t)dest << weightBits) | weight;
 
-        greaterSrcCnt[dest] = greaterSrcCnt[dest] - 1;
-        greaterSrc[greaterSrcCnt[dest]] = src;
+        greaterSrcStartIdx[dest] = greaterSrcStartIdx[dest] - 1;
+        greaterSrc[greaterSrcStartIdx[dest]] = src;
         adjListIn >> src >> dest >> weight;
     }
     adjListIn.close();
@@ -113,15 +113,15 @@ void AdjList::boundedDfs(uint64_t parIdx,
     visited[parIdx] = 1;
     level++;
 
-    if (parIdx >= smallerSrcCnt.size()) {
+    if (parIdx >= smallerSrcStartIdx.size()) {
         std::cerr << "2 happened\n";
         std::exit(3);
     }
-    uint64_t startIdx = smallerSrcCnt[parIdx];
-    uint64_t endIdx = parIdx+1 == smallerSrcCnt.size() ? smallerSrcCnt.size() : smallerSrcCnt[parIdx+1];
+    uint64_t startIdx = smallerSrcStartIdx[parIdx];
+    uint64_t endIdx = parIdx+1 == smallerSrcStartIdx.size() ? smallerSrc.size() : smallerSrcStartIdx[parIdx+1];
     auto cnt = endIdx - startIdx;
-    auto tmp1 = greaterSrcCnt[parIdx];
-    auto tmp2 = parIdx+1 == greaterSrcCnt.size() ? greaterSrcCnt.size() : greaterSrcCnt[parIdx+1];
+    auto tmp1 = greaterSrcStartIdx[parIdx];
+    auto tmp2 = parIdx+1 == greaterSrcStartIdx.size() ? greaterSrcStartIdx.size() : greaterSrcStartIdx[parIdx+1];
 //    std::cerr << " child cnt: " << cnt + (tmp2 - tmp1) - 1 << "\n";
     for (auto i = startIdx; i < endIdx; i++) {
 //            std::cerr << "s" << i << " ";
@@ -144,12 +144,12 @@ void AdjList::boundedDfs(uint64_t parIdx,
             boundedDfs(child, parentbv, visited, activeLevel, remaining, level);
         }
     }
-    if (parIdx >= greaterSrcCnt.size()) {
+    if (parIdx >= greaterSrcStartIdx.size()) {
         std::cerr << "22 happened\n";
         std::exit(3);
     }
-    startIdx = greaterSrcCnt[parIdx];
-    endIdx = parIdx+1 == greaterSrcCnt.size() ? greaterSrcCnt.size() : greaterSrcCnt[parIdx+1];
+    startIdx = greaterSrcStartIdx[parIdx];
+    endIdx = parIdx+1 == greaterSrcStartIdx.size() ? greaterSrc.size() : greaterSrcStartIdx[parIdx+1];
     for (auto i = startIdx; i < endIdx; i++) {
 //            std::cerr << "g" << i << " ";
         if (i >= greaterSrc.size()) {

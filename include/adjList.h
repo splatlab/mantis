@@ -26,9 +26,9 @@ private:
 public:
     // weight is in the smallerSrc
     sdsl::int_vector<> smallerSrc;
-    sdsl::int_vector<> smallerSrcCnt;
+    sdsl::int_vector<> smallerSrcStartIdx;
     sdsl::int_vector<> greaterSrc;
-    sdsl::int_vector<> greaterSrcCnt;
+    sdsl::int_vector<> greaterSrcStartIdx;
 
     uint64_t idx{0}, visitedCnt{0};
     uint64_t weightBits;

@@ -53,7 +53,7 @@ public:
     filename(fileNameIn), maxBufferSize(maxBufferSizeIn) {
         file.open(filename, std::ios::in | std::ios::binary);
         file.read(reinterpret_cast<char* >(&countOfItemsInFile), sizeof(countOfItemsInFile));
-        std::cerr << "Count of items in file " << filename << " = " << countOfItemsInFile << "\n";
+//        std::cerr << "Count of items in file " << filename << " = " << countOfItemsInFile << "\n";
         next();
     }
     ~TmpFileIterator() {file.close();}
@@ -247,7 +247,7 @@ struct DisjointTrees {
     }
 
     // Union by rank
-    void merge(uint64_t x, uint64_t y, uint32_t edgeW) {
+    void merge(uint64_t x, uint64_t y) {
         auto parent = find(x), child = find(y);
 
         /* Make tree with smaller height
@@ -286,13 +286,12 @@ private:
 
     bool exists(CQF<KeyObject> &cqf, dna::canonical_kmer e, uint64_t &eqid);
 
-    uint64_t mstBasedHammingDist(uint64_t eqid1,
+    uint32_t mstBasedHammingDist(uint64_t eqid1,
                                  uint64_t eqid2,
                                  MSTQuery *mst,
                                  LRUCacheMap &lru_cache,
                                  QueryStats &queryStats,
-                                 std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache,
-                                 sdsl::int_vector<> &ccSetBitCnt);
+                                 std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache);
 
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
                                            std::vector<std::pair<uint64_t, uint64_t>> &tmpEdges,
@@ -304,10 +303,12 @@ private:
     void findNeighborEdges(CQF<KeyObject> &cqf, KeyObject &keyobj, std::vector<std::pair<uint64_t, uint64_t>> &edgeList,
                            spp::sparse_hash_map<std::pair<uint64_t , uint64_t >, uint64_t, Custom_Pair_Hasher > & popularEdges);
 
-    void calcDeltasInParallel(uint32_t threadID, uint64_t deltaOffset,
+    void calcDeltasInParallel(uint32_t threadID, uint64_t &deltaOffset,
                               sdsl::int_vector<> &parentbv, sdsl::int_vector<> &deltabv,
                               sdsl::bit_vector &bbv,
-                              bool isMSTBased);
+                              bool isMSTBased,
+                              AdjList * adjListPtr
+                              );
 
     void buildMSTBasedColor(uint64_t eqid1, MSTQuery *mst1,
                             LRUCacheMap &lru_cache1, std::vector<uint64_t> &eq1,
@@ -318,7 +319,8 @@ private:
                                                MSTQuery * mstPtr,
                                                std::unordered_map<uint64_t, std::vector<uint64_t>>& fixed_cache,
                                                LRUCacheMap &lru_cache,
-                                               QueryStats &queryStats);
+                                               QueryStats &queryStats,
+                                               bool verbose=false);
 
     void planCaching(MSTQuery *mst, std::vector<colorIdType> &colorsInCache);
 
@@ -358,25 +360,19 @@ private:
 
     std::string prefix;
     uint32_t numSamples = 0;
-    uint32_t numOfFirstMantisSamples = 0;
-    uint32_t secondMantisSamples = 0;
+    uint32_t toBeMergedNumOfSamples[2];
     uint64_t k;
     uint64_t num_colorClasses = 0;
     uint64_t mstTotalWeight = 0;
     uint64_t zero = static_cast<colorIdType>(UINT64_MAX);
-    std::vector<LRUCacheMap> lru_cache1;//10000);
-    std::vector<LRUCacheMap> lru_cache2;//10000);
-    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache1;
-    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache2;
-    std::vector<QueryStats> queryStats1;
-    std::vector<QueryStats> queryStats2;
+    std::vector<LRUCacheMap> lru_cache[2];//10000);
+    std::unordered_map<uint64_t, std::vector<uint64_t>> fixed_cache[2];
+    std::vector<QueryStats> queryStats[2];
     sdsl::int_vector<> colorPairs[2];
     sdsl::int_vector<> ccBits;
     std::vector<uint64_t> ccBitsBucketCnt;
-    std::string prefix1;
-    std::string prefix2;
-    std::unique_ptr<MSTQuery> mst1;
-    std::unique_ptr<MSTQuery> mst2;
+    std::string prefixes[2];
+    std::unique_ptr<MSTQuery> mst[2];
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
     SpinLockT colorMutex;
@@ -385,7 +381,7 @@ private:
     uint64_t curFileIdx = 0;
     uint32_t maxWeightInFile{1000};
     uint64_t totalWrittenEdges{0};
-    uint64_t cc1Cnt, cc2Cnt;
+    uint64_t cc0Cnt, cc1Cnt;
 
 };
 

@@ -94,14 +94,14 @@ int merge_main(MergeOpts &opt) {
     auto t_start = time(nullptr);
     console->info("Merge starting ...");
     // merging two CQFs
-    console->info("Merging the two CQFs...");
+    /*console->info("Merging the two CQFs...");
     auto cqfMerger = std::make_unique<CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject>>(opt.dir1, opt.dir2,
                                                                                              opt.out, console,
                                                                                              opt.threadCount);
 	cqfMerger->merge();
     cqfMerger.reset(nullptr); // make the memory back to almost 0 to start the next section
     // merging two MSTs
-    console->info("Merging the two MSTs...");
+    console->info("Merging the two MSTs...");*/
 //    usleep(10000000);
     MSTMerger mst(opt.out, console, opt.threadCount, opt.dir1, opt.dir2);
     mst.mergeMSTs();

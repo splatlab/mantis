@@ -56,6 +56,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
             break;
         }
         from = (i > 0) ? (sbbv(i) + 1) : 0;
+//        std::cerr << " -> " << i;
         froms.push_back(from);
 
         if (queryStats.trySample) {
@@ -74,20 +75,24 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
         ++height;
     }
     if (!foundCache and i != zero) {
+//        std::cerr << " -> " << i;
         from = (i > 0) ? (sbbv(i) + 1) : 0;
         froms.push_back(from);
         ++queryStats.totSel;
         queryStats.rootedNonZero++;
         ++height;
     }
+//    std::cerr << "\n";
     for (auto f : froms) {
         bool found = false;
         uint64_t wrd{0};
         auto start = f;
+//        std::cerr << " -> " << start << " : ";
         do {
             uint64_t wrdLen = std::min(static_cast<uint64_t >(64), bbv.size()-start);
             wrd = bbv.get_int(start, wrdLen);
             for (uint64_t j = 0; j < wrdLen; j++) {
+//                std::cerr << deltabv[start+j] << " ";
                 flips[deltabv[start + j]] ^= 0x01;
                 weight++;
                 if ((wrd >> j) & 0x01) {
@@ -97,6 +102,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
             }
             start += wrdLen;
         } while (!found);
+//        std::cerr << "\n";
     }
 
     /*if (foundCache) {
@@ -139,7 +145,9 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
         logger->info("\t-->cqf loaded");
         for (auto key : blockKmers[blockId]) {
             KeyObject keyObj(key, 0, 0);
+            dna::canonical_kmer ck(23, key);
             uint64_t eqclass = cdbg.query_kmerInCurDbg(keyObj, 0);
+//            std::cerr << "key: " << key << " " << ck.val << " cID: " << eqclass << "\n";
             if (eqclass) {
                 kmer2cidMap[key].first = eqclass - 1;
                 query_eqclass_set.insert(eqclass - 1);
