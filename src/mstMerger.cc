@@ -22,8 +22,7 @@
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
-static constexpr uint64_t MAX_ALLOWED_TMP_EDGES{31250000}; // Up to 0.5G
-static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{130000000}; // Up to 2G
+static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{16000000};//{130000000}; // Up to 2G
 static constexpr uint64_t SHIFTBITS{32};
 static constexpr uint64_t HIGHBIT_MASK{(1ULL << 32) - 1ULL};
 static constexpr uint64_t LOWBIT_MASK{std::numeric_limits<uint64_t>::max() - HIGHBIT_MASK};
@@ -103,7 +102,8 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
         maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
     }
     cp.close();
-
+    num_colorClasses = colorPairs[0].size() + 1;
+    zero = num_colorClasses-1;
 
     logger->info("# of experiments: {}", numSamples);
 }
@@ -118,7 +118,8 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
  */
 void MSTMerger::mergeMSTs() {
     auto t_start = time(nullptr);
-    buildEdgeSets();
+//    buildEdgeSets();
+    curFileIdx = 3;
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
 
@@ -144,7 +145,7 @@ bool MSTMerger::buildEdgeSets() {
 
     uint64_t sampledEdges = 10000;
     spp::sparse_hash_map<std::pair<uint64_t , uint64_t >, uint64_t, Custom_Pair_Hasher> popularEdges;
-    std::string cqf_file(cqfBlocks[0]);
+    /*std::string cqf_file(cqfBlocks[0]);
     CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
     k = cqf.keybits() / 2;
     auto it = cqf.begin();
@@ -161,11 +162,15 @@ bool MSTMerger::buildEdgeSets() {
         }
         ++it;
     }
+    std::cerr << "Before doubling popular edges\n";
+    usleep(10000000);
+
     logger->info("PopularEdges");
     for (auto &kv : popularEdges) {
         tmpEdges.push_back(kv.first);
     }
-
+    std::cerr << "After doubling popular edges\n";
+    usleep(10000000);*/
     for (uint64_t c = 0; c < cqfBlocks.size(); c++) {
         logger->info("Reading colored dbg from disk...");
 //        std::cerr << cqfBlocks[c] << "\n";
@@ -173,6 +178,7 @@ bool MSTMerger::buildEdgeSets() {
 //        usleep(10000000);
         std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
+        k = cqf.keybits() / 2;
         cqf.dump_metadata();
         std::cerr << "\n\n";
 //        usleep(10000000);
@@ -191,29 +197,26 @@ bool MSTMerger::buildEdgeSets() {
         }
         for (auto &t : threads) { t.join(); }
     }
+    writeMutex.lock();
     if (not tmpEdges.empty()) {
         std::cerr << "tmpEdges.size(): " << tmpEdges.size() << " sizeof(element): " << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type) <<  "\n";
         edgePairSortUniq(tmpEdges);
         std::string filename(prefix+"tmp"+std::to_string(curFileIdx));
         std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
         uint64_t maxIdd = 0;
-        for (auto v: tmpEdges) {
-            if (v.first > maxIdd)
-                maxIdd = v.first;
-            if (v.second > maxIdd)
-                maxIdd = v.second;
-        }
         std::cerr << "writing to file tmp" << curFileIdx << "\n";
         std::cerr << "Total elements: " << tmpEdges.size() << " size:"
                   << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size()
                   << " with maxcolorID: " << maxIdd << "\n";
         uint64_t vecSize = tmpEdges.size();
+        totalWrittenEdges = vecSize;
         tmpfile.write(reinterpret_cast<const char *>(&vecSize), sizeof(vecSize));
         tmpfile.write(reinterpret_cast<const char *>(tmpEdges.data()),
                       sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size());
         tmpfile.close();
         curFileIdx++;
     }
+    writeMutex.unlock();
     logger->info("Done writing the last tmp file");
     for (uint32_t i = 0; i < nThreads; ++i) {
         totalWrittenEdges += cnts[i];
@@ -241,38 +244,34 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
               << "sr" << (uint64_t) (startPoint%(__uint128_t)0xFFFFFFFFFFFFFFFF) << " "
             << "e" << (uint64_t) (endPoint/(__uint128_t)0xFFFFFFFFFFFFFFFF) << " "
             << "er" << (uint64_t) (endPoint%(__uint128_t)0xFFFFFFFFFFFFFFFF) << "\n";*/
-    auto tmpEdgeListSize = MAX_ALLOWED_TMP_EDGES / nThreads;
+    auto tmpEdgeListSize = MAX_ALLOWED_TMP_EDGES_IN_FILE / nThreads;
+//    auto tmpEdgeListSize = 10000;
     std::vector<std::pair<uint64_t , uint64_t >> edgeList;
     edgeList.reserve(tmpEdgeListSize);
     auto appendStore = [&]() {
         edgePairSortUniq(edgeList);
         colorMutex.lock();
         tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
-        if (tmpEdges.size() >= MAX_ALLOWED_TMP_EDGES_IN_FILE) {
-            edgePairSortUniq(tmpEdges);
-            std::string filename(prefix+"tmp"+std::to_string(curFileIdx));
-            uint64_t maxId = 0;
-            for (auto v: tmpEdges) {
-                if (v.first > maxId)
-                    maxId = v.first;
-                if (v.second > maxId)
-                    maxId = v.second;
-            }
-            std::cerr << "writing to file tmp" << curFileIdx << "\n";
-            std::cerr << "Total elements: " << tmpEdges.size() << " size:"
-                      << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size()
-                      << " with maxcolorID: " << maxId << "\n";
-            std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
-            tmpfile.write(reinterpret_cast<const char *>(tmpEdges.size()), sizeof(size_t));
-            tmpfile.write(reinterpret_cast<const char *>(tmpEdges.data()),
-                    sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size());
-            tmpfile.close();
-            tmpEdges.clear();
-            curFileIdx++;
-        }
-        colorMutex.unlock();
-        cnt+=edgeList.size();
         edgeList.clear();
+        if (tmpEdges.size() >= MAX_ALLOWED_TMP_EDGES_IN_FILE) {
+            std::vector<std::pair<uint64_t , uint64_t >> toWrite(tmpEdges);
+            tmpEdges.clear();
+            writeMutex.lock();
+            colorMutex.unlock();
+            edgePairSortUniq(toWrite);
+            std::string filename(prefix + "tmp" + std::to_string(curFileIdx));
+            std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
+            uint64_t toWriteSize = toWrite.size();
+            cnt += toWriteSize;
+            tmpfile.write(reinterpret_cast<const char *>(&toWriteSize), sizeof(toWriteSize));
+            tmpfile.write(reinterpret_cast<const char *>(toWrite.data()),
+                          sizeof(std::remove_reference<decltype(toWrite)>::type::value_type)*toWrite.size());
+            tmpfile.close();
+            curFileIdx++;
+            writeMutex.unlock();
+        } else {
+            colorMutex.unlock();
+        }
     };
     auto it = cqf.setIteratorLimits(startPoint, endPoint);
     while (!it.reachedHashLimit()) {
@@ -287,9 +286,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         }
         ++it;
         kmerCntr++;
-        if (kmerCntr % 10000000 == 0) {
+        /*if (kmerCntr % 10000000 == 0) {
             std::cerr << "\rthread " << threadId << ": Observed " << (numOfKmers + kmerCntr) / 1000000 << "M kmers and " << cnt << " edges";
-        }
+        }*/
     }
     appendStore();
     colorMutex.lock();
@@ -312,7 +311,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
 
     std::cerr << "Before calculating the weights\n";
 //    usleep(10000000);
-
     for (auto mstIdx = 0; mstIdx < 2; mstIdx++) {
         nonstd::optional<uint64_t> dummy{nonstd::nullopt};
         QueryStats dummyStats;
@@ -337,9 +335,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
     uint64_t mst1Zero{cc0Cnt - 1}, mst2Zero{cc0Cnt - 1};
     auto c1len{static_cast<uint64_t >(ceil(log2(cc0Cnt)))}, c2len{static_cast<uint64_t >(ceil(log2(cc0Cnt)))};
     logger->info("MST 1 and 2 zeros: {}, {}", mst1Zero, mst2Zero);
-//    usleep(10000000);
-//    std::cerr << "constructing the ccSetBits for each of the manti\n";
-//    usleep(10000000);
     std::vector<uint64_t> bufferEndIndices;
     maxWeightInFile = std::min(static_cast<uint32_t >(maxWeightInFile), numSamples);
     uint64_t size = splitHarmonically(MAX_ALLOWED_TMP_EDGES_IN_FILE/2, maxWeightInFile, bufferEndIndices);
@@ -369,10 +364,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 bufferCnt[w] += (bufferEndIndices[w]-startIdx);
                 bufferCurrIndices[w] = startIdx;
             }
-            if (pair.first == 12482271 and pair.second == 12483559) {
-                std::cerr << "found it\n";
-                std::cerr << w << " " <<  bufferCurrIndices[w] << " " << bufferEndIndices[w] << " " << bufferEndIndices[w-1] << "\n";
-            }
             output_buffer[bufferCurrIndices[w]] = pair;
             bufferCurrIndices[w]++;
         }
@@ -382,6 +373,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     };
 
     uint64_t tmpedgecnt=0;
+
     std::vector<TmpFileIterator> tis;
     Minheap_edge minheap;
     logger->info("Loading {} temp edge files.", curFileIdx);
@@ -393,23 +385,33 @@ bool MSTMerger::calculateMSTBasedWeights() {
         minheap.push(&tis[i]);
     }
     spp::sparse_hash_map<std::pair<colorIdType , colorIdType >, uint32_t , Custom_Pair_Hasher> uniqueEdges[2];
+//    std::unique_ptr<spp::sparse_hash_map<std::pair<colorIdType , colorIdType >, uint32_t , Custom_Pair_Hasher>> uniqueEdges[2];
+//    uniqueEdges[0] = std::make_unique<spp::sparse_hash_map<std::pair<colorIdType , colorIdType >, uint32_t , Custom_Pair_Hasher>>();
+//    uniqueEdges[1] = std::make_unique<spp::sparse_hash_map<std::pair<colorIdType , colorIdType >, uint32_t , Custom_Pair_Hasher>>();
+//    auto outputMstEdges = std::make_unique<std::vector<std::pair<colorIdType , colorIdType >>>();
     std::vector<std::pair<colorIdType , colorIdType >> outputMstEdges;
     uint64_t maxAllowedCnt = nThreads * 1000000;
+//    outputMstEdges->reserve(maxAllowedCnt);
     outputMstEdges.reserve(maxAllowedCnt);
-
     logger->info("Calculating weights of non-dummy edges... ");
     auto val = minheap.top()->get_val();
     while (!minheap.empty()) {
+//        auto doCntr = 0;
         do {
             auto cur = minheap.top();
             val = cur->get_val();
-//            std::cerr << tmpedgecnt << " while " << val.first << " " << val.second << " ";
-            if (cur->next())
+            if (cur->next()) {
                 minheap.replace_top(cur);
+            }
             else
                 minheap.pop();
             tmpedgecnt++;
+//            doCntr++;
         } while (!minheap.empty() && val == minheap.top()->get_val());
+        /*if (doCntr > 1) {
+            std::cerr << "doCntr " << doCntr << "\n";
+        }
+        std::cerr << "\n";*/
         outputMstEdges.push_back(val);
         // calculate weight
         for (uint64_t mstIdx = 0; mstIdx < 2; mstIdx++) {
@@ -423,7 +425,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 std::vector<std::thread> threads;
                 for (auto threadId = 0; threadId < nThreads; ++threadId) {
                     threads.emplace_back([&, mstIdx, threadId]() {
-                        uint64_t startIdx = (threadId/(double)nThreads)*uniqueEdges[mstIdx].size(), endIdx = ((threadId+1)/(double)nThreads)*uniqueEdges[mstIdx].size();
+                        uint64_t startIdx = (threadId/(double)nThreads)*uniqueEdges[mstIdx].size(),
+                        endIdx = ((threadId+1)/(double)nThreads)*uniqueEdges[mstIdx].size();
                         auto startIt = uniqueEdges[mstIdx].begin();
                         for (auto i = 0; i < startIdx; i++) {
                             ++startIt;
@@ -452,11 +455,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
                         ws[mstIdx] = uniqueEdges[mstIdx][edge];
                 }
                 auto w = ws[0]+ws[1];
-                if (e.first == 12482271 and e.second == 12483559) {
-                    std::cerr << "found it\n";
-                    std::cerr << colorPairs[0][e.first] << " " <<  colorPairs[0][e.second] << " "
-                    << colorPairs[1][e.first]<<" "<< colorPairs[1][e.second] << " " << ws[0] << " " << ws[1] << " " << w << "\n";
-                }
                 store_edge_weight(e, w);
             }
             outputMstEdges.clear();
@@ -464,6 +462,14 @@ bool MSTMerger::calculateMSTBasedWeights() {
             uniqueEdges[1].clear();
         }
     }
+    outputMstEdges.shrink_to_fit();
+//    std::cerr << "Before resetting outputMstEdges, and uniqueEdges\n";
+//    usleep(10000000);
+//    outputMstEdges.reset(nullptr);
+//    uniqueEdges[0].reset(nullptr);
+//    uniqueEdges[1].reset(nullptr);
+//    std::cerr << "After resetting outputMstEdges, and uniqueEdges\n";
+    usleep(10000000);
     logger->info("Calculating weights of dummy edges... ");
 
     sdsl::int_vector<> ccSetBitCnts[2];
@@ -617,12 +623,14 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
     logger->info("before kruskal");
-//    usleep(10000000);
+    usleep(10000000);
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
+    logger->info("after kruskal. before loading the adjacency list.");
+    usleep(10000000);
     adjListPtr->loadCompactedAdjList();
-    logger->info("after kruskal");
-//    usleep(10000000);
+    logger->info("after loading the adj list");
+    usleep(10000000);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
@@ -680,9 +688,9 @@ bool MSTMerger::encodeColorClassUsingMST() {
     thread_deltaOffset_and_parentEnd[0] = 0;
 
     std::cerr << "\r";
-//    adjListPtr.reset(nullptr);
+    adjListPtr.reset(nullptr);
     std::cerr << "after deleting MST adjacency list\n";
-//    usleep(10000000);
+    usleep(10000000);
 
     // fill in deltabv and bbv
     logger->info("Filling DeltaBV and BBV...");
@@ -692,8 +700,8 @@ bool MSTMerger::encodeColorClassUsingMST() {
 //    mst[1]->loadIdx(prefixes[1]);
     sdsl::bit_vector bbv(mstTotalWeight, 0);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
-    std::cerr << "after initializing deltabv and bbv\n";
-//    usleep(10000000);
+    std::cerr << "after initializing msts in addition to deltabv and bbv\n";
+    usleep(10000000);
 
 //    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
     std::vector<std::thread> threads;

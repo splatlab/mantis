@@ -57,7 +57,7 @@ public:
         next();
     }
     ~TmpFileIterator() {file.close();}
-    TmpFileIterator(const TmpFileIterator& o) {
+    TmpFileIterator(TmpFileIterator&& o) noexcept {
         filename = o.filename;
         fileIdx = o.fileIdx;
         vecIdx = o.vecIdx;
@@ -65,7 +65,8 @@ public:
         maxBufferSize = o.maxBufferSize;
         buffer = o.buffer;
         file.open(filename, std::ios::in | std::ios::binary);
-        file.seekg(fileIdx);
+        file.seekg(o.file.tellg());
+        o.file.close();
     }
 
     bool next() {
@@ -73,9 +74,9 @@ public:
         if (end()) return false;
         if (vecIdx >= buffer.size()) {
             auto toFetch = std::min(maxBufferSize, countOfItemsInFile - fileIdx);
+            fileIdx += toFetch;
             buffer.resize(toFetch);
             file.read(reinterpret_cast<char*>(buffer.data()), sizeof(valType)*toFetch);
-            fileIdx += toFetch;
             vecIdx = 0;
         }
         return true;
@@ -85,8 +86,8 @@ public:
         return fileIdx >= countOfItemsInFile and vecIdx >= buffer.size();
     }
 
-    bool operator<(const TmpFileIterator &rhs) const {
-        return get_val() < rhs.get_val();
+    bool operator>(const TmpFileIterator &rhs) const {
+        return get_val() > rhs.get_val();
     }
 
     const valType &get_val() const { return buffer[vecIdx]; }
@@ -103,11 +104,11 @@ private:
 struct Minheap_edge {
     void push(TmpFileIterator *obj) {
         c.emplace_back(obj);
-        std::push_heap(c.begin(), c.end(), [](auto &f, auto &s) {return (*f) < (*s);});
+        std::push_heap(c.begin(), c.end(), [](auto &f, auto &s) {return (*f) > (*s);});
     }
 
     void pop() {
-        std::pop_heap(c.begin(), c.end(), [](auto &f, auto &s) {return (*f) < (*s);});
+        std::pop_heap(c.begin(), c.end(), [](auto &f, auto &s) {return (*f) > (*s);});
         c.pop_back();
     }
 
@@ -116,7 +117,7 @@ struct Minheap_edge {
         pop();
     }
 
-    TmpFileIterator* top() { return c.front(); }
+    TmpFileIterator* top() {return c.front(); }
 
     bool empty() const { return c.empty(); }
 
@@ -375,7 +376,7 @@ private:
     std::unique_ptr<MSTQuery> mst[2];
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
-    SpinLockT colorMutex;
+    SpinLockT colorMutex, writeMutex;
 
     uint64_t numBlocks;
     uint64_t curFileIdx = 0;
