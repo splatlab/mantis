@@ -59,9 +59,9 @@ struct hash128 {
 // https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values
 class Custom_Pair_Hasher {
 public:
-    uint64_t operator()(const std::pair<uint64_t , uint64_t > &val) const {
+    uint64_t operator()(const std::pair<uint64_t , uint64_t > &val, uint64_t seed = 2038074743) const {
         return MurmurHash64A((void *) &val, 2*sizeof(uint64_t),
-                             2038074743);
+                             seed);
     }
     /*uint64_t operator()(const std::pair<colorIdType, colorIdType> &key, uint64_t seed = 0) const {
         seed ^= std::hash<uint64_t>{}(key.first) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
