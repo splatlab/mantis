@@ -368,7 +368,7 @@ private:
 
     uint64_t numBlocks;
     uint64_t curFileIdx = 0;
-    uint32_t maxWeightInFile{1000};
+    uint32_t maxWeightInFile{50};
     uint64_t totalWrittenEdges{0};
     uint64_t ccCnt[2];
 
