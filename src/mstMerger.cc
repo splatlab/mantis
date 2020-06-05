@@ -335,14 +335,28 @@ bool MSTMerger::calculateMSTBasedWeights() {
     sdsl::int_vector<> ccSetBitCnts[2];
     for (auto mstIdx = 0; mstIdx < 2; ++mstIdx) {
         ccSetBitCnts[mstIdx] = sdsl::int_vector<>(ccCnt[mstIdx], 0, ceil(log2(toBeMergedNumOfSamples[mstIdx])));
-        for (auto i = 0; i < ccSetBitCnts[mstIdx].size(); i++) {
-            std::vector<uint64_t> eq;
-            buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][0], eq, queryStats[mstIdx][0], fixed_cache[mstIdx]);
-            ccSetBitCnts[mstIdx][i] = eq.size();
+        for (auto partition = 0; partition < 2; ++partition) {
+            std::vector<std::thread> threads;
+            for (auto t = 0; t < nThreads; ++t) {
+                threads.emplace_back([&, mstIdx, t, partition]() {
+                    uint64_t s = ((2*t+partition)/(double)(2*nThreads))*ccSetBitCnts[mstIdx].size();
+                    uint64_t e = ((2*t+partition+1)/(double)(2*nThreads))*ccSetBitCnts[mstIdx].size();
+                     for (auto i = s; i < e; i++) {
+                         std::vector<uint64_t> eq;
+                         buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][t], eq, queryStats[mstIdx][t],
+                                            fixed_cache[mstIdx]);
+                         ccSetBitCnts[mstIdx][i] = eq.size();
+                     }
+                 });
+            }
+            for (auto &t : threads) {
+                t.join();
+            }
+            threads.clear();
+           /* std::cerr << "mstIdx: " << mstIdx <<
+                      " cacheCntr: " << queryStats[mstIdx][0].cacheCntr <<
+                      " noCacheCntr: " << queryStats[mstIdx][0].noCacheCntr << "\n";*/
         }
-        std::cerr << "mstIdx: " << mstIdx <<
-        " cacheCntr: " << queryStats[mstIdx][0].cacheCntr <<
-        " noCacheCntr: " << queryStats[mstIdx][0].noCacheCntr << "\n";
     }
 
     logger->info("Opening {} output weight bucket files", maxWeightInFile);
@@ -630,15 +644,15 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
  */
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
-    logger->info("before kruskal");
-    usleep(10000000);
+    logger->info("Running kruskal");
+//    usleep(10000000);
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
-    logger->info("after kruskal. before loading the adjacency list.");
-    usleep(10000000);
+    logger->info("After kruskal. Loading the adjacency list.");
+//    usleep(10000000);
     adjListPtr->loadCompactedAdjList();
-    logger->info("after loading the adj list");
-    usleep(10000000);
+//    logger->info("after loading the adj list");
+//    usleep(10000000);
     uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
