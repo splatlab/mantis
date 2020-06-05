@@ -118,8 +118,7 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
  */
 void MSTMerger::mergeMSTs() {
     auto t_start = time(nullptr);
-//    buildEdgeSets();
-    curFileIdx = 3;
+    buildEdgeSets();
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
 
@@ -525,7 +524,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         ccBitsBucketCnt[maxWeightInFile-1] = 0;
         for (uint64_t i = maxWeightInFile; i < ccBitsBucketCnt.size(); i++) {
             ccBitsBucketCnt[i] += ccBitsBucketCnt[i - 1];
-            std::cerr << i << ":" << ccBitsBucketCnt[i] << "\n";
+//            std::cerr << i << ":" << ccBitsBucketCnt[i] << "\n";
         }
     }
 //    usleep(10000000);
@@ -567,6 +566,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
             outWeightFile[w].close();
         }
     }
+    std::string sysCommand = "rm -r " + prefix + "tmp*";
+    system(sysCommand.c_str());
     logger->info("Duplicated edge count: {}, final unique edge count: {}", tmpedgecnt+colorPairs[0].size(), totalUniqEdgeCnt);
     logger->info("Calculated the weight for all the edges");
     return true;
@@ -644,6 +645,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
  */
 bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
+
     logger->info("Running kruskal");
 //    usleep(10000000);
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
@@ -651,6 +653,11 @@ bool MSTMerger::encodeColorClassUsingMST() {
     logger->info("After kruskal. Loading the adjacency list.");
 //    usleep(10000000);
     adjListPtr->loadCompactedAdjList();
+    std::string sysCommand = "rm -r " + prefix + "w*";
+    system(sysCommand.c_str());
+    sysCommand = "rm -r " + prefix + "tmp*";
+    system(sysCommand.c_str());
+
 //    logger->info("after loading the adj list");
 //    usleep(10000000);
     uint64_t nodeCntr{0};
@@ -712,7 +719,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     std::cerr << "\r";
     adjListPtr.reset(nullptr);
     std::cerr << "after deleting MST adjacency list\n";
-    usleep(10000000);
+//    usleep(10000000);
 
     // fill in deltabv and bbv
     logger->info("Filling DeltaBV and BBV...");
@@ -723,7 +730,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     sdsl::bit_vector bbv(mstTotalWeight, 0);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
     std::cerr << "after initializing msts in addition to deltabv and bbv\n";
-    usleep(10000000);
+//    usleep(10000000);
 
 //    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
     std::vector<std::thread> threads;

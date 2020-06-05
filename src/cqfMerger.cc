@@ -124,7 +124,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
             minimizerKeyList[isSecond][i] = std::make_unique<std::vector<uint64_t>>(curCdbg.minimizerCntr[i], 0);
             minimizerColorList[isSecond][i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, colorBits[isSecond]);
         }
-        console->info("Start walking Cqf{}. isSecond:{}", curBlock, isSecond);
+//        console->info("Start walking Cqf{}. isSecond:{}", curBlock, isSecond);
         std::vector<SpinLockT> mutexes(maxMinimizer-minMinimizer+1);
 
         for (auto threadId = 0; threadId < threadCount; threadId++) {
@@ -177,7 +177,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
             }));
         }
         for (auto &t : threads) { t.join(); }
-        console->info("Done walking Cqf{}. isSecond:{}", curBlock, isSecond);
+//        console->info("Done walking Cqf{}. isSecond:{}", curBlock, isSecond);
 //        std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
         // validating the minimizer observed count;
         /*for (auto i = minMinimizer; i <= maxMinimizer; i++) {
