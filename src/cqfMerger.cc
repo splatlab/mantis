@@ -193,7 +193,6 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
             }
         }*/
     }
-
     curCdbg.replaceCQFInMemory(invalid);
     return maxMinimizer;
 }
@@ -218,18 +217,13 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
     while(kmerCount < sampleKmerCount and
           (curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks())) {
         console->info("Current block={}", curBlock);
+//        console->info("Usleep");
+//        usleep(10000000);
+        maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
+//        console->info("Usleep3");
+//        usleep(10000000);
+        maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
 
-        /*if (threadCount > 1) {
-            std::future<uint64_t> r1 =
-                    std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
-            std::future<uint64_t> r2 =
-                    std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
-            maxMinimizer1 = r1.get();
-            maxMinimizer2 = r2.get();
-        } else {*/
-            maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
-            maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
-//        }
         maxMinimizer =
                 // If it's the last block for both of the CQFs
                 curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
@@ -350,15 +344,8 @@ store_colorID_pairs(uint64_t startingBlock)
         console->info("Current block={}", curBlock);
         uint64_t maxMinimizer1{0}, maxMinimizer2{0};
 
-        /*if (threadCount > 1) {
-            std::future<uint64_t> r1 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg1), curBlock, false);
-            std::future<uint64_t> r2 = std::async(std::launch::async, &CQF_merger<qf_obj, key_obj>::walkBlockedCQF, this, std::ref(cdbg2), curBlock, true);
-            maxMinimizer1 = r1.get();
-            maxMinimizer2 = r2.get();
-        } else {*/
-            maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
-            maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
-//        }
+        maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
+        maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
 
         maxMinimizer =
                 // If it's the last block for both of the CQFs
@@ -538,7 +525,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     for (auto &m :  minimizerColorList[1]) m.reset(nullptr);//m.clear();
 
     uint64_t maxMinimizer{0}, minMinimizer{0};
-    uint64_t colorId{0}, epsilon{100};
+    uint64_t colorId{0}, epsilon{100}, maxMinimizerCnt{0};
     KeyObject keyObj;
 
     cdbg.initializeNewCQFBlock(invalid, kbits, cdbg.get_qbits(), hashmode, seed);
@@ -622,6 +609,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                         foundAbundantId++;
                 }
             }
+            minimizerKeyList[0][b].reset(nullptr);
+            minimizerColorList[0][b].reset(nullptr);
+            minimizerKeyList[1][b].reset(nullptr);
+            minimizerColorList[1][b].reset(nullptr);
             if (not tmp_kmers.empty() and occupiedSlotsCnt + currMinimizerSlotsCnt > cdbg.getCqfSlotCnt()) {
                 std::cerr << "\r";
                 console->info("Fill and serialize cqf {} with {} kmers into {} slots up to minimizer {}", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt, b);
@@ -678,11 +669,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 outputCQFBlockId++;
             }
             cdbg.minimizerBlock[b] = outputCQFBlockId;
-            minimizerKeyList[0][b].reset(nullptr);
-            minimizerColorList[0][b].reset(nullptr);
-            minimizerKeyList[1][b].reset(nullptr);
-            minimizerColorList[1][b].reset(nullptr);
             tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
+            if (maxMinimizerCnt < currMinimizerSlotsCnt) {
+                maxMinimizerCnt = currMinimizerSlotsCnt;
+            }
             currMinimizerKmers.clear();
             occupiedSlotsCnt += currMinimizerSlotsCnt;
             currMinimizerSlotsCnt = 0;
@@ -690,7 +680,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         minMinimizer = maxMinimizer + 1;
         std::cerr << "\r";
     }
-
+    console->info("Maximum number of pairs of key-color per minimizer : {}", maxMinimizerCnt);
     // fill and serialize last cqf block
     if (!tmp_kmers.empty()) {
         console->info("Fill and serialize cqf {} with {} kmers into {} slots as the last cqf block", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt);
