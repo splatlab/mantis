@@ -84,6 +84,7 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
     }
 //    std::cerr << "\n";
     for (auto f : froms) {
+        queryStats.noCacheCntr++;
         bool found = false;
         uint64_t wrd{0};
         auto start = f;

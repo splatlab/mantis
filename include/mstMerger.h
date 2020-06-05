@@ -41,10 +41,6 @@ typedef uint64_t colorIdType;
 typedef uint32_t weightType;
 typedef unsigned __int128 uint128_t;
 
-struct Cost {
-    uint64_t numSteps{0};
-    uint64_t numQueries{0};
-};
 
 class TmpFileIterator {
     typedef std::pair<uint64_t , uint64_t > valType;
@@ -53,7 +49,6 @@ public:
     filename(fileNameIn), maxBufferSize(maxBufferSizeIn) {
         file.open(filename, std::ios::in | std::ios::binary);
         file.read(reinterpret_cast<char* >(&countOfItemsInFile), sizeof(countOfItemsInFile));
-//        std::cerr << "Count of items in file " << filename << " = " << countOfItemsInFile << "\n";
         next();
     }
     ~TmpFileIterator() {file.close();}
@@ -64,6 +59,7 @@ public:
         countOfItemsInFile = o.countOfItemsInFile;
         maxBufferSize = o.maxBufferSize;
         buffer = o.buffer;
+        o.buffer.clear();
         file.open(filename, std::ios::in | std::ios::binary);
         file.seekg(o.file.tellg());
         o.file.close();
@@ -322,14 +318,6 @@ private:
                                                LRUCacheMap &lru_cache,
                                                QueryStats &queryStats,
                                                bool verbose=false);
-
-    void planCaching(MSTQuery *mst, std::vector<colorIdType> &colorsInCache);
-
-    void planRecursively(uint64_t nodeId,
-                         std::vector<std::vector<colorIdType>> &children,
-                         std::vector<Cost> &mstCost,
-                         std::vector<colorIdType> &colorsInCache,
-                         uint64_t &cntr);
 
     inline void edgePairSortUniq(std::vector<std::pair<uint64_t, uint64_t>> &edgeList) {
         __gnu_parallel::sort(edgeList.begin(), edgeList.end(),

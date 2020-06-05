@@ -18,6 +18,7 @@
 #include "MantisFS.h"
 #include "mstMerger.h"
 #include "ProgOpts.h"
+#include "mstPlanner.h"
 
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
@@ -174,15 +175,11 @@ bool MSTMerger::buildEdgeSets() {
         logger->info("Reading colored dbg from disk...");
 //        std::cerr << cqfBlocks[c] << "\n";
         std::cerr << "\n\ncqf" << c << "\n";
-//        usleep(10000000);
         std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
         k = cqf.keybits() / 2;
         cqf.dump_metadata();
         std::cerr << "\n\n";
-//        usleep(10000000);
-
-//        k = cqf.keybits() / 2;
         logger->info("Done loading cdbg. k is {}, numThreads is {}", k, nThreads);
         logger->info("Iterating over cqf & building edgeSet ...");
         // build color class edges in a multi-threaded manner
@@ -308,33 +305,31 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
  */
 bool MSTMerger::calculateMSTBasedWeights() {
 
-    std::cerr << "Before calculating the weights\n";
-//    usleep(10000000);
-    for (auto mstIdx = 0; mstIdx < 2; mstIdx++) {
-        nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-        QueryStats dummyStats;
-        mst[mstIdx] = std::make_unique<MSTQuery>(prefixes[mstIdx], k, k, toBeMergedNumOfSamples[mstIdx], logger);
-        std::vector<colorIdType> colorsInCache;
-        planCaching(mst[mstIdx].get(), colorsInCache);
-        logger->info("fixed cache size for mst[{}] is : {}", mstIdx, colorsInCache.size());
-        // fillout fixed_cache[0]
-        // walking in reverse order on colorsInCache is intentional
-        // because as we've filled out the colorsInCache vector in a post-order traversal of MST,
-        // if we walk in from end to the beginning we can always guarantee that we've already put the ancestors
-        // for the new colors we want to put in the fixed_cache and that will make the whole color bv construction
-        // FASTER!!
-        for (int64_t idx = colorsInCache.size() - 1; idx >= 0; idx--) {
-            auto setbits = mst[mstIdx]->buildColor(colorsInCache[idx], dummyStats, &lru_cache[mstIdx][0], nullptr, &fixed_cache[mstIdx], dummy);
-            fixed_cache[mstIdx][colorsInCache[idx]] = setbits;
-        }
-        colorsInCache.clear();
-        logger->info("Done filling the fixed cache for mst[{}].", mstIdx);
-    }
-
     uint64_t mstZero[2];
     mstZero[0] = ccCnt[0] - 1;
     mstZero[1] = ccCnt[1] - 1;
     auto c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
+
+    std::cerr << "Running the MST planner\n";
+//    usleep(10000000);
+    mst[0] = std::make_unique<MSTQuery>(prefixes[0], k, k, toBeMergedNumOfSamples[0], logger);
+    mst[1] = std::make_unique<MSTQuery>(prefixes[1], k, k, toBeMergedNumOfSamples[1], logger);
+
+
+    auto mstPlanner = std::make_unique<MSTPlanner>(prefix,
+                          mst[0].get(), mst[1].get(),
+                          colorPairs[0], colorPairs[1],
+                          curFileIdx,
+                          MAX_ALLOWED_TMP_EDGES_IN_FILE/(2.0*curFileIdx),
+                          nThreads,
+                          logger,
+                          true);
+
+    for (auto mstIdx = 0; mstIdx < 2; mstIdx++) {
+        mstPlanner->plan(mstIdx, mst[mstIdx].get(), fixed_cache[mstIdx]);
+    }
+    mstPlanner.reset(nullptr);
+
 
     logger->info("Pop counting for the two Manti color class vectors of size {}, {} respectively", ccCnt[0], ccCnt[1]);
     sdsl::int_vector<> ccSetBitCnts[2];
@@ -345,6 +340,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
             buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][0], eq, queryStats[mstIdx][0], fixed_cache[mstIdx]);
             ccSetBitCnts[mstIdx][i] = eq.size();
         }
+        std::cerr << "mstIdx: " << mstIdx <<
+        " cacheCntr: " << queryStats[mstIdx][0].cacheCntr <<
+        " noCacheCntr: " << queryStats[mstIdx][0].noCacheCntr << "\n";
     }
 
     logger->info("Opening {} output weight bucket files", maxWeightInFile);
@@ -474,6 +472,12 @@ bool MSTMerger::calculateMSTBasedWeights() {
                     }
                 }
                 auto w = ws[0]+ws[1];
+                if (w == 0) {
+                    logger->error("Weight cannot be zero for edge {}:({},{}) -> {}:({},{})",
+                            e.first, colorPairs[0][e.first], colorPairs[1][e.first],
+                            e.second, colorPairs[0][e.second], colorPairs[1][e.second]);
+                    std::exit(3);
+                }
                 store_edge_weight(e, w);
             }
             logger->info("all: {}, uniq1: {}, uniq2:{}", outputMstEdges.size(), uniqueEdges[0].size(), uniqueEdges[1].size());
@@ -1010,79 +1014,3 @@ std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t e
     return res; // rely on c++ optimization
 }
 
-void MSTMerger::planCaching(MSTQuery *mst,std::vector<colorIdType> &colorsInCache) {
-    std::vector<Cost> mstCost(mst->parentbv.size());
-
-    logger->info("In planner ..");
-    // setting local edge costs
-    // local cost for each node is its degree (in + out)
-    uint64_t src{0}, edgeCntr{0};
-    for (auto i = 0; i < mst->parentbv.size()-1; i++) {
-        mstCost[i].numQueries = ceil(totalWrittenEdges/(double)(i+2));
-    }
-    logger->info("Done setting the local costs");
-
-    std::vector<std::vector<colorIdType>> children(mst->parentbv.size());
-    for (uint64_t i = 0; i < mst->parentbv.size() - 1; i++) {
-        children[mst->parentbv[i]].push_back(i);
-    }
-    logger->info("Done creating the parent->children map");
-    // recursive planner
-    logger->info("Calling the recursive planner for {} nodes", mst->parentbv.size());
-    uint64_t cntr{0};
-    planRecursively(mst->parentbv.size() - 1, children, mstCost, colorsInCache, cntr);
-    std::cerr << "\r";
-}
-
-void MSTMerger::planRecursively(uint64_t nodeId,
-                                std::vector<std::vector<colorIdType>> &children,
-                                std::vector<Cost> &mstCost,
-                                std::vector<colorIdType> &colorsInCache,
-                                uint64_t &cntr) {
-
-    uint64_t avgCostThreshold = 16;
-
-//    std::cerr << "\rsize for node " << nodeId << " " << children[nodeId].size();
-    for (auto c : children[nodeId]) {
-        planRecursively(c, children, mstCost, colorsInCache, cntr);
-    }
-
-    std::unordered_set<colorIdType> localCache;
-    uint64_t numQueries{0}, numSteps{0};
-    colorIdType childWithMaxAvg{0};
-    float maxChildAvg{0};
-    do {
-//        auto tmp = numQueries == 0 ? 0 : (float)numSteps/(float)numQueries;
-//        std::cerr << "\rnodeId " << nodeId << " " << tmp << " " << numSteps << " " << numQueries << " " <<localCache.size();
-        if (maxChildAvg != 0) {
-            localCache.insert(childWithMaxAvg);
-            childWithMaxAvg = 0;
-            maxChildAvg = 0;
-        }
-
-        numQueries = mstCost[nodeId].numQueries;
-        numSteps = mstCost[nodeId].numSteps;
-        for (auto c : children[nodeId]) {
-            if (localCache.find(c) == localCache.end()) {
-                numQueries += mstCost[c].numQueries;
-                // steps in parent += steps in children + 1 for each child
-                numSteps += mstCost[c].numSteps + mstCost[c].numQueries;
-                float currChildAvg =
-                        mstCost[c].numQueries == 0 ? 0 : (float) mstCost[c].numSteps / (float) mstCost[c].numQueries;
-                if (mstCost[c].numSteps != 0 and
-                    (currChildAvg > maxChildAvg or
-                     (currChildAvg == maxChildAvg and mstCost[childWithMaxAvg].numQueries < mstCost[c].numQueries))) {
-                    maxChildAvg = currChildAvg;
-                    childWithMaxAvg = c;
-                }
-            }
-        }
-    } while (numQueries != 0 and (float) numSteps / (float) numQueries > avgCostThreshold);
-    mstCost[nodeId].numQueries = numQueries;
-    mstCost[nodeId].numSteps = numSteps;
-    for (auto c : localCache) {
-        colorsInCache.push_back(c);
-    }
-    if (++cntr % 1000000 == 0)
-        std::cerr << "\r" << cntr++;
-}
