@@ -142,11 +142,8 @@ class CQF {
 		uint32_t seed(void) const { return cqf.metadata->seed; }
 		uint64_t numslots(void) const { return cqf.metadata->nslots; }
 		uint32_t keybits(void) const { return cqf.metadata->key_bits; }
-		uint64_t total_elts(void) const { return qf_get_sum_of_counts(&cqf); }
-		uint64_t dist_elts(void) const { return
-				qf_get_num_distinct_key_value_pairs(&cqf); }
-//		uint64_t total_elts(void) const { return cqf.metadata->nelts; }
-//		uint64_t dist_elts(void) const { return cqf.metadata->ndistinct_elts; }
+		uint64_t total_elts(void) const { return cqf.metadata->nelts; }
+		uint64_t dist_elts(void) const { return cqf.metadata->ndistinct_elts; }
 		//uint64_t set_size(void) const { return set.size(); }
 		void reset(void) { qf_reset(&cqf); }
 

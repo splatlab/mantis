@@ -234,7 +234,11 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
         curBlock++;
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
-            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyList[0][b]->size()}, size1{minimizerKeyList[1][b]->size()};
+            uint64_t cntr0{0}, cntr1{0}, size0{0}, size1{0};
+            if (minimizerKeyList[0][b])
+                size0 = minimizerKeyList[0][b]->size();
+            if (minimizerKeyList[1][b])
+                size1 = minimizerKeyList[1][b]->size();
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
@@ -358,7 +362,11 @@ store_colorID_pairs(uint64_t startingBlock)
         uint64_t clearedBytes = 0;
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
-            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyList[0][b]->size()}, size1{minimizerKeyList[1][b]->size()};
+            uint64_t cntr0{0}, cntr1{0}, size0{0}, size1{0};
+            if (minimizerKeyList[0][b])
+                size0 = minimizerKeyList[0][b]->size();
+            if (minimizerKeyList[1][b])
+                size1 = minimizerKeyList[1][b]->size();
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
@@ -414,7 +422,7 @@ store_colorID_pairs(uint64_t startingBlock)
                     ++cntr0;
                 }
             }
-            clearedBytes += (minimizerKeyList[0][b]->size()+minimizerKeyList[1][b]->size());
+            clearedBytes += (size0+size1);
             minimizerKeyList[0][b].reset(nullptr);
             minimizerColorList[0][b].reset(nullptr);
             minimizerKeyList[1][b].reset(nullptr);
@@ -422,7 +430,7 @@ store_colorID_pairs(uint64_t startingBlock)
         }
         minMinimizer = maxMinimizer+1;
         std::cerr << "\r";
-        std::cerr << "\tcleared MBs in this round: " << (clearedBytes * 12) / std::pow(2, 20) << "\n";
+        std::cerr << "Memory cleared in this round: " << std::round((clearedBytes * (64+colorBits[0]+colorBits[1])) / std::pow(2, 23)) << "MB\n";
     }
     console -> info("Distinct kmers found {}, color-id pairs written to disk {}. Time-stamp = {}.",
                     kmerCount, writtenPairsCount, time(nullptr) - start_time_);
@@ -548,7 +556,11 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         currMinimizerKmers.reserve(cdbg.getCqfSlotCnt());
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
-            uint64_t cntr0{0}, cntr1{0}, size0{minimizerKeyList[0][b]->size()}, size1{minimizerKeyList[1][b]->size()};
+            uint64_t cntr0{0}, cntr1{0}, size0{0}, size1{0};
+            if (minimizerKeyList[0][b])
+                size0 = minimizerKeyList[0][b]->size();
+            if (minimizerKeyList[1][b])
+                size1 = minimizerKeyList[1][b]->size();
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";

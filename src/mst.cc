@@ -17,7 +17,7 @@
 MST::MST(std::string prefixIn, std::shared_ptr<spdlog::logger> loggerIn, uint32_t numThreads) :
         prefix(std::move(prefixIn)), lru_cache(10000), nThreads(numThreads) {
     logger = loggerIn.get();
-
+    logger->info("Start constructing the MST");
     // Make sure the prefix is a full folder
     if (prefix.back() != '/') {
         prefix.push_back('/');

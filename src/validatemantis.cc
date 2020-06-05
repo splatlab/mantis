@@ -179,7 +179,7 @@ validate_main(ValidateOpts &opt) {
     uint64_t queryCntr{0};
     for (auto kmers : multi_kmers) {
         std::unordered_map<uint64_t, float> fraction_present;
-        console->info("{} kmers", kmers.size());
+        console->info("querySeq {}: {} kmers", queryCntr+1, kmers.size());
         for (uint64_t i = 0; i < nqf; i++) {
             for (auto kmer : kmers) {
 //                std::cerr << kmer << " ";
@@ -204,9 +204,9 @@ validate_main(ValidateOpts &opt) {
                               i, inobjects[i].sample_id, fraction_present[i], result[queryCntr][i], kmers.size());
                 fail = true;
                 //abort();
-            } else if (fraction_present[i] > 0 ) {
+            } /*else if (fraction_present[i] > 0 ) {
                 std::cerr << "cqf" << i << ":" << fraction_present[i] << "\n";
-            }
+            }*/
         }
         queryCntr++;
 //        ground_truth.push_back(fraction_present);

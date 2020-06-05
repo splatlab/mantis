@@ -14,7 +14,6 @@
 #include <stdbool.h>
 
 #include "gqf.h"
-#include "partitioned_counter.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,9 +56,6 @@ extern "C" {
 #endif
 	} qfblock;
 
-	//struct __attribute__ ((__packed__)) qfblock;
-	//typedef struct qfblock qfblock;
-
   typedef struct file_info {
 		int fd;
 		char *filepath;
@@ -76,11 +72,7 @@ extern "C" {
 
 	typedef struct quotient_filter_runtime_data {
 		file_info f_info;
-		uint32_t auto_resize;
 		int64_t (*container_resize)(QF *qf, uint64_t nslots);
-		pc_t pc_nelts;
-		pc_t pc_ndistinct_elts;
-		pc_t pc_noccupied_slots;
 		uint64_t num_locks;
 		volatile int metadata_lock;
 		volatile int *locks;
@@ -92,7 +84,7 @@ extern "C" {
 	typedef struct quotient_filter_metadata {
 		uint64_t magic_endian_number;
 		enum qf_hashmode hash_mode;
-		uint32_t reserved;
+		uint32_t auto_resize;
 		uint64_t total_size_in_bytes;
 		uint32_t seed;
 		uint64_t nslots;
