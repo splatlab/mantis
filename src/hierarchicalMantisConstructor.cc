@@ -73,8 +73,8 @@ int recursiveConstruction(uint64_t cnt, uint64_t start, uint64_t end, std::vecto
                  + " -o " + tmpOut  + tmpIn
                  + " > " + tmpOut + std::to_string(level) + tmpIn + ".log 2>&1;";
     sysCommand += "retVal=$?;"
-                  "if [ $retVal -eq 0 ]; then"
-                  "rm -rf " + tmpOut + "squeakr" + std::to_string(start) + "_" + std::to_string(mid) + ";";
+                  "if [ $retVal -eq 0 ]; then "
+                  " rm -rf " + tmpOut + "squeakr" + std::to_string(start) + "_" + std::to_string(mid) + ";";
     sysCommand += "rm -rf " + tmpOut + "squeakr" + std::to_string(mid) + "_" + std::to_string(end) + ";fi;";
     sysCommand += "ls -lh " + tmpOut + tmpIn + " >> " + tmpOut + std::to_string(level) + tmpIn + ".log;";
     cmds.emplace_back(level, sysCommand);

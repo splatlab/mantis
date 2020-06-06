@@ -34,6 +34,7 @@ endif()
 # Sanitizers BEGIN
 ###
 if (ASAN_BUILD)
+   #-fsanitize=leak
    list(APPEND PF_CPP_FLAGS "-fsanitize=address")
    #list(APPEND PF_CPP_FLAGS "-fsanitize=undefined")
    #set(CMAKE_LINK_FLAGS "-fsanitize=address")
