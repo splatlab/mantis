@@ -249,8 +249,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
         edgeList.clear();
         if (tmpEdges.size() >= MAX_ALLOWED_TMP_EDGES_IN_FILE) {
-            std::vector<std::pair<uint64_t , uint64_t >> toWrite(tmpEdges);
+            std::vector<std::pair<uint64_t , uint64_t >> toWrite = std::move(tmpEdges);
             tmpEdges.clear();
+            tmpEdges.shrink_to_fit();
             writeMutex.lock();
             colorMutex.unlock();
             edgePairSortUniq(toWrite);
