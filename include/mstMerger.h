@@ -319,7 +319,9 @@ private:
                                                QueryStats &queryStats,
                                                bool verbose=false);
 
-    inline void edgePairSortUniq(std::vector<std::pair<uint64_t, uint64_t>> &edgeList) {
+    void edgePairSortUniq(std::vector<std::pair<uint64_t, uint64_t>> &edgeList) {
+        omp_set_dynamic(false);
+        omp_set_num_threads(nThreads);
         __gnu_parallel::sort(edgeList.begin(), edgeList.end(),
                              [](auto &e1, auto &e2) {
                                  return e1.first == e2.first ? e1.second < e2.second : e1.first < e2.first;

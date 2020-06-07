@@ -217,11 +217,7 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
     while(kmerCount < sampleKmerCount and
           (curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks())) {
         console->info("Current block={}", curBlock);
-//        console->info("Usleep");
-//        usleep(10000000);
         maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
-//        console->info("Usleep3");
-//        usleep(10000000);
         maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
 
         maxMinimizer =
@@ -518,6 +514,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
 
     console -> info("At CQFs merging phase. Time-stamp = {}.\n", time(nullptr) - start_time_);
 
+    omp_set_dynamic(false);
+    omp_set_num_threads(threadCount);
+
     std::vector<std::pair<uint64_t, uint64_t>> tmp_kmers;
     // reserve 1/3rd more than the threshold as the actual count of kmers is gonna be +-epsilon of the threshold
     tmp_kmers.reserve(cdbg.getCqfSlotCnt());
@@ -677,6 +676,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 cdbg.serializeCurrentCQF();
                 console->info("Done filling and storing cqf {}", outputCQFBlockId);
                 tmp_kmers.clear();
+                tmp_kmers.shrink_to_fit();
+//                std::vector<std::remove_reference<decltype(tmp_kmers)>::type::value_type>().swap(tmp_kmers);
                 occupiedSlotsCnt = 0;
                 outputCQFBlockId++;
             }
@@ -685,8 +686,10 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             if (maxMinimizerCnt < currMinimizerSlotsCnt) {
                 maxMinimizerCnt = currMinimizerSlotsCnt;
             }
-            currMinimizerKmers.clear();
             occupiedSlotsCnt += currMinimizerSlotsCnt;
+            currMinimizerKmers.clear();
+            currMinimizerKmers.shrink_to_fit();
+            std::vector<std::remove_reference<decltype(currMinimizerKmers)>::type::value_type>().swap(currMinimizerKmers);
             currMinimizerSlotsCnt = 0;
         }
         minMinimizer = maxMinimizer + 1;
@@ -749,6 +752,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         console->info("Done constructing last cqf");
         cdbg.serializeCurrentCQF();
         tmp_kmers.clear();
+        tmp_kmers.shrink_to_fit();
         occupiedSlotsCnt = 0;
     }
 
@@ -760,6 +764,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     console -> info("Total kmers merged: {}. Time-stamp: {}.", kmerCount, time(nullptr) - start_time_);
     console -> info("Out of {} kmers, {} have color-ids that are sampled earlier.", kmerCount, foundAbundantId);
 
+    tmp_kmers.clear();
+    tmp_kmers.shrink_to_fit();
+    std::vector<std::remove_reference<decltype(tmp_kmers)>::type::value_type>().swap(tmp_kmers);
     cdbg1.replaceCQFInMemory(invalid);
     cdbg2.replaceCQFInMemory(invalid);
     cdbg.replaceCQFInMemory(invalid);
@@ -870,17 +877,17 @@ void CQF_merger<qf_obj, key_obj>::merge()
 {
     auto t_start = time(nullptr);
     console -> info ("Merging the two CQFs..");
-    std::cerr << "0. Before starting anything\n\n";
+    std::cerr << "\n0. Before starting anything\n";
     auto tillBlock = sample_colorID_pairs(mantis::SAMPLE_SIZE);
-    std::cerr << "1. After sampling the colorIdPairs and before finding the rest of pairs\n\n";
+    std::cerr << "\n1. After sampling the colorIdPairs and before finding the rest of pairs\n";
     store_colorID_pairs(tillBlock);
-    std::cerr << "2. After fillDiskBucket before buildMPH\n\n";
+    std::cerr << "\n2. After fillDiskBucket before buildMPH\n";
     build_MPHF();
-    std::cerr << "3. After buildMPH before buildCQF\n\n";
+    std::cerr << "\n3. After buildMPH before buildCQF\n";
     build_CQF();
-    std::cerr << "4. After buildCQF before serialize\n\n";
+    std::cerr << "\n4. After buildCQF before serialize\n";
     serializeRemainingStructures();
-    std::cerr << "5. After serialize\n\n";
+    std::cerr << "\n5. After serialize\n";
     auto t_end = time(nullptr);
     console -> info("CQF merge completed in {} s.", t_end - t_start);
 }

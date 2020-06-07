@@ -79,9 +79,10 @@ class CQF {
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
 			inMem = other.inMem;
-			other.cqf.runtimedata = nullptr;
-			other.cqf.metadata = nullptr;
-			other.cqf.blocks = nullptr;
+			other.free();
+			/*delete other.cqf.runtimedata;// = nullptr;
+			delete other.cqf.metadata;// = nullptr;
+			delete other.cqf.blocks;// = nullptr;*/
 			other.is_filebased = false;
             other.inMem = false;
 		}
@@ -91,17 +92,17 @@ class CQF {
 			close();
 		}
 
-		CQF& operator=(CQF<key_obj>& other) {
+		/*CQF& operator=(CQF<key_obj>& other) {
 			memcpy(reinterpret_cast<void*>(&cqf),
 						 reinterpret_cast<void*>(&other.cqf), sizeof(QF));
 			is_filebased = other.is_filebased;
 			inMem = other.inMem;
-			other.cqf.runtimedata = nullptr;
-			other.cqf.metadata = nullptr;
-			other.cqf.blocks = nullptr;
+			other.cqf.runtimedata;// = nullptr;
+			other.cqf.metadata;// = nullptr;
+			other.cqf.blocks;// = nullptr;
 			other.is_filebased = false;
 			return *this;
-		}
+		}*/
 
 		int insert(const key_obj& k, uint8_t flags);
 
@@ -117,6 +118,7 @@ class CQF {
 		void free() {
 			if (inMem) {
 //				std::cerr << "free\n";
+
 				qf_free(&cqf);
 			}
 		}//std::cerr << "\nfree output: " << qf_free(&cqf) << "\n"; }
@@ -159,6 +161,7 @@ class CQF {
 								 false);
 				Iterator(const CQF<key_obj>::Iterator& copy_iter);
 				const CQF<key_obj>::Iterator& operator=(const CQF<key_obj>::Iterator& copy_iter);
+
 
 				key_obj operator*(void) const;
 				void operator++(void);

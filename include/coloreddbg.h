@@ -184,7 +184,7 @@ public:
                std::string &prefix, int flag);
 
     // Required for blocked CQF
-    ColoredDbg(uint64_t nqf, uint64_t key_bits);
+    ColoredDbg(uint64_t nqf, uint64_t keybits);
 
     // Overload of asignment operator to do deep copy for all the members
     ColoredDbg &operator=(ColoredDbg &&other) noexcept {
@@ -219,9 +219,9 @@ public:
             curDbg = std::move(other.curDbg);//.reset(new CQF<key_obj>(std::move(*other.curDbg)));
         }
         currentBlock = other.currentBlock;
-        dbgs.resize(other.dbgs.size());
+//        dbgs.resize(other.dbgs.size());
         for (auto i = 0; i < other.dbgs.size(); i++) {
-            dbgs[i] = other.dbgs[i];
+            dbgs.push_back(std::move(other.dbgs[i]));
         }
         return *this;
     }
@@ -511,35 +511,30 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
     sampleList.close();
 
     std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE);
-    if (colorClassFiles.size()) {
-        if (colorClassFiles.empty()) {
-            console->error("No color class bv buffer files exists. Either disable the option of using bvs"
-                           "or construct mantis in its classic mode");
-            std::exit(3);
-        }
+    if (not colorClassFiles.empty()) {
         std::cerr << "Loading the colorClass files\n";
         std::map<int, std::string> sorted_files;
-        for (std::string file : colorClassFiles) {
+        for (const std::string &file : colorClassFiles) {
             int id = std::stoi(first_part(last_part(file, '/'), '_'));
             sorted_files[id] = file;
         }
 
         eqclasses.reserve(sorted_files.size());
         BitVectorRRR bv;
-        for (auto file : sorted_files) {
+        for (const auto &file : sorted_files) {
             sdsl::load_from_file(bv, file.second);
             eqclasses.push_back(bv);
             num_serializations++;
         }
         // Load the color-class bitvector file names only.
         std::map<uint, std::string> sortedFiles;
-        for (std::string file : colorClassFiles) {
+        for (const std::string &file : colorClassFiles) {
             uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
             sortedFiles[fileID] = file;
         }
         // Store the color-class files names in sorted order (based on their sequence).
         eqClsFiles.reserve(colorClassFiles.size());
-        for (auto idFilePair : sortedFiles)
+        for (const auto &idFilePair : sortedFiles)
             eqClsFiles.push_back(idFilePair.second);
     } else { // since it's none we won't load the color info, but still need to get the eqClsFiles count
         sdsl::int_vector<> parentbv;

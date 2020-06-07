@@ -82,6 +82,8 @@ public:
                     uniqueEdges[1].push_back(edge);
                 if (uniqueEdges[0].size() > maxAllowedCnt or minheap.empty()) {
                     for (uint64_t mstIdx = 0; mstIdx < 2; mstIdx++) {
+                        omp_set_dynamic(false);
+                        omp_set_num_threads(nThreads);
                         __gnu_parallel::sort(
                                 uniqueEdges[mstIdx].begin(), uniqueEdges[mstIdx].end(),
                                              [](auto &e1, auto &e2) {
