@@ -514,8 +514,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
 
     console -> info("At CQFs merging phase. Time-stamp = {}.\n", time(nullptr) - start_time_);
 
-    omp_set_dynamic(false);
-    omp_set_num_threads(threadCount);
+//    omp_set_dynamic(false);
+//    omp_set_num_threads(threadCount);
 
     std::vector<std::pair<uint64_t, uint64_t>> tmp_kmers;
     // reserve 1/3rd more than the threshold as the actual count of kmers is gonna be +-epsilon of the threshold
@@ -628,7 +628,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 std::cerr << "\r";
                 console->info("Fill and serialize cqf {} with {} kmers into {} slots up to minimizer {}", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt, b);
                 kmerCount+=tmp_kmers.size();
-                __gnu_parallel::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+                std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
                     return kv1.first < kv2.first;
                 });
                 // unique
@@ -700,7 +700,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     if (!tmp_kmers.empty()) {
         console->info("Fill and serialize cqf {} with {} kmers into {} slots as the last cqf block", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt);
         kmerCount+=tmp_kmers.size();
-        __gnu_parallel::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+        std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
             return kv1.first < kv2.first;
         });
         // unique

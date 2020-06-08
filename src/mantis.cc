@@ -283,8 +283,11 @@ int main ( int argc, char *argv[] ) {
       qopt.prefix = bopt.out; qopt.numThreads = bopt.numthreads; qopt.remove_colorClasses = true;
       build_mst_main(qopt);
       break;//build_main(bopt);  break;
-    case mode::build_by_merge: omp_set_dynamic(false);
-            omp_set_num_threads(bopt.numthreads);construct_mantis_by_merge_main(bopt); break;
+    case mode::build_by_merge:
+//        omp_set_dynamic(false);
+//        omp_set_num_threads(bopt.numthreads);
+        construct_mantis_by_merge_main(bopt);
+        break;
     case mode::build_mst: build_mst_main(qopt); break;
     case mode::validate_mst: validate_mst_main(mvopt); break;
     case mode::query: qopt.use_colorclasses? query_main(qopt):mst_query_main(qopt);  break;
