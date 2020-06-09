@@ -33,6 +33,7 @@ public:
     uint64_t idx{0}, visitedCnt{0};
     uint64_t weightBits;
     uint64_t weightMask;
+    bool bordersAreOnDisk = false;
 
     AdjList(std::string prefix, uint64_t numColorClasses, uint64_t numSamples);
 
@@ -51,6 +52,8 @@ public:
                     sdsl::bit_vector &activeLevel,
                     uint64_t &remaining,
                     uint64_t level = 0);
+    void serialize(bool storeBorders = false);
+    void loadBorders();
 };
 
 

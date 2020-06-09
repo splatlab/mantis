@@ -33,12 +33,10 @@ void AdjList::storeEdge(uint64_t src, uint64_t dest, uint64_t weight) {
 }
 
 void AdjList::loadCompactedAdjList() {
-    for (auto i = 1; i < smallerSrcStartIdx.size(); i++) {
-        smallerSrcStartIdx[i] = smallerSrcStartIdx[i-1] + smallerSrcStartIdx[i];
-        greaterSrcStartIdx[i] = greaterSrcStartIdx[i-1] + greaterSrcStartIdx[i];
+    if (bordersAreOnDisk) {
+        loadBorders();
     }
 
-    adjListFile.close();
     std::ifstream adjListIn(prefix+mantis::TEMP_MST_ADJ_FILE);
     uint64_t src, dest, weight;
     adjListIn >> src >> dest >> weight;
@@ -180,3 +178,23 @@ void AdjList::boundedDfs(uint64_t parIdx,
     }
 //        std::cerr << "\n";
 }
+
+void AdjList::serialize(bool storeBorders) {
+    adjListFile.close();
+    for (auto i = 1; i < smallerSrcStartIdx.size(); i++) {
+        smallerSrcStartIdx[i] = smallerSrcStartIdx[i-1] + smallerSrcStartIdx[i];
+        greaterSrcStartIdx[i] = greaterSrcStartIdx[i-1] + greaterSrcStartIdx[i];
+    }
+    if (storeBorders) {
+        bordersAreOnDisk = true;
+        sdsl::store_to_file(smallerSrcStartIdx, prefix + "tmp_smallerSrcStartIdx");
+        sdsl::store_to_file(greaterSrcStartIdx, prefix + "tmp_greaterSrcStartIdx");
+    }
+}
+
+void AdjList::loadBorders() {
+    sdsl::load_from_file(smallerSrcStartIdx, prefix + "tmp_smallerSrcStartIdx");
+    sdsl::load_from_file(greaterSrcStartIdx, prefix + "tmp_greaterSrcStartIdx");
+}
+
+

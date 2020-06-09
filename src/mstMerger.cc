@@ -637,7 +637,8 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
-    removeIntermediateWeightFiles();
+    adjListPtr->serialize(true); // pass "true" for debugging purposes
+//    removeIntermediateWeightFiles();
 }
 
 /**
@@ -665,6 +666,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     std::vector<uint64_t> thread_deltaOffset_and_parentEnd =
             findThreadWeightBoundaries(parentbv, adjListPtr.get());
     adjListPtr.reset(nullptr);
+//    removeIntermediateTmpFiles();
 
     logger->info("Filling DeltaBV and BBV...");
     mst[0].reset(new MSTQuery(prefixes[0], k, k, toBeMergedNumOfSamples[0], logger));
