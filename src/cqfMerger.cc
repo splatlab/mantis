@@ -729,8 +729,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 outputCQFBlockId++;
             }
             cdbg.minimizerBlock[b] = outputCQFBlockId;
-            std::move(std::execution::par_unseq, currMinimizerKmers.begin(), currMinimizerKmers.end(), tmp_kmers.end());
-//            tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
+//            std::move(std::execution::par_unseq, currMinimizerKmers.begin(), currMinimizerKmers.end(), tmp_kmers.end());
+            tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
             currMinimizerKmers.clear();
             currMinimizerKmers.shrink_to_fit();
             std::vector<std::remove_reference<decltype(currMinimizerKmers)>::type::value_type>().swap(currMinimizerKmers);

@@ -23,7 +23,6 @@
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
-static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{64000000};//{130000000}; // Up to 2G
 static constexpr uint64_t CONSTNUMBlocks{1 << 16};
 
 MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
@@ -189,19 +188,19 @@ bool MSTMerger::buildEdgeSets() {
         }
         for (auto &t : threads) { t.join(); }
     }
+    uint64_t totalObservedEdges{0};
     writeMutex.lock();
     if (not tmpEdges.empty()) {
         std::cerr << "tmpEdges.size(): " << tmpEdges.size() << " sizeof(element): " << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type) <<  "\n";
         edgePairSortUniq(tmpEdges);
         std::string filename(prefix+"tmp"+std::to_string(curFileIdx));
         std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
-        uint64_t maxIdd = 0;
         std::cerr << "writing to file tmp" << curFileIdx << "\n";
         std::cerr << "Total elements: " << tmpEdges.size() << " size:"
                   << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size()
-                  << " with maxcolorID: " << maxIdd << "\n";
+                  << "\n";
         uint64_t vecSize = tmpEdges.size();
-        totalWrittenEdges = vecSize;
+        totalObservedEdges = vecSize;
         tmpfile.write(reinterpret_cast<const char *>(&vecSize), sizeof(vecSize));
         tmpfile.write(reinterpret_cast<const char *>(tmpEdges.data()),
                       sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size());
@@ -209,14 +208,14 @@ bool MSTMerger::buildEdgeSets() {
         curFileIdx++;
     }
     writeMutex.unlock();
-    logger->info("Done writing the last tmp file");
+    logger->info("Done writing the last tmp file, tmp {}", curFileIdx-1);
     for (uint32_t i = 0; i < nThreads; ++i) {
-        totalWrittenEdges += cnts[i];
+        totalObservedEdges += cnts[i];
     }
     num_colorClasses = maxId + 1;
     zero = static_cast<colorIdType>(num_colorClasses);
     num_colorClasses++;// last one is for zero as the dummy color class with ID equal to actual num of color classes
-    logger->info("Total number of kmers and color classes (including dummy) observed: {}, {}.\nTotal number of edges (including duplicates): {}", numOfKmers, num_colorClasses, totalWrittenEdges);
+    logger->info("Total number of kmers and color classes (including dummy) observed: {}, {}.\nTotal observed edges (including duplicates): {}", numOfKmers, num_colorClasses, totalObservedEdges);
     return true;
 }
 
@@ -243,8 +242,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     auto appendStore = [&]() {
         edgePairSortUniq(edgeList);
         colorMutex.lock();
-        std::move(std::execution::par_unseq, edgeList.begin(), edgeList.end(), tmpEdges.end());
-//        tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
+        cnt += edgeList.size();
+//        std::move(std::execution::par_unseq, edgeList.begin(), edgeList.end(), tmpEdges.end());
+        tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
         edgeList.clear();
         if (tmpEdges.size() >= MAX_ALLOWED_TMP_EDGES_IN_FILE) {
             std::vector<std::pair<uint64_t , uint64_t >> toWrite = std::move(tmpEdges);
@@ -256,7 +256,6 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
             std::string filename(prefix + "tmp" + std::to_string(curFileIdx));
             std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
             uint64_t toWriteSize = toWrite.size();
-            cnt += toWriteSize;
             tmpfile.write(reinterpret_cast<const char *>(&toWriteSize), sizeof(toWriteSize));
             tmpfile.write(reinterpret_cast<const char *>(toWrite.data()),
                           sizeof(std::remove_reference<decltype(toWrite)>::type::value_type)*toWrite.size());
@@ -379,6 +378,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     //    inMemEdgeWeight.reserve(1000000);
     // a lambda function to store the edges in the corresponding weight bucket file
     // managing its own output buffer
+    uint64_t discardedEdgeCnt = 0, discardedEdgeWeight = 0;
     auto store_edge_weight = [&](auto pair, auto w) {
         if (w <= maxWeightInFile) {
             w--;
@@ -391,10 +391,11 @@ bool MSTMerger::calculateMSTBasedWeights() {
             }
             output_buffer[bufferCurrIndices[w]] = pair;
             bufferCurrIndices[w]++;
+        } else {
+            discardedEdgeCnt++;
+            discardedEdgeWeight+=w;
+//            inMemEdgeWeight.emplace_back(pair.first, pair.second, w);
         }
-        /*else {
-            inMemEdgeWeight.emplace_back(pair.first, pair.second, w);
-        }*/
     };
 
     logger->info("Loading {} temp edge files.", curFileIdx);
@@ -552,7 +553,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
         }
     }
     logger->info("Done calculating weight of all the edges!");
-
+    if (maxWeightInFile < numSamples) {
+        logger->info("Total number of discarded edges: {} with average weight: {}",
+                discardedEdgeCnt, discardedEdgeWeight/discardedEdgeCnt);
+    }
     // store remaining buffer to file for each weight
     uint64_t totalUniqEdgeCnt = 0;
     for (auto w = 0; w < outWeightFile.size(); w++) {

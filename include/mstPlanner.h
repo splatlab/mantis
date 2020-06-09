@@ -4,6 +4,7 @@
 
 #ifndef MANTIS_MSTPLANNER_H
 #define MANTIS_MSTPLANNER_H
+static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{64000000};//{130000000}; // Up to 2G
 
 
 struct Cost {
@@ -34,8 +35,8 @@ public:
         }
         // local step cost for each node is its degree (in + out)
         // query cost for each node is number of times it is called
-        logger->info("Loading {} temp edge files.", edgeFileCnt);
         if (includingQueries) {
+            logger->info("Loading {} temp edge files.", edgeFileCnt);
             uint64_t tmpedgecnt = 0;
             std::vector<TmpFileIterator> tis;
             Minheap_edge minheap;
@@ -46,10 +47,11 @@ public:
                 if (tis[i].end()) continue;
                 minheap.push(&tis[i]);
             }
-            uint64_t maxAllowedCnt = nThreads * 1000000;
+            uint64_t maxAllowedCnt = MAX_ALLOWED_TMP_EDGES_IN_FILE;
             std::vector<std::pair<colorIdType, colorIdType>> uniqueEdges[2];
             uniqueEdges[0].reserve(maxAllowedCnt);
             uniqueEdges[1].reserve(maxAllowedCnt);
+            logger->info("Walking all the edges to find popular nodes.");
             auto val = minheap.top()->get_val();
             while (!minheap.empty()) {
                 do {
