@@ -307,8 +307,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     mstZero[1] = ccCnt[1] - 1;
     auto c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
 
-    std::cerr << "Running the MST planner\n";
-//    usleep(10000000);
+    logger->info("Running the MST planner for two input MSTs");
     mst[0] = std::make_unique<MSTQuery>(prefixes[0], k, k, toBeMergedNumOfSamples[0], logger);
     mst[1] = std::make_unique<MSTQuery>(prefixes[1], k, k, toBeMergedNumOfSamples[1], logger);
 
@@ -350,9 +349,6 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 t.join();
             }
             threads.clear();
-           /* std::cerr << "mstIdx: " << mstIdx <<
-                      " cacheCntr: " << queryStats[mstIdx][0].cacheCntr <<
-                      " noCacheCntr: " << queryStats[mstIdx][0].noCacheCntr << "\n";*/
         }
     }
 
@@ -573,8 +569,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
             outWeightFile[w].close();
         }
     }
-    std::string sysCommand = "rm -r " + prefix + "tmp*";
-    system(sysCommand.c_str());
+    removeIntermediateTmpFiles();
     logger->info("Duplicated edge count: {}, final unique edge count: {}", tmpedgecnt+colorPairs[0].size(), totalUniqEdgeCnt);
     logger->info("Calculated the weight for all the edges");
     return true;
@@ -642,6 +637,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
+    removeIntermediateWeightFiles();
 }
 
 /**
@@ -656,7 +652,6 @@ bool MSTMerger::encodeColorClassUsingMST() {
     logger->info("Running kruskal");
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
-    removeIntermediateDiskFiles();
     logger->info("After kruskal. Loading the adjacency list.");
     adjListPtr->loadCompactedAdjList();
 

@@ -351,10 +351,13 @@ private:
         return size;
     }
 
-    inline void removeIntermediateDiskFiles() {
+    inline void removeIntermediateTmpFiles() {
         std::string sysCommand = "rm -r " + prefix + "tmp*";
         system(sysCommand.c_str());
-        sysCommand = "rm -r " + prefix + "w*";
+    }
+
+    inline void removeIntermediateWeightFiles() {
+        std::string sysCommand = "rm -r " + prefix + "w*";
         system(sysCommand.c_str());
     }
 
