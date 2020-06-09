@@ -654,93 +654,31 @@ bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
 
     logger->info("Running kruskal");
-//    usleep(10000000);
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
+    removeIntermediateDiskFiles();
     logger->info("After kruskal. Loading the adjacency list.");
-//    usleep(10000000);
     adjListPtr->loadCompactedAdjList();
-    std::string sysCommand = "rm -r " + prefix + "w*";
-    system(sysCommand.c_str());
-    sysCommand = "rm -r " + prefix + "tmp*";
-    system(sysCommand.c_str());
 
-//    logger->info("after loading the adj list");
-//    usleep(10000000);
-    uint64_t nodeCntr{0};
     // encode the color classes using mst
     logger->info("Filling ParentBV...");
     sdsl::int_vector<> parentbv(num_colorClasses, 0, ceil(log2(num_colorClasses)));
     sdsl::bit_vector visited(num_colorClasses, 0);
     adjListPtr->hybridTreeWalk(zero, parentbv, visited);
-    uint64_t cntr = 0;
-    for (auto i = 0; i < visited.size(); i++) {
-        if (visited[i] == 0) {
-            cntr++;
-        }
-    }
 
-    std::cerr << "total " << visited.size() << ", visited: " << adjListPtr->visitedCnt << ", not visited: " << cntr << "\n";
-    std::vector<uint64_t> thread_deltaOffset_and_parentEnd(nThreads, 0);
-    uint64_t idx{0};
-    uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);
-    uint64_t doubleCheckTotWeight{0};
-    for (auto i = 1; i <= adjListPtr->smallerSrcStartIdx.size(); i++) {
-        // Limit for adj edges of parent, are the start of the adj edges for next node.
-        // So if parent = i-1, limit for adj edges of parent is startIdx[i]
-        auto limit = i == adjListPtr->smallerSrcStartIdx.size() ?
-                adjListPtr->smallerSrcStartIdx.size() : adjListPtr->smallerSrcStartIdx[i];
-        while (idx < limit) {
-            auto par = static_cast<uint64_t>(i-1);
-            auto val = adjListPtr->smallerSrc[idx];
-            uint64_t weight = val & adjListPtr->weightMask;
-            uint64_t child = val >> adjListPtr->weightBits;
-            if (parentbv[par] == child) {
-                std::swap(par, child);
-            } else if (parentbv[child] != par) {
-                std::cerr << "ERROR! Neither of the two nodes are the parent at index: " << idx << "\n" <<
-                             "Expected: " << child << " <-> " << par << "\n"
-                             << "Got: " << parentbv[par] << " for " << par <<
-                             " and " << parentbv[child] << " for " << child << "\n";
-                std::exit(3);
-            }
-            thread_deltaOffset_and_parentEnd[std::min(static_cast<uint64_t >(nThreads-1), child / bucketSize)] += weight;
-            doubleCheckTotWeight += weight;
-            idx++;
-        }
-    }
-    if (doubleCheckTotWeight != mstTotalWeight - 1) {
-        std::cerr << "ERROR! Weights are not stored properly:\n" <<
-        "Expected: " << mstTotalWeight << " Got: " << doubleCheckTotWeight << "\n";
-        std::exit(3);
-    }
-    for (auto i = 1; i < thread_deltaOffset_and_parentEnd.size(); i++) {
-        thread_deltaOffset_and_parentEnd[i] += thread_deltaOffset_and_parentEnd[i-1];
-    }
-    for (auto i = thread_deltaOffset_and_parentEnd.size()-1; i > 0 ; i--) {
-        thread_deltaOffset_and_parentEnd[i] = thread_deltaOffset_and_parentEnd[i-1];
-//        std::cerr << "thr" << i << " " << thread_deltaOffset_and_parentEnd[i] << "\n";
-    }
-    thread_deltaOffset_and_parentEnd[0] = 0;
 
-    std::cerr << "\r";
+    std::vector<uint64_t> thread_deltaOffset_and_parentEnd =
+            findThreadWeightBoundaries(parentbv, adjListPtr.get());
     adjListPtr.reset(nullptr);
-    std::cerr << "after deleting MST adjacency list\n";
-//    usleep(10000000);
 
-    // fill in deltabv and bbv
     logger->info("Filling DeltaBV and BBV...");
     mst[0].reset(new MSTQuery(prefixes[0], k, k, toBeMergedNumOfSamples[0], logger));
     mst[1].reset(new MSTQuery(prefixes[1], k, k, toBeMergedNumOfSamples[1], logger));
-//    mst[0]->loadIdx(prefixes[0]);
-//    mst[1]->loadIdx(prefixes[1]);
     sdsl::bit_vector bbv(mstTotalWeight, 0);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
-    std::cerr << "after initializing msts in addition to deltabv and bbv\n";
-//    usleep(10000000);
-
-//    sdsl::bit_vector::select_1_type sbbv = sdsl::bit_vector::select_1_type(&bbv);
+    std::cerr << "Reinitializing msts in addition to output deltabv and bbv\n";
     std::vector<std::thread> threads;
+    // For validation of the multi-threaded deltabv/bbv constructor
     std::cerr << "Before the start, offsets are:\n";
     for (auto v: thread_deltaOffset_and_parentEnd) {
         std::cerr << v << " ";
@@ -749,27 +687,19 @@ bool MSTMerger::encodeColorClassUsingMST() {
     for (uint32_t t = 0; t < nThreads; ++t) {
         threads.emplace_back(std::thread(&MSTMerger::calcDeltasInParallel, this,
                                          t, std::ref(thread_deltaOffset_and_parentEnd[t]),
-                                         std::ref(parentbv), std::ref(deltabv), std::ref(bbv), true, adjListPtr.get()));
+                                         std::ref(parentbv), std::ref(deltabv), std::ref(bbv), true,
+                                         adjListPtr.get()));
     }
     for (auto &t : threads) { t.join(); }
+    bbv[bbv.size()-1] = 1;
+    // For validation of the multi-threaded deltabv/bbv constructor
     std::cerr << "After calling calcdeltasInParallel, offsets are:\n";
     for (auto v: thread_deltaOffset_and_parentEnd) {
         std::cerr << v << " ";
     }
     std::cerr << "\n";
 
-
-    bbv[bbv.size()-1] = 1;
-    std::cerr << "\r";
-
-    std::cerr << "Done\n";
-//    usleep(10000000);
-
-    logger->info("Serializing data structures parentbv, deltabv, & bbv...");
-    sdsl::store_to_file(parentbv, std::string(prefix + mantis::PARENTBV_FILE));
-    sdsl::store_to_file(deltabv, std::string(prefix + mantis::DELTABV_FILE));
-    sdsl::store_to_file(bbv, std::string(prefix + mantis::BOUNDARYBV_FILE));
-    logger->info("Done Serializing.");
+    storeMST(parentbv, deltabv, bbv);
     return true;
 }
 

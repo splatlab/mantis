@@ -63,7 +63,6 @@ void AdjList::hybridTreeWalk(uint64_t root, sdsl::int_vector<> &parentbv, sdsl::
     parentbv[root] = root; // and it's its own parent (has no parent)
     uint64_t parIdx = root;
     boundedDfs(parIdx, parentbv, visited, currentLevel, remaining);
-//    std::cerr << "remaining " << remaining << "\n";
     while (remaining) {
         uint64_t idx = 0;
         while (remaining and idx < currentLevel.size()) {
@@ -74,9 +73,7 @@ void AdjList::hybridTreeWalk(uint64_t root, sdsl::int_vector<> &parentbv, sdsl::
                     parIdx = idx + i;
                     if ( ((wrd >> i) & 1ULL) and visited[parIdx] == 0) {
                         remaining--;
-//                        std::cerr << "in if remaining " << remaining << " ";
                         boundedDfs(parIdx, parentbv, visited, currentLevel, remaining);
-//                        std::cerr << " after remaining " << remaining << "\n";
                     }
                 }
             }
@@ -84,8 +81,17 @@ void AdjList::hybridTreeWalk(uint64_t root, sdsl::int_vector<> &parentbv, sdsl::
             currentLevel.set_int(idx, newWrd ^ wrd, wrdLen); // this is so cool and smart :D
             idx += wrdLen;
         }
-//        std::cerr << "remaining " << remaining << "\n";
     }
+
+    // validate hybridTreeWalk
+    uint64_t cntr = 0;
+    for (auto i = 0; i < visited.size(); i++) {
+        if (visited[i] == 0) {
+            cntr++;
+        }
+    }
+    std::cerr << "total " << visited.size() << ", visited: " << visitedCnt << ", not visited: " << cntr << "\n";
+
 }
 /**
  * DFS walk instead of BFS
