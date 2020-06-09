@@ -179,7 +179,7 @@ int stats_main(StatsOpts &sopt) {
         for (auto &kv : mcc_freq) {
             auto &mccs = kv.second;
             mcc_file << kv.first << "\t" << mccs.size() << "\t";
-            std::sort(mccs.begin(), mccs.end(), [](uint64_t &v1, uint64_t &v2){
+            std::sort(std::execution::par_unseq, mccs.begin(), mccs.end(), [](const uint64_t &v1, const uint64_t &v2){
                 return v1 < v2;
             });
             uint64_t prev{0}, color_cntr{0};
@@ -405,4 +405,5 @@ int stats_main(StatsOpts &sopt) {
         std::cout << bucketCntr << "\n";
         logger->info("total kmers observed: {}", kmerCntr);
     }
+    return 0;
 }

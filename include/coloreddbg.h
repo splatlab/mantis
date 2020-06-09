@@ -36,6 +36,7 @@
 
 #include <cstdlib>
 #include <random>
+#include <execution>
 
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
@@ -186,6 +187,23 @@ public:
     // Required for blocked CQF
     ColoredDbg(uint64_t nqf, uint64_t keybits);
 
+    ~ColoredDbg() {
+        sampleid_map.clear();
+        eqclass_map.clear();
+        bv_buffer.resize(0);
+        first_bv_buffer.resize(0);
+        eqclasses.clear();
+        eqclasses.shrink_to_fit();
+        minimizerBlock.clear();
+        minimizerBlock.shrink_to_fit();
+        eqClsFiles.clear();
+        eqClsFiles.shrink_to_fit();
+        minmaxMinimizer.clear();
+        minmaxMinimizer.shrink_to_fit();
+        curDbg.reset(nullptr);
+        dbgs.clear();
+        dbgs.shrink_to_fit();
+    }
     // Overload of asignment operator to do deep copy for all the members
     ColoredDbg &operator=(ColoredDbg &&other) noexcept {
         sampleid_map = other.sampleid_map;
@@ -1051,6 +1069,7 @@ ColoredDbg<qf_obj, key_obj>::findMinimizer(const typename key_obj::kmer_t &key, 
     } else if (last < minim) {
         return std::make_pair(last, minim);
     }
+    return std::make_pair(invalid, invalid);
 }
 
 template<class qf_obj, class key_obj>

@@ -23,10 +23,7 @@
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
-static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{16000000};//{130000000}; // Up to 2G
-static constexpr uint64_t SHIFTBITS{32};
-static constexpr uint64_t HIGHBIT_MASK{(1ULL << 32) - 1ULL};
-static constexpr uint64_t LOWBIT_MASK{std::numeric_limits<uint64_t>::max() - HIGHBIT_MASK};
+static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{64000000};//{130000000}; // Up to 2G
 static constexpr uint64_t CONSTNUMBlocks{1 << 16};
 
 MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
@@ -138,7 +135,7 @@ bool MSTMerger::buildEdgeSets() {
     std::vector<uint64_t> cnts(nThreads, 0);
     uint64_t maxId{0}, numOfKmers{0};
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
-    std::sort(cqfBlocks.begin(), cqfBlocks.end());
+    std::sort(std::execution::par_unseq, cqfBlocks.begin(), cqfBlocks.end());
     std::vector<std::pair<uint64_t, uint64_t>> tmpEdges;
     tmpEdges.reserve(MAX_ALLOWED_TMP_EDGES_IN_FILE);
 
@@ -246,7 +243,8 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     auto appendStore = [&]() {
         edgePairSortUniq(edgeList);
         colorMutex.lock();
-        tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
+        std::move(std::execution::par_unseq, edgeList.begin(), edgeList.end(), tmpEdges.end());
+//        tmpEdges.insert(tmpEdges.end(), edgeList.begin(), edgeList.end());
         edgeList.clear();
         if (tmpEdges.size() >= MAX_ALLOWED_TMP_EDGES_IN_FILE) {
             std::vector<std::pair<uint64_t , uint64_t >> toWrite = std::move(tmpEdges);
@@ -410,7 +408,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         if (tis[i].end()) continue;
         minheap.push(&tis[i]);
     }
-    uint64_t maxAllowedCnt = nThreads * 1000000;
+    uint64_t maxAllowedCnt = MAX_ALLOWED_TMP_EDGES_IN_FILE; //Allow up to 3.5Gigs of overhead in addition to the two msts
     std::vector<std::pair<colorIdType , colorIdType>> uniqueEdges[2];
     std::vector<std::pair<colorIdType , colorIdType >> outputMstEdges;
     outputMstEdges.reserve(maxAllowedCnt);
@@ -427,8 +425,12 @@ bool MSTMerger::calculateMSTBasedWeights() {
             if (cur->next()) {
                 minheap.replace_top(cur);
             }
-            else
+            else {
+//                std::string tmpFilename = cur->get_filename();
                 minheap.pop();
+//                std::string sysCommand = "rm -r " + prefix + tmpFilename;
+//                system(sysCommand.c_str());
+            }
             tmpedgecnt++;
         } while (!minheap.empty() && val == minheap.top()->get_val());
         outputMstEdges.push_back(val);

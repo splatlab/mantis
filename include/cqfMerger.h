@@ -58,9 +58,10 @@ typedef boomphf::mphf<ColorPair, Fat_Custom_Pair_Hasher> boophf_t;
 typedef std::unordered_map<std::pair<colorIdType, colorIdType>, uint64_t, Custom_Pair_Hasher> idPairMap_t;
 
 struct KeyColorMin {
-    uint64_t key;
-    colorIdType color;
-    uint16_t minimizer;
+    uint64_t key{0};
+    colorIdType color{0};
+    uint16_t minimizer{0};
+    KeyColorMin() {}
     KeyColorMin(uint64_t keyIn, colorIdType colorIn, uint16_t minimizerIn): key(keyIn), color(colorIn), minimizer(minimizerIn) {}
 };
 
@@ -186,6 +187,15 @@ public:
     // (all the CdBG's are private members).
     void merge();
 
+    ~CQF_merger() {
+        for (auto i = 0; i < 2; i++) {
+            minimizerKeyList[i].clear();
+            minimizerKeyList[i].shrink_to_fit();
+            minimizerColorList[i].clear();
+            minimizerColorList[i].shrink_to_fit();
+        }
+        sampledPairs.clear();
+    }
 
 private:
 

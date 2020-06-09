@@ -103,7 +103,7 @@ void AdjList::boundedDfs(uint64_t parIdx,
         return;
     }
     if (parIdx >= visited.size()) {
-        std::cerr << "1 happened\n";
+        std::cerr << "1 happened : parIdx" << parIdx << " visited.size():" << visited.size() << "\n";
         std::exit(3);
     }
     if (visited[parIdx] == 0) {
@@ -114,7 +114,7 @@ void AdjList::boundedDfs(uint64_t parIdx,
     level++;
 
     if (parIdx >= smallerSrcStartIdx.size()) {
-        std::cerr << "2 happened\n";
+        std::cerr << "2 happened : child" << parIdx << " smallerSrcStartIdx.size():" << smallerSrcStartIdx.size() << "\n";
         std::exit(3);
     }
     uint64_t startIdx = smallerSrcStartIdx[parIdx];
@@ -126,17 +126,17 @@ void AdjList::boundedDfs(uint64_t parIdx,
     for (auto i = startIdx; i < endIdx; i++) {
 //            std::cerr << "s" << i << " ";
         if (i >= smallerSrc.size()) {
-            std::cerr << "3 happened\n";
+            std::cerr << "3 happened : i" << i << " smallerSrc.size():" << smallerSrc.size() << "\n";
             std::exit(3);
         }
         auto child = smallerSrc[i] >> weightBits;
 //            std::cerr << child << "\n";
         if (child >= visited.size()) {
-            std::cerr << "4 happened\n";
+            std::cerr << "4 happened : child" << child << " visited.size():" << visited.size() << "\n";
             std::exit(3);
         }
         if (child >= parentbv.size()) {
-            std::cerr << "5 happened\n";
+            std::cerr << "5 happened : child" << child << " parentbv.size():" << parentbv.size() << "\n";
             std::exit(3);
         }
         if (!visited[child]) {

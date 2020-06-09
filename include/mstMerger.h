@@ -87,6 +87,8 @@ public:
     }
 
     const valType &get_val() const { return buffer[vecIdx]; }
+
+    std::string get_filename() {return filename;}
 private:
     std::string filename;
     std::ifstream file;
@@ -322,7 +324,7 @@ private:
     void edgePairSortUniq(std::vector<std::pair<uint64_t, uint64_t>> &edgeList) {
 //        omp_set_dynamic(false);
 //        omp_set_num_threads(nThreads);
-        std::sort(edgeList.begin(), edgeList.end(),
+        std::sort(std::execution::par_unseq,edgeList.begin(), edgeList.end(),
                              [](auto &e1, auto &e2) {
                                  return e1.first == e2.first ? e1.second < e2.second : e1.first < e2.first;
                              });

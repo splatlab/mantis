@@ -84,7 +84,7 @@ public:
                     for (uint64_t mstIdx = 0; mstIdx < 2; mstIdx++) {
 //                        omp_set_dynamic(false);
 //                        omp_set_num_threads(nThreads);
-                        std::sort(
+                        std::sort(std::execution::par_unseq,
                                 uniqueEdges[mstIdx].begin(), uniqueEdges[mstIdx].end(),
                                              [](auto &e1, auto &e2) {
                                                  return e1.first == e2.first ? e1.second < e2.second : e1.first <
@@ -142,6 +142,7 @@ public:
             auto setbits = mst->buildColor(colorsInCache[idx], dummyStats, &lru_cache, nullptr, &fixed_cache, dummy);
             fixed_cache[colorsInCache[idx]] = setbits;
         }
+        return true;
     }
 private:
 

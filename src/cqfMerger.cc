@@ -59,10 +59,10 @@ CQF_merger(std::string &firstCQFdir, std::string &secondCQFdir,
     seed = cdbg1.get_current_cqf()->seed();
     kmerMask = (1ULL << kbits) - 1;
 
-    minimizerKeyList[0].resize(cdbg1.minimizerBlock.size());
-    minimizerKeyList[1].resize(cdbg2.minimizerBlock.size());
-    minimizerColorList[0].resize(cdbg1.minimizerBlock.size());
-    minimizerColorList[1].resize(cdbg2.minimizerBlock.size());
+//    minimizerKeyList[0].resize(cdbg1.minimizerBlock.size());
+//    minimizerKeyList[1].resize(cdbg2.minimizerBlock.size());
+//    minimizerColorList[0].resize(cdbg1.minimizerBlock.size());
+//    minimizerColorList[1].resize(cdbg2.minimizerBlock.size());
 //    for (auto &m : minimizerKeyColorList[0]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());
 //    for (auto &m : minimizerKeyColorList[1]) m.reset(new std::vector<std::pair<uint64_t, colorIdType>>());
 }
@@ -120,9 +120,10 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                 }
             }
         }
+        uint64_t end = curCdbg.minimizerBlock.size()-1;
         for (auto i = minMinimizer; i <= maxMinimizer; i++) {
-            minimizerKeyList[isSecond][i] = std::make_unique<std::vector<uint64_t>>(curCdbg.minimizerCntr[i], 0);
-            minimizerColorList[isSecond][i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, colorBits[isSecond]);
+            minimizerKeyList[isSecond][end-i] = std::make_unique<std::vector<uint64_t>>(curCdbg.minimizerCntr[i], 0);
+            minimizerColorList[isSecond][end-i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, colorBits[isSecond]);
         }
 //        console->info("Start walking Cqf{}. isSecond:{}", curBlock, isSecond);
         std::vector<SpinLockT> mutexes(maxMinimizer-minMinimizer+1);
@@ -155,7 +156,8 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                     }
                     ++it;
                     if (tmpList.size() >= tmpSize or it.reachedHashLimit()) {
-                        std::sort(tmpList.begin(), tmpList.end(), [](auto &f, auto &s) {
+                        std::sort(std::execution::par_unseq, tmpList.begin(), tmpList.end(),
+                                [](const KeyColorMin &f, const KeyColorMin &s) {
                             return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
                         });
                         uint64_t i = 0;
@@ -164,8 +166,8 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                             mutexes[prev - minMinimizer].lock();
                             while (i < tmpList.size() and tmpList[i].minimizer == prev) {
                                 int64_t curIdx = minimizerIdx[threadId][prev - minMinimizer];
-                                (*minimizerKeyList[isSecond][prev])[curIdx] = tmpList[i].key;
-                                (*minimizerColorList[isSecond][prev])[curIdx] = tmpList[i].color;
+                                (*minimizerKeyList[isSecond][end-prev])[curIdx] = tmpList[i].key;
+                                (*minimizerColorList[isSecond][end-prev])[curIdx] = tmpList[i].color;
                                 minimizerIdx[threadId][prev - minMinimizer]++;
                                 i++;
                             }
@@ -205,6 +207,14 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
 
     auto t_start = time(nullptr);
 
+    uint64_t sizes[2];
+    sizes[0] = cdbg1.minimizerBlock.size();
+    sizes[1] = cdbg2.minimizerBlock.size();
+    for (auto i = 0; i < 2; i++) {
+        minimizerKeyList[i] = std::vector<std::unique_ptr<std::vector<uint64_t >>>(sizes[i]);
+        minimizerColorList[i] = std::vector<std::unique_ptr<sdsl::int_vector<>>>(sizes[i]);
+    }
+
     console -> info("Sampling at least {} kmers. Time-stamp = {}.",
                     sampleKmerCount, time(nullptr) - start_time_);
 
@@ -228,21 +238,24 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
                 std::min(maxMinimizer1, maxMinimizer2);
         std::cerr << "\rMin minimizer=" << minMinimizer << " Max minimizer=" << maxMinimizer << "\n";
         curBlock++;
+        uint64_t end[2];
+        end[0] = sizes[0]-1;
+        end[1] = sizes[1]-1;
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
             uint64_t cntr0{0}, cntr1{0}, size0{0}, size1{0};
-            if (minimizerKeyList[0][b])
-                size0 = minimizerKeyList[0][b]->size();
-            if (minimizerKeyList[1][b])
-                size1 = minimizerKeyList[1][b]->size();
+            if (minimizerKeyList[0][end[0]-b])
+                size0 = minimizerKeyList[0][end[0]-b]->size();
+            if (minimizerKeyList[1][end[1]-b])
+                size1 = minimizerKeyList[1][end[1]-b]->size();
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
             while (cntr0 < size0 and cntr1 < size1) {
-                uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
-                uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
-                uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
-                uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
+                uint64_t key0 = (*minimizerKeyList[0][end[0]-b])[cntr0];
+                uint64_t color0 = (*minimizerColorList[0][end[0]-b])[cntr0];
+                uint64_t key1 = (*minimizerKeyList[1][end[1]-b])[cntr1];
+                uint64_t color1 = (*minimizerColorList[1][end[1]-b])[cntr1];
                 /*if (kmerCount < 20000) {
                     std::cerr << ">>false " << key0 << " " << cntr0 << "\n";
                     std::cerr << ">>true " << key1 << " " << cntr1 << "\n";
@@ -263,7 +276,7 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
             }
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
-                    uint64_t color = (*minimizerColorList[1][b])[cntr1];
+                    uint64_t color = (*minimizerColorList[1][end[1]-b])[cntr1];
                     sampledPairs[std::make_pair(0, color)]++;
                     cdbg.minimizerCntr[b]++;
                     kmerCount++;
@@ -271,21 +284,29 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
                 }
             } else {
                 while (cntr0 < size0) {
-                    uint64_t color = (*minimizerColorList[0][b])[cntr0];
+                    uint64_t color = (*minimizerColorList[0][end[0]-b])[cntr0];
                     sampledPairs[std::make_pair(color, 0)]++;
                     cdbg.minimizerCntr[b]++;
                     kmerCount++;
                     ++cntr0;
                 }
             }
-            minimizerKeyList[0][b].reset(nullptr);
-            minimizerColorList[0][b].reset(nullptr);
-            minimizerKeyList[1][b].reset(nullptr);
-            minimizerColorList[1][b].reset(nullptr);
+        }
+        for (auto i = 0; i < 2; ++i) {
+            std::cerr << minimizerKeyList[i].size();
+            minimizerKeyList[i].erase(minimizerKeyList[i].begin()+(end[i]-maxMinimizer), minimizerKeyList[i].end());
+            minimizerColorList[i].erase(minimizerColorList[i].begin()+(end[i]-maxMinimizer), minimizerColorList[i].end());
+            std::cerr << " to " << minimizerKeyList[i].size() << " ";
         }
         minMinimizer = maxMinimizer+1;
         std::cerr << "\r";
     }
+    /*for (auto i = 0; i < 2; i++) {
+        minimizerKeyList[i].clear();
+        minimizerColorList[i].clear();
+        minimizerKeyList[i].shrink_to_fit();
+        minimizerColorList[i].shrink_to_fit();
+    }*/
     console -> info("Sampled {} k-mers, color-classes found: {}. Time-stamp = {}.",
                     kmerCount, sampledPairs.size(), time(nullptr) - start_time_);
     typedef std::pair<uint64_t, std::pair<uint64_t, uint64_t>> CountAndIdPair;
@@ -317,6 +338,10 @@ template <typename qf_obj, typename key_obj>
 uint64_t CQF_merger<qf_obj, key_obj>::
 store_colorID_pairs(uint64_t startingBlock)
 {
+    if (startingBlock == 0) {
+        console->error("Should have at least walked over one cqf block to sample kmers. But {} blocks have been processed.", startingBlock);
+        std::exit(3);
+    }
     auto t_start = time(nullptr);
 
     console -> info("Writing the non-sampled color-id pairs to disk-files of form ({}). Time-stamp = {}.",
@@ -324,53 +349,56 @@ store_colorID_pairs(uint64_t startingBlock)
 
     uint64_t writtenPairsCount = 0;
 
-
-    // force currentCQFBlock to get loaded into memory
-    cdbg1.replaceCQFInMemory(invalid);
-    cdbg2.replaceCQFInMemory(invalid);
-
     std::string output = cdbg.prefix + EQ_ID_PAIRS_FILE;
     console -> info("Iterating over the CQFs for the non-sampled color-id pairs starting from block {}."
                     " writing in file \"{}\"", startingBlock, output);
     std::ofstream diskBucket(output, std::ios::out);
-    uint64_t curBlock{startingBlock}, kmerCount{0};
+    uint64_t curBlock1{startingBlock}, curBlock2{startingBlock}, kmerCount{0};
     uint64_t maxMinimizer{0}, minMinimizer;
-    minMinimizer = curBlock >= cdbg1.get_numBlocks() and curBlock >= cdbg2.get_numBlocks() ? 0 :
-            curBlock >= cdbg1.get_numBlocks() ? cdbg2.getMinMaxMinimizer(curBlock).first :
-            curBlock >= cdbg2.get_numBlocks() ? cdbg1.getMinMaxMinimizer(curBlock).first :
-            std::min(cdbg1.getMinMaxMinimizer(curBlock).first, cdbg2.getMinMaxMinimizer(curBlock).first);
+    minMinimizer = curBlock1 >= cdbg1.get_numBlocks() and curBlock2 >= cdbg2.get_numBlocks() ? 0 :
+            curBlock1 >= cdbg1.get_numBlocks() ? cdbg2.getMinMaxMinimizer(curBlock2).first :
+            curBlock2 >= cdbg2.get_numBlocks() ? cdbg1.getMinMaxMinimizer(curBlock1).first :
+            std::min(cdbg1.getMinMaxMinimizer(curBlock1).first, cdbg2.getMinMaxMinimizer(curBlock2).first);
 
-    while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
-        console->info("Current block={}", curBlock);
-        uint64_t maxMinimizer1{0}, maxMinimizer2{0};
-
-        maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
-        maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
-
+    uint64_t maxMinimizer1{cdbg1.getMinMaxMinimizer(curBlock1-1).second}, maxMinimizer2{cdbg2.getMinMaxMinimizer(curBlock2-1).second};
+    cdbg.initializeNewCQFBlock(invalid, kbits, cdbg.get_qbits(), hashmode, seed);
+    uint64_t ends[2];
+    ends[0] = cdbg1.minimizerBlock.size()-1;
+    ends[1] = cdbg2.minimizerBlock.size()-1;
+    while(curBlock1 < cdbg1.get_numBlocks() or curBlock2 < cdbg2.get_numBlocks()) {
+        console->info("Current block={},{}", curBlock1, curBlock2);
+        if (curBlock2 >= cdbg2.get_numBlocks() or
+                (curBlock1 < cdbg1.get_numBlocks() and maxMinimizer1 <= maxMinimizer2)) {
+            maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock1, false);
+            curBlock1++;
+        } else {
+            maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock2, true);
+            curBlock2++;
+        }
         maxMinimizer =
                 // If it's the last block for both of the CQFs
-                curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
-                curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
-                curBlock >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
+                curBlock1 >= cdbg1.get_numBlocks() and curBlock2 >= cdbg2.get_numBlocks() ? std::max(maxMinimizer1, maxMinimizer2) :
+                curBlock1 >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
+                curBlock2 >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
                 std::min(maxMinimizer1, maxMinimizer2);
         std::cerr << "\rMin minimizer=" << minMinimizer << " Max minimizer=" << maxMinimizer << "\n";
-        curBlock++;
         uint64_t clearedBytes = 0;
+
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
             uint64_t cntr0{0}, cntr1{0}, size0{0}, size1{0};
-            if (minimizerKeyList[0][b])
-                size0 = minimizerKeyList[0][b]->size();
-            if (minimizerKeyList[1][b])
-                size1 = minimizerKeyList[1][b]->size();
+            if (minimizerKeyList[0][ends[0]-b])
+                size0 = minimizerKeyList[0][ends[0]-b]->size();
+            if (minimizerKeyList[1][ends[1]-b])
+                size1 = minimizerKeyList[1][ends[1]-b]->size();
             if (b % 500 == 0)
-                std::cerr << "\rminimizer " << b
+                std::cerr << "\rminimizer " << b << " " << ends[0]-b << " " << ends[1]-b
                           << " size=" << size0 << "," << size1 << "     ";
             while (cntr0 < size0 and cntr1 < size1) {
-                uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
-                uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
-                uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
-                uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
+                uint64_t key0 = (*minimizerKeyList[0][ends[0]-b])[cntr0];
+                uint64_t color0 = (*minimizerColorList[0][ends[0]-b])[cntr0];
+                uint64_t key1 = (*minimizerKeyList[1][ends[1]-b])[cntr1];
+                uint64_t color1 = (*minimizerColorList[1][ends[1]-b])[cntr1];
                 auto colorPair = std::make_pair(color0, color1);
                 if (key0 < key1) {
                     colorPair = std::make_pair(color0, 0);
@@ -393,7 +421,7 @@ store_colorID_pairs(uint64_t startingBlock)
             }
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
-                    uint64_t color = (*minimizerColorList[1][b])[cntr1];
+                    uint64_t color = (*minimizerColorList[1][ends[1]-b])[cntr1];
                     auto colorPair = std::make_pair(0ULL, color);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
@@ -406,7 +434,7 @@ store_colorID_pairs(uint64_t startingBlock)
                 }
             } else {
                 while (cntr0 < size0) {
-                    uint64_t color = (*minimizerColorList[0][b])[cntr0];
+                    uint64_t color = (*minimizerColorList[0][ends[0]-b])[cntr0];
                     auto colorPair = std::make_pair(color, 0ULL);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
@@ -418,15 +446,27 @@ store_colorID_pairs(uint64_t startingBlock)
                     ++cntr0;
                 }
             }
-            clearedBytes += (size0+size1);
-            minimizerKeyList[0][b].reset(nullptr);
-            minimizerColorList[0][b].reset(nullptr);
-            minimizerKeyList[1][b].reset(nullptr);
-            minimizerColorList[1][b].reset(nullptr);
+            clearedBytes += ((size0* (64+colorBits[0]))+(size1* (64+colorBits[1])));
+            for (auto i = 0; i < 2; ++i) {
+                minimizerKeyList[i].erase(minimizerKeyList[i].begin()+(ends[i]-b), minimizerKeyList[i].end());
+                minimizerColorList[i].erase(minimizerColorList[i].begin()+(ends[i]-b), minimizerColorList[i].end());
+                minimizerKeyList[i].shrink_to_fit();
+                minimizerColorList[i].shrink_to_fit();
+            }
         }
-        minMinimizer = maxMinimizer+1;
+        /*for (auto i = 0; i < 2; i++) {
+            minimizerKeyList[i].shrink_to_fit();
+            minimizerColorList[i].shrink_to_fit();
+        }*/
         std::cerr << "\r";
-        std::cerr << "Memory cleared in this round: " << std::round((clearedBytes * (64+colorBits[0]+colorBits[1])) / std::pow(2, 23)) << "MB\n";
+        std::cerr << "Memory cleared in this round: " << std::round((clearedBytes) / std::pow(2, 23)) << "MB\n";
+        minMinimizer = maxMinimizer+1;
+    }
+    for (auto i = 0; i < 2; i++) {
+        minimizerKeyList[i].clear();
+        minimizerColorList[i].clear();
+        minimizerKeyList[i].shrink_to_fit();
+        minimizerColorList[i].shrink_to_fit();
     }
     console -> info("Distinct kmers found {}, color-id pairs written to disk {}. Time-stamp = {}.",
                     kmerCount, writtenPairsCount, time(nullptr) - start_time_);
@@ -435,8 +475,6 @@ store_colorID_pairs(uint64_t startingBlock)
     diskBucket.close();
 
     // force currentCQFBlock to get loaded into memory
-    cdbg1.replaceCQFInMemory(invalid);
-    cdbg2.replaceCQFInMemory(invalid);
     std::cerr << "1.5. Before sortUnique colorPairs\n\n";
     auto t_end = time(nullptr);
     console -> info("Filling up the disk-buckets with color-id pairs took time {} seconds.", t_end - t_start);
@@ -454,7 +492,7 @@ sortUniq_colorID_pairs()
         console -> error("Command processor does not exist.");
         exit(1);
     }
-    uint64_t maxMemoryForSort = 20;
+    uint64_t maxMemoryForSort = 10;
 
     std::string diskBucket = cdbg.prefix + EQ_ID_PAIRS_FILE;
     console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
@@ -511,44 +549,52 @@ template <typename qf_obj, typename key_obj>
 void CQF_merger<qf_obj, key_obj>::build_CQF()
 {
     auto t_start = time(nullptr);
-
+    uint64_t ends[2];
+    ends[0] = cdbg1.minimizerBlock.size();
+    ends[1] = cdbg2.minimizerBlock.size();
+    for (auto i = 0; i < 2; i++) {
+        minimizerKeyList[i] = std::vector<std::unique_ptr<std::vector<uint64_t >>>(ends[i]);
+        minimizerColorList[i] = std::vector<std::unique_ptr<sdsl::int_vector<>>>(ends[i]);
+        ends[i]--;
+    }
     console -> info("At CQFs merging phase. Time-stamp = {}.\n", time(nullptr) - start_time_);
-
-//    omp_set_dynamic(false);
-//    omp_set_num_threads(threadCount);
 
     std::vector<std::pair<uint64_t, uint64_t>> tmp_kmers;
     // reserve 1/3rd more than the threshold as the actual count of kmers is gonna be +-epsilon of the threshold
     tmp_kmers.reserve(cdbg.getCqfSlotCnt());
 
     uint64_t kmerCount{0}, foundAbundantId{0};
-    cdbg1.replaceCQFInMemory(invalid);
-    cdbg2.replaceCQFInMemory(invalid);
-
-    uint64_t curBlock{0}, outputCQFBlockId{0}, occupiedSlotsCnt{0}, currMinimizerSlotsCnt{0};
-    for (auto &m :  minimizerKeyList[0]) m.reset(nullptr);//m.clear();
-    for (auto &m :  minimizerKeyList[1]) m.reset(nullptr);//m.clear();
-    for (auto &m :  minimizerColorList[0]) m.reset(nullptr);//m.clear();
-    for (auto &m :  minimizerColorList[1]) m.reset(nullptr);//m.clear();
+    uint64_t curBlock1{0}, curBlock2{0}, outputCQFBlockId{0}, occupiedSlotsCnt{0}, currMinimizerSlotsCnt{0};
 
     uint64_t maxMinimizer{0}, minMinimizer{0};
     uint64_t colorId{0}, epsilon{100}, maxMinimizerCnt{0};
     KeyObject keyObj;
 
+    uint64_t maxMinimizer1{0}, maxMinimizer2{0};
     cdbg.initializeNewCQFBlock(invalid, kbits, cdbg.get_qbits(), hashmode, seed);
-    while(curBlock < cdbg1.get_numBlocks() or curBlock < cdbg2.get_numBlocks()) {
-        console->info("Current block={}", curBlock);
-        uint64_t maxMinimizer1{0}, maxMinimizer2{0};
-        maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock, false);
-        maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock, true);
+    while(curBlock1 < cdbg1.get_numBlocks() or curBlock2 < cdbg2.get_numBlocks()) {
+        console->info("Current block={},{}", curBlock1, curBlock2);
+        if (curBlock1 == 0 and curBlock2 == 0) {
+            maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock1, false);
+            maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock2, true);
+            curBlock1++;
+            curBlock2++;
+        }
+        else if (curBlock2 >= cdbg2.get_numBlocks() or
+            (curBlock1 < cdbg1.get_numBlocks() and maxMinimizer1 <= maxMinimizer2)) {
+            maxMinimizer1 = walkBlockedCQF(cdbg1, curBlock1, false);
+            curBlock1++;
+        } else {
+            maxMinimizer2 = walkBlockedCQF(cdbg2, curBlock2, true);
+            curBlock2++;
+        }
         maxMinimizer =
                 // If it's the last block for both of the CQFs
-                curBlock >= cdbg1.get_numBlocks() - 1 and curBlock >= cdbg2.get_numBlocks() - 1 ? std::max(maxMinimizer1, maxMinimizer2) :
-                curBlock >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
-                curBlock >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
+                curBlock1 >= cdbg1.get_numBlocks() and curBlock2 >= cdbg2.get_numBlocks() ? std::max(maxMinimizer1, maxMinimizer2) :
+                curBlock1 >= cdbg1.get_numBlocks() ? maxMinimizer2 : // If we've passed the last block for CQF1
+                curBlock2 >= cdbg2.get_numBlocks() ? maxMinimizer1 : // If we've passed the last block for CQF2
                 std::min(maxMinimizer1, maxMinimizer2);
-        std::cerr << "\rMin minimizer=" << minMinimizer << " Max minimizer=" << maxMinimizer << "\n";
-        curBlock++;
+        console->info("Min minimizer={}, Max minimizer={}", minMinimizer, maxMinimizer);
 
         //        The output block kmer count should be left for the next set of input blocks
         std::vector<std::pair<uint64_t, uint64_t>> currMinimizerKmers;
@@ -556,18 +602,18 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         for (uint64_t b = minMinimizer; b <= maxMinimizer; b++) {
             // merge the two keys from cqf1 and cqf2
             uint64_t cntr0{0}, cntr1{0}, size0{0}, size1{0};
-            if (minimizerKeyList[0][b])
-                size0 = minimizerKeyList[0][b]->size();
-            if (minimizerKeyList[1][b])
-                size1 = minimizerKeyList[1][b]->size();
+            if (minimizerKeyList[0][ends[0]-b])
+                size0 = minimizerKeyList[0][ends[0]-b]->size();
+            if (minimizerKeyList[1][ends[1]-b])
+                size1 = minimizerKeyList[1][ends[1]-b]->size();
             if (b % 500 == 0)
                 std::cerr << "\rminimizer " << b
                           << " size=" << size0 << "," << size1 << "     ";
             while (cntr0 < size0 and cntr1 < size1) {
-                uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
-                uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
-                uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
-                uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
+                uint64_t key0 = (*minimizerKeyList[0][ends[0]-b])[cntr0];
+                uint64_t color0 = (*minimizerColorList[0][ends[0]-b])[cntr0];
+                uint64_t key1 = (*minimizerKeyList[1][ends[1]-b])[cntr1];
+                uint64_t color1 = (*minimizerColorList[1][ends[1]-b])[cntr1];
                 if (key0 < key1) {
                     colorId = get_colorID(std::make_pair(color0, 0));
                     keyObj = KeyObject(key0, 0, colorId);
@@ -583,7 +629,6 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                     ++cntr1;
                 }
                 currMinimizerKmers.emplace_back(keyObj.key, keyObj.count);
-//                tmp_kmers.emplace_back(keyObj.key, keyObj.count);
                 currMinimizerSlotsCnt++;
                 if (colorId > 1) {
                     currMinimizerSlotsCnt += cdbg.getColorIdSlotCnt(colorId) + 1;
@@ -593,8 +638,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             }
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
-                    uint64_t key1 = (*minimizerKeyList[1][b])[cntr1];
-                    uint64_t color1 = (*minimizerColorList[1][b])[cntr1];
+                    uint64_t key1 = (*minimizerKeyList[1][ends[1]-b])[cntr1];
+                    uint64_t color1 = (*minimizerColorList[1][ends[1]-b])[cntr1];
                     colorId = get_colorID(std::make_pair(0, color1));
                     currMinimizerKmers.emplace_back(key1, colorId);
                     currMinimizerSlotsCnt++;
@@ -607,8 +652,8 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 }
             } else {
                 while (cntr0 < size0) {
-                    uint64_t key0 = (*minimizerKeyList[0][b])[cntr0];
-                    uint64_t color0 = (*minimizerColorList[0][b])[cntr0];
+                    uint64_t key0 = (*minimizerKeyList[0][ends[0]-b])[cntr0];
+                    uint64_t color0 = (*minimizerColorList[0][ends[0]-b])[cntr0];
                     colorId = get_colorID(std::make_pair(color0, 0));
                     currMinimizerKmers.emplace_back(key0, colorId);
                     currMinimizerSlotsCnt++;
@@ -620,15 +665,17 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                         foundAbundantId++;
                 }
             }
-            minimizerKeyList[0][b].reset(nullptr);
-            minimizerColorList[0][b].reset(nullptr);
-            minimizerKeyList[1][b].reset(nullptr);
-            minimizerColorList[1][b].reset(nullptr);
+            for (auto i = 0; i < 2; ++i) {
+                minimizerKeyList[i].erase(minimizerKeyList[i].begin()+(ends[i]-b), minimizerKeyList[i].end());
+                minimizerColorList[i].erase(minimizerColorList[i].begin()+(ends[i]-b), minimizerColorList[i].end());
+                minimizerKeyList[i].shrink_to_fit();
+                minimizerColorList[i].shrink_to_fit();
+            }
             if (not tmp_kmers.empty() and occupiedSlotsCnt + currMinimizerSlotsCnt > cdbg.getCqfSlotCnt()) {
                 std::cerr << "\r";
                 console->info("Fill and serialize cqf {} with {} kmers into {} slots up to minimizer {}", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt, b);
                 kmerCount+=tmp_kmers.size();
-                std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+                std::sort(std::execution::par_unseq, tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
                     return kv1.first < kv2.first;
                 });
                 // unique
@@ -682,25 +729,32 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 outputCQFBlockId++;
             }
             cdbg.minimizerBlock[b] = outputCQFBlockId;
-            tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
+            std::move(std::execution::par_unseq, currMinimizerKmers.begin(), currMinimizerKmers.end(), tmp_kmers.end());
+//            tmp_kmers.insert(tmp_kmers.end(), currMinimizerKmers.begin(), currMinimizerKmers.end());
+            currMinimizerKmers.clear();
+            currMinimizerKmers.shrink_to_fit();
+            std::vector<std::remove_reference<decltype(currMinimizerKmers)>::type::value_type>().swap(currMinimizerKmers);
             if (maxMinimizerCnt < currMinimizerSlotsCnt) {
                 maxMinimizerCnt = currMinimizerSlotsCnt;
             }
             occupiedSlotsCnt += currMinimizerSlotsCnt;
-            currMinimizerKmers.clear();
-            currMinimizerKmers.shrink_to_fit();
-            std::vector<std::remove_reference<decltype(currMinimizerKmers)>::type::value_type>().swap(currMinimizerKmers);
             currMinimizerSlotsCnt = 0;
         }
         minMinimizer = maxMinimizer + 1;
         std::cerr << "\r";
+    }
+    for (auto i = 0; i < 2; i++) {
+        minimizerKeyList[i].clear();
+        minimizerColorList[i].clear();
+        minimizerKeyList[i].shrink_to_fit();
+        minimizerColorList[i].shrink_to_fit();
     }
     console->info("Maximum number of pairs of key-color per minimizer : {}", maxMinimizerCnt);
     // fill and serialize last cqf block
     if (!tmp_kmers.empty()) {
         console->info("Fill and serialize cqf {} with {} kmers into {} slots as the last cqf block", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt);
         kmerCount+=tmp_kmers.size();
-        std::sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+        std::sort(std::execution::par_unseq,tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
             return kv1.first < kv2.first;
         });
         // unique

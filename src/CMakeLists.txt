@@ -46,11 +46,16 @@ target_link_libraries(mantis_core
   rt
   ${ASAN_LIB}
   sdsl
+  ${TBB_LIBRARIES}
   OpenMP::OpenMP_CXX)
 
 # The driver program is `mantis`, which is a front-end
 # with the relevant sub-commands
 add_executable(mantis mantis.cc)
+if (FETCHED_TBB)
+	add_dependencies(mantis libtbb)
+endif()
+
 target_include_directories(mantis PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_link_libraries(mantis mantis_core)
 target_compile_options(mantis PUBLIC "$<$<AND:$<CONFIG:DEBUG>,$<COMPILE_LANGUAGE:C>>:${MANTIS_DEBUG_CFLAGS}>")

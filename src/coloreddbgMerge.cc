@@ -101,7 +101,9 @@ int merge_main(MergeOpts &opt) {
 	cqfMerger->merge();
     cqfMerger.reset(nullptr); // make the memory back to almost 0 to start the next section
     // merging two MSTs
-    console->info("Merging the two MSTs...");
+    std::cerr << "\n\nMerging the two MSTs...\n";
+//    std::cerr << "usleep\n";
+//    usleep(10000000);
     MSTMerger mst(opt.out, console, opt.threadCount, opt.dir1, opt.dir2);
     mst.mergeMSTs();
 

@@ -5,42 +5,12 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-//#include <utility>
-//#include <algorithm>
-//#include <string>
-//#include <vector>
-//#include <map>
-//#include <queue>
-//#include <set>
-//#include <unordered_set>
-//#include <bitset>
-//#include <cassert>
-//#include <fstream>
-
-//#include <time.h>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <stdlib.h>
-//#include <fcntl.h>
-//#include <unistd.h>
-//#include <sys/resource.h>
-//#include <sys/stat.h>
-//#include <sys/time.h>
-//#include <sys/mman.h>
-//#include <openssl/rand.h>
-
-//#include "sparsepp/spp.h"
-//#include "tsl/sparse_map.h"
-
+#include <execution>
 
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "ctpl_stl.h"
-//#include "coloreddbg.h"
-//#include "squeakrconfig.h"
-//#include "json.hpp"
-//#include "mantis_utils.hpp"
-//#include "mantisconfig.hpp"
+
 
 constexpr static uint32_t classicMaxCnt = 128;
 
@@ -131,7 +101,7 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         std::exit(2);
     }
 
-    std::sort(cmds.begin(), cmds.end(), [](auto &c1, auto &c2){
+    std::sort(std::execution::par_unseq, cmds.begin(), cmds.end(), [](auto &c1, auto &c2){
         return c1.first > c2.first;
     });
     uint64_t level = cmds.begin()->first;
