@@ -625,7 +625,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
             auto startIdx = ccBitsBucketCnt[bucketCntr];
             auto endIdx = bucketCntr+1==ccBitsBucketCnt.size()?ccBits.size():ccBitsBucketCnt[bucketCntr+1];
             while (startIdx < endIdx) {
-                analyze_edge(startIdx, zero, ccBits[startIdx]);
+                analyze_edge(ccBits[startIdx], zero, bucketCntr);
                 startIdx++;
             }
         }
