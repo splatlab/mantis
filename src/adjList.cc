@@ -6,6 +6,11 @@
 #include <mantisconfig.hpp>
 #include "adjList.h"
 
+AdjList::AdjList(std::string prefixIn, uint64_t numSamples) : prefix(prefixIn) {
+    weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
+    weightMask = (1ULL << weightBits) - 1;
+}
+
 AdjList::AdjList(std::string prefixIn, uint64_t numColorClasses, uint64_t numSamples) : prefix(prefixIn), adjListFile(prefix+mantis::TEMP_MST_ADJ_FILE) {
     weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
     weightMask = (1ULL << weightBits) - 1;
@@ -22,6 +27,7 @@ AdjList::AdjList(std::string prefixIn, uint64_t numColorClasses, uint64_t numSam
      * @param weight of the edge
      */
 void AdjList::storeEdge(uint64_t src, uint64_t dest, uint64_t weight) {
+    bordersAreOnDisk = false;
     if (src > dest) {
         std::cerr << "WARNING!! Expect src < dest but " << src << " > " << dest << "\n";
         std::swap(src, dest);
@@ -179,6 +185,24 @@ void AdjList::boundedDfs(uint64_t parIdx,
 //        std::cerr << "\n";
 }
 
+uint32_t AdjList::getWeight(uint64_t u, uint64_t v) {
+    if (u > v) {
+        std::swap(u,v);
+    }
+    for (uint64_t idx = smallerSrcStartIdx[u]; idx < smallerSrcStartIdx[u+1]; idx++) {
+        uint64_t val = smallerSrc[idx];
+        uint32_t weight = val & weightMask;
+        uint64_t other = val >> weightBits;
+        if (other == v) {
+            return weight;
+        }
+    }
+    std::stringstream ss;
+    ss << "u,v:0 " << smallerSrcStartIdx[u] << " " << smallerSrcStartIdx[u+1] << "\n";
+    std::cerr << ss.str();
+    return 0;
+}
+
 void AdjList::serialize(bool storeBorders) {
     adjListFile.close();
     for (auto i = 1; i < smallerSrcStartIdx.size(); i++) {
@@ -195,6 +219,8 @@ void AdjList::serialize(bool storeBorders) {
 void AdjList::loadBorders() {
     sdsl::load_from_file(smallerSrcStartIdx, prefix + "tmp_smallerSrcStartIdx");
     sdsl::load_from_file(greaterSrcStartIdx, prefix + "tmp_greaterSrcStartIdx");
+    smallerSrc = sdsl::int_vector<>(smallerSrcStartIdx.size(), 0, ceil(log2(smallerSrcStartIdx.size()))+weightBits);
+    greaterSrc = sdsl::int_vector<>(greaterSrcStartIdx.size(), 0, ceil(log2(greaterSrcStartIdx.size())));
 }
 
 

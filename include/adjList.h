@@ -33,8 +33,9 @@ public:
     uint64_t idx{0}, visitedCnt{0};
     uint64_t weightBits;
     uint64_t weightMask;
-    bool bordersAreOnDisk = false;
+    bool bordersAreOnDisk = true;
 
+    AdjList(std::string prefixIn, uint64_t numSamples);
     AdjList(std::string prefix, uint64_t numColorClasses, uint64_t numSamples);
 
     void storeEdge(uint64_t src, uint64_t dest, uint64_t weight);
@@ -54,6 +55,8 @@ public:
                     uint64_t level = 0);
     void serialize(bool storeBorders = false);
     void loadBorders();
+
+    uint32_t getWeight(uint64_t u, uint64_t v);
 };
 
 

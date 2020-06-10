@@ -393,7 +393,10 @@ private:
                     std::cerr << "ERROR! Neither of the two nodes are the parent at index: " << idx << "\n" <<
                               "Expected: " << child << " <-> " << par << "\n"
                               << "Got: " << parentbv[par] << " for " << par <<
-                              " and " << parentbv[child] << " for " << child << "\n";
+                              " and " << parentbv[child] << " for " << child <<
+                              " with weight " << weight
+                              << " for val: " << val << " from idx " << idx
+                              << " with limit: " << limit << "\n";
                     std::exit(3);
                 }
                 thread_deltaOffset_and_parentEnd[std::min(static_cast<uint64_t >(nThreads-1), child / bucketSize)] += weight;
@@ -436,7 +439,6 @@ private:
     uint32_t nThreads = 1;
     SpinLockT colorMutex, writeMutex;
 
-    uint64_t numBlocks;
     uint64_t curFileIdx = 0;
     uint32_t maxWeightInFile{1000};
     uint64_t ccCnt[2];

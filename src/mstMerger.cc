@@ -23,12 +23,10 @@
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
 
-static constexpr uint64_t CONSTNUMBlocks{1 << 16};
-
 MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t numThreads,
                      std::string prefixIn1, std::string prefixIn2) :
                 prefix(std::move(prefixIn)),
-                nThreads(numThreads), numBlocks(CONSTNUMBlocks) {
+                nThreads(numThreads) {
     logger = loggerIn;//.get();
     prefixes[0] = prefixIn1;
     prefixes[1] = prefixIn2;
@@ -619,15 +617,15 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                 if (selectedEdgeCntr == num_colorClasses) break;
                 it.next();
             }
-            if (selectedEdgeCntr == num_colorClasses) break;
         } else {
             auto startIdx = ccBitsBucketCnt[bucketCntr];
             auto endIdx = bucketCntr+1==ccBitsBucketCnt.size()?ccBits.size():ccBitsBucketCnt[bucketCntr+1];
             while (startIdx < endIdx) {
-                analyze_edge(ccBits[startIdx], zero, bucketCntr);
+                analyze_edge(ccBits[startIdx], zero, bucketCntr+1);
                 startIdx++;
             }
         }
+        if (selectedEdgeCntr == num_colorClasses) break;
     }
     std::cerr << "\n";
     mstTotalWeight++;//1 empty slot for root (zero)
@@ -637,8 +635,8 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
-    adjListPtr->serialize(true); // pass "true" for debugging purposes
-//    removeIntermediateWeightFiles();
+//    adjListPtr->serialize(true); // pass "true" for debugging purposes
+    removeIntermediateWeightFiles();
 }
 
 /**
@@ -651,6 +649,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     // build mst of color class graph
 
     logger->info("Running kruskal");
+//    auto adjListPtr = std::make_unique<AdjList>(prefix, numSamples);
     auto adjListPtr = std::make_unique<AdjList>(prefix, num_colorClasses, numSamples);
     kruskalMSF(adjListPtr.get());
     logger->info("After kruskal. Loading the adjacency list.");
@@ -666,7 +665,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     std::vector<uint64_t> thread_deltaOffset_and_parentEnd =
             findThreadWeightBoundaries(parentbv, adjListPtr.get());
     adjListPtr.reset(nullptr);
-//    removeIntermediateTmpFiles();
+    removeIntermediateTmpFiles();
 
     logger->info("Filling DeltaBV and BBV...");
     mst[0].reset(new MSTQuery(prefixes[0], k, k, toBeMergedNumOfSamples[0], logger));
@@ -750,6 +749,43 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t &deltaOffset,
             v += toBeMergedNumOfSamples[0];
             deltas.back().deltaVals.push_back(v);
         }
+/*
+        auto w = adjListPtr->getWeight(childIdx, parentbv[childIdx]);
+        if (w != deltas.back().deltaVals.size()) {
+            colorMutex.lock();
+            uint64_t w1{0}, w2{0};
+            if (child0 != parent0) {
+                firstDelta = getMSTBasedDeltaList(child0, parent0, mst[0].get(), fixed_cache[0],
+                                                  lru_cache[0][threadID], queryStats[0][threadID]);
+                w1 = mstBasedHammingDist(child0, parent0, mst[0].get(),
+                                                  lru_cache[0][threadID], queryStats[0][threadID]
+                        , fixed_cache[0]);
+
+
+            }
+            if (child1 != parent1) {
+                secondDelta = getMSTBasedDeltaList(child1, parent1, mst[1].get(), fixed_cache[1],
+                                                   lru_cache[1][threadID], queryStats[1][threadID]);
+                w2 = mstBasedHammingDist(child1, parent1, mst[1].get(),
+                                                   lru_cache[1][threadID], queryStats[1][threadID]
+                        , fixed_cache[1]);
+
+            }
+
+            std::stringstream ss;
+            ss << "Found a No match in thread " << threadID
+                      << " child:" << childIdx << "(" << child0 << "," << child1 << ")"
+                      << " parent:" << parentbv[childIdx] << "(" << parent0 << "," << parent1 << ")"
+                      << " adj weight:" << w
+                      << " deltabv weight:" << deltas.back().deltaVals.size()
+                      << " w1: " << w1 << " vs firstDelta: " << firstDelta.size()
+                      << " w2: " << w2 << " vs secondDelta: " << secondDelta.size()
+                      << "\n";
+            std::cerr << ss.str();
+            colorMutex.unlock();
+            std::exit(3);
+        }
+*/
         deltaOffset += deltas.back().deltaVals.size();
         if (deltas.size() >= deltasKeptInMem) {
             colorMutex.lock();
