@@ -636,6 +636,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
 //    adjListPtr->serialize(true); // pass "true" for debugging purposes
+    adjListPtr->serialize();
     removeIntermediateWeightFiles();
 }
 
