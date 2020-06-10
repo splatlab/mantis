@@ -373,6 +373,7 @@ private:
 
     inline std::vector<uint64_t> findThreadWeightBoundaries(sdsl::int_vector<> &parentbv,
                                                             AdjList *adjListPtr) {
+        logger->info("Finding the deltabv boundaries per thread for {} threads", nThreads);
         std::vector<uint64_t> thread_deltaOffset_and_parentEnd(nThreads, 0);
         uint64_t idx{0};
         uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);

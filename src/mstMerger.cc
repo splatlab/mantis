@@ -673,10 +673,10 @@ bool MSTMerger::encodeColorClassUsingMST() {
     mst[1].reset(new MSTQuery(prefixes[1], k, k, toBeMergedNumOfSamples[1], logger));
     sdsl::bit_vector bbv(mstTotalWeight, 0);
     sdsl::int_vector<> deltabv(mstTotalWeight, 0, ceil(log2(numSamples)));
-    std::cerr << "Reinitializing msts in addition to output deltabv and bbv\n";
+    std::cerr << "Reinitialized msts in addition to output bvs: deltabv and bbv\n";
     std::vector<std::thread> threads;
     // For validation of the multi-threaded deltabv/bbv constructor
-    std::cerr << "Before the start, offsets are:\n";
+    logger->info("Before the start, offsets are:");
     for (auto v: thread_deltaOffset_and_parentEnd) {
         std::cerr << v << " ";
     }
@@ -690,7 +690,7 @@ bool MSTMerger::encodeColorClassUsingMST() {
     for (auto &t : threads) { t.join(); }
     bbv[bbv.size()-1] = 1;
     // For validation of the multi-threaded deltabv/bbv constructor
-    std::cerr << "After calling calcdeltasInParallel, offsets are:\n";
+    logger->info("After calling calcdeltasInParallel, offsets are:");
     for (auto v: thread_deltaOffset_and_parentEnd) {
         std::cerr << v << " ";
     }
