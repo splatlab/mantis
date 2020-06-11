@@ -19,6 +19,8 @@
 #include "mstQuery.h"
 #include <omp.h>
 
+#include "tbb/global_control.h"
+
 template <typename T>
 void explore_options_verbose(T& res) {
   if(res.any_error()) { std::cerr << "error\n"; }
@@ -275,16 +277,25 @@ int main ( int argc, char *argv[] ) {
   }
 
   //explore_options_verbose(res);
-
+  int numThreads = 16;
+  if (res) {
+    switch(selected) {
+      case mode::build:numThreads=qopt.numThreads;break;
+      case mode::build_by_merge:numThreads=bopt.numthreads;break;
+      case mode::merge:numThreads=mopt.threadCount;break;
+      case mode::query:numThreads=qopt.numThreads;break;
+    }
+  }
+  tbb::global_control c(tbb::global_control::max_allowed_parallelism, numThreads);
   if(res) {
     switch(selected) {
     case mode::build:
       build_blockedCQF_main(bopt);
       qopt.prefix = bopt.out; qopt.numThreads = bopt.numthreads; qopt.remove_colorClasses = true;
-      build_mst_main(qopt);
+            build_mst_main(qopt);
       break;//build_main(bopt);  break;
     case mode::build_by_merge:
-//        omp_set_dynamic(false);
+      //        omp_set_dynamic(false);
 //        omp_set_num_threads(bopt.numthreads);
         construct_mantis_by_merge_main(bopt);
         break;

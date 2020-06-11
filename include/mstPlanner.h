@@ -4,6 +4,8 @@
 
 #ifndef MANTIS_MSTPLANNER_H
 #define MANTIS_MSTPLANNER_H
+
+#include "tbb/parallel_sort.h"
 static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{64000000};//{130000000}; // Up to 2G
 
 
@@ -86,12 +88,17 @@ public:
                     for (uint64_t mstIdx = 0; mstIdx < 2; mstIdx++) {
 //                        omp_set_dynamic(false);
 //                        omp_set_num_threads(nThreads);
-                        std::sort(std::execution::par_unseq,
-                                uniqueEdges[mstIdx].begin(), uniqueEdges[mstIdx].end(),
-                                             [](auto &e1, auto &e2) {
-                                                 return e1.first == e2.first ? e1.second < e2.second : e1.first <
-                                                                                                       e2.first;
-                                             });
+                        tbb::parallel_sort( uniqueEdges[mstIdx].begin(), uniqueEdges[mstIdx].end(),
+                                            [](auto &e1, auto &e2) {
+                                                return e1.first == e2.first ? e1.second < e2.second : e1.first <
+                                                                                                      e2.first;
+                                            });
+//                        std::sort(std::execution::par_unseq,
+//                                uniqueEdges[mstIdx].begin(), uniqueEdges[mstIdx].end(),
+//                                             [](auto &e1, auto &e2) {
+//                                                 return e1.first == e2.first ? e1.second < e2.second : e1.first <
+//                                                                                                       e2.first;
+//                                             });
                         uniqueEdges[mstIdx].erase(
                                 std::unique(uniqueEdges[mstIdx].begin(), uniqueEdges[mstIdx].end(),
                                                               [](auto &e1, auto &e2) {

@@ -28,6 +28,7 @@
 #include "mstQuery.h"
 #include "adjList.h"
 #include "cqfMerger.h"
+#include "tbb/parallel_sort.h"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
@@ -324,10 +325,14 @@ private:
     void edgePairSortUniq(std::vector<std::pair<uint64_t, uint64_t>> &edgeList) {
 //        omp_set_dynamic(false);
 //        omp_set_num_threads(nThreads);
-        std::sort(std::execution::par_unseq,edgeList.begin(), edgeList.end(),
-                             [](auto &e1, auto &e2) {
-                                 return e1.first == e2.first ? e1.second < e2.second : e1.first < e2.first;
-                             });
+        tbb::parallel_sort(edgeList.begin(), edgeList.end(),
+                           [](auto &e1, auto &e2) {
+                               return e1.first == e2.first ? e1.second < e2.second : e1.first < e2.first;
+                           });
+//        std::sort(std::execution::par_unseq,edgeList.begin(), edgeList.end(),
+//                             [](auto &e1, auto &e2) {
+//                                 return e1.first == e2.first ? e1.second < e2.second : e1.first < e2.first;
+//                             });
         edgeList.erase(std::unique(edgeList.begin(), edgeList.end(),
                                    [](auto &e1, auto &e2) {
                                        return e1.first == e2.first and e1.second == e2.second;

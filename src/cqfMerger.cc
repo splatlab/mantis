@@ -10,7 +10,7 @@
  */
 
 #include "cqfMerger.h"
-
+#include "tbb/parallel_sort.h"
 
 template<typename qf_obj, typename key_obj>
 CQF_merger<qf_obj, key_obj>::
@@ -156,10 +156,14 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                     }
                     ++it;
                     if (tmpList.size() >= tmpSize or it.reachedHashLimit()) {
-                        std::sort(std::execution::par_unseq, tmpList.begin(), tmpList.end(),
-                                [](const KeyColorMin &f, const KeyColorMin &s) {
-                            return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
-                        });
+                        tbb::parallel_sort(tmpList.begin(), tmpList.end(),
+                                      [](const KeyColorMin &f, const KeyColorMin &s) {
+                                          return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
+                                      });
+//                        std::sort(std::execution::par_unseq, tmpList.begin(), tmpList.end(),
+//                                [](const KeyColorMin &f, const KeyColorMin &s) {
+//                            return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
+//                        });
                         uint64_t i = 0;
                         while (i < tmpList.size()) {
                             auto prev = tmpList[i].minimizer;
@@ -675,9 +679,12 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 std::cerr << "\r";
                 console->info("Fill and serialize cqf {} with {} kmers into {} slots up to minimizer {}", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt, b);
                 kmerCount+=tmp_kmers.size();
-                std::sort(std::execution::par_unseq, tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+                tbb::parallel_sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
                     return kv1.first < kv2.first;
                 });
+//                std::sort(std::execution::par_unseq, tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+//                    return kv1.first < kv2.first;
+//                });
                 // unique
                 tmp_kmers.erase(std::unique(tmp_kmers.begin(), tmp_kmers.end(),
                                            [](auto &kv1, auto &kv2) {
@@ -754,9 +761,12 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     if (!tmp_kmers.empty()) {
         console->info("Fill and serialize cqf {} with {} kmers into {} slots as the last cqf block", outputCQFBlockId, tmp_kmers.size(), occupiedSlotsCnt);
         kmerCount+=tmp_kmers.size();
-        std::sort(std::execution::par_unseq,tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+        tbb::parallel_sort(tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
             return kv1.first < kv2.first;
         });
+//        std::sort(std::execution::par_unseq,tmp_kmers.begin(), tmp_kmers.end(), [](auto &kv1, auto &kv2) {
+//            return kv1.first < kv2.first;
+//        });
         // unique
         tmp_kmers.erase(std::unique(tmp_kmers.begin(), tmp_kmers.end(),
                                     [](auto &kv1, auto &kv2) {

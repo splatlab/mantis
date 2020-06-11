@@ -132,7 +132,8 @@ bool MSTMerger::buildEdgeSets() {
     std::vector<uint64_t> cnts(nThreads, 0);
     uint64_t maxId{0}, numOfKmers{0};
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
-    std::sort(std::execution::par_unseq, cqfBlocks.begin(), cqfBlocks.end());
+    tbb::parallel_sort(cqfBlocks.begin(), cqfBlocks.end());
+//    std::sort(std::execution::par_unseq, cqfBlocks.begin(), cqfBlocks.end());
     std::vector<std::pair<uint64_t, uint64_t>> tmpEdges;
     tmpEdges.reserve(MAX_ALLOWED_TMP_EDGES_IN_FILE);
 
