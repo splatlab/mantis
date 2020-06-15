@@ -41,7 +41,6 @@
 #include "coloreddbg.h"
 #include "squeakrconfig.h"
 #include "json.hpp"
-#include "mantis_utils.hpp"
 #include "mantisconfig.hpp"
 
 /*

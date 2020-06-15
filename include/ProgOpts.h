@@ -72,13 +72,23 @@ public:
 class MergeOpts
 {
 	public:
-		uint threadCount{1};
-    bool timeLog{false};
-    bool removeIndices{false};
-    std::string dir1;
+		uint numThreads{1};
+		bool timeLog{false};
+		bool removeIndices{false};
+		std::string dir1;
 		std::string dir2;
 		std::string out;
 		std::shared_ptr<spdlog::logger> console{nullptr};
+
+		nlohmann::json to_json() {
+			nlohmann::json j;
+			j["output_dir"] = out;
+			j["input_mantis1"] = dir1;
+			j["input_mantis2"] = dir2;
+			j["num_threads"] = numThreads;
+			j["remove_input_indices"] = removeIndices;
+			return j;
+		}
 };
 
 

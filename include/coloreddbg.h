@@ -33,6 +33,7 @@
 #include "mantisconfig.hpp"
 #include "canonicalKmer.h"
 #include "minimizerRandomOrder.h"
+#include "util.h"
 
 #include <cstdlib>
 #include <random>

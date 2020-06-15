@@ -18,6 +18,8 @@
 
 #include <inttypes.h>
 
+#include <chrono>
+
 #ifdef DEBUG
 #define PRINT_DEBUG 1
 #else
@@ -73,4 +75,9 @@ std::string first_part(std::string str, char c);
 /* Print elapsed time using the start and end timeval */
 void print_time_elapsed(std::string desc, struct timeval* start, struct
 												timeval* end);
+
+namespace mantis{
+	std::string get_current_time_as_string();
+}
+
 #endif

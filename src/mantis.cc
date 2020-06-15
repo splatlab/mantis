@@ -187,7 +187,7 @@ int main ( int argc, char *argv[] ) {
   
   auto merge_mode = (
                     command("merge").set(selected, mode::merge),
-										option("-t", "--thread-count") & value("thread-count", mopt.threadCount) % "number of threads to use in intermediate unique color-id filtering phase",
+										option("-t", "--thread-count") & value("thread-count", mopt.numThreads) % "number of threads to use in intermediate unique color-id filtering phase",
                     required("-i1", "--input-dir-1") & value("input-dir-1", mopt.dir1) % "directory containing the first CdBG",
                     required("-i2", "--input-dir-2") & value("input-dir-2", mopt.dir2) % "directory containing the second CdBG",
                     required("-o", "--output") & value("merge-output", mopt.out) % "directory where the merged CdBG should be written",
@@ -282,7 +282,7 @@ int main ( int argc, char *argv[] ) {
     switch(selected) {
       case mode::build:numThreads=qopt.numThreads;break;
       case mode::build_by_merge:numThreads=bopt.numthreads;break;
-      case mode::merge:numThreads=mopt.threadCount;break;
+      case mode::merge:numThreads=mopt.numThreads;break;
       case mode::query:numThreads=qopt.numThreads;break;
     }
   }

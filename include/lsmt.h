@@ -346,7 +346,7 @@ void LSMT<qf_obj, key_obj>::
 {
     MergeOpts mergeOpts;
 
-    mergeOpts.threadCount = threadCount;
+    mergeOpts.numThreads = threadCount;
     mergeOpts.timeLog = true;
     mergeOpts.removeIndices = true;
     mergeOpts.dir1 = cdbg1;

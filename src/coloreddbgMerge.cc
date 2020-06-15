@@ -97,18 +97,35 @@ int merge_main(MergeOpts &opt) {
     console->info("Merging the two CQFs...");
     auto cqfMerger = std::make_unique<CQF_merger<SampleObject<CQF<KeyObject> *>, KeyObject>>(opt.dir1, opt.dir2,
                                                                                              opt.out, console,
-                                                                                             opt.threadCount);
+                                                                                             opt.numThreads);
 	cqfMerger->merge();
     cqfMerger.reset(nullptr); // make the memory back to almost 0 to start the next section
     // merging two MSTs
     std::cerr << "\n\nMerging the two MSTs...\n";
 //    std::cerr << "usleep\n";
 //    usleep(10000000);
-    MSTMerger mst(opt.out, console, opt.threadCount, opt.dir1, opt.dir2);
+    MSTMerger mst(opt.out, console, opt.numThreads, opt.dir1, opt.dir2);
     mst.mergeMSTs();
 
     auto t_end = time(nullptr);
     console->info("Total merge time is {} s", t_end - t_start);
+    // If we made it this far, record relevant meta information in the output directory
+    nlohmann::json minfo;
+    {
+        std::ofstream jfile(opt.out + "/" + mantis::meta_file_name);
+        if (jfile.is_open()) {
+            minfo = opt.to_json();
+            minfo["Merged_index"] = "True";
+            minfo["start_time"] = mantis::get_current_time_as_string();
+            minfo["mantis_version"] = mantis::version;
+            minfo["index_version"] = mantis::index_version;
+            jfile << minfo.dump(4);
+        } else {
+            console->error("Could not write to output directory {}", opt.out);
+            exit(1);
+        }
+        jfile.close();
+    }
     return EXIT_SUCCESS;
 }
 

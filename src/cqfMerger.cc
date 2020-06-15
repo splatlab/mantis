@@ -187,8 +187,8 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
 //        std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
         // validating the minimizer observed count;
         /*for (auto i = minMinimizer; i <= maxMinimizer; i++) {
-            if (minimizerIdx[threadCount-1][i - minMinimizer] != curCdbg.minimizerCntr[i]) {
-                console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected{}", i, minimizerIdx[threadCount-1][i-minMinimizer], curCdbg.minimizerCntr[i]);
+            if (minimizerIdx[numThreads-1][i - minMinimizer] != curCdbg.minimizerCntr[i]) {
+                console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected{}", i, minimizerIdx[numThreads-1][i-minMinimizer], curCdbg.minimizerCntr[i]);
                 std::exit(3);
             }
             for (auto idx = 1; idx < minimizerKeyList[isSecond][i]->size(); idx++) {
@@ -699,7 +699,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                 /*int ret;
                 do {
                     ret = 0;
-                    std::vector<int> rets(threadCount, 0);
+                    std::vector<int> rets(numThreads, 0);
                     if (qbits > cdbg.get_qbits()) {
                         console->warn("NOOO!! This thing should not happen very often! Almost never.");
                     }
@@ -707,9 +707,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                                   qbits, 1ULL << qbits, occupiedSlotsCnt, tmp_kmers.size());
                     cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
                     std::vector<std::thread> threads;
-                    for (uint32_t t = 0; t < threadCount; ++t) {
-                        uint64_t s = tmp_kmers.size()*((double)t/threadCount),
-                                e = ((double)(t+1)/threadCount)*tmp_kmers.size();
+                    for (uint32_t t = 0; t < numThreads; ++t) {
+                        uint64_t s = tmp_kmers.size()*((double)t/numThreads),
+                                e = ((double)(t+1)/numThreads)*tmp_kmers.size();
                         threads.emplace_back(std::thread( [&, s, e, t] {
                             std::stringstream ss;
                             ss << "thread " << t << " s=" << s << " e=" << e << " start with reset return value " << rets[t] << "\n";
@@ -717,7 +717,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                             rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);
                         }));
                     }
-                    for (uint32_t t = 0; t < threadCount; ++t) {
+                    for (uint32_t t = 0; t < numThreads; ++t) {
                         threads[t].join();
                         if (rets[t] == QF_NO_SPACE) {
                             ret = rets[t];
@@ -782,7 +782,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
 /*        int ret;
         do {
             ret = 0;
-            std::vector<int> rets(threadCount, 0);
+            std::vector<int> rets(numThreads, 0);
             if (qbits > cdbg.get_qbits()) {
                 console->warn("This thing should not happen very often! Almost never. "
                               "CurrQbits: {}, availableSlotCnt: {}, requiredSlotCnt: {} for {} kmers",
@@ -790,9 +790,9 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
             }
             cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
             std::vector<std::thread> threads;
-            for (uint32_t t = 0; t < threadCount; ++t) {
-                uint64_t s = tmp_kmers.size()*((double)t/threadCount),
-                e = ((double)(t+1)/threadCount)*tmp_kmers.size();
+            for (uint32_t t = 0; t < numThreads; ++t) {
+                uint64_t s = tmp_kmers.size()*((double)t/numThreads),
+                e = ((double)(t+1)/numThreads)*tmp_kmers.size();
                 threads.emplace_back(std::thread( [&, s, e, t] {
                     std::stringstream ss;
                     ss << "thread " << t << " s=" << s << " e=" << e << " start with reset return value " << rets[t] << "\n";
@@ -800,7 +800,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                     rets[t] = cdbg.add_kmer2CurDbg(std::ref(tmp_kmers), s, e);
                 }));
             }
-            for (uint32_t t = 0; t < threadCount; ++t) {
+            for (uint32_t t = 0; t < numThreads; ++t) {
                 threads[t].join();
                 if (rets[t] == QF_NO_SPACE) {
                     ret = rets[t];
