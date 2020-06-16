@@ -33,6 +33,7 @@
 #include "mantisconfig.hpp"
 #include "canonicalKmer.h"
 #include "minimizerRandomOrder.h"
+#include "json.hpp"
 #include "util.h"
 
 #include <cstdlib>
@@ -425,6 +426,7 @@ private:
 
     uint64_t minlen{MINLEN};
     uint64_t numKmers{0};
+    uint64_t numColors{0};
 
     // Maximum number of color-class bitvectors that can be present at the bitvector buffer.
     uint64_t colorClassPerBuffer{0};
@@ -505,16 +507,25 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
         std::exit(3);
     }
     minmaxMinimizer.push_back(std::make_pair(min, lastExistingMin));
-    /*std::cerr << "Total # of blocks: " << minmaxMinimizer.size() << "\n";
-    uint64_t blockCntr=0;
-    for (auto v : minmaxMinimizer) {
-        std::cerr << blockCntr++ << ":" << v.first << " " << v.second << "\n";
-    }*/
+
     replaceCQFInMemory(invalid); // just to force the first CQF to definitely be loaded into memory
     std::cerr << "Loading first CQF block\n";
     replaceCQFInMemory(0);
     setUpperboundPerBlock(curDbg->keybits());
 
+    // Load index information
+    std::ifstream infile(prefix + mantis::index_info_file_name);
+    if (infile.is_open()) {
+        // read a JSON file
+        nlohmann::json idxInfo;
+        infile >> idxInfo;
+        numKmers = idxInfo["num_kmers"];
+        numColors = idxInfo["num_colors"];
+    } else {
+        std::cerr << "Could not write to output directory " << prefix << "\n";
+        exit(3);
+    }
+    infile.close();
     // Load the sample / experiment names.
     std::cerr << "Loading the sampleList file\n";
     std::ifstream sampleList(sampleListFile.c_str());
