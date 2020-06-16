@@ -200,7 +200,7 @@ uint64_t MSTQuery::parseBulkKmers(std::string &file, u_int64_t kmer_size) {
     ipfile.close();
     for (auto &kv : kmer2cidMap) {
         auto &v = kv.second.second;
-        std::sort(std::execution::par_unseq,v.begin(), v.end());
+        tbb::parallel_sort(v.begin(), v.end());
         v.erase(std::unique(v.begin(), v.end()), v.end());
     }
     return numOfQueries;

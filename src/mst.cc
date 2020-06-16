@@ -7,7 +7,8 @@
 #include <sstream>
 #include <cstdio>
 #include <stdio.h>
-#include <execution>
+#include "tbb/parallel_sort.h"
+//#include <execution>
 
 #include "MantisFS.h"
 #include "mst.h"
@@ -159,7 +160,7 @@ bool MST::buildEdgeSets() {
         tmp.close();
         std::remove(filename.c_str());
 //        std::cerr << "Done reading file " << i << "\n";
-        std::sort(std::execution::par_unseq,edgeList.begin(), edgeList.end(),
+        tbb::parallel_sort(edgeList.begin(), edgeList.end(),
                   [](const Edge &e1, const Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
                   });
@@ -174,7 +175,7 @@ bool MST::buildEdgeSets() {
     }
     for (auto &bucket: edgeBucketList) {
         std::cerr << "before uniqifying: " << bucket.size() << " ";
-        std::sort(std::execution::par_unseq,bucket.begin(), bucket.end(),
+        tbb::parallel_sort(bucket.begin(), bucket.end(),
                   [](const Edge &e1, const Edge &e2) {
                       return e1.n1 == e2.n1 ? e1.n2 < e2.n2 : e1.n1 < e2.n1;
                   });

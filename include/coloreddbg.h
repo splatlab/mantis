@@ -35,10 +35,11 @@
 #include "minimizerRandomOrder.h"
 #include "json.hpp"
 #include "util.h"
+#include "tbb/parallel_sort.h"
 
 #include <cstdlib>
 #include <random>
-#include <execution>
+//#include <execution>
 
 #define MANTIS_DBG_IN_MEMORY (0x01)
 #define MANTIS_DBG_ON_DISK (0x02)
