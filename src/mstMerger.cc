@@ -19,6 +19,7 @@
 #include "mstMerger.h"
 #include "ProgOpts.h"
 #include "mstPlanner.h"
+#include "util.h"
 
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) - 1ULL)
@@ -698,6 +699,25 @@ bool MSTMerger::encodeColorClassUsingMST() {
     std::cerr << "\n";
 
     storeMST(parentbv, deltabv, bbv);
+    // read previous information
+    {
+        std::ifstream infile(prefix + mantis::index_info_file_name);
+        if (infile.is_open()) {
+            // read a JSON file
+            nlohmann::json idxInfo;
+            infile >> idxInfo;
+            infile.close();
+            std::ofstream jfile(prefix + mantis::index_info_file_name);
+            idxInfo["num_colors"] = parentbv.size();
+            idxInfo["num_deltas"] = deltabv.size();
+            jfile << idxInfo.dump(4);
+            jfile.close();
+        } else {
+            logger->error("Could not write to output directory {}", prefix);
+            exit(1);
+        }
+        infile.close();
+    }
     return true;
 }
 

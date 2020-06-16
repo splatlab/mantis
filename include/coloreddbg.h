@@ -255,6 +255,8 @@ public:
 
     const uint64_t get_numBlocks() const { return minmaxMinimizer.size(); }
 
+    const uint64_t get_numKmers() const { return numKmers;}
+
     uint64_t get_num_bitvectors() const;
 
     uint64_t get_num_eqclasses() const { return numEqClassBVs; }//eqclass_map.size(); }
@@ -422,6 +424,7 @@ private:
     spdlog::logger *console;
 
     uint64_t minlen{MINLEN};
+    uint64_t numKmers{0};
 
     // Maximum number of color-class bitvectors that can be present at the bitvector buffer.
     uint64_t colorClassPerBuffer{0};
@@ -746,30 +749,10 @@ uint64_t ColoredDbg<qf_obj, key_obj>::query_kmerInCurDbg(key_obj &keyObj, uint8_
 template<class qf_obj, class key_obj>
 int ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(std::vector<std::pair<uint64_t , uint64_t >> &kmers,
         uint64_t s, uint64_t e) {
-    // check: the k-mer should not already be present.
-    /*uint64_t count = curDbg->query(keyObj, flags);
-    if (count > 0) {
-        if (count != keyObj.count) {
-            std::cerr << "\nError. Kmer was already present. kmer: "
-                      << keyObj.key << " colorID: " << keyObj.count
-                      << ", old colorId: " << count << "\n";
-            console->error("K-mer was already present. kmer: {} colorID: {}, old colorId: {}", keyObj.key, keyObj.count,
-                           count);
-            std::exit(3);
-        }
-    } else {
-        // we use the count to store the eqclass ids
-        return curDbg->insert(keyObj, flags);
-    }*/
+    // assumption: the k-mer should not already be present.
     auto ret = 0;
 //    uint8_t flags = QF_WAIT_FOR_LOCK | QF_KEY_IS_HASH;
     uint8_t flags = QF_NO_LOCK | QF_KEY_IS_HASH;
-//    std::stringstream ss(" range inside: "+ std::to_string(s) + " " + std::to_string(e) + "\n");
-//    std::cerr << ss.str();
-
-//    for (uint64_t i = s; i < e; i++)
-//        std::cerr << kmers[i].first << " " << kmers[i].second << "\n";
-
     for (uint64_t i = s; i < e; i++) {
         auto keyObj = KeyObject(kmers[i].first, 0, kmers[i].second);
         ret = curDbg->insert(keyObj, flags);
@@ -779,6 +762,9 @@ int ColoredDbg<qf_obj, key_obj>::add_kmer2CurDbg(std::vector<std::pair<uint64_t 
             console->error("CQF multi-threaded insertion failed with code: {}", ret);
             std::exit(3);
         }
+    }
+    if (ret != QF_NO_SPACE) {
+        numKmers += e-s;
     }
     return ret;
 }

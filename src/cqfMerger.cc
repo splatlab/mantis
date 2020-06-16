@@ -11,6 +11,7 @@
 
 #include "cqfMerger.h"
 #include "tbb/parallel_sort.h"
+#include "json.hpp"
 
 template<typename qf_obj, typename key_obj>
 CQF_merger<qf_obj, key_obj>::
@@ -933,6 +934,28 @@ void CQF_merger<qf_obj, key_obj>:: serializeRemainingStructures()
     minfile.write(reinterpret_cast<char *>(cdbg.minimizerBlock.data()),
                   cdbg.minimizerBlock.size()*sizeof(typename decltype(cdbg.minimizerBlock)::value_type));
     minfile.close();
+
+    {
+        std::ofstream jfile(cdbg.prefix + mantis::index_info_file_name);
+        if (jfile.is_open()) {
+            nlohmann::json idxInfo;
+            idxInfo["Merged_index"] = "True";
+            uint64_t i = 0;
+            while (i<cdbg.minimizerCntr.size() and cdbg.minimizerCntr[i] == 0) i++;
+            idxInfo["min_minimizer"] = i;
+            i = cdbg.minimizerCntr.size()-1;
+            while (i>=0 and cdbg.minimizerCntr[i] == 0) i--;
+            idxInfo["max_minimizer"] = i;
+            idxInfo["num_blocks"] = cdbg.minimizerBlock[i]+1;
+            idxInfo["num_kmers"] = cdbg.get_numKmers();
+            jfile << idxInfo.dump(4);
+        } else {
+            console->error("Could not write to output directory {}", cdbg.prefix);
+            exit(1);
+        }
+        jfile.close();
+    }
+
     console -> info("Serialized minimizer info.");
 }
 
