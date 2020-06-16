@@ -498,6 +498,24 @@ bool MST::encodeColorClassUsingMST() {
     sdsl::store_to_file(deltabv, std::string(prefix + mantis::DELTABV_FILE));
     sdsl::store_to_file(bbv, std::string(prefix + mantis::BOUNDARYBV_FILE));
     logger->info("Done Serializing.");
+    {
+        std::ifstream infile(prefix + mantis::index_info_file_name);
+        if (infile.is_open()) {
+            // read a JSON file
+            nlohmann::json idxInfo;
+            infile >> idxInfo;
+            infile.close();
+            std::ofstream jfile(prefix + mantis::index_info_file_name);
+            idxInfo["num_colors"] = parentbv.size();
+            idxInfo["num_deltas"] = deltabv.size();
+            jfile << idxInfo.dump(4);
+            jfile.close();
+        } else {
+            logger->error("Could not write to output directory {}", prefix);
+            exit(1);
+        }
+        infile.close();
+    }
     return true;
 }
 

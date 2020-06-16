@@ -193,6 +193,28 @@ int build_blockedCQF_main(BuildOpts &opt) {
     console->info("Serialization done.");
 
     {
+        std::ofstream jfile(cdbg.prefix + mantis::index_info_file_name);
+        if (jfile.is_open()) {
+            nlohmann::json idxInfo;
+            idxInfo["Merged_index"] = "False";
+            uint64_t i = 0;
+            while (i<cdbg.minimizerCntr.size() and cdbg.minimizerCntr[i] == 0) i++;
+            idxInfo["min_minimizer"] = i;
+            i = cdbg.minimizerCntr.size()-1;
+            while (i>=0 and cdbg.minimizerCntr[i] == 0) i--;
+            idxInfo["max_minimizer"] = i;
+            idxInfo["num_blocks"] = cdbg.minimizerBlock[i]+1;
+            idxInfo["num_kmers"] = cdbg.get_numKmers();
+            idxInfo["num_colors"] = cdbg.get_num_eqclasses();
+            jfile << idxInfo.dump(4);
+        } else {
+            console->error("Could not write to output directory {}", cdbg.prefix);
+            exit(1);
+        }
+        jfile.close();
+    }
+
+    {
         std::ofstream jfile(prefix + "/" + mantis::meta_file_name);
         if (jfile.is_open()) {
             minfo["end_time"] = mantis::get_current_time_as_string();

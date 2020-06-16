@@ -867,6 +867,7 @@ void ColoredDbg<qf_obj, key_obj>::serializeCurrentCQF() {
 template<class qf_obj, class key_obj>
 void ColoredDbg<qf_obj, key_obj>::serializeBlockedCQF() {
     for (auto i = 0; i < dbgs.size(); i++) {
+        numKmers += dbgs[i].dist_elts();
         // serialize the CQF
         if (dbg_alloc_flag == MANTIS_DBG_IN_MEMORY)
             dbgs[i].serialize(prefix + std::to_string(i) + "_" + mantis::CQF_FILE);
