@@ -330,7 +330,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("Pop counting for the two Manti color class vectors of size {}, {} respectively", ccCnt[0], ccCnt[1]);
     sdsl::int_vector<> ccSetBitCnts[2];
     for (auto mstIdx = 0; mstIdx < 2; ++mstIdx) {
-        ccSetBitCnts[mstIdx] = sdsl::int_vector<>(ccCnt[mstIdx], 0, ceil(log2(toBeMergedNumOfSamples[mstIdx])));
+        ccSetBitCnts[mstIdx] = sdsl::int_vector<>(ccCnt[mstIdx], 0, ceil(log2(toBeMergedNumOfSamples[mstIdx]+1)));
         for (auto partition = 0; partition < 2; ++partition) {
             std::vector<std::thread> threads;
             for (auto t = 0; t < nThreads; ++t) {
