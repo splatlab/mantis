@@ -383,11 +383,10 @@ private:
         uint64_t idx{0};
         uint64_t bucketSize = std::ceil(parentbv.size() / (double)nThreads);
         uint64_t doubleCheckTotWeight{0};
-        for (auto i = 1; i <= adjListPtr->smallerSrcStartIdx.size(); i++) {
+        for (auto i = 1; i < adjListPtr->smallerSrcStartIdx.size(); i++) {
             // Limit for adj edges of parent, are the start of the adj edges for next node.
             // So if parent = i-1, limit for adj edges of parent is startIdx[i]
-            auto limit = i == adjListPtr->smallerSrcStartIdx.size() ?
-                         adjListPtr->smallerSrcStartIdx.size() : adjListPtr->smallerSrcStartIdx[i];
+            auto limit = adjListPtr->smallerSrcStartIdx[i];
             while (idx < limit) {
                 auto par = static_cast<uint64_t>(i-1);
                 auto val = adjListPtr->smallerSrc[idx];

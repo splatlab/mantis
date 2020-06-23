@@ -12,11 +12,15 @@ AdjList::AdjList(std::string prefixIn, uint64_t numSamples) : prefix(prefixIn) {
 }
 
 AdjList::AdjList(std::string prefixIn, uint64_t numColorClasses, uint64_t numSamples) : prefix(prefixIn), adjListFile(prefix+mantis::TEMP_MST_ADJ_FILE) {
-    weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
+    if (numColorClasses < 2) {
+        std::cerr << " No edges are possible in a graph with fewer than 2 nodes\n";
+        std::exit(3);
+    }
+    weightBits = static_cast<uint64_t>(ceil(log2(numSamples+1)));
     weightMask = (1ULL << weightBits) - 1;
-    smallerSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses))+weightBits);
+    smallerSrc = sdsl::int_vector<>(numColorClasses-1, 0, ceil(log2(numColorClasses))+weightBits);
     smallerSrcStartIdx = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
-    greaterSrc = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
+    greaterSrc = sdsl::int_vector<>(numColorClasses-1, 0, ceil(log2(numColorClasses)));
     greaterSrcStartIdx = sdsl::int_vector<>(numColorClasses, 0, ceil(log2(numColorClasses)));
 }
 
