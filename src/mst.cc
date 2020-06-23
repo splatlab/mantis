@@ -419,7 +419,7 @@ bool MST::encodeColorClassUsingMST() {
     // create and fill the deltabv and boundarybv data structures
     sdsl::bit_vector bbv(mstTotalWeight, 0);
     {// putting weightbv inside the scope so its memory is freed after we're done with it
-        sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples)));
+        sdsl::int_vector<> weightbv(num_colorClasses, 0, ceil(log2(numSamples+1)));
         sdsl::bit_vector visited(num_colorClasses, 0);
         bool check = false;
         std::queue<colorIdType> q;

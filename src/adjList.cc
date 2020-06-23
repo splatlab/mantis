@@ -7,7 +7,7 @@
 #include "adjList.h"
 
 AdjList::AdjList(std::string prefixIn, uint64_t numSamples) : prefix(prefixIn) {
-    weightBits = static_cast<uint64_t>(ceil(log2(numSamples)));
+    weightBits = static_cast<uint64_t>(ceil(log2(numSamples+1)));
     weightMask = (1ULL << weightBits) - 1;
 }
 
