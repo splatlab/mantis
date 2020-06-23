@@ -1,72 +1,51 @@
 /*
  * ============================================================================
  *
- *         Author:  Jamshed Khan (jamshed@cs.umd.edu)
+ *         Author:  Jamshed Khan (jamshed@umd.edu)
  *   Organization:  University of Maryland, College Park
  *
  * ============================================================================
  */
- 
-#include <iostream>
-#include <fstream>
-#include <utility>
-#include <algorithm>
-#include <string>
-#include <vector>
-#include <map>
-#include <queue> 
-#include <set>
-#include <unordered_set>
-#include <bitset>
-#include <cassert>
-#include <fstream>
 
-#include <time.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/resource.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/mman.h>
-#include <openssl/rand.h>
-
-#include "sparsepp/spp.h"
-#include "tsl/sparse_map.h"
 
 #include "MantisFS.h"
 #include "ProgOpts.h"
 #include "coloreddbg.h"
-#include "cqfMerger.h"
-#include "squeakrconfig.h"
-#include "mantisconfig.hpp"
 #include "lsmt.h"
 #include "kmer.h"
+ 
+#include <fstream>
+#include <string>
+#include <vector>
 
 
 
-int lsmt_initialize_main(LSMT_InitializeOpts &opt)
+int lsmt_initialize_main(LSMT_InitializeOpts& opt)
 {
-	spdlog::logger *console = opt.console.get();
+	spdlog::logger* console = opt.console.get();
 
 	std::string dir = opt.dir;
 	if(dir.back() != '/')	// Make sure it is a full directory.
 		dir += '/';
 
-	// Make the LSM Tree directory if it doesn't exist.
+	// Make the LSM tree directory if it doesn't exist.
 	if(!mantis::fs::DirExists(dir.c_str()))
 		mantis::fs::MakeDir(dir.c_str());
 	
 	// Check to see if the directory exists now.
 	if(!mantis::fs::DirExists(dir.c_str()))
 	{
-		console -> error("LSM Tree directory {} could not be created.", dir);
-		exit(1);
+		console->error("Error creating LSM tree directory {}. Aborting.", dir);
+		std::exit(EXIT_FAILURE);
 	}
 
+	// Create the pending samples list file.
 	std::ofstream pendingSamples(dir + mantis::PENDING_SAMPLES_LIST);
+	if(!pendingSamples.is_open())
+	{
+		console->error("Error creating the pending samples list file {}. Aborting.", dir + mantis::PENDING_SAMPLES_LIST);
+		std::exit(EXIT_FAILURE);
+	}
 	pendingSamples.close();
 
 
@@ -77,37 +56,39 @@ int lsmt_initialize_main(LSMT_InitializeOpts &opt)
 		if (jfile.is_open())
 		{
 			paramInfo["dir"] = dir;
-			paramInfo["scalingFactor"] = opt.scalingFactor;
-			paramInfo["kmerThreshold"] = opt.kmerThreshold;
-			paramInfo["sampleThreshold"] = opt.sampleThreshold;
+			paramInfo["scaling_factor"] = opt.scaling_factor;
+			paramInfo["kmer_threshold"] = opt.kmer_threshold;
+			paramInfo["cqf_count_threshold"] = opt.cqf_count_threshold;
+			paramInfo["sample_threshold"] = opt.sample_threshold;
 			paramInfo["levels"] = 0;
-			paramInfo["sampleCount"] = 0;
-			paramInfo["qBitInitBuild"] = opt.qBitInitBuild;
+			paramInfo["sample_count"] = 0;
+			paramInfo["qBit_init_build"] = opt.qBit_init_build;
 
 
 			jfile << paramInfo.dump(4);
 		}
 		else
 		{
-			console -> error("Could not write to output directory {}", dir);
-			exit(1);
+			console->error("Error opening the LSM tree parameters file {}. Aborting.", dir + mantis::PARAM_FILE);
+			std::exit(EXIT_FAILURE);
 		}
 
-		console -> info("LSM-tree parameters recorded at file {}.", dir + mantis::PARAM_FILE);
+		console->info("LSM tree parameters recorded at file {}.", dir + mantis::PARAM_FILE);
 		
 		jfile.close();
 	}
+
 
 	return EXIT_SUCCESS;
 }
 
 
 
-int lsmt_update_main(LSMT_UpdateOpts &opt)
+int lsmt_update_main(LSMT_UpdateOpts& opt)
 {
 	using LSMT_t = LSMT<SampleObject<CQF<KeyObject> *>, KeyObject>;
 
-	spdlog::logger *console = opt.console.get();
+	spdlog::logger* console = opt.console.get();
 
 
 	std::string dir = opt.dir;
@@ -117,35 +98,38 @@ int lsmt_update_main(LSMT_UpdateOpts &opt)
 	// Make sure the input directory exists.
 	if(!mantis::fs::DirExists(dir.c_str()))
 	{
-		console -> error("LSM tree directory {} does not exist.", dir);
-		exit(1);
+		console->error("LSM tree directory {} does not exist.", dir);
+		std::exit(EXIT_FAILURE);
 	}
 
-	
+
 	if(!LSMT_t::is_valid_LSMT(dir, console))
-		exit(1);
-
-	std::ifstream inputList(opt.inputList);
-	std::vector<std::string> inputSamples;
-
-	if(!inputList.is_open())
 	{
-		console -> error("Input file {} does not exist or could not be opened.", opt.inputList);
-		exit(1);
+		console->error("LSM tree structure is not valid. Aborting.");
+		std::exit(EXIT_FAILURE);
+	}
+
+	std::ifstream input_list(opt.input_list);
+	std::vector<std::string> input_samples;
+
+	if(!input_list.is_open())
+	{
+		console->error("Input file {} does not exist or could not be opened.", opt.input_list);
+		std::exit(EXIT_FAILURE);
 	}
 
 	std::string sample;
-	while(inputList >> sample)
-		inputSamples.push_back(sample);
+	while(input_list >> sample)
+		input_samples.push_back(sample);
 	
-	inputList.close();
+	input_list.close();
 
 	
 	LSMT_t lsmt(dir);
 	lsmt.set_console(opt.console);
 	lsmt.print_config();
 
-	lsmt.update(inputSamples, opt.threadCount);
+	lsmt.update(input_samples, opt.thread_count);
 
 
 	return EXIT_SUCCESS;

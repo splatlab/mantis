@@ -285,7 +285,7 @@ public:
     // Additional public members required for mantii merge.
 
     // Checks if all the required data for a mantis index exists at directory 'dir'.
-    static bool data_exists(std::string &dir, spdlog::logger *console);
+    static bool data_exists(std::string& dir, spdlog::logger* console);
 
     // Returns the vector of names of all the color-class (bitvector) files.
     inline std::vector<std::string> &get_eq_class_files() { return eqClsFiles; }
@@ -297,8 +297,8 @@ public:
     // CdBG.
     std::vector<BitVectorRRR> get_eqclasses() { return eqclasses; }
 
-    // Move the mantis index at directory 'source' to directory 'destination'.
-    static void move_index(std::string source, std::string destination, spdlog::logger *console);
+    // Move the Mantis index at the directory `source` to the directory `destination`.
+    static void move_index(std::string source, std::string destination, spdlog::logger* console);
 
     // Friend class that merges two mantis indices into one.
     template<typename q_obj, typename k_obj> friend
@@ -1358,24 +1358,32 @@ void ColoredDbg<qf_obj, key_obj>::concat_sample_id_maps(ColoredDbg<qf_obj, key_o
 
 
 template<typename qf_obj, typename key_obj>
-bool ColoredDbg<qf_obj, key_obj>::data_exists(std::string &dir, spdlog::logger *console) {
-    if (!mantis::fs::FileExists((dir + mantis::CQF_FILE).c_str())) {
-        console->error("CQF file {} does not exist in input directory {}.", mantis::CQF_FILE, dir);
+bool ColoredDbg<qf_obj, key_obj>::data_exists(std::string& dir, spdlog::logger* console) {
+    // Check for the existence of at least one CQF file.
+    std::string cqf_name = std::string("0_") + mantis::CQF_FILE;
+    std::cout << cqf_name << "\n";
+    if (!mantis::fs::FileExists((dir + cqf_name).c_str())) {
+        console->error("CQF file {} does not exist in input directory {}.", cqf_name, dir);
         return false;
     }
 
+    // Check for the sample-id mapping file.
     if (!mantis::fs::FileExists((dir + mantis::SAMPLEID_FILE).c_str())) {
-        console->error("Sample-ID list file {} does not exist in input directory {}.",
-                       mantis::SAMPLEID_FILE, dir);
+        console->error("Sample-ID list file {} does not exist in input directory {}.", mantis::SAMPLEID_FILE, dir);
         return false;
     }
 
-    /*if(mantis::fs::GetFilesExt(dir.c_str(), mantis::EQCLASS_FILE).empty())
-    {
-        console -> error("No equivalence-class file with extension {} exists in input directory {}.",
-                        mantis::EQCLASS_FILE, dir);
+    // Check for the minimizer frequency file.
+    if (!mantis::fs::FileExists((dir + mantis::MINIMIZER_FREQ).c_str())) {
+        console->error("Minimizer frequency file {} does not exist in input directory {}.", mantis::MINIMIZER_FREQ, dir);
         return false;
-    }*/
+    }
+
+    // Check for the minimizer boundary file.
+    if (!mantis::fs::FileExists((dir + mantis::MINIMIZER_BOUNDARY).c_str())) {
+        console->error("Minimizer boundary file {} does not exist in input directory {}.", mantis::MINIMIZER_BOUNDARY, dir);
+        return false;
+    }
 
 
     return true;
@@ -1383,7 +1391,8 @@ bool ColoredDbg<qf_obj, key_obj>::data_exists(std::string &dir, spdlog::logger *
 
 
 template<typename qf_obj, typename key_obj>
-void ColoredDbg<qf_obj, key_obj>::move_index(std::string source, std::string destination, spdlog::logger *console) {
+void ColoredDbg<qf_obj, key_obj>::move_index(std::string source, std::string destination, spdlog::logger* console) {
+    
     if (destination.back() != '/')
         destination += '/'; // Make sure it is a full directory.
 
@@ -1395,81 +1404,108 @@ void ColoredDbg<qf_obj, key_obj>::move_index(std::string source, std::string des
         exit(1);
     }
 
-
     console->info("Directory {} created.", destination);
 
-    if (rename((source + mantis::CQF_FILE).c_str(), (destination + mantis::CQF_FILE).c_str()) != 0) {
-        console->error("Moving CQF file {} to directory {} failed.", source + mantis::CQF_FILE, destination);
-        exit(1);
+
+    // Move the blocked CQF files.
+
+    std::vector<std::string> cqf_files = mantis::fs::GetFilesExt(source.c_str(), mantis::CQF_FILE);
+    std::map<uint, std::string> sorted_files;
+
+    for (std::string file_name : cqf_files)
+    {
+    	uint file_id = std::stoi(first_part(last_part(file_name, '/'), '_'));
+    	sorted_files[file_id] = file_name;
     }
+
+    cqf_files.clear();
+    for(auto id_fileName_pair : sorted_files)
+    	cqf_files.push_back(id_fileName_pair.second);
+
+    for(uint i = 0; i < cqf_files.size(); ++i)
+    	if(rename(cqf_files[i].c_str(), (destination + std::to_string(i) + "_" + mantis::CQF_FILE).c_str()) != 0)
+    	{
+    		console->error("Moving CQF file {} to directory {} failed. Aborting.", cqf_files[i], destination);
+    		std::exit(EXIT_FAILURE);
+    	}
+
+
+    // Move the minimizer frequency file.
+
+    if (rename((source + mantis::MINIMIZER_FREQ).c_str(), (destination + mantis::MINIMIZER_FREQ).c_str()) != 0) {
+        console->error("Moving minimizer frequency file {} to directory {} failed. Aborting.", source + mantis::MINIMIZER_FREQ, destination);
+        std::exit(EXIT_FAILURE);
+    }
+
+
+    // Move the minimizer boundary file.
+
+    if (rename((source + mantis::MINIMIZER_BOUNDARY).c_str(), (destination + mantis::MINIMIZER_BOUNDARY).c_str()) != 0) {
+        console->error("Moving minimizer boundary file {} to directory {} failed. Aborting.", source + mantis::MINIMIZER_BOUNDARY, destination);
+        std::exit(EXIT_FAILURE);
+    }
+
+
+    // Move the sample-id file.
 
     if (rename((source + mantis::SAMPLEID_FILE).c_str(), (destination + mantis::SAMPLEID_FILE).c_str()) != 0) {
-        console->error("Moving sample-id list file {} to directory {} failed.",
-                       source + mantis::SAMPLEID_FILE, destination);
-        exit(1);
+        console->error("Moving sample-id list file {} to directory {} failed. Aborting.", source + mantis::SAMPLEID_FILE, destination);
+        std::exit(EXIT_FAILURE);
     }
 
 
-    // std::vector<std::string> colorClassFiles = mantis::fs::GetFilesExt(source.c_str(), mantis::EQCLASS_FILE);
-    // std::map<uint, std::string> sortedFiles;
-
-    // for (std::string file : colorClassFiles)
-    // {
-    // 	uint fileID = std::stoi(first_part(last_part(file, '/'), '_'));
-    // 	sortedFiles[fileID] = file;
-    // }
-
-    // colorClassFiles.clear();
-    // for(auto idFilePair : sortedFiles)
-    // 	colorClassFiles.push_back(idFilePair.second);
-
-    // for(uint i = 0; i < colorClassFiles.size(); ++i)
-    // 	if(rename(colorClassFiles[i].c_str(),
-    // 				(destination + std::to_string(i) + "_" + mantis::EQCLASS_FILE).c_str()) != 0)
-    // 	{
-    // 		console -> error("Moving color-class bitvector file {} to directory {} failed.",
-    // 						colorClassFiles[i], destination);
-    // 		exit(1);
-    // 	}
+    // Move the MST-related files.
 
     if (rename((source + mantis::PARENTBV_FILE).c_str(), (destination + mantis::PARENTBV_FILE).c_str()) != 0) {
-        console->error("Moving parent-bv file {} to directory {} failed.",
-                       source + mantis::PARENTBV_FILE, destination);
-        exit(1);
+        console->error("Moving parent-bv file {} to directory {} failed.", source + mantis::PARENTBV_FILE, destination);
+        std::exit(EXIT_FAILURE);
     }
 
 
     if (rename((source + mantis::BOUNDARYBV_FILE).c_str(), (destination + mantis::BOUNDARYBV_FILE).c_str()) != 0) {
-        console->error("Moving boundary-bv file {} to directory {} failed.",
-                       source + mantis::BOUNDARYBV_FILE, destination);
-        exit(1);
+        console->error("Moving boundary-bv file {} to directory {} failed.", source + mantis::BOUNDARYBV_FILE, destination);
+        std::exit(EXIT_FAILURE);
     }
 
 
     if (rename((source + mantis::DELTABV_FILE).c_str(), (destination + mantis::DELTABV_FILE).c_str()) != 0) {
-        console->error("Moving delta-bv file {} to directory {} failed.",
-                       source + mantis::DELTABV_FILE, destination);
-        exit(1);
+        console->error("Moving delta-bv file {} to directory {} failed.", source + mantis::DELTABV_FILE, destination);
+        std::exit(EXIT_FAILURE);
     }
 
+
+    // Remove the meta-info json file (if exists).
 
     if (mantis::fs::FileExists((source + mantis::meta_file_name).c_str()) &&
         remove((source + mantis::meta_file_name).c_str()) != 0) {
-        console->error("File deletion of {} failed.",
-                       source + mantis::meta_file_name);
-        exit(1);
+        console->error("File deletion of {} failed. Aborting.\n", source + mantis::meta_file_name);
+        std::exit(EXIT_FAILURE);
     }
 
-    if (mantis::fs::FileExists((source + "newID2oldIDs").c_str()) &&
-        remove((source + "newID2oldIDs").c_str()) != 0) {
-        console->error("File deletion of {} failed.",
-                       source + "newID2oldIDs");
-        exit(1);
+
+    // Move the index-info json file (if exists).
+
+    if (mantis::fs::FileExists((source + mantis::index_info_file_name).c_str()) &&
+        rename((source + mantis::index_info_file_name).c_str(), (destination + mantis::index_info_file_name).c_str()) != 0) {
+        console->error("Moving index-info file {} to directory {} failed. Aborting.\n", source + mantis::index_info_file_name, destination);
+        std::exit(EXIT_FAILURE);
     }
+
+
+    // Remove the `newID2oldIDs` debug file.
+
+    if (mantis::fs::FileExists((source + "newID2oldIDs").c_str()) && remove((source + "newID2oldIDs").c_str()) != 0) {
+        console->error("File deletion of {} failed.", source + "newID2oldIDs");
+        std::exit(EXIT_FAILURE);
+    }
+
+
+
+    // Remove the directory; precondition: it must be empty.
 
     if (rmdir(source.c_str()) == -1) {
-        console->error("Cannot remove directory {}.", source);
-        exit(1);
+        console->error("Cannot remove directory {}. Aborting.", source);
+        std::exit(EXIT_FAILURE);
     }
 }
 

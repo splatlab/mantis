@@ -117,10 +117,11 @@ class LSMT_InitializeOpts
 {
   public:
     std::string dir;
-    uint scalingFactor{mantis::SCALING_FACTOR};
-    uint64_t kmerThreshold{mantis::KMER_THRESHOLD};
-    uint64_t sampleThreshold{mantis::SAMPLE_THRESHOLD};
-    uint qBitInitBuild{mantis::INIT_BUILD_Q_BIT};
+    uint scaling_factor{mantis::SCALING_FACTOR};
+    uint64_t kmer_threshold{mantis::KMER_THRESHOLD};
+    uint32_t cqf_count_threshold{mantis::CQF_COUNT_THRESHOLD};
+    uint64_t sample_threshold{mantis::SAMPLE_THRESHOLD};
+    uint qBit_init_build{mantis::INIT_BUILD_Q_BIT};
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 
@@ -130,8 +131,8 @@ class LSMT_UpdateOpts
 {
   public:
     std::string dir;
-    std::string inputList;
-    uint threadCount{1};
+    std::string input_list;
+    uint thread_count{1};
     std::shared_ptr<spdlog::logger> console{nullptr};
 };
 

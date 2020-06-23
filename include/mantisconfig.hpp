@@ -29,6 +29,7 @@ namespace mantis{
     // Constants for LSM tree.
     constexpr uint SCALING_FACTOR = 4;
     constexpr uint64_t KMER_THRESHOLD = 1500000000UL;
+    constexpr uint32_t CQF_COUNT_THRESHOLD = 5;
     constexpr uint64_t SAMPLE_THRESHOLD = 100;
     constexpr uint64_t INIT_BUILD_Q_BIT = 31;
     constexpr char PARAM_FILE[] = "lsmt-params.json";
