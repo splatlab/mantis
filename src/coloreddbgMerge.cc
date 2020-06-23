@@ -126,6 +126,12 @@ int merge_main(MergeOpts &opt) {
         }
         jfile.close();
     }
+    if (opt.removeIndices) {
+        std::string cmd = "rm -r " + opt.dir1;
+        system(cmd.c_str());
+        cmd = "rm -r " + opt.dir2;
+        system(cmd.c_str());
+    }
     return EXIT_SUCCESS;
 }
 
