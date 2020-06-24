@@ -211,13 +211,15 @@ int main ( int argc, char *argv[] ) {
                         command("lsmt_init").set(selected, mode::lsmt_init),
                         required("-d", "--dir") & value("dir", lsmtiopt.dir)
                         % "directory where the LSM-tree will reside",
-                        option("-c", "--scaling-factor") & value("scaling-factor", lsmtiopt.scalingFactor)
+                        option("-c", "--scaling-factor") & value("scaling-factor", lsmtiopt.scaling_factor)
                         % "scaling factor for the LSM-tree levels",
-                        option("-k", "--kmer-threshold") & value("kmer-threshold", lsmtiopt.kmerThreshold)
+                        option("-k", "--kmer-threshold") & value("kmer-threshold", lsmtiopt.kmer_threshold)
                         % "kmer count threshold for the level 0 of the LSM-tree",
-                        option("-s", "--sample-threshold") & value("sample-threshold", lsmtiopt.sampleThreshold)
+                        option("-th", "--cqf-count-threshold") & value("cqf-count-threshold", lsmtiopt.cqf_count_threshold)
+                        % "CQF count threshold for the level 0 of the LSM-tree",
+                        option("-s", "--sample-threshold") & value("sample-threshold", lsmtiopt.sample_threshold)
                         % "threshold on the count of samples kept pending before insertion into the LSM-tree",
-                        option("-q", "--q-bit-init-build") & value("q-bit-init-build", lsmtiopt.qBitInitBuild)
+                        option("-q", "--q-bit-init-build") & value("q-bit-init-build", lsmtiopt.qBit_init_build)
                         % "q (quotient)-bit count for the initial mantis build at an update"
                         );
 
@@ -225,9 +227,9 @@ int main ( int argc, char *argv[] ) {
                           command("lsmt_update").set(selected, mode::lsmt_update),
                           required("-d", "--dir") & value("dir", lsmtuopt.dir)
                           % "directory where the LSM-tree resides",
-                          required("-i", "--input-list") & value(ensure_file_exists, "input-list", lsmtuopt.inputList)
+                          required("-i", "--input-list") & value(ensure_file_exists, "input-list", lsmtuopt.input_list)
                           % "file containing list of input sample-filters",
-                          option("-t", "--thread-count") & value("thread-count", lsmtuopt.threadCount)
+                          option("-t", "--thread-count") & value("thread-count", lsmtuopt.thread_count)
                           % "number of threads to use in intermediate merge operations"
                           );
 
