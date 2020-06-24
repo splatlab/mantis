@@ -49,6 +49,7 @@ int recursiveConstruction(uint64_t cnt, uint64_t start, uint64_t end, std::vecto
     sysCommand += "rm -rf " + tmpOut + "squeakr" + std::to_string(mid) + "_" + std::to_string(end) + ";fi;";
     sysCommand += "ls -lh " + tmpOut + tmpIn + " >> " + tmpOut + std::to_string(level) + tmpIn + ".log;";
     cmds.emplace_back(level, sysCommand);
+    return EXIT_SUCCESS;
 }
 
 int construct_mantis_by_merge_main(BuildOpts &opt) {
@@ -66,7 +67,10 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         console->error("Input file {} does not exist or could not be opened.", opt.inlist);
         std::exit(1);
     }
-
+    if (opt.numProcesses > opt.numthreads) {
+        console->error("Number of processes should be smaller than number of threads, but {} > {}", opt.numProcesses, opt.numthreads);
+        std::exit(1);
+    }
     // Allowing only a limited num of processes run at the same time, even if more threads are provided
     ctpl::thread_pool p(opt.numProcesses /* num of threads in the pool */);
     std::vector<std::future<void>> results;
@@ -101,12 +105,25 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         std::cerr << "ERROR: No command to run.\n";
         std::exit(2);
     }
-
     tbb::parallel_sort(cmds.begin(), cmds.end(), [](auto &c1, auto &c2){
         return c1.first > c2.first;
     });
+    uint64_t maxLevel = cmds[0].first;
+    std::vector<uint64_t > levelCnt(maxLevel+1, 0);
+    for (auto &level_cmd : cmds) {
+        levelCnt[level_cmd.first]++;
+    }
+    std::string oldNumThreads = " -t " + std::to_string(numThreads) + " ";
+    for (auto &level_cmd : cmds) {
+        std::string newNumThreads = " -t " +
+                std::to_string(numThreads/std::min(static_cast<uint64_t>(opt.numProcesses), levelCnt[level_cmd.first])) + " ";
+//        std::cerr << level_cmd.first << " --> " << levelCnt[level_cmd.first] << "\n";
+        level_cmd.second.replace(level_cmd.second.find(oldNumThreads), oldNumThreads.size(), newNumThreads);
+//        std::cerr << level_cmd.second << "\n";
+    }
+    std::exit(3);
     uint64_t level = cmds.begin()->first;
-    for (auto &level_cmd:cmds) {
+    for (auto &level_cmd : cmds) {
         if (level != level_cmd.first) {
             for (auto &r : results) {
                 r.get();
@@ -115,9 +132,9 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
             console->info("Done with Level {}", level);
             level = level_cmd.first;
         }
-        results.push_back(p.push([level_cmd](int) {
+        results.push_back(p.push([level_cmd, console](int) {
             std::stringstream ss(std::to_string(level_cmd.first) + ": " + level_cmd.second + "\n\n");
-            std::cerr << ss.str();
+            console->info(ss.str());
             system(level_cmd.second.c_str());
         }));
     }
