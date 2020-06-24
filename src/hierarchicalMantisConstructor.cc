@@ -121,7 +121,6 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
         level_cmd.second.replace(level_cmd.second.find(oldNumThreads), oldNumThreads.size(), newNumThreads);
 //        std::cerr << level_cmd.second << "\n";
     }
-    std::exit(3);
     uint64_t level = cmds.begin()->first;
     for (auto &level_cmd : cmds) {
         if (level != level_cmd.first) {
@@ -148,4 +147,5 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
                           + "mv " + opt.out + mantis::TEMP_DIR + " " + opt.out + "logs;";
     system(command.c_str());
     std::cerr << "\nALL DONE!\n";
+    return EXIT_SUCCESS;
 }
