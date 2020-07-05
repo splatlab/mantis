@@ -108,6 +108,8 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
     tbb::parallel_sort(cmds.begin(), cmds.end(), [](auto &c1, auto &c2){
         return c1.first > c2.first;
     });
+
+    /// limiting final number of cpus
     uint64_t maxLevel = cmds[0].first;
     std::vector<uint64_t > levelCnt(maxLevel+1, 0);
     for (auto &level_cmd : cmds) {
@@ -117,10 +119,10 @@ int construct_mantis_by_merge_main(BuildOpts &opt) {
     for (auto &level_cmd : cmds) {
         std::string newNumThreads = " -t " +
                 std::to_string(numThreads/std::min(static_cast<uint64_t>(opt.numProcesses), levelCnt[level_cmd.first])) + " ";
-//        std::cerr << level_cmd.first << " --> " << levelCnt[level_cmd.first] << "\n";
         level_cmd.second.replace(level_cmd.second.find(oldNumThreads), oldNumThreads.size(), newNumThreads);
-//        std::cerr << level_cmd.second << "\n";
     }
+    /// end of limiting final number of cpus
+
     uint64_t level = cmds.begin()->first;
     for (auto &level_cmd : cmds) {
         if (level != level_cmd.first) {

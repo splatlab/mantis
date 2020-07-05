@@ -34,16 +34,15 @@ endif()
 ###
 # Sanitizers BEGIN
 ###
-if (ASAN_BUILD)
-   #-fsanitize=leak
-   list(APPEND PF_CPP_FLAGS "-fsanitize=address")
-   #list(APPEND PF_CPP_FLAGS "-fsanitize=undefined")
-   #set(CMAKE_LINK_FLAGS "-fsanitize=address")
-   #list(APPEND CMAKE_LINK_FLAGS "-fsanitize=undefined")
-   set(ASAN_LIB "asan")
-else()
-   set(ASAN_LIB "")
-endif()
+set(ASAN_LIB "")
+#if (ASAN_BUILD)
+#   #-fsanitize=leak
+#   list(APPEND PF_CPP_FLAGS "-fsanitize=address")
+#   #list(APPEND PF_CPP_FLAGS "-fsanitize=undefined")
+#   #set(CMAKE_LINK_FLAGS "-fsanitize=address")
+#   #list(APPEND CMAKE_LINK_FLAGS "-fsanitize=undefined")
+#   set(ASAN_LIB "asan")
+#endif()
 ###
 # Sanitizers END
 ###

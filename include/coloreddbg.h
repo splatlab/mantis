@@ -523,8 +523,8 @@ ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
         numKmers = idxInfo["num_kmers"];
         numColors = idxInfo["num_colors"];
     } else {
-        std::cerr << "Could not write to output directory " << prefix << "\n";
-        exit(3);
+        std::cerr << "\n\nWarning: File " << mantis::index_info_file_name << " not found in " << prefix << "\n\n";
+//        exit(3);
     }
     infile.close();
     // Load the sample / experiment names.

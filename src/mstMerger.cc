@@ -85,18 +85,31 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
     cp.read(reinterpret_cast<char *>(&ccCnt[1]), sizeof(ccCnt[1]));
     auto c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
     logger->info("# of color classes based on count of colorPairs: {}", newColorIdCnt);
+    logger->info("# of color classes of first input mantis: {}", ccCnt[0]);
+    logger->info("# of color classes of second input mantis: {}", ccCnt[1]);
     colorPairs[0] = sdsl::int_vector<>(newColorIdCnt, 0, c1len);
     colorPairs[1] = sdsl::int_vector<>(newColorIdCnt, 0, c2len);
     uint64_t maxIndex = 0;
+//    uint64_t colorCntr= 0;
     for (auto i = 0; i < newColorIdCnt; i++) {
+//    while (true) {
         cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
         cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
         cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
+//        if (not cp.good()) break;
+//        colorCntr++;
+//        if (colorCntr % 100000000 == 0) {std::cerr << colorCntr << "\n";}
+//        if (cIdx >= newColorIdCnt) {
+//            std::cerr <<" wow! how? " << cIdx << " " << newColorIdCnt << "\n";
+//            std::exit(3);
+//        }
         colorPairs[0][cIdx] = c1;
         colorPairs[1][cIdx] = c2;
         maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
     }
     cp.close();
+//    std::cerr << newColorIdCnt << " vs " << colorCntr << "\n";
+//    std::exit(3);
     num_colorClasses = colorPairs[0].size() + 1;
     zero = num_colorClasses-1;
 
@@ -114,11 +127,12 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
 void MSTMerger::mergeMSTs() {
     auto t_start = time(nullptr);
     buildEdgeSets();
+//    curFileIdx = 13;
     calculateMSTBasedWeights();
     encodeColorClassUsingMST();
 
-//    std::string cmd = "rm " + prefix + "newID2oldIDs";
-//    system(cmd.c_str());
+    std::string cmd = "rm " + prefix + "newID2oldIDs";
+    system(cmd.c_str());
     auto t_end = time(nullptr);
     logger->info("MST merge completed in {} s.", t_end - t_start);
 }
@@ -133,7 +147,20 @@ bool MSTMerger::buildEdgeSets() {
     std::vector<uint64_t> cnts(nThreads, 0);
     uint64_t maxId{0}, numOfKmers{0};
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
-    tbb::parallel_sort(cqfBlocks.begin(), cqfBlocks.end());
+    tbb::parallel_sort(cqfBlocks.begin(), cqfBlocks.end(), [](std::string &s1, std::string &s2) {
+        uint64_t startPos1 = s1.find_last_of("/");
+        uint64_t startPos2 = s2.find_last_of("/");
+        if (startPos1 == std::string::npos) startPos1 = 0; else startPos1++;
+        if (startPos2 == std::string::npos) startPos2 = 0; else startPos2++;
+
+        std::string subs1 = s1.substr(startPos1);
+        std::string subs2 = s2.substr(startPos2);
+        if (subs1.find("_") == std::string::npos or subs2.find("_") == std::string::npos) {
+            std::cerr << "CQF files should start with a number followed by \"_\"\n Instead got: " << subs1 << " and " << subs2 << "\n";
+            std::exit(3);
+        }
+        return stoul(subs1.substr(0, subs1.find_first_of("_"))) < stoul(subs2.substr(0, subs1.find_first_of("_")));
+    });
 //    std::sort(std::execution::par_unseq, cqfBlocks.begin(), cqfBlocks.end());
     std::vector<std::pair<uint64_t, uint64_t>> tmpEdges;
     tmpEdges.reserve(MAX_ALLOWED_TMP_EDGES_IN_FILE);
@@ -191,7 +218,10 @@ bool MSTMerger::buildEdgeSets() {
     uint64_t totalObservedEdges{0};
     writeMutex.lock();
     if (not tmpEdges.empty()) {
-        std::cerr << "tmpEdges.size(): " << tmpEdges.size() << " sizeof(element): " << sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type) <<  "\n";
+        for (auto &e: tmpEdges) {
+            maxId = e.first > maxId ? e.first : maxId;
+            maxId = e.second > maxId ? e.second : maxId;
+        }
         edgePairSortUniq(tmpEdges);
         std::string filename(prefix+"tmp"+std::to_string(curFileIdx));
         std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
@@ -205,6 +235,7 @@ bool MSTMerger::buildEdgeSets() {
         tmpfile.write(reinterpret_cast<const char *>(tmpEdges.data()),
                       sizeof(std::remove_reference<decltype(tmpEdges)>::type::value_type)*tmpEdges.size());
         tmpfile.close();
+        logger->info("Max colorId observed: {}", maxId);
         curFileIdx++;
     }
     writeMutex.unlock();
@@ -241,6 +272,10 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     edgeList.reserve(tmpEdgeListSize);
     auto appendStore = [&]() {
         edgePairSortUniq(edgeList);
+        for (auto &e: edgeList) {
+            localMaxId = e.first > localMaxId ? e.first : localMaxId;
+            localMaxId = e.second > localMaxId ? e.second : localMaxId;
+        }
         colorMutex.lock();
         cnt += edgeList.size();
 //        std::move(std::execution::par_unseq, edgeList.begin(), edgeList.end(), tmpEdges.end());
@@ -256,6 +291,10 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
             std::string filename(prefix + "tmp" + std::to_string(curFileIdx));
             std::ofstream tmpfile(filename, std::ios::out | std::ios::binary);
             uint64_t toWriteSize = toWrite.size();
+            std::cerr << "writing to file tmp" << curFileIdx << "\n";
+            std::cerr << "Total elements: " << toWrite.size() << " size:"
+                      << sizeof(std::remove_reference<decltype(toWrite)>::type::value_type)*toWrite.size()
+                      << "\n";
             tmpfile.write(reinterpret_cast<const char *>(&toWriteSize), sizeof(toWriteSize));
             tmpfile.write(reinterpret_cast<const char *>(toWrite.data()),
                           sizeof(std::remove_reference<decltype(toWrite)>::type::value_type)*toWrite.size());
@@ -269,9 +308,9 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     auto it = cqf.setIteratorLimits(startPoint, endPoint);
     while (!it.reachedHashLimit()) {
         KeyObject keyObject = *it;
-        uint64_t curEqId = keyObject.count - 1;
+//        uint64_t curEqId = keyObject.count - 1;
         //nodes[curEqId] = 1; // set the seen color class id bit
-        localMaxId = curEqId > localMaxId ? curEqId : localMaxId;
+
         // Add an edge between the color class and each of its neighbors' colors in dbg
         findNeighborEdges(cqf, keyObject, edgeList, popularEdges);
         if (edgeList.size() >= tmpEdgeListSize) {

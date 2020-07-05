@@ -55,10 +55,20 @@ public:
             uniqueEdges[1].reserve(maxAllowedCnt);
             logger->info("Walking all the edges to find popular nodes.");
             auto val = minheap.top()->get_val();
+            if (val.first >= colorPairs0.size() or val.second >= colorPairs0.size()) {
+                logger->error("Reading a wrong edge from the tmp file: {}->{} while max nodeId:{}", val.first, val.second, colorPairs0.size());
+                std::cerr << minheap.top()->get_filename() << " " << minheap.top()->countOfItemsInFile << " " << minheap.top()->fileIdx << " " << minheap.top()->vecIdx << " " << minheap.top()->buffer.size() << "\n";
+                std::exit(3);
+            }
             while (!minheap.empty()) {
                 do {
                     auto cur = minheap.top();
                     val = cur->get_val();
+                    if (val.first >= colorPairs0.size() or val.second >= colorPairs0.size()) {
+                        logger->error("Reading a wrong edge from the tmp file: {}->{} while max nodeId:{}", val.first, val.second, colorPairs0.size());
+                        std::cerr << minheap.top()->get_filename() << " " << minheap.top()->countOfItemsInFile << " " << minheap.top()->fileIdx << " " << minheap.top()->vecIdx << " " << minheap.top()->buffer.size() << "\n";
+                        std::exit(3);
+                    }
                     if (cur->next()) {
                         minheap.replace_top(cur);
                     } else
@@ -68,18 +78,21 @@ public:
                     logger->error("edge.first = edge.second while no self-edges are allowed: {}->{}", val.first, val.second);
                     std::exit(3);
                 }
+
                 std::pair<uint64_t , uint64_t> edge = std::make_pair(colorPairs0[val.first], colorPairs0[val.second]);
                 if (edge.first != edge.second)
                     uniqueEdges[0].push_back(edge);
                 if (edge.first > mstZero[0] or edge.second > mstZero[0]) {
                     std::cerr << "FFFFUUUCK0 " <<
                     mstZero[0] << " " << edge.first << " " << edge.second
-                            << " " << val.first << " " << val.second << "\n";
+                            << " colorPair0.size():" << colorPairs0.size() << " " << val.first << " " << val.second << "\n";
                     std::exit(3);
                 }
                 edge = std::make_pair(colorPairs1[val.first], colorPairs1[val.second]);
                 if (edge.first > mstZero[1] or edge.second > mstZero[1]) {
-                    std::cerr << "FFFFUUUCK1 " << mstZero[1] << " " << edge.first << " " << edge.second << "\n";
+                    std::cerr << "FFFFUUUCK1 "
+                              << mstZero[1] << " " << edge.first << " " << edge.second
+                              << " colorPair1.size():" << colorPairs1.size() << " " << val.first << " " << val.second << "\n";
                     std::exit(3);
                 }
                 if (edge.first != edge.second)
