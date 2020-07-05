@@ -57,7 +57,7 @@ public:
             auto val = minheap.top()->get_val();
             if (val.first >= colorPairs0.size() or val.second >= colorPairs0.size()) {
                 logger->error("Reading a wrong edge from the tmp file: {}->{} while max nodeId:{}", val.first, val.second, colorPairs0.size());
-                std::cerr << minheap.top()->get_filename() << " " << minheap.top()->countOfItemsInFile << " " << minheap.top()->fileIdx << " " << minheap.top()->vecIdx << " " << minheap.top()->buffer.size() << "\n";
+//                std::cerr << minheap.top()->get_filename() << " " << minheap.top()->countOfItemsInFile << " " << minheap.top()->fileIdx << " " << minheap.top()->vecIdx << " " << minheap.top()->buffer.size() << "\n";
                 std::exit(3);
             }
             while (!minheap.empty()) {
@@ -66,7 +66,7 @@ public:
                     val = cur->get_val();
                     if (val.first >= colorPairs0.size() or val.second >= colorPairs0.size()) {
                         logger->error("Reading a wrong edge from the tmp file: {}->{} while max nodeId:{}", val.first, val.second, colorPairs0.size());
-                        std::cerr << minheap.top()->get_filename() << " " << minheap.top()->countOfItemsInFile << " " << minheap.top()->fileIdx << " " << minheap.top()->vecIdx << " " << minheap.top()->buffer.size() << "\n";
+//                        std::cerr << minheap.top()->get_filename() << " " << minheap.top()->countOfItemsInFile << " " << minheap.top()->fileIdx << " " << minheap.top()->vecIdx << " " << minheap.top()->buffer.size() << "\n";
                         std::exit(3);
                     }
                     if (cur->next()) {

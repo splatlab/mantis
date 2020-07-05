@@ -62,14 +62,10 @@ public:
         buffer = o.buffer;
         o.buffer.clear();
         o.buffer.shrink_to_fit();
-/*
-        std::cerr << filename << "\n" << buffer[80140].first << "->" << buffer[80140].second << "\n"
-                  << buffer[80141].first << "->" << buffer[80141].second << "\n\n";
-*/
-        o.file.close();
+
         file.open(filename, std::ios::in | std::ios::binary);
         file.seekg(o.file.tellg());
-
+        o.file.close();
     }
 
     bool next() {
