@@ -10,7 +10,8 @@
 #include "kmer.h"
 #include "mstQuery.h"
 
-void MSTQuery::loadIdx(std::string indexDir) {
+
+void MSTQuery::loadMST(std::string indexDir) {
     sdsl::load_from_file(parentbv, indexDir + mantis::PARENTBV_FILE);
     sdsl::load_from_file(deltabv, indexDir + mantis::DELTABV_FILE);
     sdsl::load_from_file(bbv, indexDir + mantis::BOUNDARYBV_FILE);
@@ -126,41 +127,99 @@ std::vector<uint64_t> MSTQuery::buildColor(uint64_t eqid, QueryStats &queryStats
 void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> &cdbg,
                            LRUCacheMap &lru_cache,
                            RankScores *rs,
-                           QueryStats &queryStats) {
+                           QueryStats &queryStats,
+                           uint64_t numQueries) {
     uint64_t ksize{cdbg.get_current_cqf()->keybits()}, numBlocks{cdbg.get_numBlocks()};
     std::vector<std::unordered_set<mantis::KmerHash>> blockKmers(numBlocks);
+    std::vector<std::ofstream> blockKmerFiles;
+    std::vector<uint64_t> blockKmerCnt(numBlocks, 0);
+    for (auto i = 0; i < numBlocks; i++) {
+        blockKmerFiles.emplace_back(outfile+".tmp" + std::to_string(i), std::ios::out | std::ios::binary);
+    }
     // split kmers based on minimizers into blocks
     logger->info("# of distinct kmers to query: {}", kmer2cidMap.size());
     for (auto kv : kmer2cidMap) {
         auto minimizers = cdbg.findMinimizer(kv.first, ksize); //assuming not hashed
         blockKmers[cdbg.minimizerBlock[minimizers.first]].insert(kv.first);
+        blockKmerFiles[cdbg.minimizerBlock[minimizers.first]].write(reinterpret_cast<const char*>(&kv.first), sizeof(kv.first));
+        blockKmerCnt[cdbg.minimizerBlock[minimizers.first]]++;
     }
 
+    for (auto &f : blockKmerFiles) f.close();
+
     // go block by block and query kmers
-    std::unordered_set<uint64_t> query_eqclass_set;
+    std::vector<uint64_t> query_eqclass_set;
+    query_eqclass_set.reserve(10000000);
     for (auto blockId = 0; blockId < numBlocks; blockId++) {
-        if (blockKmers[blockId].empty())
+//        if (blockKmers[blockId].empty())
+//            continue;
+        if (blockKmerCnt[blockId] == 0)
             continue;
         logger->info("{}: kmer count: {}", blockId, blockKmers[blockId].size());
         cdbg.replaceCQFInMemory(blockId);
         logger->info("\t-->cqf loaded");
-        for (auto key : blockKmers[blockId]) {
+        std::vector<uint64_t> kmers(blockKmerCnt[blockId]);
+        std::ifstream inputf(outfile+".tmp" + std::to_string(blockId), std::ios::in | std::ios::binary);
+        inputf.read(reinterpret_cast<char *>(kmers.data()), sizeof(uint64_t)*blockKmerCnt[blockId]);
+        inputf.close();
+//        for (auto key : blockKmers[blockId]) {
+        for (auto key : kmers) {
             KeyObject keyObj(key, 0, 0);
-            dna::canonical_kmer ck(23, key);
+//            dna::canonical_kmer ck(23, key);
             uint64_t eqclass = cdbg.query_kmerInCurDbg(keyObj, 0);
 //            std::cerr << "key: " << key << " " << ck.val << " cID: " << eqclass << "\n";
             if (eqclass) {
                 kmer2cidMap[key].first = eqclass - 1;
-                query_eqclass_set.insert(eqclass - 1);
+                query_eqclass_set.push_back(eqclass - 1);
             }
         }
+        tbb::parallel_sort(query_eqclass_set.begin(), query_eqclass_set.end());
+        query_eqclass_set.erase(std::unique(query_eqclass_set.begin(), query_eqclass_set.end()), query_eqclass_set.end());
     }
-    cdbg.replaceCQFInMemory(invalid);
 
+
+    cdbg.replaceCQFInMemory(invalid);
+    auto colorIt = boomphf::range(query_eqclass_set.begin(), query_eqclass_set.end());
+    colorMph = boomphf::mphf<uint64_t, boomphf::SingleHashFunctor<uint64_t>>(query_eqclass_set.size(), colorIt, threadCount, 2.5);
+//    cid2exp.resize(query_eqclass_set.size());
+    std::vector<uint64_t> eqQueriesStartIdx(query_eqclass_set.size()+1,0), eqQueriesEndIdx(query_eqclass_set.size()+1,0);
+    std::vector<uint32_t> eqQueries;
+    for (auto &kv : kmer2cidMap) {
+        eqQueriesEndIdx[colorMph.lookup(kv.second.first)]+=kv.second.second.size();
+    }
+    for (auto i = 1; i < eqQueriesEndIdx.size(); i++) {
+        eqQueriesEndIdx[i] += eqQueriesEndIdx[i-1];
+        eqQueriesStartIdx[i] = eqQueriesEndIdx[i-1];
+    }
+    eqQueries.resize(eqQueriesEndIdx.back());
+    for (auto &kv : kmer2cidMap) {
+        auto idx = colorMph.lookup(kv.second.first);
+        for (auto &q : kv.second.second) {
+            eqQueries[eqQueriesStartIdx[idx]] = q;
+            eqQueriesStartIdx[idx]++;
+        }
+    }
+    eqQueriesStartIdx[0] = 0;
+    for (auto i = 1; i < eqQueriesEndIdx.size(); i++) {
+        if (eqQueriesStartIdx[i] != eqQueriesEndIdx[i]) {
+            std::cerr << "Error in calculating the start and end for queries containing a color\n";
+            std::cerr << eqQueriesStartIdx[i] << "!=" << eqQueriesEndIdx[i] << "\n";
+            std::exit(3);
+        }
+        eqQueriesStartIdx[i] = eqQueriesEndIdx[i-1];
+    }
+    // we can now clear kmer2cidMap
 
     nonstd::optional<uint64_t> toDecode{nonstd::nullopt};
     nonstd::optional<uint64_t> dummy{nonstd::nullopt};
     logger->info("Fetching colors now ..");
+    if (!MSTIsLoaded) {
+        loadMST(prefix);
+    }
+    allQueries.resize(numQueries);
+    for (auto &r : allQueries) {
+        r.resize(numSamples+1, 0); // last index keeps count of distinct kmers
+    }
     for (auto &it : query_eqclass_set) {
         uint64_t eqclass_id = it;
 
@@ -185,7 +244,19 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
                 lru_cache.emplace(*toDecode, s);
             }
         }
-        cid2expMap[eqclass_id] = setbits;
+
+        // update query sample counts
+        auto eqMappedIndx = colorMph.lookup(eqclass_id);
+        for (auto idx = eqQueriesStartIdx[eqMappedIndx]; idx < eqQueriesEndIdx[eqMappedIndx]; idx++) {
+            auto q = eqQueries[idx];
+            allQueries[q][numSamples]++;
+            for (auto &c : setbits) {
+                allQueries[q][c]++;
+            }
+        }
+
+//        cid2exp[colorMph.lookup(eqclass_id)] = setbits;
+//        cid2expMap[eqclass_id] = setbits;
     }
 }
 
@@ -280,7 +351,7 @@ void MSTQuery::parseKmers(uint32_t readId, std::string read, uint64_t kmer_size)
 
 void MSTQuery::reset() {
     kmer2cidMap.clear();
-    cid2expMap.clear();
+//    cid2expMap.clear();
 }
 
 void MSTQuery::clear() {
@@ -290,13 +361,16 @@ void MSTQuery::clear() {
     bbv.resize(0);
 }
 
+/*
 mantis::QueryResults MSTQuery::getResultList(uint64_t numQueries) {
     mantis::QueryResults allQueries(numQueries);
     for (auto &r : allQueries) {
         r.resize(numSamples+1, 0); // last index keeps count of distinct kmers
     }
     for (auto& kv : kmer2cidMap) {
-        auto &samples = cid2expMap[kv.second.first];
+//        auto &samples = cid2expMap[kv.second.first];
+        auto &samples = cid2exp[colorMph.lookup(kv.second.first)];
+
         for (uint64_t q : kv.second.second) { // for all queries that have this kmer
             allQueries[q][numSamples]++; // first increase count of distinct kmer for that query
             if (kv.second.first != std::numeric_limits<uint64_t>::max()) { // if kmer is found
@@ -309,6 +383,7 @@ mantis::QueryResults MSTQuery::getResultList(uint64_t numQueries) {
     }
     return allQueries;
 }
+*/
 
 void output_results(MSTQuery &mstQuery,
                     std::ofstream &opfile,
@@ -316,7 +391,7 @@ void output_results(MSTQuery &mstQuery,
                     QueryStats &queryStats,
                     uint64_t numQueries) {
     //CLI::AutoTimer timer{"Second round going over the file + query time ", CLI::Timer::Big};
-    mantis::QueryResults result = mstQuery.getResultList(numQueries);
+    mantis::QueryResults &result = mstQuery.allQueries;//mstQuery.getResultList(numQueries);
     for (auto &q : result) {
         // last element in the result for each query contains # of distinct kmers
         opfile << "seq" << queryStats.cnt++ << '\t' << q[q.size()-1] << '\n';
@@ -335,7 +410,8 @@ void output_results_json(MSTQuery &mstQuery,
                          uint64_t nquery,
                          bool isFirstQuery) {
     //CLI::AutoTimer timer{"Query time ", CLI::Timer::Big};
-    mantis::QueryResults result = mstQuery.getResultList(nquery);
+//    mantis::QueryResults result = mstQuery.getResultList(nquery);
+    mantis::QueryResults &result = mstQuery.allQueries;//mstQuery.getResultList(numQueries);
     for (auto &q : result) {
         if (!isFirstQuery) {
             opfile << ",";
@@ -400,11 +476,11 @@ int mst_query_main(QueryOpts &opt) {
     if (queryK == 0) queryK = indexK;
     logger->info("Done loading cqf. k is {}", indexK);
 
-
     logger->info("Loading color classes in the MST form...");
-    MSTQuery mstQuery(opt.prefix, indexK, queryK, queryStats.numSamples, logger);
+    MSTQuery mstQuery(opt.prefix, opt.output, indexK, queryK, queryStats.numSamples, logger, !opt.process_in_bulk);
     logger->info("Done Loading color classes. Total # of color classes is {}",
                  mstQuery.parentbv.size() - 1);
+
     logger->info("Querying colored dbg.");
     std::ofstream opfile(opt.output);
     LRUCacheMap cache_lru(100000);
@@ -414,7 +490,7 @@ int mst_query_main(QueryOpts &opt) {
     if (opt.process_in_bulk) {
         numOfQueries = mstQuery.parseBulkKmers(opt.query_file, indexK);
         logger->info("# of observed sequences: {}", numOfQueries);
-        mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
+        mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats, numOfQueries);
         if (opt.use_json) {
             opfile << "[\n";
             output_results_json(mstQuery, opfile, sampleNames, queryStats, numOfQueries, true);
@@ -431,7 +507,7 @@ int mst_query_main(QueryOpts &opt) {
             while (ipfile >> read) {
                 mstQuery.reset();
                 mstQuery.parseKmers(numOfQueries, read, indexK);
-                mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
+                mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats, 1);
                 output_results_json(mstQuery, opfile, sampleNames, queryStats, 1, isFirstQuery);
                 isFirstQuery = false;
                 numOfQueries++;
@@ -441,7 +517,7 @@ int mst_query_main(QueryOpts &opt) {
             while (ipfile >> read) {
                 mstQuery.reset();
                 mstQuery.parseKmers(numOfQueries, read, indexK);
-                mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
+                mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats, 1);
                 output_results(mstQuery, opfile, sampleNames, queryStats, 1);
                 numOfQueries++;
             }

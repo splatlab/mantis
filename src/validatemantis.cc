@@ -156,7 +156,7 @@ validate_main(ValidateOpts &opt) {
 
 
     console->info("Query all as a bulk query from MST");
-    MSTQuery mstQuery(prefix, kmer_size, kmer_size, cdbg.get_num_samples(), console);
+    MSTQuery mstQuery(prefix, prefix + "querytmps", kmer_size, kmer_size, cdbg.get_num_samples(), console);
     console->info("Done Loading data structure. Total # of color classes is {}",
                   mstQuery.parentbv.size() - 1);
     console->info("Start querying Mantis.");
@@ -166,8 +166,8 @@ validate_main(ValidateOpts &opt) {
     queryStats.numSamples = cdbg.get_num_samples();
     uint64_t numOfQueries = mstQuery.parseBulkKmers(query_file, kmer_size);
     console->info("Done reading {} input queries and parsing the kmers.", numOfQueries);
-    mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats);
-    mantis::QueryResults result = mstQuery.getResultList(numOfQueries);
+    mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats, numOfQueries);
+    mantis::QueryResults &result = mstQuery.allQueries; //getResultList(numOfQueries);
     console->info("Done querying the Mantis index.");
 
     // Query kmers in each experiment CQF

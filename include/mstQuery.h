@@ -18,6 +18,7 @@
 #include <mutex>
 #include "MantisFS.h"
 #include "coloreddbg.h"
+#include "BooPHF.h"
 
 //using LRUCacheMap =  LRU::Cache<uint64_t, std::shared_ptr<std::vector<uint64_t>>>;
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
@@ -78,14 +79,20 @@ private:
     sdsl::bit_vector bbv;
     spdlog::logger *logger{nullptr};
     mantis::QueryMap kmer2cidMap;
-    mantis::EqMap cid2expMap;
+//    mantis::EqMap cid2expMap;
+//    std::vector<std::vector<mantis::ExperimentID>> cid2exp;
     std::string prefix;
+    std::string outfile;
+    boomphf::mphf<uint64_t, boomphf::SingleHashFunctor<uint64_t>> colorMph;
+    uint64_t threadCount = 1;
+    bool MSTIsLoaded = false;
 public:
     uint32_t queryK;
     uint32_t indexK;
     sdsl::int_vector<> parentbv;
     sdsl::int_vector<> deltabv;
     sdsl::bit_vector::select_1_type sbbv;
+    mantis::QueryResults allQueries;
 
     static colorIdType getNodeCount(std::string &prefix) {
         static sdsl::int_vector<> parentbv;
@@ -96,13 +103,26 @@ public:
     }
 
     MSTQuery(std::string prefixIn, uint32_t indexKIn, uint32_t queryKIn,
-            uint64_t numSamplesIn, spdlog::logger *loggerIn) :
-    numSamples(numSamplesIn), indexK(indexKIn), queryK(queryKIn), logger(loggerIn), prefix(prefixIn) {
+             uint64_t numSamplesIn, spdlog::logger *loggerIn, bool loadMSTAhead=true) :
+            numSamples(numSamplesIn), outfile(prefixIn + "queryTmps"), indexK(indexKIn), queryK(queryKIn), logger(loggerIn), prefix(prefixIn) {
         numWrds = (uint64_t) std::ceil((double) numSamples / 64.0);
-        loadIdx(prefix);
+        if (loadMSTAhead) {
+            loadMST(prefix);
+            MSTIsLoaded = true;
+        }
     }
 
-    void loadIdx(std::string indexDir);
+    MSTQuery(std::string prefixIn, std::string outIn, uint32_t indexKIn, uint32_t queryKIn,
+            uint64_t numSamplesIn, spdlog::logger *loggerIn, bool loadMSTAhead=true) :
+    numSamples(numSamplesIn), outfile(outIn), indexK(indexKIn), queryK(queryKIn), logger(loggerIn), prefix(prefixIn) {
+        numWrds = (uint64_t) std::ceil((double) numSamples / 64.0);
+        if (loadMSTAhead) {
+            loadMST(prefix);
+            MSTIsLoaded = true;
+        }
+    }
+
+    void loadMST(std::string indexDir);
     std::vector<uint64_t> buildColor(uint64_t eqid, QueryStats &queryStats,
                                      LRUCacheMap *lru_cache,
                                      RankScores* rs,
@@ -115,8 +135,9 @@ public:
     void findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> &cdbg,
                                         LRUCacheMap &lru_cache,
                                         RankScores *rs,
-                                        QueryStats &queryStats);
-    mantis::QueryResults getResultList(uint64_t numQueries);
+                                        QueryStats &queryStats,
+                                        uint64_t numQueries);
+//    mantis::QueryResults getResultList(uint64_t numQueries);
 
     void reset();
 
