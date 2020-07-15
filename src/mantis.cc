@@ -339,7 +339,10 @@ int main ( int argc, char *argv[] ) {
         std::cout << make_man_page(compare_indices_mode, "mantis");
       } else if (b->arg() == "lsmt_init") {
         std::cout << make_man_page(lsmt_init_mode, "mantis");
-      } else if(b->arg() == "lsmt_query") {
+      } else if (b->arg() == "lsmt_update") {
+        std::cout << make_man_page(lsmt_update_mode, "mantis");
+      } 
+      else if(b->arg() == "lsmt_query") {
         std::cout << make_man_page(lsmt_query_mode, "mantis");
       }
       else {
