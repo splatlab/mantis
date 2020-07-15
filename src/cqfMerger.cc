@@ -509,7 +509,7 @@ sortUniq_colorID_pairs()
         console -> error("Command processor does not exist.");
         exit(1);
     }
-    uint64_t maxMemoryForSort = 10;
+    uint64_t maxMemoryForSort = 20;
 
     std::string diskBucket = cdbg.prefix + EQ_ID_PAIRS_FILE;
     console -> info("Filtering out the unique eq-id pairs from file {} with {} threads. Time-stamp = {}",
@@ -907,6 +907,7 @@ store_colorID_map()
     std::string colorIdPairFile = cdbg.prefix + EQ_ID_PAIRS_FILE;
     std::ifstream input(colorIdPairFile);
     colorIdType c1, c2;
+    uint64_t lineCntr = 0;
     while (input >> c1 >> c2) {
         ColorPair cpair(c1, c2);
         uint64_t colorID = sampledPairs.size() + colorMph->lookup(cpair);
@@ -920,6 +921,7 @@ store_colorID_map()
         output.write(reinterpret_cast<char*>(&(c1)), sizeof(c1));
         output.write(reinterpret_cast<char*>(&(c2)), sizeof(c2));
         writtenPairsCount++;
+        lineCntr++;
     }
     input.close();
     output.seekp(0, std::ios::beg);
