@@ -134,9 +134,13 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                 __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
                 __uint128_t endPoint =
                         threadId + 1 == threadCount ? cqf1->range() + 1 : (threadId + 1) * (cqf1->range() / (__uint128_t) threadCount);
-//                std::stringstream ss;
-//                ss << "threadId: " << std::to_string(threadId) << "\n";
-//                std::cerr << ss.str();
+/*
+                std::stringstream ss;
+                ss << "\nThreadId: " << std::to_string(threadId) << " ";
+                ss << "s " << (uint64_t)(startPoint >> 64) << "-" << (uint64_t)(startPoint & (0ULL-1)) << " ";
+                ss << "e " << (uint64_t)(endPoint >> 64) << "-" << (uint64_t)(endPoint & (0ULL-1)) << "\n";
+                std::cerr << ss.str();
+*/
                 auto it = cqf1->setIteratorLimits(startPoint, endPoint);
                 uint64_t tmpSize{100000}, cntr{0};
                 std::vector<KeyColorMin> tmpList;
@@ -187,18 +191,26 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
 //        console->info("Done walking Cqf{}. isSecond:{}", curBlock, isSecond);
 //        std::cerr << "\r" << (isSecond?"Second ":"First ") << cntr << " (main & duplicate) inserts for " << count << " kmers\n";
         // validating the minimizer observed count;
-        /*for (auto i = minMinimizer; i <= maxMinimizer; i++) {
-            if (minimizerIdx[numThreads-1][i - minMinimizer] != curCdbg.minimizerCntr[i]) {
-                console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected{}", i, minimizerIdx[numThreads-1][i-minMinimizer], curCdbg.minimizerCntr[i]);
+        /*std::cerr << "Validate the kmers count within each minimizer block .. ";
+        for (auto i = minMinimizer; i <= maxMinimizer; i++) {
+            if (minimizerIdx[threadCount-1][i - minMinimizer] != curCdbg.minimizerCntr[i]) {
+                console->error("Did not observe all the kmers with minimizer {}. Observed:{}, Expected:{}", i, minimizerIdx[threadCount-1][i-minMinimizer], curCdbg.minimizerCntr[i]);
                 std::exit(3);
             }
-            for (auto idx = 1; idx < minimizerKeyList[isSecond][i]->size(); idx++) {
-                if ((*minimizerKeyList[isSecond][i])[idx-1] >= (*minimizerKeyList[isSecond][i])[idx]) {
-                    std::cerr << "didn't work yet\n";
-                    std::exit(3);
+            if (minimizerKeyList[isSecond][end-i]) {
+                for (auto idx = 1; idx < minimizerKeyList[isSecond][end - i]->size(); idx++) {
+                    if ((*minimizerKeyList[isSecond][end - i])[idx - 1] >=
+                        (*minimizerKeyList[isSecond][end - i])[idx]) {
+                        std::cerr << "didn't work yet\n";
+                        std::exit(3);
+                    }
                 }
+            } else if (curCdbg.minimizerCntr[i] != 0) {
+                console->error("Cannot see any kmers for minimizer {} while we claim to have found {} kmers", i, curCdbg.minimizerCntr[i]);
+                std::exit(3);
             }
-        }*/
+        }
+        std::cerr << "passed.\n";*/
     }
     curCdbg.replaceCQFInMemory(invalid);
     return maxMinimizer;
@@ -505,6 +517,7 @@ sortUniq_colorID_pairs()
     std::string sysCommand = "sort -t' ' -u -n -k1,1 -k2,2";
     sysCommand += " --parallel=" + std::to_string(threadCount);
     sysCommand += " -S " + std::to_string(maxMemoryForSort) + "G";
+    sysCommand += " -T " + cdbg.prefix;
     sysCommand += " -o " + diskBucket + " " + diskBucket;
 
     console -> info("System command used:\n{}", sysCommand);
@@ -693,8 +706,12 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                                            }), tmp_kmers.end());
                 console->info("Sort-unique done.");
                 uint64_t qbits = cdbg.get_qbits();
+                if (occupiedSlotsCnt > cdbg.getCqfSlotCnt()) {
+                    console->info("Faced a case with one minimizer block requiring more than available slots");
+                    qbits++; // the CQF holds only one minimizer
+                }
                 console->info("CurrQbits: {}, availableSlotCnt: {}, requiredSlotCnt: {} for {} kmers",
-                              qbits, 1ULL << qbits, occupiedSlotsCnt, tmp_kmers.size());
+                              qbits, cdbg.getCqfSlotCnt(), occupiedSlotsCnt, tmp_kmers.size());
                 cdbg.initializeNewCQFBlock(outputCQFBlockId, kbits, qbits, hashmode, seed);
                 cdbg.add_kmer2CurDbg(tmp_kmers, 0,  tmp_kmers.size());
                 /*int ret;
@@ -868,7 +885,6 @@ store_colorID_map()
     output.write(reinterpret_cast<char*>(&writtenPairsCount), sizeof(writtenPairsCount));
     output.write(reinterpret_cast<char*>(&cdbg1ColorCnt), sizeof(cdbg1ColorCnt));
     output.write(reinterpret_cast<char*>(&cdbg2ColorCnt), sizeof(cdbg2ColorCnt));
-    console->info("# of abundant color IDs: {}", sampledPairs.size());
     // write down the pair and the associated colorID here
     // storing the IDs from 0 (when inserting into CQF, they needed a +1) (0-based)
 
@@ -877,6 +893,10 @@ store_colorID_map()
         auto fs = idpair.first;
         colorIdType c1 = fs.first == 0 ? cdbg1ColorCnt - 1 : fs.first - 1;
         colorIdType c2 = fs.second == 0 ? cdbg2ColorCnt - 1 : fs.second - 1;
+        if (c1 == cdbg1ColorCnt-1 and c2 == cdbg2ColorCnt-1) {
+            console->error("ERROR: Found a color pair in sampled colors with both ends = dummy ID: {}:<{},{}>", colorID, c1,c2);
+            std::exit(3);
+        }
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
         output.write(reinterpret_cast<char*>(&(c1)), sizeof(c1));
         output.write(reinterpret_cast<char*>(&(c2)), sizeof(c2));
@@ -892,6 +912,10 @@ store_colorID_map()
         uint64_t colorID = sampledPairs.size() + colorMph->lookup(cpair);
         c1 = c1 == 0 ? cdbg1ColorCnt - 1 : c1 - 1;
         c2 = c2 == 0 ? cdbg2ColorCnt - 1: c2 - 1;
+        if (c1 == cdbg1ColorCnt-1 and c2 == cdbg2ColorCnt-1) {
+            console->error("ERROR: Found a non-sampled color pair at line {} with both ends = dummy ID: {}:<{},{}>", lineCntr, colorID, c1,c2);
+            std::exit(3);
+        }
         output.write(reinterpret_cast<char*>(&colorID), sizeof(colorID));
         output.write(reinterpret_cast<char*>(&(c1)), sizeof(c1));
         output.write(reinterpret_cast<char*>(&(c2)), sizeof(c2));
@@ -906,6 +930,8 @@ store_colorID_map()
     system(sysCommand.c_str());
     auto t_end = time(nullptr);
     console -> info("Writing {} color pairs took time {} seconds.", writtenPairsCount, t_end - t_start);
+    console->info("# of abundant color IDs: {}", sampledPairs.size());
+
 }
 
 
