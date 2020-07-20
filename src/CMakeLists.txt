@@ -44,10 +44,11 @@ target_link_libraries(mantis_core
   m
   z
   rt
-  ${ASAN_LIB}
+  ${SAN_LIB}
   sdsl
   ${TBB_LIBRARIES}
-  OpenMP::OpenMP_CXX)
+#  OpenMP::OpenMP_CXX
+		)
 
 # The driver program is `mantis`, which is a front-end
 # with the relevant sub-commands

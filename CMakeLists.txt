@@ -34,30 +34,35 @@ endif()
 ###
 # Sanitizers BEGIN
 ###
-set(ASAN_LIB "")
-#if (ASAN_BUILD)
-#   #-fsanitize=leak
-#   list(APPEND PF_CPP_FLAGS "-fsanitize=address")
-#   #list(APPEND PF_CPP_FLAGS "-fsanitize=undefined")
-#   #set(CMAKE_LINK_FLAGS "-fsanitize=address")
-#   #list(APPEND CMAKE_LINK_FLAGS "-fsanitize=undefined")
-#   set(ASAN_LIB "asan")
-#endif()
-###
-# Sanitizers END
-###
-
-find_package(OpenMP)
-
-if(NOT TARGET OpenMP::OpenMP_CXX)
-   find_package(Threads REQUIRED)
-   add_library(OpenMP::OpenMP_CXX IMPORTED INTERFACE)
-   set_property(TARGET OpenMP::OpenMP_CXX
-           PROPERTY INTERFACE_COMPILE_OPTIONS ${OpenMP_CXX_FLAGS})
-   # Only works if the same flag is passed to the linker; use CMake 3.9+ otherwise (Intel, AppleClang)
-   set_property(TARGET OpenMP::OpenMP_CXX
-           PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
+set(SAN_LIB "")
+#message("ASAN_BUILD=${ASAN_BUILD}")
+if (ASAN_BUILD)
+   message("Inside ASAN_BUILD block")
+   #-fsanitize=leak
+   list(APPEND PF_CPP_FLAGS "-fsanitize=address")
+   set(SAN_LIB "asan")
 endif()
+if (TSAN_BUILD)
+   ## The thread option cannot be combined with address and leak. Use them separately
+   list(APPEND PF_CPP_FLAGS "-fsanitize=thread")
+   set(SAN_LIB "tsan")
+endif()
+message("SAN_LIB =  ${SAN_LIB}")
+##
+# Sanitizers END
+##
+
+#find_package(OpenMP)
+#
+#if(NOT TARGET OpenMP::OpenMP_CXX)
+#   find_package(Threads REQUIRED)
+#   add_library(OpenMP::OpenMP_CXX IMPORTED INTERFACE)
+#   set_property(TARGET OpenMP::OpenMP_CXX
+#           PROPERTY INTERFACE_COMPILE_OPTIONS ${OpenMP_CXX_FLAGS})
+#   # Only works if the same flag is passed to the linker; use CMake 3.9+ otherwise (Intel, AppleClang)
+#   set_property(TARGET OpenMP::OpenMP_CXX
+#           PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
+#endif()
 
 if (NOT GAT_SOURCE_DIR)
    message("Top-level source directory variable not set externally; setting it to ${CMAKE_CURRENT_SOURCE_DIR}")
