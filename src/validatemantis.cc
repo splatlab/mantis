@@ -53,69 +53,7 @@ int
 validate_main(ValidateOpts &opt) {
 
     spdlog::logger *console = opt.console.get();
-    // Read experiment CQFs
-    std::ifstream infile(opt.inlist);
-    uint64_t num_samples{0};
-    if (infile.is_open()) {
-        std::string line;
-        while (std::getline(infile, line)) { ++num_samples; }
-        infile.clear();
-        infile.seekg(0, std::ios::beg);
-    } else {
-        console->error("Input filter list {} does not exist or could not be opened.", opt.inlist);
-        std::exit(1);
-    }
-
-    std::vector<SampleObject<CQF<KeyObject> *>> inobjects;
-    std::vector<CQF<KeyObject>> cqfs;
-
-    // reserve QF structs for input CQFs
-    inobjects.reserve(num_samples);
-    cqfs.reserve(num_samples);
-
-    // mmap all the input cqfs
-    std::string squeakr_file;
-    uint32_t nqf = 0;
-    uint64_t kmer_size;
-    while (infile >> squeakr_file) {
-        if (!mantis::fs::FileExists(squeakr_file.c_str())) {
-            console->error("Squeakr file {} does not exist.", squeakr_file);
-            exit(1);
-        }
-        squeakr::squeakrconfig config;
-        int ret = squeakr::read_config(squeakr_file, &config);
-        if (ret == squeakr::SQUEAKR_INVALID_VERSION) {
-            console->error("Squeakr index version is invalid. Expected: {} Available: {}",
-                           squeakr::INDEX_VERSION, config.version);
-            exit(1);
-        }
-        if (cqfs.size() == 0) {
-            kmer_size = config.kmer_size;
-        } else {
-            if (kmer_size != config.kmer_size) {
-                console->error("Squeakr file {} has a different k-mer size. Expected: {} Available: {}",
-                               squeakr_file, kmer_size, config.kmer_size);
-                exit(1);
-            }
-        }
-        if (config.cutoff == 1) {
-            console->warn("Squeakr file {} is not filtered.", squeakr_file);
-        }
-
-        cqfs.emplace_back(squeakr_file, CQF_FREAD);
-        std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
-                                                      '.'), '_');
-        console->info("Reading CQF {} Seed {}", nqf, cqfs[nqf].seed());
-        console->info("Sample id {}", sample_id);
-        cqfs[nqf].dump_metadata();
-        inobjects.emplace_back(&cqfs[nqf], sample_id, nqf);
-        if (!cqfs.front().check_similarity(&cqfs.back())) {
-            console->error("Passed Squeakr files are not similar.", squeakr_file);
-            exit(1);
-        }
-        nqf++;
-    }
-
+    float eps = 0.001;
     std::string prefix = opt.prefix;
     if (prefix.back() != '/') {
         prefix += '/';
@@ -128,18 +66,10 @@ validate_main(ValidateOpts &opt) {
 
     // Read the colored dBG
     console->info("Reading colored dbg from disk.");
-    /*std::string dbg_file(prefix + mantis::CQF_FILE);
-    std::string sample_file(prefix + mantis::SAMPLEID_FILE);
-    std::vector<std::string> eqclass_files = mantis::fs::GetFilesExt(prefix.c_str(), mantis::EQCLASS_FILE);
-
-    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(dbg_file,
-                                                               eqclass_files,
-                                                               sample_file,
-                                                               MANTIS_DBG_IN_MEMORY);*/
 
     ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> cdbg(prefix, MANTIS_DBG_IN_MEMORY);
     cdbg.set_console(console);
-
+    uint64_t kmer_size = cdbg.get_current_cqf()->keybits()/2; // kmer size is in number of bases
     /*console->info("Read colored dbg with {} k-mers and {} color classes",
                   cdbg.get_cqf()->dist_elts(), cdbg.get_num_bitvectors());*/
 
@@ -152,70 +82,156 @@ validate_main(ValidateOpts &opt) {
                                                       total_kmers,
                                                       false,
                                                       _dummy_uniqueKmers);
+    std::vector<uint64_t> queryKmers(multi_kmers.size(), 0);
+    uint64_t queryCntr=0;
+    for (auto &kmers : multi_kmers) {
+        console->info("querySeq {}: {} kmers", queryCntr+1, kmers.size());
+        queryKmers[queryCntr] = kmers.size();
+        queryCntr++;
+    }
     console->info("Total k-mers to query: {}", total_kmers);
 
 
     console->info("Query all as a bulk query from MST");
-    MSTQuery mstQuery(prefix, prefix + "querytmps", kmer_size, kmer_size, cdbg.get_num_samples(), console);
+    std::unique_ptr<MSTQuery> mstQuery = std::make_unique<MSTQuery>(prefix, prefix + "querytmps", kmer_size, kmer_size, cdbg.get_num_samples(), console);
     console->info("Done Loading data structure. Total # of color classes is {}",
-                  mstQuery.parentbv.size() - 1);
+                  mstQuery->parentbv.size() - 1);
     console->info("Start querying Mantis.");
     LRUCacheMap cache_lru(100000);
     RankScores rs(1);
     QueryStats queryStats;
     queryStats.numSamples = cdbg.get_num_samples();
-    uint64_t numOfQueries = mstQuery.parseBulkKmers(query_file, kmer_size);
+    uint64_t numOfQueries = mstQuery->parseBulkKmers(query_file, kmer_size);
     console->info("Done reading {} input queries and parsing the kmers.", numOfQueries);
-    mstQuery.findSamples(cdbg, cache_lru, &rs, queryStats, numOfQueries);
-    mantis::QueryResults &result = mstQuery.allQueries; //getResultList(numOfQueries);
+    mstQuery->findSamples(cdbg, cache_lru, &rs, queryStats, numOfQueries);
+    mantis::QueryResults result = mstQuery->allQueries; //getResultList(numOfQueries);
+    mstQuery.reset(nullptr);
     console->info("Done querying the Mantis index.");
 
-    // Query kmers in each experiment CQF
-    // Maintain the fraction of kmers present in each experiment CQF.
-    std::vector<std::unordered_map<uint64_t, float>> ground_truth;
-    std::vector<std::vector<uint64_t>> cdbg_output;
-    bool fail{false};
-//    std::cerr << "kmer_size: " << kmer_size << "\n";
-    uint64_t queryCntr{0};
-    for (auto kmers : multi_kmers) {
-        std::unordered_map<uint64_t, float> fraction_present;
-        console->info("querySeq {}: {} kmers", queryCntr+1, kmers.size());
-        for (uint64_t i = 0; i < nqf; i++) {
+
+
+    // Read experiment CQFs
+    /*std::ifstream infile(opt.inlist);
+    uint64_t num_samples{0};
+    if (infile.is_open()) {
+        std::string line;
+        while (std::getline(infile, line)) { ++num_samples; }
+        infile.clear();
+        infile.seekg(0, std::ios::beg);
+    } else {
+        console->error("Input filter list {} does not exist or could not be opened.", opt.inlist);
+        std::exit(1);
+    }*/
+
+    std::vector<std::pair<uint32_t, std::string>> squeakrFiles;
+    // Read experiment CQFs
+    std::ifstream sampleFile(prefix + mantis::SAMPLEID_FILE);
+    uint64_t num_samples{0};
+    if (sampleFile.is_open()) {
+        uint64_t order;
+        std::string squeakrAdd;
+        while (sampleFile >> order >> squeakrAdd) {
+            ++num_samples;
+            squeakrFiles.emplace_back(order, squeakrAdd);
+        }
+    } else {
+        console->error("Input filter list {} does not exist or could not be opened.", opt.inlist);
+        std::exit(1);
+    }
+    std::sort(squeakrFiles.begin(), squeakrFiles.end(), [](auto &a1, auto &a2) {return a1.first < a2.first;});
+    // Query kmers in each experiment CQF in the same order as the Mantis sample file
+    uint32_t nqf = 0;
+    std::vector<uint64_t> fails;
+//    while (infile >> squeakr_file) {
+    for (auto & p : squeakrFiles) {
+        std::string  squeakr_file = p.second;
+        bool fail{false};
+        if (!mantis::fs::FileExists(squeakr_file.c_str())) {
+            console->error("Squeakr file {} does not exist.", squeakr_file);
+            exit(1);
+        }
+        squeakr::squeakrconfig config;
+        int ret = squeakr::read_config(squeakr_file, &config);
+        if (ret == squeakr::SQUEAKR_INVALID_VERSION) {
+            console->error("Squeakr index version is invalid. Expected: {} Available: {}",
+                           squeakr::INDEX_VERSION, config.version);
+            exit(1);
+        }
+        if (kmer_size != config.kmer_size) {
+                console->error("Squeakr file {} has a different k-mer size. Expected: {} Available: {}",
+                               squeakr_file, kmer_size, config.kmer_size);
+                exit(1);
+            }
+        if (config.cutoff == 1) {
+            console->warn("Squeakr file {} is not filtered.", squeakr_file);
+        }
+
+        CQF<KeyObject> cqf(squeakr_file, CQF_FREAD);
+//        cqf.dump_metadata();
+        std::string sample_id = first_part(first_part(last_part(squeakr_file, '/'),
+                                                      '.'), '_');
+        console->info("Sample {}:{} --> Validating on cdbg", nqf, sample_id);
+        queryCntr = 0;
+        std::vector<uint64_t> fraction_present(multi_kmers.size(), 0);
+        for (auto &kmers : multi_kmers) {
+//            console->info("querySeq {}: {} kmers", queryCntr+1, kmers.size());
             for (auto kmer : kmers) {
-//                std::cerr << kmer << " ";
                 KeyObject k(kmer, 0, 0);
-                uint64_t count = cqfs[i].query(k, 0);
+                uint64_t count = cqf.query(k, 0);
                 if (count > 0) {
-//                    dna::canonical_kmer ck(kmer_size, kmer);
-//                    std::cerr << "kmer: " << kmer << " " << ck.val << " " << std::string(ck) << ": " << i << ","
-//                                << inobjects[i].id << "\n";
-                    fraction_present[inobjects[i].id] += 1;
+                    fraction_present[queryCntr] += 1;
                 }
             }
+            queryCntr++;
         }
-        // Query kmers in the cdbg
-//        std::vector<uint64_t> result = cdbg.find_samples(kmers);
-
 
         // Validate the cdbg output
-        for (uint64_t i = 0; i < nqf; i++) {
-            if (fraction_present[i] != result[queryCntr][i]) {
-                console->info("Failed for sample: {},{}: original CQF {}, cdbg {} out of {}",
-                              i, inobjects[i].sample_id, fraction_present[i], result[queryCntr][i], kmers.size());
+        uint64_t nonEmptyQueries{0}, kmerCnt{0}, mantis_nonEmptyQueries{0}, mantis_kmerCnt{0};
+        for (queryCntr = 0; queryCntr < multi_kmers.size(); queryCntr++) {
+            if (fraction_present[queryCntr] != result[queryCntr][nqf]) {
+                console->error("Failed for query {}, original CQF {}, cdbg {} out of {}",
+                              queryCntr, fraction_present[queryCntr], result[queryCntr][nqf], queryKmers[queryCntr]);
                 fail = true;
                 //abort();
-            } /*else if (fraction_present[i] > 0 ) {
-                std::cerr << "cqf" << i << ":" << fraction_present[i] << "\n";
-            }*/
+            }
+            if (fraction_present[queryCntr] > 0) {
+                nonEmptyQueries += 1;
+                kmerCnt += fraction_present[queryCntr];
+            }
+            if (result[queryCntr][nqf] > 0) {
+                mantis_nonEmptyQueries += 1;
+                mantis_kmerCnt += result[queryCntr][nqf];
+            }
         }
-        queryCntr++;
-//        ground_truth.push_back(fraction_present);
-//        cdbg_output.push_back(result);
+        /*if (!cqfs.front().check_similarity(&cqfs.back())) {
+            console->error("Passed Squeakr files are not similar.", squeakr_file);
+            exit(1);
+        }*/
+        if (fail) {
+            console->error("Failed --> Sample {}: {}! Avg kmer count: Mantis: {}, Squeakrs: {}", nqf, sample_id,
+                           static_cast<uint64_t >(mantis_kmerCnt/(mantis_nonEmptyQueries+eps)),
+                           static_cast<uint64_t >(kmerCnt/(nonEmptyQueries+eps)));
+            fails.push_back(nqf);
+//            std::exit(3);
+        } else {
+            console->info("Passed --> {} non-zero intersected queries with avg found kmer count={} ", nonEmptyQueries,
+                          static_cast<uint64_t >(kmerCnt/(nonEmptyQueries+eps)));
+        }
+        nqf++;
     }
-    if (fail)
-        console->info("Mantis validation failed!");
-    else
-        console->info("Mantis validation passed!");
+
+    console->info("");
+    if (not fails.empty()) {
+        console->error("Mantis validation failed!");
+        console->info("Sample IDs that Mantis validation failed on:");
+        for (auto f : fails) {
+            std::cerr << f << " ";
+        }
+        std::cerr << "\n";
+        console->error("Mantis validation failed!");
+    }
+    console->info("YaaaY");
+    console->info("Mantis validation passed!");
 
 #if 0
     // This is x-axis

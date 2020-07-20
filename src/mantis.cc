@@ -172,7 +172,7 @@ int main ( int argc, char *argv[] ) {
 
   auto validate_mode = (
                      command("validate").set(selected, mode::validate),
-                     required("-i", "--input-list") & value(ensure_file_exists, "input_list", vopt.inlist) % "file containing list of input filters",
+//                     required("-i", "--input-list") & value(ensure_file_exists, "input_list", vopt.inlist) % "file containing list of input filters",
                      required("-p", "--input-prefix") & value(ensure_dir_exists, "dbg_prefix", vopt.prefix) % "Directory containing the mantis dbg.",
                      value(ensure_file_exists, "query", vopt.query_file) % "Query file."
                      );
