@@ -168,6 +168,8 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
             if (eqclass) {
                 kmer2cidMap[key].first = eqclass - 1;
                 query_colors.push_back(eqclass - 1);
+            } else {
+                kmer2cidMap[key].first = invalid;
             }
         }
         tbb::parallel_sort(query_colors.begin(), query_colors.end());
@@ -182,7 +184,9 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     std::vector<uint64_t> eqQueriesStartIdx(query_colors.size()+1,0), eqQueriesEndIdx(query_colors.size()+1,0);
     std::vector<uint32_t> eqQueries;
     for (auto &kv : kmer2cidMap) {
-        eqQueriesEndIdx[colorMph.lookup(kv.second.first)]+=kv.second.second.size();
+        if (kv.second.first != invalid) {
+            eqQueriesEndIdx[colorMph.lookup(kv.second.first)] += kv.second.second.size();
+        }
     }
     for (auto i = 1; i < eqQueriesEndIdx.size(); i++) {
         eqQueriesEndIdx[i] += eqQueriesEndIdx[i-1];
@@ -190,10 +194,12 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     }
     eqQueries.resize(eqQueriesEndIdx.back());
     for (auto &kv : kmer2cidMap) {
-        auto idx = colorMph.lookup(kv.second.first);
-        for (auto &q : kv.second.second) {
-            eqQueries[eqQueriesStartIdx[idx]] = q;
-            eqQueriesStartIdx[idx]++;
+        if (kv.second.first != invalid) {
+            auto idx = colorMph.lookup(kv.second.first);
+            for (auto &q : kv.second.second) {
+                eqQueries[eqQueriesStartIdx[idx]] = q;
+                eqQueriesStartIdx[idx]++;
+            }
         }
     }
     eqQueriesStartIdx[0] = 0;
