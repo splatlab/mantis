@@ -161,14 +161,14 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
                     }
                     ++it;
                     if (tmpList.size() >= tmpSize or it.reachedHashLimit()) {
-                        tbb::parallel_sort(tmpList.begin(), tmpList.end(),
-                                      [](const KeyColorMin &f, const KeyColorMin &s) {
-                                          return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
-                                      });
-//                        std::sort(std::execution::par_unseq, tmpList.begin(), tmpList.end(),
-//                                [](const KeyColorMin &f, const KeyColorMin &s) {
-//                            return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
-//                        });
+//                        tbb::parallel_sort(tmpList.begin(), tmpList.end(),
+//                                      [](const KeyColorMin &f, const KeyColorMin &s) {
+//                                          return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
+//                                      });
+                        std::sort(tmpList.begin(), tmpList.end(),
+                                           [](const KeyColorMin &f, const KeyColorMin &s) {
+                                               return f.minimizer == s.minimizer? f.key < s.key : f.minimizer < s.minimizer;
+                                           });
                         uint64_t i = 0;
                         while (i < tmpList.size()) {
                             auto prev = tmpList[i].minimizer;
