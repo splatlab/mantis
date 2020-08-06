@@ -370,24 +370,34 @@ bool MSTMerger::calculateMSTBasedWeights() {
     sdsl::int_vector<> ccSetBitCnts[2];
     for (auto mstIdx = 0; mstIdx < 2; ++mstIdx) {
         ccSetBitCnts[mstIdx] = sdsl::int_vector<>(ccCnt[mstIdx], 0, ceil(log2(toBeMergedNumOfSamples[mstIdx]+1)));
-        for (auto partition = 0; partition < 2; ++partition) {
-            std::vector<std::thread> threads;
-            for (auto t = 0; t < nThreads; ++t) {
-                threads.emplace_back([&, mstIdx, t, partition]() {
-                    uint64_t s = ((2*t+partition)/(double)(2*nThreads))*ccSetBitCnts[mstIdx].size();
-                    uint64_t e = ((2*t+partition+1)/(double)(2*nThreads))*ccSetBitCnts[mstIdx].size();
-                     for (auto i = s; i < e; i++) {
-                         std::vector<uint64_t> eq;
-                         buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][t], eq, queryStats[mstIdx][t],
-                                            fixed_cache[mstIdx]);
-                         ccSetBitCnts[mstIdx][i] = eq.size();
-                     }
-                 });
+        // if the color class count is small don't apply multi-threading as there will be a race-condition
+        if (ccCnt[mstIdx]*ceil(log2(toBeMergedNumOfSamples[mstIdx]+1)) < 64*2*nThreads) {
+            for (uint64_t i = 0; i < ccSetBitCnts[mstIdx].size(); i++) {
+                std::vector<uint64_t> eq;
+                buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][0], eq, queryStats[mstIdx][0],
+                                   fixed_cache[mstIdx]);
+                ccSetBitCnts[mstIdx][i] = eq.size();
             }
-            for (auto &t : threads) {
-                t.join();
+        } else {
+            for (auto partition = 0; partition < 2; ++partition) {
+                std::vector<std::thread> threads;
+                for (auto t = 0; t < nThreads; ++t) {
+                    threads.emplace_back([&, mstIdx, t, partition]() {
+                        uint64_t s = ((2 * t + partition) / (double) (2 * nThreads)) * ccSetBitCnts[mstIdx].size();
+                        uint64_t e = ((2 * t + partition + 1) / (double) (2 * nThreads)) * ccSetBitCnts[mstIdx].size();
+                        for (auto i = s; i < e; i++) {
+                            std::vector<uint64_t> eq;
+                            buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][t], eq, queryStats[mstIdx][t],
+                                               fixed_cache[mstIdx]);
+                            ccSetBitCnts[mstIdx][i] = eq.size();
+                        }
+                    });
+                }
+                for (auto &t : threads) {
+                    t.join();
+                }
+                threads.clear();
             }
-            threads.clear();
         }
     }
 
