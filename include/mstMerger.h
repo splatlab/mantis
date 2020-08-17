@@ -444,7 +444,7 @@ private:
     std::unique_ptr<MSTQuery> mst[2];
     spdlog::logger *logger{nullptr};
     uint32_t nThreads = 1;
-    SpinLockT colorMutex, writeMutex;
+    SpinLockT colorMutex, writeMutex, counterMutex;
 
     uint64_t curFileIdx = 0;
     uint32_t maxWeightInFile{1000};

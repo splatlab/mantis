@@ -329,12 +329,12 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
         }*/
     }
     appendStore();
-    colorMutex.lock();
+    counterMutex.lock();
     maxId = localMaxId > maxId ? localMaxId : maxId;
     numOfKmers += kmerCntr;
     std::cerr << "\r";
     logger->info("Thread {}: Observed {} kmers and {} edges", threadId, kmerCntr, cnt);
-    colorMutex.unlock();
+    counterMutex.unlock();
 }
 
 /**
