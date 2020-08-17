@@ -430,6 +430,10 @@ store_colorID_pairs(uint64_t startingBlock)
 
                 if(sampledPairs.find(colorPair) == sampledPairs.end())
                 {
+					if (colorPair.first == 0 and colorPair.second == 0) {
+						console->error("both colorIDs are 0 for key {} and {} on {}, {}th element for minimizer={}", key0, key1, cntr0, cntr1, b);
+						std::exit(3);
+					}
                     diskBucket << colorPair.first << " " << colorPair.second << "\n";
                     writtenPairsCount++;
                 }
@@ -439,7 +443,11 @@ store_colorID_pairs(uint64_t startingBlock)
             if (cntr0 == size0) {
                 while (cntr1 < size1) {
                     uint64_t color = (*minimizerColorList[1][ends[1]-b])[cntr1];
-                    auto colorPair = std::make_pair(0ULL, color);
+  					if (color == 0) {
+						console->error("colorID is 0 for the second input, size={}, cntr={}, minimizer={}", size1, cntr1, b);
+						std::exit(3);
+					}
+                   auto colorPair = std::make_pair(0ULL, color);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
                         diskBucket << colorPair.first << " " << colorPair.second << "\n";
@@ -452,10 +460,14 @@ store_colorID_pairs(uint64_t startingBlock)
             } else {
                 while (cntr0 < size0) {
                     uint64_t color = (*minimizerColorList[0][ends[0]-b])[cntr0];
-                    auto colorPair = std::make_pair(color, 0ULL);
+   					if (color == 0) {
+						console->error("colorID is 0 for the first input, size={}, cntr={}, minimizer={}", size0, cntr0, b);
+						std::exit(3);
+					}
+                   auto colorPair = std::make_pair(color, 0ULL);
                     if(sampledPairs.find(colorPair) == sampledPairs.end())
                     {
-                        diskBucket << colorPair.first << " " << colorPair.second << "\n";
+						diskBucket << colorPair.first << " " << colorPair.second << "\n";
                         writtenPairsCount++;
                     }
                     cdbg.minimizerCntr[b]++;
@@ -521,7 +533,19 @@ sortUniq_colorID_pairs()
     sysCommand += " -o " + diskBucket + " " + diskBucket;
 
     console -> info("System command used:\n{}", sysCommand);
-    system(sysCommand.c_str());
+    int status = system(sysCommand.c_str());
+	if (status < 0) {
+			console->error("system call to sort failed.");
+			std::exit(3);
+	}
+	else {
+		if (WIFEXITED(status)) {
+			console->info("System call to sort completed normally with exit code {}.", WEXITSTATUS(status));
+		} else {
+			console->error("System call to sort failed with exit code {}.", WEXITSTATUS(status));
+			std::exit(3);
+		}
+	}
 }
 
 template <typename qf_obj, typename key_obj>
