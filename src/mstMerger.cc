@@ -194,14 +194,14 @@ bool MSTMerger::buildEdgeSets() {
     std::cerr << "After doubling popular edges\n";
     usleep(10000000);*/
     for (uint64_t c = 0; c < cqfBlocks.size(); c++) {
-        logger->info("Reading colored dbg from disk...");
+//        logger->info("Reading colored dbg from disk...");
 //        std::cerr << cqfBlocks[c] << "\n";
         std::cerr << "\n\ncqf" << c << "\n";
         std::string cqf_file(cqfBlocks[c]);
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
         k = cqf.keybits() / 2;
         cqf.dump_metadata();
-        std::cerr << "\n";
+//        std::cerr << "\n";
 //        logger->info("Done loading cdbg. k is {}, numThreads is {}", k, nThreads);
 //        logger->info("Iterating over cqf & building edgeSet ...");
         // build color class edges in a multi-threaded manner
