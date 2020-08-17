@@ -145,7 +145,7 @@ void MSTMerger::mergeMSTs() {
 bool MSTMerger::buildEdgeSets() {
 
     std::vector<uint64_t> cnts(nThreads, 0);
-    uint64_t maxId{0}, numOfKmers{0};
+    uint64_t maxId{0}, numOfKmers{0}, prevNumOfKmers{0};
     std::vector<std::string> cqfBlocks = mantis::fs::GetFilesExt(prefix.c_str(), mantis::CQF_FILE);
     tbb::parallel_sort(cqfBlocks.begin(), cqfBlocks.end(), [](std::string &s1, std::string &s2) {
         uint64_t startPos1 = s1.find_last_of("/");
@@ -201,9 +201,9 @@ bool MSTMerger::buildEdgeSets() {
         CQF<KeyObject> cqf(cqf_file, CQF_FREAD);
         k = cqf.keybits() / 2;
         cqf.dump_metadata();
-        std::cerr << "\n\n";
-        logger->info("Done loading cdbg. k is {}, numThreads is {}", k, nThreads);
-        logger->info("Iterating over cqf & building edgeSet ...");
+        std::cerr << "\n";
+//        logger->info("Done loading cdbg. k is {}, numThreads is {}", k, nThreads);
+//        logger->info("Iterating over cqf & building edgeSet ...");
         // build color class edges in a multi-threaded manner
         std::vector<std::thread> threads;
         for (uint32_t i = 0; i < nThreads; ++i) {
@@ -214,6 +214,12 @@ bool MSTMerger::buildEdgeSets() {
                                              std::ref(popularEdges)));
         }
         for (auto &t : threads) { t.join(); }
+        if (numOfKmers-prevNumOfKmers != cqf.dist_elts()) {
+            logger->error("CQF{}: number of observed kmers is different from metadata info. Observed: {}, metadata: {}", c, numOfKmers-prevNumOfKmers, cqf.dist_elts());
+            std::exit(3);
+        }
+        logger->info("CQF{}: # of kmers: {}", c, numOfKmers-prevNumOfKmers);
+        prevNumOfKmers = numOfKmers;
     }
     uint64_t totalObservedEdges{0};
     writeMutex.lock();
@@ -327,7 +333,7 @@ void MSTMerger::buildPairedColorIdEdgesInParallel(uint32_t threadId,
     maxId = localMaxId > maxId ? localMaxId : maxId;
     numOfKmers += kmerCntr;
     std::cerr << "\r";
-    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, numOfKmers, cnt);
+    logger->info("Thread {}: Observed {} kmers and {} edges", threadId, kmerCntr, cnt);
     colorMutex.unlock();
 }
 
