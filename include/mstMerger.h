@@ -29,6 +29,7 @@
 #include "adjList.h"
 #include "cqfMerger.h"
 #include "tbb/parallel_sort.h"
+#include "gqf/partitioned_counter.h"
 
 using LRUCacheMap =  LRU::Cache<uint64_t, std::vector<uint64_t>>;
 
@@ -298,7 +299,7 @@ private:
     void buildPairedColorIdEdgesInParallel(uint32_t threadId, CQF<KeyObject> &cqf,
                                            std::vector<std::pair<uint64_t, uint64_t>> &tmpEdges,
                                            uint64_t &curFileIdx,
-                                           uint64_t &cnt, uint64_t &maxId, uint64_t &numOfKmers,
+                                           uint64_t &cnt, uint64_t &maxId, uint64_t &numOfKmers, void *pt_cntr,
                                            spp::sparse_hash_map<std::pair<uint64_t , uint64_t >, uint64_t, Custom_Pair_Hasher > &popularEdges);
 
 

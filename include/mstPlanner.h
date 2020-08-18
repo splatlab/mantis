@@ -134,38 +134,12 @@ public:
         logger->info("Done setting the local costs");
     }
 
-    bool plan(uint64_t mstIdx, MSTQuery *mst, std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache) {
-        logger->info("Planner for mantis {}", mstIdx);
-        LRUCacheMap lru_cache(1000);
-        nonstd::optional<uint64_t> dummy{nonstd::nullopt};
-        QueryStats dummyStats;
+    void constructStaticCache(uint64_t mstIdx, MSTQuery *mst, std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache) {
         std::vector<colorIdType> colorsInCache;
-        std::vector<std::vector<colorIdType>> children(mst->parentbv.size());
-
-        for (uint64_t i = 0; i < mstZero[mstIdx]; i++) {
-            if (mst->parentbv[i] >= children.size()) {
-                logger->error("A parent index should be in the range of valid indices. "
-                              "parentIdx of {}:{}, maxIdx:{}",mstIdx,  mst->parentbv[i], children.size());
-                std::exit(3);
-            }
-            children[mst->parentbv[i]].push_back(i);
-        }
-        // recursive planner
-        uint64_t cntr{0};
-        planRecursively(mstZero[mstIdx], mstCost[mstIdx], children, colorsInCache, cntr);
-        logger->info("fixed cache size is : {}", colorsInCache.size());
-        // fillout fixed_cache[0]
-        // walking in reverse order on colorsInCache is intentional
-        // because as we've filled out the colorsInCache vector in a post-order traversal of MST,
-        // if we walk in from end to the beginning we can always guarantee that we've already put the ancestors
-        // for the new colors we want to put in the fixed_cache and that will make the whole color bv construction
-        // FASTER!!
-        for (int64_t idx = colorsInCache.size() - 1; idx >= 0; idx--) {
-            auto setbits = mst->buildColor(colorsInCache[idx], dummyStats, &lru_cache, nullptr, &fixed_cache, dummy);
-            fixed_cache[colorsInCache[idx]] = setbits;
-        }
-        return true;
+        plan(mstIdx, mst, colorsInCache);
+        fillCache(mst, colorsInCache, fixed_cache);
     }
+
 private:
 
     void  planRecursively(uint64_t nodeId,
@@ -216,10 +190,47 @@ private:
             colorsInCache.push_back(c);
         }
         if (++cntr % 1000000 == 0)
-            std::cerr << "\r" << cntr++;
+            std::cerr << "\r" << cntr++ << " nodes processed.";
     }
 
+    void plan(uint64_t mstIdx, MSTQuery *mst, std::vector<colorIdType> &colorsInCache) {
+        logger->info("Planner for mantis {}", mstIdx);
+        std::vector<std::vector<colorIdType>> children(mst->parentbv.size());
 
+        for (uint64_t i = 0; i < mstZero[mstIdx]; i++) {
+            if (mst->parentbv[i] >= children.size()) {
+                logger->error("A parent index should be in the range of valid indices. "
+                              "parentIdx of {}:{}, maxIdx:{}",mstIdx,  mst->parentbv[i], children.size());
+                std::exit(3);
+            }
+            children[mst->parentbv[i]].push_back(i);
+        }
+        logger->info("Done constructing the parent->children vector.");
+        // recursive planner
+        uint64_t cntr{0};
+        planRecursively(mstZero[mstIdx], mstCost[mstIdx], children, colorsInCache, cntr);
+        mstCost[mstIdx].clear();
+        mstCost[mstIdx].shrink_to_fit();
+        std::cerr << "\r";
+        logger->info("Fixed cache size is : {}", colorsInCache.size());
+    }
+
+    void fillCache(MSTQuery *mst, std::vector<colorIdType> &colorsInCache, std::unordered_map<uint64_t, std::vector<uint64_t>> &fixed_cache) {
+        LRUCacheMap lru_cache(1000);
+        nonstd::optional<uint64_t> dummy{nonstd::nullopt};
+        QueryStats dummyStats;
+        // fillout fixed_cache[0]
+        // walking in reverse order on colorsInCache is intentional
+        // because as we've filled out the colorsInCache vector in a post-order traversal of MST,
+        // if we walk in from end to the beginning we can always guarantee that we've already put the ancestors
+        // for the new colors we want to put in the fixed_cache and that will make the whole color bv construction
+        // FASTER!!
+        for (int64_t idx = colorsInCache.size() - 1; idx >= 0; idx--) {
+            auto setbits = mst->buildColor(colorsInCache[idx], dummyStats, &lru_cache, nullptr, &fixed_cache, dummy);
+            fixed_cache[colorsInCache[idx]] = setbits;
+        }
+        logger->info("Done filling the planned color class cache.");
+    }
 
     std::vector<Cost> mstCost[2];
     uint64_t mstZero[2]{};
