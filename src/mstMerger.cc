@@ -369,7 +369,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                           MAX_ALLOWED_TMP_EDGES_IN_FILE/(2.0*curFileIdx),
                           nThreads,
                           logger,
-                          true);
+                          false);
 
     for (auto mstIdx = 0; mstIdx < 2; mstIdx++) {
         mstPlanner->constructStaticCache(mstIdx, mst[mstIdx].get(), fixed_cache[mstIdx]);
