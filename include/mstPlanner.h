@@ -209,6 +209,8 @@ private:
         // recursive planner
         uint64_t cntr{0};
         planRecursively(mstZero[mstIdx], mstCost[mstIdx], children, colorsInCache, cntr);
+        children.clear();
+        children.shrink_to_fit();
         mstCost[mstIdx].clear();
         mstCost[mstIdx].shrink_to_fit();
         std::cerr << "\r";
@@ -225,6 +227,7 @@ private:
         // if we walk in from end to the beginning we can always guarantee that we've already put the ancestors
         // for the new colors we want to put in the fixed_cache and that will make the whole color bv construction
         // FASTER!!
+        logger->info("Filling the cache for planned color class IDs..");
         for (int64_t idx = colorsInCache.size() - 1; idx >= 0; idx--) {
             auto setbits = mst->buildColor(colorsInCache[idx], dummyStats, &lru_cache, nullptr, &fixed_cache, dummy);
             fixed_cache[colorsInCache[idx]] = setbits;
