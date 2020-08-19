@@ -92,16 +92,24 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
     colorPairs[1] = sdsl::int_vector<>(newColorIdCnt, 0, c2len);
     uint64_t maxIndex = 0, colorCntr{0};
 //    uint64_t colorCntr= 0;
-    for (auto i = 0; i < newColorIdCnt; i++) {
-//    while (true) {
-        cp.read(reinterpret_cast<char *>(&cIdx), sizeof(cIdx));
-        cp.read(reinterpret_cast<char *>(&c1), sizeof(c1));
-        cp.read(reinterpret_cast<char *>(&c2), sizeof(c2));
-        if (colorCntr % 100000000 == 0) {std::cerr << "\r" << colorCntr;}
-        colorPairs[0][cIdx] = c1;
-        colorPairs[1][cIdx] = c2;
-        maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
-        colorCntr++;
+    uint64_t bufferSize = 10000000;
+    while (colorCntr < newColorIdCnt) {
+//        cp.read(reinterpret_cast<char *>(&cIdx), sizeof(uint64_t));
+//        cp.read(reinterpret_cast<char *>(&c1), sizeof(uint64_t));
+//        cp.read(reinterpret_cast<char *>(&c2), sizeof(uint64_t));
+        uint64_t numElem = std::min(newColorIdCnt-colorCntr, bufferSize);
+        std::vector<uint64_t> buffer(numElem*3);
+        cp.read(reinterpret_cast<char *>(buffer.data()), buffer.size()*sizeof(uint64_t));
+        for (uint64_t i = 0; i < buffer.size(); i+=3) {
+            cIdx = buffer[i];
+            c1 = buffer[i+1];
+            c2 = buffer[i+2];
+            colorPairs[0][cIdx] = c1;
+            colorPairs[1][cIdx] = c2;
+            maxIndex = maxIndex>=cIdx?maxIndex:cIdx;
+        }
+        colorCntr+=numElem;
+        std::cerr << "\r" << colorCntr << " color pairs loaded";
     }
     cp.close();
     std::cerr << "\r";
@@ -567,9 +575,9 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("Calculating weights of dummy edges... ");
     ccBitsBucketCnt.resize(numSamples, 0);
     if (maxWeightInFile < ccBitsBucketCnt.size()) {
-        for (auto i = 0; i < colorPairs[0].size(); i++) {
-            auto cc1 = colorPairs[0][i];
-            auto cc2 = colorPairs[1][i];
+        for (uint64_t i = 0; i < colorPairs[0].size(); i++) {
+            uint64_t cc1 = colorPairs[0][i];
+            uint64_t cc2 = colorPairs[1][i];
             if (cc1 > mstZero[0] or cc2 > mstZero[1]) {
                 logger->error("Should not happen. Either of the colorIDs does not exist. cc1={}, max1={}. cc2={}, max2={}",
                               cc1, mstZero[0], cc2, mstZero[1]);
@@ -592,10 +600,10 @@ bool MSTMerger::calculateMSTBasedWeights() {
     logger->info("Done calculating dummy weight bucket counts. Putting dummy edges in their weight bucket...");
 //    usleep(10000000);
     uint64_t fileDummies{0}, memoryDummies{0};
-    for (auto i = 0; i < colorPairs[0].size(); i++) {
-        auto cc1 = colorPairs[0][i];
-        auto cc2 = colorPairs[1][i];
-        auto w = ccSetBitCnts[0][cc1] + ccSetBitCnts[1][cc2];
+    for (uint64_t i = 0; i < colorPairs[0].size(); i++) {
+        uint64_t cc1 = colorPairs[0][i];
+        uint64_t cc2 = colorPairs[1][i];
+        uint64_t w = ccSetBitCnts[0][cc1] + ccSetBitCnts[1][cc2];
         if (w == 0) {
             logger->error("The weight of an edge is zero! edge:{}->dummy or <{},{}>->dummy", i, cc1,cc2);
             std::exit(3);
