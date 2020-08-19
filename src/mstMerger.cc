@@ -84,7 +84,7 @@ MSTMerger::MSTMerger(std::string prefixIn, spdlog::logger *loggerIn, uint32_t nu
     cp.read(reinterpret_cast<char *>(&newColorIdCnt), sizeof(newColorIdCnt));
     cp.read(reinterpret_cast<char *>(&ccCnt[0]), sizeof(ccCnt[0]));
     cp.read(reinterpret_cast<char *>(&ccCnt[1]), sizeof(ccCnt[1]));
-    auto c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
+    uint64_t c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
     logger->info("# of color classes based on count of colorPairs: {}", newColorIdCnt);
     logger->info("# of color classes of first input mantis: {}", ccCnt[0]);
     logger->info("# of color classes of second input mantis: {}", ccCnt[1]);
@@ -363,7 +363,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
     uint64_t mstZero[2];
     mstZero[0] = ccCnt[0] - 1;
     mstZero[1] = ccCnt[1] - 1;
-    auto c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
+    uint64_t c1len{static_cast<uint64_t >(ceil(log2(ccCnt[0])))}, c2len{static_cast<uint64_t >(ceil(log2(ccCnt[1])))};
 
     logger->info("Running the MST planner for two input MSTs");
     mst[0] = std::make_unique<MSTQuery>(prefixes[0], k, k, toBeMergedNumOfSamples[0], logger);
@@ -379,7 +379,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                           logger,
                           false);
 
-    for (auto mstIdx = 0; mstIdx < 2; mstIdx++) {
+    for (uint64_t mstIdx = 0; mstIdx < 2; mstIdx++) {
         mstPlanner->constructStaticCache(mstIdx, mst[mstIdx].get(), fixed_cache[mstIdx]);
     }
     mstPlanner.reset(nullptr);
@@ -387,7 +387,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
 
     logger->info("Pop counting for the two Manti color class vectors of size {}, {} respectively", ccCnt[0], ccCnt[1]);
     sdsl::int_vector<> ccSetBitCnts[2];
-    for (auto mstIdx = 0; mstIdx < 2; ++mstIdx) {
+    for (uint64_t mstIdx = 0; mstIdx < 2; ++mstIdx) {
         ccSetBitCnts[mstIdx] = sdsl::int_vector<>(ccCnt[mstIdx], 0, ceil(log2(toBeMergedNumOfSamples[mstIdx]+1)));
         // if the color class count is small don't apply multi-threading as there will be a race-condition
         if (ccCnt[mstIdx]*ceil(log2(toBeMergedNumOfSamples[mstIdx]+1)) < 64*2*nThreads) {
@@ -398,13 +398,13 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 ccSetBitCnts[mstIdx][i] = eq.size();
             }
         } else {
-            for (auto partition = 0; partition < 2; ++partition) {
+            for (uint64_t partition = 0; partition < 2; ++partition) {
                 std::vector<std::thread> threads;
-                for (auto t = 0; t < nThreads; ++t) {
+                for (uint64_t t = 0; t < nThreads; ++t) {
                     threads.emplace_back([&, mstIdx, t, partition]() {
                         uint64_t s = ((2 * t + partition) / (double) (2 * nThreads)) * ccSetBitCnts[mstIdx].size();
                         uint64_t e = ((2 * t + partition + 1) / (double) (2 * nThreads)) * ccSetBitCnts[mstIdx].size();
-                        for (auto i = s; i < e; i++) {
+                        for (uint64_t i = s; i < e; i++) {
                             std::vector<uint64_t> eq;
                             buildMSTBasedColor(i, mst[mstIdx].get(), lru_cache[mstIdx][t], eq, queryStats[mstIdx][t],
                                                fixed_cache[mstIdx]);
@@ -418,6 +418,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 threads.clear();
             }
         }
+        logger->info("MST {}: Done counting set-bits for {} cc nodes.", mstIdx, ccSetBitCnts[mstIdx].size());
     }
 
     logger->info("Opening {} output weight bucket files", maxWeightInFile);
@@ -426,12 +427,12 @@ bool MSTMerger::calculateMSTBasedWeights() {
     std::vector<std::pair<uint64_t , uint64_t >> output_buffer(size);
     std::vector<uint64_t> bufferCurrIndices(bufferEndIndices.size(), 0);
     std::vector<uint64_t > bufferCnt(bufferEndIndices.size(), 0);
-    for (auto i = 1; i < bufferCurrIndices.size(); i++) {
+    for (uint64_t i = 1; i < bufferCurrIndices.size(); i++) {
         bufferCurrIndices[i] = bufferEndIndices[i-1];
     }
     std::vector<std::ofstream> outWeightFile;
     outWeightFile.reserve(maxWeightInFile);
-    for (auto tmpOutIdx = 1; tmpOutIdx <= maxWeightInFile; tmpOutIdx++) {
+    for (uint64_t tmpOutIdx = 1; tmpOutIdx <= maxWeightInFile; tmpOutIdx++) {
         std::string filename = prefix+"w"+std::to_string(tmpOutIdx);
         outWeightFile.emplace_back(filename, std::ios::out | std::ios::binary);
         uint64_t cnt = 0;
@@ -447,7 +448,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
         if (w <= maxWeightInFile) {
             w--;
             if (bufferCurrIndices[w] == bufferEndIndices[w]) {
-                auto startIdx = w == 0?0:bufferEndIndices[w-1];
+                uint64_t startIdx = w == 0?0:bufferEndIndices[w-1];
                 outWeightFile[w].write(reinterpret_cast<char *>(output_buffer.data()+startIdx),
                                        sizeof(std::remove_reference<decltype(output_buffer)>::type::value_type) * (bufferEndIndices[w]-startIdx));
                 bufferCnt[w] += (bufferEndIndices[w]-startIdx);
@@ -518,11 +519,11 @@ bool MSTMerger::calculateMSTBasedWeights() {
                               (mph[mstIdx]->totalBitSize() / 8) / (1024 * 1024));*/
                 weights[mstIdx].resize(uniqueEdges[mstIdx].size(), 0);
                 std::vector<std::thread> threads;
-                for (auto threadId = 0; threadId < nThreads; ++threadId) {
+                for (uint64_t threadId = 0; threadId < nThreads; ++threadId) {
                     threads.emplace_back([&, mstIdx, threadId]() {
                         uint64_t startIdx = (threadId/(double)nThreads)*uniqueEdges[mstIdx].size(),
                         endIdx = ((threadId+1)/(double)nThreads)*uniqueEdges[mstIdx].size();
-                        for (auto idx = startIdx; idx < endIdx; ++idx) {
+                        for (uint64_t idx = startIdx; idx < endIdx; ++idx) {
                             auto edge = uniqueEdges[mstIdx][idx];
                             if (edge.first == mstZero[mstIdx]) {
                                 weights[mstIdx][mph[mstIdx]->lookup(edge)] = ccSetBitCnts[mstIdx][edge.second];
@@ -546,13 +547,13 @@ bool MSTMerger::calculateMSTBasedWeights() {
             // go over the edges and store them based on weight:
             for (auto &e : outputMstEdges) {
                 uint64_t ws[2] = {0,0};
-                for (auto mstIdx = 0; mstIdx < 2; mstIdx++) {
+                for (uint64_t mstIdx = 0; mstIdx < 2; mstIdx++) {
                     auto edge = std::make_pair(colorPairs[mstIdx][e.first], colorPairs[mstIdx][e.second]);
                     if (edge.first != edge.second) {
                         ws[mstIdx] = weights[mstIdx][mph[mstIdx]->lookup(edge)];
                     }
                 }
-                auto w = ws[0]+ws[1];
+                uint64_t w = ws[0]+ws[1];
                 if (w == 0) {
                     logger->error("Weight cannot be zero for edge {}:({},{}) -> {}:({},{})",
                             e.first, colorPairs[0][e.first], colorPairs[1][e.first],
@@ -582,7 +583,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
                 logger->error("Should not happen. Either of the colorIDs does not exist. cc1={}, max1={}. cc2={}, max2={}",
                               cc1, mstZero[0], cc2, mstZero[1]);
             }
-            auto w = ccSetBitCnts[0][cc1] + ccSetBitCnts[1][cc2];
+            uint64_t w = ccSetBitCnts[0][cc1] + ccSetBitCnts[1][cc2];
             if (w == 0) {
                 logger->error("The weight of an edge is zero! edge:{},{}->dummy", cc1,cc2);
                 std::exit(3);
@@ -613,7 +614,7 @@ bool MSTMerger::calculateMSTBasedWeights() {
             store_edge_weight(pair, w);
             fileDummies++;
         } else {
-            auto &idx = ccBitsBucketCnt[w-1];
+            uint64_t &idx = ccBitsBucketCnt[w-1];
             idx--;
             ccBits[idx] = i;
             memoryDummies++;
@@ -627,8 +628,8 @@ bool MSTMerger::calculateMSTBasedWeights() {
     }
     // store remaining buffer to file for each weight
     uint64_t totalUniqEdgeCnt = 0;
-    for (auto w = 0; w < outWeightFile.size(); w++) {
-        auto startIdx = w == 0?0:bufferEndIndices[w-1];
+    for (uint64_t w = 0; w < outWeightFile.size(); w++) {
+        uint64_t startIdx = w == 0?0:bufferEndIndices[w-1];
         if (bufferCurrIndices[w] != startIdx) {
             outWeightFile[w].write(reinterpret_cast<char *>(output_buffer.data()+startIdx),
                                    sizeof(std::remove_reference<decltype(output_buffer)>::type::value_type) * (bufferCurrIndices[w]-startIdx));
@@ -694,7 +695,7 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
         if (selectedEdgeCntr == num_colorClasses) break;
     }
     std::cerr << "\n";
-    logger->info("Done with edges with weight < {} => {} edges processed and {} were selected with total weight of {}", maxWeightInFile, edgeCntr, selectedEdgeCntr, mstTotalWeight);
+    logger->info("Done with edges with weight <= {} => {} edges processed and {} were selected with total weight of {}", maxWeightInFile, edgeCntr, selectedEdgeCntr, mstTotalWeight);
     for (uint64_t bucketCntr = bucketsInFile; bucketCntr < bucketCnt; bucketCntr++) {
         auto startIdx = ccBitsBucketCnt[bucketCntr];
         auto endIdx = bucketCntr+1==ccBitsBucketCnt.size()?ccBits.size():ccBitsBucketCnt[bucketCntr+1];
@@ -705,10 +706,6 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
         if (selectedEdgeCntr == num_colorClasses) break;
     }
     std::cerr << "\n";
-    if (selectedEdgeCntr != num_colorClasses - 1) {
-        logger->error("Kruskal is unable to output one tree. The color graph is not ONE connected component.");
-        std::exit(3);
-    }
     mstTotalWeight++;//1 empty slot for root (zero)
     logger->info("MST Construction finished:"
                  "\n\t# of graph nodes: {}"
@@ -716,6 +713,10 @@ void MSTMerger::kruskalMSF(AdjList * adjListPtr) {
                  "\n\t# of merges (mst edges): {}"
                  "\n\tmst weight sum: {}",
                  num_colorClasses, edgeCntr, selectedEdgeCntr, mstTotalWeight);
+    if (selectedEdgeCntr != num_colorClasses - 1) {
+        logger->error("Kruskal is unable to output one tree. The color graph is not ONE connected component.");
+        std::exit(3);
+    }
 //    adjListPtr->serialize(true); // pass "true" for debugging purposes
     adjListPtr->serialize();
     removeIntermediateWeightFiles();
@@ -894,7 +895,7 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t &deltaOffset,
                 if (v.startingOffset > 0) {
                     bbv[v.startingOffset - 1] = 1;
                 }
-                for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++) {
+                for (uint64_t cntr = 0; cntr < v.deltaVals.size(); cntr++) {
                     deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
                 }
             }
@@ -908,7 +909,7 @@ void MSTMerger::calcDeltasInParallel(uint32_t threadID, uint64_t &deltaOffset,
         if (v.startingOffset > 0) {
             bbv[v.startingOffset - 1] = 1;
         }
-        for (auto cntr = 0; cntr < v.deltaVals.size(); cntr++) {
+        for (uint64_t cntr = 0; cntr < v.deltaVals.size(); cntr++) {
             deltabv[v.startingOffset + cntr] = v.deltaVals[cntr];
         }
     }
@@ -1081,7 +1082,7 @@ std::vector<uint32_t> MSTMerger::getMSTBasedDeltaList(uint64_t eqid1, uint64_t e
         std::cerr << ss.str();
     }
     /// calc delta
-    auto i{0}, j{0};
+    uint64_t i{0}, j{0};
     while (i != eq1.size() and j != eq2.size()) {
         if (eq1[i] == eq2[j]) {
             i++;

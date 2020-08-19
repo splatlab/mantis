@@ -86,7 +86,7 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
             v.resize(maxMinimizer-minMinimizer+1, 0);
         std::vector<std::thread> threads;
         if (threadCount > 1) {
-            for (auto threadId = 0; threadId < threadCount; threadId++) {
+            for (uint64_t threadId = 0; threadId < threadCount; threadId++) {
                 threads.emplace_back(std::thread([&, threadId]() {
                     __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
                     __uint128_t endPoint =
@@ -112,9 +112,9 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
             }
             for (auto &t : threads) { t.join(); }
             threads.clear();
-            for (auto m = 0; m <= maxMinimizer - minMinimizer; m++) {
+            for (uint64_t m = 0; m <= maxMinimizer - minMinimizer; m++) {
                 uint32_t prevCnt = 0, cur = 0;
-                for (auto idx = 0; idx < threadCount; idx++) {
+                for (uint64_t idx = 0; idx < threadCount; idx++) {
                     cur = minimizerIdx[idx][m];
                     minimizerIdx[idx][m] = prevCnt;
                     prevCnt += cur;
@@ -122,14 +122,14 @@ walkBlockedCQF(ColoredDbg<qf_obj, key_obj> &curCdbg, const uint64_t curBlock, bo
             }
         }
         uint64_t end = curCdbg.minimizerBlock.size()-1;
-        for (auto i = minMinimizer; i <= maxMinimizer; i++) {
+        for (uint64_t i = minMinimizer; i <= maxMinimizer; i++) {
             minimizerKeyList[isSecond][end-i] = std::make_unique<std::vector<uint64_t>>(curCdbg.minimizerCntr[i], 0);
             minimizerColorList[isSecond][end-i] = std::make_unique<sdsl::int_vector<>>(curCdbg.minimizerCntr[i], 0, colorBits[isSecond]);
         }
 //        console->info("Start walking Cqf{}. isSecond:{}", curBlock, isSecond);
         std::vector<SpinLockT> mutexes(maxMinimizer-minMinimizer+1);
 
-        for (auto threadId = 0; threadId < threadCount; threadId++) {
+        for (uint64_t threadId = 0; threadId < threadCount; threadId++) {
             threads.emplace_back(std::thread([&, threadId](){
                 __uint128_t startPoint = threadId * (cqf1->range() / (__uint128_t) threadCount);
                 __uint128_t endPoint =
@@ -227,7 +227,7 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
     uint64_t sizes[2];
     sizes[0] = cdbg1.minimizerBlock.size();
     sizes[1] = cdbg2.minimizerBlock.size();
-    for (auto i = 0; i < 2; i++) {
+    for (uint64_t i = 0; i < 2; i++) {
         minimizerKeyList[i] = std::vector<std::unique_ptr<std::vector<uint64_t >>>(sizes[i]);
         minimizerColorList[i] = std::vector<std::unique_ptr<sdsl::int_vector<>>>(sizes[i]);
     }
@@ -309,7 +309,7 @@ sample_colorID_pairs(uint64_t sampleKmerCount)
                 }
             }
         }
-        for (auto i = 0; i < 2; ++i) {
+        for (uint64_t i = 0; i < 2; ++i) {
             std::cerr << minimizerKeyList[i].size();
             minimizerKeyList[i].erase(minimizerKeyList[i].begin()+(end[i]-maxMinimizer), minimizerKeyList[i].end());
             minimizerColorList[i].erase(minimizerColorList[i].begin()+(end[i]-maxMinimizer), minimizerColorList[i].end());
@@ -476,7 +476,7 @@ store_colorID_pairs(uint64_t startingBlock)
                 }
             }
             clearedBytes += ((size0* (64+colorBits[0]))+(size1* (64+colorBits[1])));
-            for (auto i = 0; i < 2; ++i) {
+            for (uint64_t i = 0; i < 2; ++i) {
                 minimizerKeyList[i].erase(minimizerKeyList[i].begin()+(ends[i]-b), minimizerKeyList[i].end());
                 minimizerColorList[i].erase(minimizerColorList[i].begin()+(ends[i]-b), minimizerColorList[i].end());
                 minimizerKeyList[i].shrink_to_fit();
@@ -491,7 +491,7 @@ store_colorID_pairs(uint64_t startingBlock)
         std::cerr << "Memory cleared in this round: " << std::round((clearedBytes) / std::pow(2, 23)) << "MB\n";
         minMinimizer = maxMinimizer+1;
     }
-    for (auto i = 0; i < 2; i++) {
+    for (uint64_t i = 0; i < 2; i++) {
         minimizerKeyList[i].clear();
         minimizerColorList[i].clear();
         minimizerKeyList[i].shrink_to_fit();
@@ -594,7 +594,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
     uint64_t ends[2];
     ends[0] = cdbg1.minimizerBlock.size();
     ends[1] = cdbg2.minimizerBlock.size();
-    for (auto i = 0; i < 2; i++) {
+    for (uint64_t i = 0; i < 2; i++) {
         minimizerKeyList[i] = std::vector<std::unique_ptr<std::vector<uint64_t >>>(ends[i]);
         minimizerColorList[i] = std::vector<std::unique_ptr<sdsl::int_vector<>>>(ends[i]);
         ends[i]--;
@@ -707,7 +707,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
                         foundAbundantId++;
                 }
             }
-            for (auto i = 0; i < 2; ++i) {
+            for (uint64_t i = 0; i < 2; ++i) {
                 minimizerKeyList[i].erase(minimizerKeyList[i].begin()+(ends[i]-b), minimizerKeyList[i].end());
                 minimizerColorList[i].erase(minimizerColorList[i].begin()+(ends[i]-b), minimizerColorList[i].end());
                 minimizerKeyList[i].shrink_to_fit();
@@ -792,7 +792,7 @@ void CQF_merger<qf_obj, key_obj>::build_CQF()
         minMinimizer = maxMinimizer + 1;
         std::cerr << "\r";
     }
-    for (auto i = 0; i < 2; i++) {
+    for (uint64_t i = 0; i < 2; i++) {
         minimizerKeyList[i].clear();
         minimizerColorList[i].clear();
         minimizerKeyList[i].shrink_to_fit();
