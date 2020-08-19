@@ -65,7 +65,7 @@ void output_results(mantis::QuerySets &multi_kmers,
                         }
                     }
                 }
-                for (auto i = 0; i < kmerCnt.size(); ++i) {
+                for (uint64_t i = 0; i < kmerCnt.size(); ++i) {
                     if (kmerCnt[i] > 0)
                         opfile << cdbg.get_sample(i) << '\t' << kmerCnt[i] << '\n';
                 }
@@ -76,7 +76,7 @@ void output_results(mantis::QuerySets &multi_kmers,
                 //std::sort(std::execution::par_unseq,kmers.begin(), kmers.end());
                 opfile << cnt++ << '\t' << kmers.size() << '\n';
                 mantis::QueryResult result = cdbg.find_samples(kmers);
-                for (auto i = 0; i < result.size(); ++i) {
+                for (uint64_t i = 0; i < result.size(); ++i) {
                     if (result[i] > 0)
                         opfile << cdbg.get_sample(i) << '\t' << result[i] << '\n';
                 }
@@ -111,7 +111,7 @@ void output_results_json(mantis::QuerySets &multi_kmers,
                         }
                     }
                 }
-                for (auto i = 0; i < kmerCnt.size(); ++i) {
+                for (uint64_t i = 0; i < kmerCnt.size(); ++i) {
                     if (kmerCnt[i] > 0) {
                         opfile << " \"" << cdbg.get_sample(i) << "\": " << kmerCnt[i];
                         if (i != kmerCnt.size()) {

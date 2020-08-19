@@ -133,7 +133,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     std::vector<std::unordered_set<mantis::KmerHash>> blockKmers(numBlocks);
     std::vector<std::ofstream> blockKmerFiles;
     std::vector<uint64_t> blockKmerCnt(numBlocks, 0);
-    for (auto i = 0; i < numBlocks; i++) {
+    for (uint64_t i = 0; i < numBlocks; i++) {
         blockKmerFiles.emplace_back(outfile+".tmp" + std::to_string(i), std::ios::out | std::ios::binary);
     }
     // split kmers based on minimizers into blocks
@@ -150,7 +150,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     // go block by block and query kmers
     std::vector<uint64_t> query_colors;
     query_colors.reserve(10000000);
-    for (auto blockId = 0; blockId < numBlocks; blockId++) {
+    for (uint64_t blockId = 0; blockId < numBlocks; blockId++) {
         if (blockKmerCnt[blockId] == 0)
             continue;
         logger->info("{}: kmer count: {}", blockId, blockKmers[blockId].size());
@@ -188,7 +188,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
             eqQueriesEndIdx[colorMph.lookup(kv.second.first)] += kv.second.second.size();
         }
     }
-    for (auto i = 1; i < eqQueriesEndIdx.size(); i++) {
+    for (uint64_t i = 1; i < eqQueriesEndIdx.size(); i++) {
         eqQueriesEndIdx[i] += eqQueriesEndIdx[i-1];
         eqQueriesStartIdx[i] = eqQueriesEndIdx[i-1];
     }
@@ -203,7 +203,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
         }
     }
     eqQueriesStartIdx[0] = 0;
-    for (auto i = 1; i < eqQueriesEndIdx.size(); i++) {
+    for (uint64_t i = 1; i < eqQueriesEndIdx.size(); i++) {
         if (eqQueriesStartIdx[i] != eqQueriesEndIdx[i]) {
             std::cerr << "Error in calculating the start and end for queries containing a color\n";
             std::cerr << eqQueriesStartIdx[i] << "!=" << eqQueriesEndIdx[i] << "\n";
@@ -445,7 +445,7 @@ int mst_query_main(QueryOpts &opt) {
         logger->error("No dbg has been loaded into memory.");
         std::exit(3);
     }
-    auto indexK = curDbg->keybits() / 2;
+    uint64_t indexK = curDbg->keybits() / 2;
     if (queryK == 0) queryK = indexK;
     logger->info("Done loading cqf. k is {}", indexK);
 
