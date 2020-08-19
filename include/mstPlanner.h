@@ -144,12 +144,14 @@ private:
 
     void  planRecursively(uint64_t nodeId,
                                     std::vector<Cost> &mstCostv,
-                                    std::vector<std::vector<colorIdType>> &children,
+                                    std::vector<uint64_t> &childStartIdx,
+                                    std::vector<uint64_t> &children,
                                     std::vector<colorIdType> &colorsInCache,
                                     uint64_t &cntr) {
 
-        for (auto c : children[nodeId]) {
-            planRecursively(c, mstCostv, children, colorsInCache, cntr);
+        for (auto startIdx = childStartIdx[nodeId]; startIdx < childStartIdx[nodeId+1]; startIdx++) {
+            auto c = children[startIdx];
+            planRecursively(c, mstCostv, childStartIdx, children, colorsInCache, cntr);
         }
 
         std::unordered_set<colorIdType> localCache;
@@ -168,7 +170,8 @@ private:
 
             numQueries = mstCostv[nodeId].numQueries;
             numSteps = mstCostv[nodeId].numSteps;
-            for (auto c : children[nodeId]) {
+            for (auto startIdx = childStartIdx[nodeId]; startIdx < childStartIdx[nodeId+1]; startIdx++) {
+                auto c = children[startIdx];
                 if (localCache.find(c) == localCache.end()) {
                     numQueries += mstCostv[c].numQueries;
                     // steps in parent += steps in children + 1 for each child
@@ -195,20 +198,48 @@ private:
 
     void plan(uint64_t mstIdx, MSTQuery *mst, std::vector<colorIdType> &colorsInCache) {
         logger->info("Planner for mantis {}", mstIdx);
-        std::vector<std::vector<colorIdType>> children(mst->parentbv.size());
+        std::vector<uint64_t> childStartIdx(mst->parentbv.size()+1, 0);
+        std::vector<uint64_t> children(mst->parentbv.size(), 0);
+//        std::vector<std::vector<colorIdType>> children(mst->parentbv.size());
 
+        for (uint64_t i = 0; i < mstZero[mstIdx]; i++) {
+            if (mst->parentbv[i] >= childStartIdx.size()) {
+                logger->error("A parent index should be in the range of valid indices. "
+                              "parentIdx of {}:{}, maxIdx:{}",mstIdx,  mst->parentbv[i], childStartIdx.size());
+                std::exit(3);
+            }
+            childStartIdx[mst->parentbv[i]]++;
+        }
+        for (uint64_t i = 1; i < childStartIdx.size(); i++) {
+            childStartIdx[i]+=childStartIdx[i-1];
+        }
+        if (childStartIdx.back() != mst->parentbv.size()-1) {
+            logger->error("Total#ofChildren != Total#ofNodes-1 in MST {} ( {} != {} ). Is the MST fully connected?", mstIdx, childStartIdx.back(), mst->parentbv.size()-1);
+            std::exit(3);
+        }
+        logger->info("Done setting startIndices for parent->children vector.");
         for (uint64_t i = 0; i < mstZero[mstIdx]; i++) {
             if (mst->parentbv[i] >= children.size()) {
                 logger->error("A parent index should be in the range of valid indices. "
                               "parentIdx of {}:{}, maxIdx:{}",mstIdx,  mst->parentbv[i], children.size());
                 std::exit(3);
             }
-            children[mst->parentbv[i]].push_back(i);
+            uint64_t parentIdx = mst->parentbv[i];
+            childStartIdx[parentIdx]--;
+            if (childStartIdx[parentIdx] >= children.size()) {
+                logger->error("Out of range index for the parent->children vector "
+                              "for MST {} => startIndex:{}, vectorSize:{}",mstIdx,  childStartIdx[parentIdx], children.size());
+                std::exit(3);
+            }
+            uint64_t startIdx = childStartIdx[parentIdx];
+            children[startIdx] = i;
         }
         logger->info("Done constructing the parent->children vector.");
         // recursive planner
         uint64_t cntr{0};
-        planRecursively(mstZero[mstIdx], mstCost[mstIdx], children, colorsInCache, cntr);
+        planRecursively(mstZero[mstIdx], mstCost[mstIdx], childStartIdx, children, colorsInCache, cntr);
+        childStartIdx.clear();
+        childStartIdx.shrink_to_fit();
         children.clear();
         children.shrink_to_fit();
         mstCost[mstIdx].clear();
