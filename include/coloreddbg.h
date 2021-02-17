@@ -35,7 +35,7 @@
 #include "minimizerRandomOrder.h"
 #include "json.hpp"
 #include "util.h"
-#include "tbb/parallel_sort.h"
+// #include "tbb/parallel_sort.h"
 
 #include <cstdlib>
 #include <random>

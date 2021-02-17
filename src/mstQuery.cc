@@ -172,7 +172,8 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
                 kmer2cidMap[key].first = invalid;
             }
         }
-        tbb::parallel_sort(query_colors.begin(), query_colors.end());
+        std::sort(query_colors.begin(), query_colors.end());
+        // tbb::parallel_sort(query_colors.begin(), query_colors.end());
         query_colors.erase(std::unique(query_colors.begin(), query_colors.end()), query_colors.end());
     }
 
@@ -269,7 +270,8 @@ uint64_t MSTQuery::parseBulkKmers(std::string &file, u_int64_t kmer_size) {
     ipfile.close();
     for (auto &kv : kmer2cidMap) {
         auto &v = kv.second.second;
-        tbb::parallel_sort(v.begin(), v.end());
+        std::sort(v.begin(), v.end());
+        // tbb::parallel_sort(v.begin(), v.end());
         v.erase(std::unique(v.begin(), v.end()), v.end());
     }
     return numOfQueries;
