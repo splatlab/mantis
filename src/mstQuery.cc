@@ -259,7 +259,7 @@ void MSTQuery::findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject>
     }
 }
 
-uint64_t MSTQuery::parseBulkKmers(std::string &file, u_int64_t kmer_size) {
+uint64_t MSTQuery::parseBulkKmers(const std::string &file, u_int64_t kmer_size) {
     uint64_t numOfQueries{0};
     std::string read;
     std::ifstream ipfile(file);
@@ -362,7 +362,7 @@ void MSTQuery::clear() {
 
 void output_results(MSTQuery &mstQuery,
                     std::ofstream &opfile,
-                    std::vector<std::string> &sampleNames,
+                    const std::vector<std::string> &sampleNames,
                     QueryStats &queryStats,
                     uint64_t numQueries) {
     //CLI::AutoTimer timer{"Second round going over the file + query time ", CLI::Timer::Big};

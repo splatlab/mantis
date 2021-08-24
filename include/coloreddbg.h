@@ -181,7 +181,7 @@ public:
     ColoredDbg() {}
 
     // Required to load the input CdBGs for manti merge.
-    ColoredDbg(std::string &dir, int flag);
+    ColoredDbg(const std::string &dir, int flag);
 
     // Required to instantitate the output CdBG for mantii merge.
     ColoredDbg(ColoredDbg<qf_obj, key_obj> &cdbg1, ColoredDbg<qf_obj, key_obj> &cdbg2,
@@ -468,7 +468,7 @@ private:
 
 
 template<typename qf_obj, typename key_obj>
-ColoredDbg<qf_obj, key_obj>::ColoredDbg(std::string &dir, int flag):
+ColoredDbg<qf_obj, key_obj>::ColoredDbg(const std::string &dir, int flag):
         bv_buffer(),
         prefix(dir),
         num_samples(0),

@@ -131,7 +131,7 @@ public:
                                      );
 
     void parseKmers(uint32_t readId, std::string read, uint64_t kmer_size);
-    uint64_t parseBulkKmers(std::string &file, u_int64_t kmer_size);
+    uint64_t parseBulkKmers(const std::string &file, u_int64_t kmer_size);
     void findSamples(ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> &cdbg,
                                         LRUCacheMap &lru_cache,
                                         RankScores *rs,
