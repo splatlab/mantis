@@ -50,3 +50,6 @@ core
 #build dirs
 build/
 bin/
+
+# external
+external/
