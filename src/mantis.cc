@@ -61,7 +61,8 @@ int validate_merge_main(ValidateMergeOpts &opt);
 int compare_indices_main(CompareIndicesOpt &opt);
 int lsmt_initialize_main(LSMT_InitializeOpts &opt);
 int lsmt_update_main(LSMT_UpdateOpts &opt);
-int lsmt_query_main(LSMT_QueryOpts &opt);
+// int lsmt_query_main(LSMT_QueryOpts &opt);
+int lsmt_query_main(QueryOpts& opt);
 
 
 
@@ -89,7 +90,7 @@ int main ( int argc, char *argv[] ) {
   CompareIndicesOpt ciopt;
   LSMT_InitializeOpts lsmtiopt;
   LSMT_UpdateOpts lsmtuopt;
-  LSMT_QueryOpts lsmtqopt;
+  // LSMT_QueryOpts lsmtqopt;
   bopt.console = console;
   qopt.console = console;
   vopt.console = console;
@@ -100,7 +101,7 @@ int main ( int argc, char *argv[] ) {
   ciopt.console = console;
   lsmtiopt.console = console;
   lsmtuopt.console = console;
-  lsmtqopt.console = console;
+  // lsmtqopt.console = console;
 
 
   auto ensure_file_exists = [](const std::string& s) -> bool {
@@ -233,16 +234,27 @@ int main ( int argc, char *argv[] ) {
                           % "number of threads to use in intermediate merge operations"
                           );
 
-  auto lsmt_query_mode = (
+  // auto lsmt_query_mode = (
+  //                         command("lsmt_query").set(selected, mode::lsmt_query),
+  //                         required("-d", "--dir") & value("dir", lsmtqopt.dir)
+  //                         % "directory where the LSM-tree resides",
+  //                         required("-q", "--query-file") & value(ensure_file_exists, "query-file", lsmtqopt.queryFile)
+  //                         % "file containing the query transcripts",
+  //                         required("-o", "--output") & value("query-output", lsmtqopt.output)
+  //                         % "file containing the query results",
+  //                         option("-k", "--kmer-length") & value("kmer-length", lsmtqopt.k) % "length of k-mers"
+  //                       );
+  auto lsmt_query_mode =  (
                           command("lsmt_query").set(selected, mode::lsmt_query),
-                          required("-d", "--dir") & value("dir", lsmtqopt.dir)
-                          % "directory where the LSM-tree resides",
-                          required("-q", "--query-file") & value(ensure_file_exists, "query-file", lsmtqopt.queryFile)
-                          % "file containing the query transcripts",
-                          required("-o", "--output") & value("query-output", lsmtqopt.output)
-                          % "file containing the query results",
-                          option("-k", "--kmer-length") & value("kmer-length", lsmtqopt.k) % "length of k-mers"
-                        );
+                          option("-b", "--bulk").set(qopt.process_in_bulk) % "Process the whole input query file as a bulk.",
+                          option("-1", "--use-colorclasses").set(qopt.use_colorclasses)
+                          % "Use color classes as the color info representation instead of MST",
+                          option("-j", "--json").set(qopt.use_json) % "Write the output in JSON format",
+                          option("-k", "--kmer") & value("kmer", qopt.k) % "size of k for kmer.",
+                          required("-p", "--input-prefix") & value(ensure_dir_exists, "query_prefix", qopt.prefix) % "LSM tree directory",
+                          option("-o", "--output") & value("output_file", qopt.output) % "Where to write query output.",
+                          value(ensure_file_exists, "query", qopt.query_file) % "Prefix of input files."
+                          );
 
 
   auto cli = (
@@ -311,7 +323,8 @@ int main ( int argc, char *argv[] ) {
     // case mode::compare_indices: compare_indices_main(ciopt); break;
     case mode::lsmt_init: lsmt_initialize_main(lsmtiopt); break;
     case mode::lsmt_update: lsmt_update_main(lsmtuopt); break;
-    case mode::lsmt_query: lsmt_query_main(lsmtqopt); break;
+    // case mode::lsmt_query: lsmt_query_main(lsmtqopt); break;
+    case mode::lsmt_query: lsmt_query_main(qopt); break;
     case mode::help: std::cout << make_man_page(cli, "mantis"); break;
     }
   } else {

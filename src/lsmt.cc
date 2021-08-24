@@ -185,3 +185,42 @@ int lsmt_query_main(LSMT_QueryOpts &opt)
 
 	return EXIT_SUCCESS;
 }
+
+
+int lsmt_query_main(QueryOpts& opt)
+{
+	typedef LSMT<SampleObject<CQF<KeyObject> *>, KeyObject> LSMT_t;
+
+	spdlog::logger* const logger = opt.console.get();
+
+	if(!opt.process_in_bulk)
+	{
+		logger->error("Only qurying in bulk is supported currently. Aborting.\n");
+		std::exit(EXIT_FAILURE);
+	}
+
+	const std::string lsmt_dir(opt.prefix + "/");
+	if(!mantis::fs::DirExists(lsmt_dir.c_str()))
+	{
+		logger->error("LSM-tree directory does not exist. Aborting.");
+		std::exit(EXIT_FAILURE);
+	}
+
+	if(!LSMT_t::is_valid_LSMT(lsmt_dir, logger))
+	{
+		logger->error("LSM-tree is not valid. Aborting.\n");
+		std::exit(EXIT_FAILURE);
+	}
+
+
+
+	LSMT_t lsmt(lsmt_dir);
+	lsmt.set_console(opt.console);
+	lsmt.print_config();
+
+
+	lsmt.query(opt);
+
+
+	return EXIT_SUCCESS;
+}

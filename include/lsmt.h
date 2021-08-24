@@ -13,12 +13,16 @@
 
 
 #include "cqfMerger.h"
+#include "kmer.h"
 
 
+// Forward declarations.
 int build_blockedCQF_main(BuildOpts& opt);
 //int build_main (BuildOpts& opt);
 int merge_main(MergeOpts &opt);
 int build_mst_main(QueryOpts &opt);
+std::vector<std::string> loadSampleFile(const std::string &sampleFileAddr);
+void output_results(MSTQuery &mstQuery, std::ofstream &opfile, const std::vector<std::string> &sampleNames, QueryStats &queryStats, uint64_t numQueries);
 
 
 
@@ -26,16 +30,17 @@ template<typename qf_obj, typename key_obj>
 class LSMT
 {
     using ColoredDbg_t = ColoredDbg<qf_obj, key_obj>;
+    using query_aggregate_t = std::vector<std::vector<std::pair<std::string, uint64_t>>>;
     
     public:
         // Checks if all the required data for the mantis indices at each LSMT-level
         // exists at the LSMT directory `dir`.
-        static bool is_valid_LSMT(std::string& dir, spdlog::logger* console);
+        static bool is_valid_LSMT(const std::string& dir, spdlog::logger* console);
 
         // Constructs an LSM tree configuration from the LSMT directory `dir`.
-        LSMT(std::string& dir);
+        LSMT(const std::string& dir);
 
-        void set_console(std::shared_ptr<spdlog::logger>& c);
+        void set_console(const std::shared_ptr<spdlog::logger>& c);
 
         // Prints the LSM tree parameters.
         void print_config();
@@ -53,6 +58,10 @@ class LSMT
         // 'output' file.
         void query(std::vector<std::unordered_set<uint64_t>> &kmerSets, std::string &output);
 
+        void query(const QueryOpts& opt);
+
+        void query_level(uint level, const QueryOpts& opt, query_aggregate_t& aggregate_result);
+
         // Queries the k-mers from 'kmerSets' into the pendling samples;
         // where 'kmerSets' is a collection of sets of k-mers with each set corresponding
         // to one read; and appends the query results (histogram) for each read into the
@@ -60,6 +69,7 @@ class LSMT
         void query_pending_list(std::vector<std::unordered_set<uint64_t>> &kmerSets,
                                 std::vector<std::vector<std::pair<std::string, uint64_t>>> &totalResult);
 
+        void query_pending_list(const QueryOpts& opt, query_aggregate_t& agrregate_result);
 
 
     private:
@@ -113,12 +123,16 @@ class LSMT
 
         // Remove the indices that have been merged into one.
         void remove_old_indices(std::string cdbg_dir1, std::string cdbg_dir2);
+
+        void aggregate_query_results(query_aggregate_t& aggregate, const MSTQuery &mstQuery, const std::vector<std::string> &sampleNames, QueryStats &queryStats, uint64_t numQueries);
+
+        void print_query_results(const query_aggregate_t& aggregate, const std::string& op_file_path) const;
 };
 
 
 
 template<typename qf_obj, typename key_obj>
-bool LSMT<qf_obj, key_obj>::is_valid_LSMT(std::string& dir, spdlog::logger* console)
+bool LSMT<qf_obj, key_obj>::is_valid_LSMT(const std::string& dir, spdlog::logger* console)
 {
 	// Check for the LSMT parameters configuration file.
 	if(!mantis::fs::FileExists((dir + mantis::PARAM_FILE).c_str()))
@@ -160,7 +174,7 @@ bool LSMT<qf_obj, key_obj>::is_valid_LSMT(std::string& dir, spdlog::logger* cons
 
 
 template<typename qf_obj, typename key_obj>
-LSMT<qf_obj, key_obj>::LSMT(std::string& dir)
+LSMT<qf_obj, key_obj>::LSMT(const std::string& dir)
 {
     std::ifstream param_file(dir + mantis::PARAM_FILE);
     if(!param_file.is_open())
@@ -205,7 +219,7 @@ LSMT<qf_obj, key_obj>::LSMT(std::string& dir)
 
 
 template<typename qf_obj, typename key_obj>
-void LSMT<qf_obj, key_obj>::set_console(std::shared_ptr<spdlog::logger>& c)
+void LSMT<qf_obj, key_obj>::set_console(const std::shared_ptr<spdlog::logger>& c)
 {
     shared_console = c;
     console = shared_console.get();
@@ -452,7 +466,7 @@ uint64_t LSMT<qf_obj, key_obj>::kmer_len()
         if(mantis::fs::DirExists(levelDir.c_str()))
         {
             std::string cqfFile = levelDir + "0_" + mantis::CQF_FILE;
-            CQF<key_obj> cqf(cqfFile, CQF_MMAP);
+            CQF<key_obj> cqf(cqfFile, CQF_FREAD);
 
             uint64_t kmerLen = cqf.keybits() / 2;
             cqf.close();
@@ -543,7 +557,7 @@ void LSMT<qf_obj, key_obj>::
     std::ofstream outputFile(output);
     if(!outputFile.is_open())
     {
-        console -> error("Cannot write to file {}.", dir + mantis::PENDING_SAMPLES_LIST);
+        console->error("Cannot write to file {}.", output);
         exit(1);
     }
 
@@ -618,6 +632,159 @@ void LSMT<qf_obj, key_obj>::
 }
 
 
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    query(const QueryOpts& opt)
+{
+    auto t_start = time(nullptr);
+
+
+    const std::string op_file_path(opt.output);
+    std::ofstream output(op_file_path);
+    if(!output.is_open())
+    {
+        console->error("Cannot write to file path {}.", op_file_path);
+        std::exit(EXIT_FAILURE);
+    }
+
+    output.close();
+
+
+    query_aggregate_t aggregate_result;
+
+
+    for(uint curr_level = 0; curr_level < levels; ++curr_level)
+    {
+        const std::string level_dir(dir + mantis::LSMT_LEVEL_DIR + std::to_string(curr_level) + "/");
+        if(mantis::fs::DirExists(level_dir.c_str()))
+        {
+            console->info("Querying tree level {}.", curr_level);
+            query_level(curr_level, opt, aggregate_result);
+        }
+    }
+
+    console->info("Query completed for full LSM-tree. Now querying the {} pending samples.", pending_samples.size());
+    query_pending_list(opt, aggregate_result);
+    console->info("Query completed for the pending samples.");
+
+    console->info("Number of reads in query: {}", aggregate_result.size());
+
+
+    console -> info("Serializing the query results.");
+    print_query_results(aggregate_result, op_file_path);
+    console -> info("Query results serialization completed.");
+
+
+    auto t_end = time(nullptr);
+    console -> info("Time taken to query = {} s.", t_end - t_start);
+}
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    query_level(const uint level, const QueryOpts& opt, query_aggregate_t& aggregate_result)
+{
+    const std::string query_file(opt.query_file);
+    const std::string level_dir(dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/");
+    const std::string op_file_path(opt.output);
+    
+    const std::string sample_id_file_path(level_dir + mantis::SAMPLEID_FILE);
+    const std::vector<std::string> sample_names = loadSampleFile(sample_id_file_path);
+
+    QueryStats query_stats;   
+    query_stats.numSamples = sample_names.size();
+    console->info("Number of samples: {}", query_stats.numSamples);
+
+
+    ColoredDbg<SampleObject<CQF<KeyObject> *>, KeyObject> dbg(level_dir, MANTIS_DBG_IN_MEMORY);
+    dbg.set_console(console);
+
+    console->info("Loading the first CQF.");
+    const CQF<KeyObject>* const cqf = dbg.get_current_cqf();
+    if(!cqf)
+    {
+        console->error("Failed to load CQF. Aborting.");
+        std::exit(EXIT_FAILURE);
+    }
+    
+
+    const uint64_t k = (cqf->keybits() / 2);
+    const uint64_t query_k = (opt.k > 0 ? opt.k : k);
+    console->info("Loaded the CQF. k is {}.", k);
+
+    console->info("Loading color classes in the MST form.");
+    MSTQuery mst_query(level_dir, opt.output, k, query_k, query_stats.numSamples, console, true);
+    console->info("Done loading color classes. Total color class count is {}", mst_query.parentbv.size() - 1);
+
+    console->info("Querying the colored de Bruijn graph.");
+    std::ofstream output(op_file_path.c_str(), std::ofstream::app);
+    
+    LRUCacheMap cache_lru(100000);
+    RankScores rs(1);
+    uint64_t num_queries = 0;
+
+    if(opt.process_in_bulk)
+    {
+        num_queries = mst_query.parseBulkKmers(query_file, k);
+        console->info("# of observed sequences: {}", num_queries);
+        mst_query.findSamples(dbg, cache_lru, &rs, query_stats, num_queries);
+
+        // output_results(mst_query, output, sample_names, query_stats, num_queries);
+        aggregate_query_results(aggregate_result, mst_query, sample_names, query_stats, num_queries);
+    }
+
+
+    output.close();
+    console->info("Done querying level {}.", level);
+}
+
+
+template <typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    aggregate_query_results(query_aggregate_t& aggregate, const MSTQuery &mstQuery, const std::vector<std::string> &sampleNames, QueryStats &queryStats, uint64_t numQueries)
+{
+    const mantis::QueryResults& result = mstQuery.allQueries;//mstQuery.getResultList(numQueries);
+    if(aggregate.size() < result.size())
+        aggregate.resize(result.size());
+
+    for(auto& sample_hits: result)
+    {
+        // last element in the result for each query contains # of distinct kmers
+        // opfile << "seq" << queryStats.cnt++ << '\t' << q[q.size()-1] << '\n';
+        
+        for(uint64_t i = 0; i < sample_hits.size() - 1; i++)
+            if(sample_hits[i] > 0)
+                aggregate[queryStats.cnt].emplace_back(sampleNames[i], sample_hits[i]);
+
+        queryStats.cnt++;
+    }
+}
+
+
+template <typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    print_query_results(const query_aggregate_t& aggregate, const std::string& op_file_path) const
+{
+    std::ofstream output(op_file_path, std::ofstream::out);
+
+    uint64_t seq_count = 0;
+    for(auto& seq_query_result: aggregate)
+    {
+        output << "seq" << seq_count++ << "\n";
+        for(auto& sample_hit: seq_query_result)
+            output << sample_hit.first << "\t" << sample_hit.second << "\n";
+    }
+
+
+    output.close();
+    if(output.bad())
+    {
+        console->error("Error writing query results.");
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+
 
 template<typename qf_obj, typename key_obj>
 void LSMT<qf_obj, key_obj>::
@@ -647,5 +814,43 @@ void LSMT<qf_obj, key_obj>::
         }
     }
 }
+
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::
+    query_pending_list(const QueryOpts& opt, query_aggregate_t& aggregate_result)
+{
+    const std::string query_file(opt.query_file);
+    std::unordered_map<uint64_t, uint64_t> unique_kmers;
+    uint64_t total_kmers = 0;
+    
+    std::vector<std::unordered_set<uint64_t>> kmerSets = Kmer::parse_kmers( query_file.c_str(), kmer_len(),
+																			total_kmers, true,
+																			unique_kmers);
+    // Go over each sample.
+    for(auto sample: pending_samples)
+    {
+        CQF<key_obj> cqf(sample, CQF_FREAD);
+
+        // Go over each read.
+        for(auto read = 0; read < kmerSets.size(); ++read)
+        {
+            uint64_t hitCount = 0;
+
+            // Go over each k-mer of this read.
+            for(auto kmer: kmerSets[read])
+            {
+                key_obj key(kmer, 0, 0);
+                if(cqf.query(key, 0))
+                    hitCount++;        
+            }
+            
+            if(hitCount)
+                aggregate_result[read].emplace_back(sample, hitCount);//, std::cout << "Found " << hitCount << "hits\n"; 
+        }
+    }
+}
+
+
 
 #endif
