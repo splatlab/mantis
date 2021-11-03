@@ -123,10 +123,8 @@ public:
                         for (auto &e: uniqueEdges[mstIdx]) {
                             if (e.first != mstZero[mstIdx]) {
                                 mstCost[mstIdx][e.first].numQueries++;
-                                mstCost[mstIdx][e.first].numSteps++;
                             } else if (e.second != mstZero[mstIdx]) {
                                 mstCost[mstIdx][e.second].numQueries++;
-                                mstCost[mstIdx][e.first].numSteps++;
                             }
                         }
                         uniqueEdges[mstIdx].clear();
