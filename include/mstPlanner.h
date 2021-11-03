@@ -10,7 +10,9 @@ static constexpr uint64_t MAX_ALLOWED_TMP_EDGES_IN_FILE{64000000};//{130000000};
 
 
 struct Cost {
+    // sum of number of steps from all leaves' paths
     uint64_t numSteps{1};
+    // sum of number of queries for all nodes along all paths leading to this node
     uint64_t numQueries{1};
 };
 
