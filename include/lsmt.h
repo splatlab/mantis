@@ -95,8 +95,8 @@ class LSMT
         // is removed from disk. Uses `thread_count` number of threads in the merge.
         void merge_into_level(uint level, std::string upper_level_dir, uint thread_count);
         
-        // Writes the pending list into disk.
-        void dump_pending_list();
+        // Writes the pending list into disk, to the file at path `file_path`.
+        void dump_pending_list(const std::string& file_path) const;
 
         // Builds a Mantis index for the samples collection whose paths are present
         // at the file named `input_list`, into the directory `out_dir`.
@@ -249,6 +249,8 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
     auto t_start = time(nullptr);
 
 
+    const std::string pending_list_path = dir + mantis::PENDING_SAMPLES_LIST;
+
     // Read in the new samples' paths.
 
     for(auto p = sample_list.begin(); p != sample_list.end(); ++p)
@@ -259,9 +261,9 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
         {
             console->critical("Pushing {} samples into the LSM tree from the pending list.", pending_samples.size());
 
-            dump_pending_list();
+            dump_pending_list(pending_list_path);
 
-            build_index(dir + mantis::PENDING_SAMPLES_LIST, dir + mantis::TEMP_BUILD_IDX_DIR);
+            build_index(pending_list_path, dir + mantis::TEMP_BUILD_IDX_DIR);
             build_mst_index(dir + mantis::TEMP_BUILD_IDX_DIR, thread_count);
 
             merge_into_level(0, dir + mantis::TEMP_BUILD_IDX_DIR, thread_count);
@@ -299,7 +301,7 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
     }
 
 
-    dump_pending_list();
+    dump_pending_list(pending_list_path);
 
     console -> info("Update completed. Total {} samples are kept in the pending list.", pending_samples.size());
     print_config();
@@ -313,9 +315,9 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
 
 
 template<typename qf_obj, typename key_obj>
-void LSMT<qf_obj, key_obj>::dump_pending_list()
+void LSMT<qf_obj, key_obj>::dump_pending_list(const std::string& file_path) const
 {
-    std::ofstream pendingList(dir + mantis::PENDING_SAMPLES_LIST);
+    std::ofstream pendingList(file_path);
     if(!pendingList.is_open())
     {
         console->error("Error writing to pending samples list file {}. Aborting.", dir + mantis::PENDING_SAMPLES_LIST);
