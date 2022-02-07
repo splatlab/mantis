@@ -15,6 +15,9 @@
 #include "cqfMerger.h"
 #include "kmer.h"
 
+#include <string>
+#include <filesystem>
+
 
 // Forward declarations.
 int build_blockedCQF_main(BuildOpts& opt);
@@ -88,12 +91,19 @@ class LSMT
 
 
 
+        // Returns the name of the index directory for level `level`.
+        static const std::string level_idx(const std::string& base_dir, uint level);
+        
         // Merges the Mantis index present at directory `upper_level_dir` into
         // the Mantis index (if exists) at LSM-tree[`level`]; or move the index
         // from `upper_level_dir` to LSM-tree[`level`] if currently there is no
         // Mantis index at `level`. Also, the Mantis index at `upper_level_dir`
         // is removed from disk. Uses `thread_count` number of threads in the merge.
         void merge_into_level(uint level, std::string upper_level_dir, uint thread_count);
+
+        // Consolidates the mantis indices present at `idx1` and `idx2` into a
+        // merged index at directory `out_idx`. Uses `thread_count` number of threads.
+        void consolidate_indices(const std::string& idx1, const std::string& idx2, const std::string& out_idx, uint thread_count);
         
         // Writes the pending list into disk, to the file at path `file_path`.
         void dump_pending_list(const std::string& file_path) const;
@@ -111,15 +121,18 @@ class LSMT
         // of threads.
         void merge_indices(std::string cdbg1, std::string cdbg2, std::string cdbg, uint thread_count);
 
-        // Returns the count of k-mers stored at LSM-tree[`level`].
-        uint64_t kmer_count(uint level);
+        // Returns the count of k-mers stored at the mantis index at path `idx_path`.
+        static uint64_t kmer_count(const std::string& idx_path);
 
-        // Returns the number of CQFs stored at LSM-tree[`level`].
-        uint32_t cqf_count(uint level) const;
+        // Returns the number of CQFs stored at the mantis index at path `idx_path`.
+        static uint32_t cqf_count(const std::string& idx_path);
 
         void dump_parameters();
 
         bool propagation_triggered(uint64_t kmers_count, uint64_t kmers_threshold, uint32_t cqf_count, uint32_t cqf_threshold) const;
+
+        // Removes the mantis index present at the path `idx_path`.
+        void remove_index(const std::string& idx_path) const;
 
         // Remove the indices that have been merged into one.
         void remove_old_indices(std::string cdbg_dir1, std::string cdbg_dir2);
@@ -248,8 +261,18 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
 {
     auto t_start = time(nullptr);
 
+    if(pending_samples.size() + sample_list.size() >= 2 * sample_threshold)
+    {
+        console->error("Too many samples provided at once. Please try to keep the update batch-size within {}.", sample_threshold);
+        return;
+    }
 
-    const std::string pending_list_path = dir + mantis::PENDING_SAMPLES_LIST;
+
+    // Create temporary directory for the merge.
+    const std::string temp_lsmt_dir = dir + mantis::TEMP_LSMT_DIR;
+    std::filesystem::create_directory(temp_lsmt_dir);
+
+    const std::string tmp_pending_list = temp_lsmt_dir + mantis::PENDING_SAMPLES_LIST;
 
     // Read in the new samples' paths.
 
@@ -261,33 +284,49 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
         {
             console->critical("Pushing {} samples into the LSM tree from the pending list.", pending_samples.size());
 
-            dump_pending_list(pending_list_path);
+            dump_pending_list(tmp_pending_list);
 
-            build_index(pending_list_path, dir + mantis::TEMP_BUILD_IDX_DIR);
-            build_mst_index(dir + mantis::TEMP_BUILD_IDX_DIR, thread_count);
+            const std::string init_idx_path = temp_lsmt_dir + mantis::TEMP_BUILD_IDX_DIR;
+            build_index(tmp_pending_list, init_idx_path);
+            build_mst_index(init_idx_path, thread_count);
 
-            merge_into_level(0, dir + mantis::TEMP_BUILD_IDX_DIR, thread_count);
+            // merge_into_level(0, dir + mantis::TEMP_BUILD_IDX_DIR, thread_count);
+            std::string orig_level = level_idx(dir, 0);
+            std::string new_level = level_idx(temp_lsmt_dir, 0);
+            consolidate_indices(init_idx_path, orig_level, new_level, thread_count);
 
             
             uint curr_level = 0;
             uint64_t curr_kmer_threshold = kmer_threshold;
             uint32_t curr_cqf_count_threshold = cqf_count_threshold;
+            std::string level_path = level_idx(temp_lsmt_dir, 0);
 
 
             // while(kmer_count(currLevel) >= currKmerThreshold)
-            while(propagation_triggered(kmer_count(curr_level), kmer_threshold, cqf_count(curr_level), curr_cqf_count_threshold))
+            while(propagation_triggered(kmer_count(level_path), kmer_threshold, cqf_count(level_path), curr_cqf_count_threshold))
             {
                 console->critical("For level {}, k-mer count is {} and CQF count is {}. k-mer and CQF count thresholds are {} and {}, respectively.",
-                                    curr_level, kmer_count(curr_level), cqf_count(curr_level), kmer_threshold, curr_cqf_count_threshold);
+                                    curr_level, kmer_count(level_path), cqf_count(level_path), curr_kmer_threshold, curr_cqf_count_threshold);
                 console->critical("Propagating the Mantis index present at this level downwards.");
 
-                std::string levelDir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(curr_level) + "/";
-                merge_into_level(curr_level + 1, levelDir, thread_count);
+                // std::string levelDir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(curr_level) + "/";
+                // merge_into_level(curr_level + 1, levelDir, thread_count);
+                orig_level = level_idx(dir, curr_level + 1);
+                new_level = level_idx(temp_lsmt_dir, curr_level + 1);
+                consolidate_indices(level_path, orig_level, new_level, thread_count);
+                remove_index(level_path);
 
                 curr_level++;
                 curr_kmer_threshold *= scaling_factor;
                 curr_cqf_count_threshold *= scaling_factor;
+                level_path = level_idx(temp_lsmt_dir, curr_level);
             }
+
+
+            for(uint level = 0; level <= curr_level; ++level)
+                remove_index(level_idx(dir, level));
+
+            ColoredDbg_t::move_index(level_idx(temp_lsmt_dir, curr_level), level_idx(dir, curr_level), console);
 
             
             if(levels < curr_level + 1)
@@ -301,7 +340,10 @@ void LSMT<qf_obj, key_obj>::update(std::vector<std::string>& sample_list, uint t
     }
 
 
+    const std::string pending_list_path = dir + mantis::PENDING_SAMPLES_LIST;
     dump_pending_list(pending_list_path);
+
+    remove_index(temp_lsmt_dir);
 
     console -> info("Update completed. Total {} samples are kept in the pending list.", pending_samples.size());
     print_config();
@@ -394,6 +436,26 @@ void LSMT<qf_obj, key_obj>::merge_into_level(uint level, std::string upper_level
 }
 
 
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::consolidate_indices(const std::string& idx1, const std::string& idx2, const std::string& out_idx, uint thread_count)
+{
+    if(!mantis::fs::DirExists(idx1.c_str()) && !mantis::fs::DirExists(idx2.c_str()))
+        return;
+
+    std::filesystem::create_directory(out_idx);
+    if(!mantis::fs::DirExists(idx1.c_str()))
+        ColoredDbg_t::move_index(idx2, out_idx, console);
+    else if(!mantis::fs::DirExists(idx2.c_str()))
+        ColoredDbg_t::move_index(idx1, out_idx, console);
+    else
+    {
+        console->critical("Merging Mantis indices at directories {} and {} into directory {}.", idx1, idx2, out_idx);
+
+        merge_indices(idx1, idx2, out_idx, thread_count);
+    }
+}
+
+
 
 template<typename qf_obj, typename key_obj>
 void LSMT<qf_obj, key_obj>::merge_indices(std::string cdbg1, std::string cdbg2, std::string cdbg, uint threadCount)
@@ -414,11 +476,9 @@ void LSMT<qf_obj, key_obj>::merge_indices(std::string cdbg1, std::string cdbg2, 
 
 
 template<typename qf_obj, typename key_obj>
-uint64_t LSMT<qf_obj, key_obj>::kmer_count(uint level)
+uint64_t LSMT<qf_obj, key_obj>::kmer_count(const std::string& idx_path)
 {
-    std::string level_dir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
-
-    if(mantis::fs::DirExists(level_dir.c_str()))
+    if(mantis::fs::DirExists(idx_path.c_str()))
     {
         // std::string cqfFile = levelDir + mantis::CQF_FILE;
         // CQF<key_obj> cqf(cqfFile, CQF_MMAP);
@@ -428,11 +488,11 @@ uint64_t LSMT<qf_obj, key_obj>::kmer_count(uint level)
 
         // return kmerCount;
 
-        std::string index_info_file_name = level_dir + mantis::index_info_file_name;
+        std::string index_info_file_name = idx_path + mantis::index_info_file_name;
         std::ifstream input(index_info_file_name.c_str());
         if(!input.is_open())
         {
-            console->error("Error opening index info {}. Aborting.\n", index_info_file_name);
+            std::cerr << "Error opening index info " << index_info_file_name << ". Aborting.\n";
             std::exit(EXIT_FAILURE);
         }
 
@@ -449,10 +509,9 @@ uint64_t LSMT<qf_obj, key_obj>::kmer_count(uint level)
 
 
 template<typename qf_obj, typename key_obj>
-uint32_t LSMT<qf_obj, key_obj>::cqf_count(uint level) const
+uint32_t LSMT<qf_obj, key_obj>::cqf_count(const std::string& idx_path)
 {
-    std::string level_dir = dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
-    std::vector<std::string> cqf_file_names = mantis::fs::GetFilesExt(level_dir.c_str(), mantis::CQF_FILE);
+    std::vector<std::string> cqf_file_names = mantis::fs::GetFilesExt(idx_path.c_str(), mantis::CQF_FILE);
 
     return cqf_file_names.size();
 }
@@ -478,6 +537,13 @@ uint64_t LSMT<qf_obj, key_obj>::kmer_len()
     }
 
     return 0;
+}
+
+
+template<typename qf_obj, typename key_obj>
+const std::string LSMT<qf_obj, key_obj>::level_idx(const std::string& base_dir, const uint level)
+{
+    return base_dir + mantis::LSMT_LEVEL_DIR + std::to_string(level) + "/";
 }
 
 
@@ -546,6 +612,18 @@ void LSMT<qf_obj, key_obj>::remove_old_indices(std::string cdbg_dir1, std::strin
     }
 }
 
+
+template<typename qf_obj, typename key_obj>
+void LSMT<qf_obj, key_obj>::remove_index(const std::string& idx_path) const
+{
+    if(mantis::fs::DirExists(idx_path.c_str()))
+    {
+        const std::string sys_command = std::string("rm -rf ") + idx_path;
+        console->info("Removing a Mantis index from disk. System command used:");
+        console->info("{}", sys_command);
+        system(sys_command.c_str());
+    }
+}
 
 
 template<typename qf_obj, typename key_obj>

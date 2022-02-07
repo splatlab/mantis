@@ -35,6 +35,7 @@ namespace mantis{
     constexpr char PARAM_FILE[] = "lsmt-params.json";
 	constexpr char PENDING_SAMPLES_LIST[] = "pending-samples.lst";
     constexpr char LSMT_LEVEL_DIR[] = "lsmt-level-";
+    constexpr char TEMP_LSMT_DIR[] = "temp-lsmt-merge/";
     constexpr char TEMP_BUILD_IDX_DIR[] = "temp-build-idx/";
     constexpr char TEMP_MERGE_IDX_DIR[] = "temp-merge-idx/";
     constexpr char TEMP_MST_ADJ_FILE[] = "tmp-mst-adj.tmp";
