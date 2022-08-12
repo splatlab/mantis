@@ -827,6 +827,9 @@ void LSMT<qf_obj, key_obj>::
     std::vector<std::unordered_set<uint64_t>> kmerSets = Kmer::parse_kmers( query_file.c_str(), kmer_len(),
 																			total_kmers, true,
 																			unique_kmers);
+    if(aggregate_result.size() < kmerSets.size())
+        aggregate_result.resize(kmerSets.size());
+
     // Go over each sample.
     for(auto sample: pending_samples)
     {
