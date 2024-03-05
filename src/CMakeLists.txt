@@ -55,6 +55,10 @@ target_compile_definitions(mantis PUBLIC "${ARCH_DEFS}")
 #target_link_libraries(estimateNumOfKners mantis_core)
 
 # TODO: look more into why this is necessary
+if (SDSL_FOUND)
+  set_property(TARGET mantis APPEND PROPERTY LINK_DIRECTORIES ${SDSL_LIBRARY_DIRS})
+  set_property(TARGET mantis APPEND PROPERTY LINK_LIBRARIES ${SDSL_LINK_LIBRARIES})
+endif()
 if (SDSL_INSTALL_PATH)
    set_property(TARGET mantis APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
    set_property(TARGET mantis_core APPEND_STRING PROPERTY LINK_FLAGS "-L${SDSL_INSTALL_PATH}/lib")
