@@ -108,4 +108,5 @@ int validate_mst_main(MSTValidateOpts &opt) {
         }
     }
     logger->info("\nWOOOOW! Validation passed\n");
+    return 0;
 }

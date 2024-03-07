@@ -293,4 +293,6 @@ int stats_main(StatsOpts &sopt) {
         logger->info("total confused kmers: {}", kmerMap.size());
         logger->info("total non-confusing jmers: {}", jmerMap.size());
     }
+
+    return 0;
 }
